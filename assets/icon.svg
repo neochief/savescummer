@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">SaveScrummer</title>
+  <desc id="desc">An ivory skull inside a violet counterclockwise undo arrow on a deep plum background.</desc>
+
+  <rect id="background" width="1024" height="1024" fill="#191322"/>
+
+  <g id="undo-arrow" fill="#9747FF">
+    <path d="M 162 506 A 350 350 0 1 0 264.51 262.51"
+          fill="none" stroke="#9747FF" stroke-width="90" stroke-linecap="round"/>
+    <path d="M 174 198
+             Q 181 164 207 188
+             L 350 320
+             Q 376 344 341 356
+             L 166 408
+             Q 128 419 138 380
+             Z"/>
+  </g>
+
+  <path id="skull" fill="#FFF0CC" fill-rule="evenodd" d="
+    M 512 313
+    C 401 313 312 387 312 492
+    C 312 529 323 556 341 578
+    C 330 587 327 602 333 619
+    C 339 638 353 648 375 648
+    L 397 648
+    Q 411 648 411 662
+    L 411 686
+    Q 411 709 438 711
+    L 465 713
+    L 468 679
+    L 485 679
+    L 486 707
+    Q 486 715 496 715
+    L 527 715
+    Q 537 715 537 707
+    L 538 679
+    L 555 679
+    L 558 713
+    L 585 711
+    Q 612 709 612 686
+    L 612 662
+    Q 612 648 626 648
+    L 648 648
+    C 670 648 684 638 690 619
+    C 696 602 693 587 682 578
+    C 700 556 712 529 712 492
+    C 712 387 623 313 512 313
+    Z
+
+    M 385 492
+    C 373 487 363 491 360 508
+    C 351 541 357 573 374 586
+    C 393 602 425 598 446 584
+    C 462 573 474 550 468 538
+    C 460 524 408 500 385 492
+    Z
+
+    M 639 492
+    C 651 487 661 491 664 508
+    C 673 541 667 573 650 586
+    C 631 602 599 598 578 584
+    C 562 573 550 550 556 538
+    C 564 524 616 500 639 492
+    Z
+
+    M 505 574
+    Q 512 563 519 574
+    L 540 608
+    Q 546 622 533 622
+    L 491 622
+    Q 478 622 484 608
+    Z"/>
+</svg>
