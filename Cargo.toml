@@ -1,0 +1,33 @@
+[workspace]
+resolver = "3"
+members = ["apps/host", "crates/core", "crates/snapshots", "crates/storage", "crates/scanner", "crates/monitor", "crates/platform", "crates/ipc", "integrations/windows-explorer/bridge", "tests/fake-game", "tests/integration"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+
+[workspace.dependencies]
+savescummer-core = { path = "crates/core" }
+savescummer-snapshots = { path = "crates/snapshots" }
+savescummer-storage = { path = "crates/storage" }
+savescummer-scanner = { path = "crates/scanner" }
+savescummer-monitor = { path = "crates/monitor" }
+savescummer-platform = { path = "crates/platform" }
+savescummer-ipc = { path = "crates/ipc" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "2"
+anyhow = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "signal", "time"] }
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+tempfile = "3"
+fs2 = "0.4"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Memory", "Win32_System_Registry", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+lto = "thin"
+strip = true

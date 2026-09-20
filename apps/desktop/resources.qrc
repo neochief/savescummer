@@ -1,0 +1,9 @@
+<RCC><qresource prefix="/">
+  <file alias="icon.svg">../../assets/icon.svg</file>
+  <file alias="save.svg">src/save.svg</file>
+  <file alias="check.svg">src/check.svg</file>
+  <file alias="chevron.svg">src/chevron.svg</file>
+  <file alias="chevron-right.svg">src/chevron-right.svg</file>
+  <file alias="ellipsis.svg">src/ellipsis.svg</file>
+  <file alias="void-war.yaml">../../catalog/games/void-war.yaml</file>
+</qresource></RCC>

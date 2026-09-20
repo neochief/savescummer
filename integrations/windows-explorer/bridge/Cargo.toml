@@ -1,0 +1,13 @@
+[package]
+name = "savescummer-explorer-bridge"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+savescummer-core.workspace = true
+savescummer-ipc.workspace = true
+savescummer-platform.workspace = true
+tokio.workspace = true

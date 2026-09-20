@@ -92,7 +92,8 @@ The host composes modules and manages their lifecycle. Business rules live in th
 
 | Module | Owns | Boundary |
 | --- | --- | --- |
-| UI | Game widgets, history presentation, progress display, configuration forms and confirmation dialogs | Sends commands and renders returned state/events. Does not copy game files, access SQLite directly, scan installations or implement operation policy. |
+| UI | Game widgets, history presentation, progress display, configuration forms and confirmation dialogs | Sends commands and renders returned state/events, including cached artwork supplied by the host. Does not download artwork, copy game files, access SQLite directly, scan installations or implement operation policy. |
+| Artwork service | Steam artwork resolution, download queue, cache validation and persistence | Runs asynchronously in the existing background host process, independently of scanning and Save/Load. Publishes cached asset availability to the UI through the service contract. |
 | Core application | SAVE, LOAD, REVERT, Flush and interrupted-operation recovery workflows; validation, busy/recovery states, operation locking and coordination | Sole entry point for actions from UI, shortcuts and Explorer. Coordinates the other modules through interfaces. |
 | Snapshot engine | Snapshot discovery, native copy naming, file copying, staging, replacement and rollback | Accepts resolved paths and operation context; reports results and progress. Does not select the active game, render UI or decide history policy. |
 | History and settings store | Games, overrides, snapshot metadata, history entries and durable operation records | Repository interface with an initial SQLite implementation. Does not manipulate game files or decide when an operation is permitted. |
@@ -107,11 +108,15 @@ Platform integrations are a family of small adapters, not one interface that eve
 
 Expose a small, versioned local API with plain data types and stable IDs:
 
-- Commands: Save, Load (default or an explicit saved history entry), Revert (an explicit operation history entry), retry interrupted-operation recovery, resolve recovery (an explicit interrupted operation and choice), confirmed Flush history, configuration updates and rescan.
-- Queries: current games, active stack, configuration, history, operation status and recovery status.
-- Events: game availability/activity changes, history changes, operation start/progress/completion/failure, recovery status changes and configuration changes.
+- Commands: Save, Load (default or an explicit saved checkpoint ID), Revert (the exact recovery checkpoint ID referenced by a selected Loaded/Reverted history entry), retry interrupted-operation recovery, resolve recovery (an explicit interrupted operation and choice), confirmed Flush history, configuration updates, rescan and request an asynchronous artwork cache check for known games.
+- Queries: current games, active stack, configuration, checkpoints and their restore eligibility, history, operation status and recovery status.
+- Events: game availability/activity changes, artwork availability changes, history changes, operation start/progress/completion/failure, recovery status changes and configuration changes.
+
+The game read model and IPC state expose the catalog's optional Steam app ID (`stores.steam`) and the artwork service's current asset availability and validated local cache paths. Include artwork state in the initial snapshot and publish changes so a newly attached UI can display cached icons and update as downloads finish. Steam metadata resolution and download state belong to the host's artwork service; artwork URLs, image hashes and cache paths are not catalog fields or durable game records. Keep the Rust read model, request/response schemas, fixtures and desktop parser aligned with the artwork check command, state and events.
 
 Use the same core command handling for every caller. The host validates commands and acquires operation locks; a disabled UI button is never the enforcement mechanism. Commands return an accepted operation ID or a structured rejection such as busy, unavailable or recovery needed. Clients can query an accepted operation after reconnecting instead of reissuing a destructive command. A client disconnect must not cancel an accepted operation.
+
+History responses expose the exact saved or recovery checkpoint reference for each action. The core resolves and validates that checkpoint; clients do not supply trusted filesystem paths. History-entry IDs remain useful for presentation and audit relationships, but are not a second source of restore eligibility.
 
 The connection must provide a consistent current-state snapshot and subsequent events, with revisions or equivalent resynchronization so clients cannot miss a change while attaching. Progress and errors use structured fields; user-facing wording is supplied by the UI or feedback adapter. A transport failure or disconnect must not be reported as success.
 
@@ -126,6 +131,7 @@ Keep IPC local to the signed-in user. The core application must not depend on th
 - Test the monitor with recorded or synthetic launch/focus/close sequences, including multiple processes per game.
 - Test the store's persistence, transaction boundaries and restart recovery separately. Replacement store implementations must satisfy the same repository contract.
 - Test the UI against a fake service that can produce busy, progress, failure, unavailable-snapshot and disconnected states.
+- Test the host's artwork service with a fake downloader and temporary cache: cache reuse after restart, missing/deleted/corrupt icon downloads, post-scan discovery, UI attachment, duplicate queue suppression, offline failures and interrupted writes. Verify that slow downloads do not block scanning, service requests or Save/Load. These tests must not require live Steam access.
 - Keep platform-specific integration checks separate from portable module tests. Verify the service contract end to end with the UI absent, including shortcut/Explorer command handling and UI reattachment during an operation.
 
 History policy, operation locks and file replacement behavior must have a single authoritative implementation. Replacing the UI, discovery provider or storage implementation must not require recreating those rules.
@@ -157,7 +163,7 @@ On Windows, the scanner may also derive the uninstall registry key "Steam App <a
 
 ### Windows application records
 
-Read installed-app registry records from the current-user and machine-wide uninstall locations, including applicable 32-bit and 64-bit registry views. Treat names, installation locations and icons as discovery hints, then validate them against the game definition and actual files. Registry records are not a complete inventory and do not generally declare a game's save directory.
+Read installed-app registry records from the current-user and machine-wide uninstall locations, including applicable 32-bit and 64-bit registry views. Treat names and installation locations as discovery hints, then validate them against the game definition and actual files. Registry records are not a complete inventory and do not generally declare a game's save directory.
 
 For non-Steam games, allow a game-specific registry locator when needed. Do not query every application through Windows Installer or assume that all portable games have registry entries.
 
@@ -179,7 +185,7 @@ Keep entries declarative and small. Each entry declares:
 - Per-platform executable paths, relative to the discovered installation directory.
 - A per-platform data-directory rule declaring both the base location and the game-specific subdirectory. The whole resolved DIR is the snapshot unit.
 
-Steam discovery, Steam registry fallback, icon discovery, path-root resolution, Proton translation and snapshot naming are shared scanner behavior. Do not repeat those mechanisms in every entry. Add optional game-specific locators, alternative data locations or runtime exceptions only when a game needs them. User overrides are local settings and do not modify the shared catalog.
+Steam discovery, Steam registry fallback, path-root resolution, Proton translation and snapshot naming are shared scanner behavior. Steam artwork resolution, downloading and caching belong to a separate artwork service within the same background host process. Do not declare icon paths, artwork URLs or image hashes in library entries; the Steam app ID is sufficient input for the artwork resolver. Add optional game-specific locators, alternative data locations or runtime exceptions only when a game needs them. User overrides are local settings and do not modify the shared catalog.
 
 Store `info` as a UTF-8 multiline string in the shared game definition. Support paragraphs and plain-text numbered lists, preserving their order and displaying each procedure as an ordered list starting at 1; treat the content as text, without interpreting HTML or executable commands. Instructions describe the manual steps the player takes around SaveScummer operations. They do not automate the game or change core Save/Load behavior. Include `info` in new definitions; allow an empty string while instructions are unavailable and treat a missing field in older definitions as empty. Do not invent generic instructions for games whose procedure has not been documented.
 
@@ -255,10 +261,24 @@ For each resolved game, retain:
 - Resolved platform/runtime and Proton prefix when applicable.
 - Full executable paths for process identification.
 - Full data DIR and its current availability.
-- Discovered icon, using installation/store information with executable-icon fallback where supported.
-- Persistent local overrides and the data-location identity used to associate snapshots and history.
+- The catalog's optional Steam app ID, used by the host's artwork service independently of the installation's discovery source.
+- Persistent local overrides, including the resolved current data-directory path.
 
-History remains associated with its original data location. Changing a configured DIR must not silently retarget existing Restore or Revert actions to a different location.
+Do not maintain a separate `location_id` or a registry of location UUIDs. Each checkpoint records the original resolved data-directory path it belongs to. Changing a configured DIR must not silently retarget existing Restore or Revert actions: compare the checkpoint's recorded directory with the game's current DIR using the shared platform-aware path rules. Returning to the same resolved directory makes its surviving checkpoints eligible again without changing their IDs or registering duplicate checkpoints. History stays associated with the game and references checkpoints for its actions.
+
+### Steam artwork loading and cache
+
+Use Steam as the source of game artwork. The current UI uses game icons; library backgrounds, covers, headers and logos can use the same loader when a UI design calls for them. Do not fetch unused artwork by default. Games without a Steam app ID or available Steam artwork keep a neutral initials placeholder in the icon box; executable and registry icons are not alternative artwork sources.
+
+Use the existing background host process that performs scanning; do not launch an additional artwork process. After each scan publishes discovered games, the host queues cache checks and missing icon downloads in its artwork service. Run network requests asynchronously and blocking cache I/O and image validation on background workers within that process. Startup and UI-attachment checks use the same queue. Scanning, the UI event loop, game monitoring and Save/Load operations never wait for artwork; do not hold scan or operation locks during artwork work. Publish completed cache entries through IPC and update the matching UI rows without changing their layout or selection. Deduplicate queued and in-flight requests by Steam app ID and asset kind, with bounded download concurrency.
+
+Download icons from Steam and persist them in SaveScummer's own per-user cache directory, keyed by Steam app ID and asset kind. Resolve icon URLs from Steam metadata, including any required image hash, rather than assuming the app ID alone determines an icon URL. Do not require a user-supplied Steam API key or sign-in. Keep this disposable cache separate from the catalog, game data, snapshots and history database; the app must not depend on Steam's local image cache remaining present.
+
+Resolve the cache root through a shared platform-path provider: the Windows LocalAppData known folder plus `SaveScummer/cache`, macOS `~/Library/Caches/SaveScummer`, and Linux `$XDG_CACHE_HOME/SaveScummer` with `~/.cache/SaveScummer` as the fallback when XDG_CACHE_HOME is unset, empty or not absolute. Honor OS folder redirection and the current user's home directory; do not hardcode usernames, drive letters or Steam installation paths. Use the same relative layout below that root on every platform, such as `artwork/steam/<appid>/<asset-kind>.<extension>`. The host resolves native paths and supplies them through IPC; the UI does not reconstruct OS-specific locations. Tests inject a temporary cache root. Cache deletion is recoverable through the normal missing-asset check.
+
+On host startup after initial discovery, and on every UI startup including attachment to an already-running host, queue a background cache check for every currently known game. The UI requests this check through IPC rather than inspecting the cache itself. Reuse readable, valid cached images immediately. Queue downloads for missing, deleted, empty or undecodable entries, even if an earlier session recorded a successful download. Repeat this check when subsequent scans publish discovered games, including already-known games whose cache files have disappeared. These checks and downloads also run when the host is operating without a UI. Valid cached images do not need to be downloaded again on every startup or scan.
+
+Write downloads to temporary files, validate that they decode as images, and atomically publish completed cache entries. An interrupted download must never count as a cached icon. On network failure or unavailable artwork, retain any usable cached image or show the placeholder, and retry missing entries with bounded backoff while the host is active and on later startup or scan checks. Do not show blocking dialogs or repeatedly request unavailable artwork on every repaint. Closing the UI does not cancel artwork work in the host; incomplete entries left by host shutdown are retried on the next startup.
 
 ### Data-directory validation
 
@@ -287,6 +307,27 @@ Game launches and closes add history markers. These markers do not create snapsh
 
 Snapshots contain game files. History entries describe what happened and reference snapshots by stable IDs. Displayed timestamps are labels, not identifiers; actions in the same second must remain distinct.
 
+### Checkpoint ownership and restore eligibility
+
+Checkpoint metadata is authoritative for restore selection and eligibility. Keep the responsibilities small:
+
+| Record | Owns |
+| --- | --- |
+| Game | Stable game ID and the currently configured resolved `data_dir`. |
+| Checkpoint | Stable generation ID, game ID, original resolved data-directory path, backup path, saved/recovery kind, filesystem identity and change signature, availability/removal state, timestamps and durable registration order. |
+| History entry | Event ID, chronological order, event time and observed-session context, plus references to the checkpoints involved. It has no independent location ID, directory ownership or restore-availability state. |
+| Operation journal | The game, accepted action and exact original live/source/recovery/staging/retained paths, source generation checks, durable phase and outcome needed for interruption recovery. |
+
+Default LOAD selects directly from eligible saved checkpoint records. A history action supplies its referenced checkpoint ID. Both paths use one core validation rule: the checkpoint belongs to the requested game, has the required kind, was created or imported for the current resolved DIR, and its exact generation remains available. Revalidate its filesystem identity and change signature before restoring. Preserve current DIR and perform replacement through the same restore workflow for LOAD and REVERT.
+
+Store the original data-directory association on the checkpoint, not another copy on every history row. Keep the journal's captured paths and identity checks: they describe a specific accepted operation and must remain usable even if a live directory is temporarily absent or history is hidden. Launch/close markers describe observed game sessions; they do not establish checkpoint ownership. Preserve observation epochs so unobserved host downtime does not join unrelated sessions.
+
+Use known save time for app-created saved checkpoints and the recorded folder-modification estimate for manual ones. Break equal selection times by durable checkpoint registration order. History sequence orders timeline events only; changing or filtering the timeline must not change default LOAD selection.
+
+When implementing this simplification, update Rust records, SQLite persistence, the service schemas/fixtures and CLI/entry-point target handling together. Preserve existing checkpoint/history IDs, chronological relationships and interrupted-operation paths when converting stored records. Do not recreate backup folders or discard journals as part of removing `location_id`.
+
+### Snapshot storage and history relationships
+
 All snapshots are siblings of DIR, in the same parent directory:
 
 ```text
@@ -302,8 +343,8 @@ Game/
 - Saved snapshots follow the platform's native duplicate-directory naming convention, including localized names. Manually created sibling copies matching a supported convention are ordinary saved checkpoints, regardless of whether the app created them. Discover them automatically as "Existing backup" entries without inventing SAVE events. Their discovery time must not be presented as the time they were saved.
 - Recovery snapshots use a separate reserved naming convention with unique IDs, such as "Void_War.recovery-000001". Never overwrite an existing directory when allocating a new snapshot. Recovery snapshots are excluded from default LOAD selection.
 - The app treats completed snapshots as read-only. Restoration copies their contents into DIR and leaves the source snapshot intact.
-- A local SQLite database stores game configuration, snapshot IDs, kinds, paths and timestamps, and history entries. Game files remain in the sibling directories, not in the database.
-- History entries have stable IDs and a stable chronological order, including when timestamps are equal. Saved and Existing backup entries reference their saved snapshots. Loaded and Reverted entries reference the target history entry, the snapshot restored, and the recovery snapshot captured immediately before the operation.
+- A local SQLite database stores game configuration, checkpoint metadata including original data-directory paths and registration order, history entries and operation journals. Game files remain in the sibling directories, not in the database.
+- History entries have stable IDs and a stable chronological order, including when timestamps are equal. Saved and Existing backup entries reference their saved checkpoints. Loaded and Reverted entries reference the checkpoint restored and the recovery checkpoint captured immediately before the operation. They may also reference the selected earlier history entry for display and audit; that relationship does not determine restore eligibility.
 - SAVE, game exit and app restart never delete existing snapshots or history. Only an explicit, confirmed Flush history operation deletes them. There is no automatic expiry or single UNDO PATH.
 - If a snapshot is confirmed deleted or changed externally, mark that snapshot generation removed and hide history rows whose Restore/Revert action depended on it. Keep the original IDs and references internally for audit and interrupted-operation recovery. A newer folder at the same path never becomes the target of an older action. Temporary access failures remain unavailable states, not proof of removal.
 
@@ -332,7 +373,7 @@ Scan DIR's parent directory for matching checkpoints at startup and during perio
 
 Register newly discovered manual checkpoints in the database without changing their folder names or contents. Repeated discovery of an unchanged checkpoint must not duplicate its history entry. Offer Restore and include it among the ordinary saved checkpoints eligible for default LOAD and confirmed Flush history. Database IDs identify checkpoint generations independently of folder names.
 
-Use a manual checkpoint's folder modification time as an estimate when ordering default LOAD candidates, with stable history sequence as the tie-breaker. Preserve its original save time as unknown; neither this estimate nor discovery time is a claimed SAVE timestamp.
+Use a manual checkpoint's folder modification time as an estimate when ordering default LOAD candidates, with durable checkpoint registration order as the tie-breaker. Preserve its original save time as unknown; neither this estimate nor discovery time is a claimed SAVE timestamp.
 
 Recovery snapshots and app staging directories are separate from native duplicate copies and must never be discovered as ordinary saved checkpoints.
 
@@ -363,13 +404,13 @@ All entry points (UI, global shortcuts and Explorer) use the same operation hand
 
 For every Restore or Revert:
 
-1. Resolve the requested history entry and check that its snapshot is available before creating any new snapshot.
+1. Resolve the requested checkpoint ID and apply the shared game, kind, original-directory and generation-availability checks before creating any new snapshot. A history row contributes only the reference to its saved or recovery checkpoint.
 2. Copy the current DIR into a new recovery snapshot. If DIR is missing or the copy fails, stop with a clear error and leave DIR untouched.
 3. Prepare the requested replacement in a separate staging directory before changing DIR. Incomplete copies must not appear as usable snapshots.
 4. Replace DIR while retaining enough data to recover if replacement fails. Attempt rollback on failure; retain recovery and staging data needed for recovery if rollback cannot complete, and report the failure.
 5. Mark the operation complete only after successful replacement. Keep both the source snapshot and the newly captured recovery snapshot.
 
-Filesystem changes and database changes cannot share one transaction. Persist a pending/completed/failed operation record so startup can identify interrupted operations. Record the original data-location identity, live DIR, source snapshot, recovery snapshot, staging and retained-original paths. Persist the intended replacement step before changing paths and its result afterward, so startup can reconcile the record with the actual directories. Preserve their recovery files and surface the interruption instead of silently treating it as a successful load or deleting recovery data. Failed and pending operations must not appear as completed history actions.
+Filesystem changes and database changes cannot share one transaction. Persist a pending/completed/failed operation record so startup can identify interrupted operations. Record the original resolved live DIR, source checkpoint ID and exact source path, recovery snapshot, staging and retained-original paths, together with the filesystem identities/change signatures required to validate them. Persist the intended replacement step before changing paths and its result afterward, so startup can reconcile the record with the actual directories. Preserve their recovery files and surface the interruption instead of silently treating it as a successful load or deleting recovery data. Failed and pending operations must not appear as completed history actions.
 
 SAVE also publishes a snapshot and its history entry only after its copy succeeds. Flush history reports deletion failures and retains records for remaining snapshots instead of claiming that cleanup completed.
 
@@ -404,20 +445,20 @@ When save is triggered, I want the app to:
 
 When load is triggered, I want the app to:
 
-1. Select the latest available saved snapshot, including valid imported existing backups, unless a specific saved snapshot was requested. Recovery snapshots must never become the default LOAD target. If no saved snapshot is available, do nothing and finish LOAD.
+1. Select the latest eligible saved checkpoint directly from checkpoint metadata, including valid imported existing backups, unless a specific saved checkpoint ID was requested. Use the current game's resolved DIR and the shared eligibility and ordering rules above; do not search history to choose a source. Recovery checkpoints must never become the default LOAD target. If no saved checkpoint is available, do nothing and finish LOAD.
 
 2. Preserve the current DIR and restore the selected snapshot using the OPERATION SAFETY steps.
 
-3. Append a Loaded [target] history entry referencing the selected saved entry and the new recovery snapshot. Its Revert action restores the state from before this particular load.
+3. Append a Loaded [target] history entry referencing the selected saved checkpoint and the new recovery checkpoint, retaining any selected history-entry reference as audit context. Its Revert action restores the state from before this particular load.
 
-The Restore action on a Saved or Existing backup history entry runs LOAD with that entry as the explicit target.
+The Restore action on a Saved or Existing backup history entry runs LOAD with that row's exact saved checkpoint ID as the explicit target. The checkpoint determines eligibility even when the row was displayed before a rescan or configuration change.
 
 
 ## REVERT
 
 When Revert is selected for a Loaded or Reverted history entry:
 
-1. Select the recovery snapshot captured immediately before that specific operation. If it is unavailable, stop with a clear error.
+1. Take the exact recovery checkpoint ID referenced by that entry, captured immediately before the specific operation. Apply the same checkpoint validation as LOAD, requiring recovery kind instead of saved kind. If it is unavailable or belongs to another game or data directory, stop with a clear error.
 2. Preserve the current DIR as a new recovery snapshot and restore the selected recovery snapshot using the OPERATION SAFETY steps.
 3. Append a Reverted [target] history entry referencing the operation being reverted and the new recovery snapshot. Its own Revert action restores the state from before this revert.
 
@@ -441,6 +482,8 @@ SAVE and LOAD triggered through global shortcuts have separate start and complet
 | LOAD completed | A rounded descending resolution |
 | Operation failed or could not start | A distinct, low double knock |
 | Request rejected because the game is busy | One quiet, dry tick |
+
+Use the approved generated WAV files in `assets/sounds`: `save-start.wav`, `save-complete.wav`, `load-start.wav`, `load-complete.wav`, `operation-failed.wav` and `busy.wav`. Embed these assets in the host's platform feedback adapter. `scripts/generate-sounds.mjs` is the reproducible authoring source; generation is not required at build time or runtime. Keep the approved levels and timbres.
 
 Start cues should be approximately 100 ms and completion cues approximately 200 ms. If an accepted operation fails, play the failure cue instead of completion. If it cannot start, play only the appropriate failure or busy cue. Rate-limit busy cues to avoid audio spam.
 
@@ -467,7 +510,7 @@ It should show a scrollable list of widgets, one per game, for games that are in
 
 When at least one game is running, show launched games in ACTIVE STACK order and group all nonrunning installed games under an expandable "Other games" row with a count. Collapse that group by default when entering this running-games view, unless it contains the currently selected game. Expanding the group exposes its rows; selecting a row reveals that game's controls and instructions. Preserve the user's expansion choice during ordinary refreshes while games remain running. When no games are running, show all installed known games directly without requiring expansion. If a game closes, it leaves ACTIVE STACK and moves into the nonrunning group, or into the full list if it was the last running game; preserve its selection and expand the group if needed to keep it visible. If a scan confirms that a game is no longer installed, its entry disappears.
 
-Use the existing `assets/icon.svg` for application branding, including the window icon and tray icon. Game widgets use each game's discovered icon; the application icon does not replace game icons. Give the main window icon and game icons matching 27 px boxes aligned to the same left edge, with the title-bar and game names aligned after the same 8 px gap. Preserve this alignment at narrower window widths.
+Use the existing `assets/icon.svg` for application branding, including the window icon and tray icon. Game widgets use each game's downloaded, cached Steam icon, with a neutral initials placeholder while missing or loading, as described under Steam artwork loading and cache. The application icon does not replace game icons. Give the main window icon and game icons matching 27 px boxes aligned to the same left edge, with the title-bar and game names aligned after the same 8 px gap. Preserve this alignment at narrower window widths.
 
 Keep the window, title bar, help bar, game list, menus, ordinary text and borders in neutral grayscale for both light and dark appearances. Limit the icon's violet (`#9747FF`, adjusted for contrast where needed) to small functional accents: checked checkboxes, selected history actions, open dropdown controls and progress. Retain distinct semantic colors where needed, such as the Running indicator.
 
@@ -537,7 +580,7 @@ Save is a button that does the SAVE operation. Disable it while the game's data 
 
 ### Load
 
-Load is a split button. The main button runs the default LOAD operation using the latest available saved snapshot. The arrow opens the game's history, newest first, grouped by day.
+Load is a split button. The main button runs the default LOAD operation using the latest eligible saved checkpoint selected by the core. The arrow opens the game's history, newest first, grouped by day.
 
 - Saved and Existing backup rows offer **Restore**.
 - Loaded [target] and Reverted [target] rows offer **Revert**.
@@ -546,7 +589,7 @@ Load is a split button. The main button runs the default LOAD operation using th
 
 References such as [19:25] identify the target history entry. Include the date or additional detail when needed to distinguish targets; use stable IDs internally. Selecting Restore or Revert runs that action for the selected row immediately and appends the resulting event after success.
 
-The latest available saved snapshot's time appears below the main Load caption in smaller, subtler type. When no saved snapshot is available, omit this secondary line rather than showing a placeholder or invented time. Relative labels can use the following formats:
+The core-selected eligible saved checkpoint's time appears below the main Load caption in smaller, subtler type. When no saved checkpoint is eligible, omit this secondary line rather than showing a placeholder or invented time. Relative labels can use the following formats:
 
 - 4 seconds ago
 - 2 minutes ago

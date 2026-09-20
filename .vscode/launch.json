@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Save Scummer: app",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/savescummer-desktop.exe",
+            "args": [
+                "--data-dir", "${workspaceFolder}/.runtime/vscode",
+                "--host", "${workspaceFolder}/target/debug/savescummer-host.exe"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "PATH", "value": "${workspaceFolder}/.runtime/Qt/6.5.3/msvc2019_64/bin;${env:PATH}" }
+            ],
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Save Scummer: prepare app",
+            "postDebugTask": "Save Scummer: stop debug host"
+        },
+        {
+            "name": "Save Scummer: demo",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/savescummer-desktop.exe",
+            "args": ["--demo"],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "PATH", "value": "${workspaceFolder}/.runtime/Qt/6.5.3/msvc2019_64/bin;${env:PATH}" }
+            ],
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Save Scummer: build dev"
+        }
+    ]
+}

@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Save Scummer: build dev",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "demo"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$msCompile"]
+        },
+        {
+            "label": "Save Scummer: prepare app",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "prepare"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$msCompile"]
+        },
+        {
+            "label": "Save Scummer: stop debug host",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "stop"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Save Scummer: package release",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/build.ps1", "release"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$msCompile"]
+        }
+    ]
+}

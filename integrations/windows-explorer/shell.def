@@ -1,0 +1,4 @@
+LIBRARY savescummer-explorer
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

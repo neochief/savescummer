@@ -1,0 +1,908 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Response",
+  "type": "object",
+  "properties": {
+    "host_id": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "result": {
+      "$ref": "#/$defs/Reply"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "request_id",
+    "host_id",
+    "result"
+  ],
+  "$defs": {
+    "Action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "save"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "description": "Saved checkpoint ID; None selects the newest eligible checkpoint.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "load"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "description": "Recovery checkpoint ID from a Loaded/Reverted row's recovery_id.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "revert"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "confirmed_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "flush"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "confirmed_revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "choice": {
+              "$ref": "#/$defs/RecoveryChoice"
+            },
+            "operation": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "recover"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "operation",
+            "choice"
+          ]
+        }
+      ]
+    },
+    "Error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "busy",
+        "recovery_needed",
+        "unavailable",
+        "invalid_path",
+        "invalid_target",
+        "not_found",
+        "io",
+        "storage",
+        "confirmation_required",
+        "shutting_down",
+        "invalid_request"
+      ]
+    },
+    "ExplorerTarget": {
+      "description": "A file-manager menu resolves paths to opaque checkpoint IDs before execution.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action"
+        },
+        "game_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "game_id",
+        "action"
+      ]
+    },
+    "FlushPreview": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recovery": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "retained": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "saved": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "saved",
+        "recovery",
+        "retained",
+        "paths"
+      ]
+    },
+    "Game": {
+      "type": "object",
+      "properties": {
+        "configuration_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "data_dir": {
+          "type": "string"
+        },
+        "detected_locations": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GameLocation"
+          }
+        },
+        "executables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "info": {
+          "type": "string",
+          "default": ""
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "user_configured": {
+          "description": "Older configured games are conservatively treated as user overrides.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "data_dir",
+        "executables",
+        "installed"
+      ]
+    },
+    "GameArtwork": {
+      "type": "object",
+      "properties": {
+        "icon_path": {
+          "description": "Only complete, validated images are published here.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "steam_app_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "steam_app_id"
+      ]
+    },
+    "GameAvailability": {
+      "type": "object",
+      "properties": {
+        "data_available": {
+          "type": "boolean"
+        },
+        "default_snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "data_available"
+      ]
+    },
+    "GameLocation": {
+      "type": "object",
+      "properties": {
+        "data_dir": {
+          "type": "string"
+        },
+        "executables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "data_dir",
+        "executables"
+      ]
+    },
+    "History": {
+      "type": "object",
+      "properties": {
+        "game_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/HistoryKind"
+        },
+        "observation_run": {
+          "description": "Observation epoch prevents joining sessions across unobserved downtime.",
+          "type": "string"
+        },
+        "recorded_at": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "recovery_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "observation_run",
+        "sequence",
+        "game_id",
+        "kind",
+        "recorded_at"
+      ]
+    },
+    "HistoryKind": {
+      "type": "string",
+      "enum": [
+        "saved",
+        "existing_backup",
+        "loaded",
+        "reverted",
+        "game_started",
+        "game_closed"
+      ]
+    },
+    "Operation": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action"
+        },
+        "bytes_copied": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "game_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "live": {
+          "type": "string"
+        },
+        "original": {
+          "type": "string"
+        },
+        "original_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "recovery": {
+          "type": "string"
+        },
+        "recovery_complete": {
+          "type": "boolean"
+        },
+        "recovery_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recovery_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recovery_staging": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snapshot_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "staging": {
+          "type": "string"
+        },
+        "staging_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "started_at": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/OperationStatus"
+        },
+        "target_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "request_id",
+        "game_id",
+        "action",
+        "status",
+        "phase",
+        "live",
+        "recovery",
+        "recovery_staging",
+        "staging",
+        "original",
+        "recovery_complete",
+        "started_at",
+        "bytes_copied"
+      ]
+    },
+    "OperationStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed",
+        "recovery_needed",
+        "resolved"
+      ]
+    },
+    "Phase": {
+      "type": "string",
+      "enum": [
+        "preparing",
+        "recovery_ready",
+        "stage_ready",
+        "publishing_save",
+        "moving_original",
+        "original_moved",
+        "installing_replacement",
+        "replacement_installed",
+        "finished"
+      ]
+    },
+    "RecoveryChoice": {
+      "type": "string",
+      "enum": [
+        "retry",
+        "keep_current",
+        "restore_before"
+      ]
+    },
+    "RemovalReason": {
+      "type": "string",
+      "enum": [
+        "deleted",
+        "changed"
+      ]
+    },
+    "Reply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "$ref": "#/$defs/State"
+            },
+            "type": {
+              "type": "string",
+              "const": "state"
+            }
+          },
+          "required": [
+            "type",
+            "state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "accepted"
+            }
+          },
+          "required": [
+            "type",
+            "operation_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "$ref": "#/$defs/Operation"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation"
+            }
+          },
+          "required": [
+            "type",
+            "operation"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "game": {
+              "$ref": "#/$defs/Game"
+            },
+            "type": {
+              "type": "string",
+              "const": "configured"
+            }
+          },
+          "required": [
+            "type",
+            "game"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "preview": {
+              "$ref": "#/$defs/FlushPreview"
+            },
+            "type": {
+              "type": "string",
+              "const": "flush_preview"
+            }
+          },
+          "required": [
+            "type",
+            "preview"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "targets": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExplorerTarget"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "explorer_targets"
+            }
+          },
+          "required": [
+            "type",
+            "targets"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "shutting_down"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/Error"
+            },
+            "type": {
+              "type": "string",
+              "const": "error"
+            }
+          },
+          "required": [
+            "type",
+            "error"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ok"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "launch_on_startup": {
+          "type": "boolean",
+          "default": false
+        },
+        "play_sounds": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "Snapshot": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "description": "Last filesystem observation; service state also applies restore eligibility.",
+          "type": "boolean"
+        },
+        "discovered_at": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "game_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "identity": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SnapshotKind"
+        },
+        "original_data_dir": {
+          "description": "Original resolved live directory. Legacy records with no recoverable\norigin stay ineligible until rediscovered at a configured location.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "registration_order": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "removal_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemovalReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "removed_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "saved_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "selection_time": {
+          "description": "Estimated ordering timestamp for manual backups; not a claimed save time.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "game_id",
+        "registration_order",
+        "path",
+        "identity",
+        "fingerprint",
+        "kind",
+        "selection_time",
+        "discovered_at",
+        "available"
+      ]
+    },
+    "SnapshotKind": {
+      "type": "string",
+      "enum": [
+        "saved",
+        "recovery"
+      ]
+    },
+    "State": {
+      "type": "object",
+      "properties": {
+        "active_stack": {
+          "description": "Most recently activated game first.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artwork": {
+          "description": "Host artwork projection; not persisted or used for operation revisions.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/GameArtwork"
+          },
+          "default": {}
+        },
+        "artwork_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "availability": {
+          "description": "Derived by the host; clients must not inspect game directories or select\ndefault checkpoints themselves. Not persisted by the repository.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/GameAvailability"
+          },
+          "default": {}
+        },
+        "discovery_errors": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "games": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Game"
+          }
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/History"
+          }
+        },
+        "operations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Operation"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings",
+          "default": {
+            "launch_on_startup": false,
+            "play_sounds": true
+          }
+        },
+        "snapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Snapshot"
+          }
+        },
+        "visible_history": {
+          "description": "UI projection. `history` retains audit records and stale action IDs.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/History"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "games",
+        "snapshots",
+        "history",
+        "visible_history",
+        "operations",
+        "active_stack"
+      ]
+    }
+  }
+}

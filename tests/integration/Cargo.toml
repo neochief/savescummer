@@ -1,0 +1,18 @@
+[package]
+name = "savescummer-integration-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dev-dependencies]
+savescummer-core.workspace = true
+savescummer-snapshots.workspace = true
+savescummer-storage.workspace = true
+savescummer-platform.workspace = true
+savescummer-monitor.workspace = true
+savescummer-scanner.workspace = true
+savescummer-ipc.workspace = true
+tempfile.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+tokio.workspace = true

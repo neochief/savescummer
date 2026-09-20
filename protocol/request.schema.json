@@ -1,0 +1,440 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Request",
+  "type": "object",
+  "properties": {
+    "command": {
+      "$ref": "#/$defs/Command"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "request_id",
+    "command"
+  ],
+  "$defs": {
+    "Action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "save"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "description": "Saved checkpoint ID; None selects the newest eligible checkpoint.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "load"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "description": "Recovery checkpoint ID from a Loaded/Reverted row's recovery_id.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "revert"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "confirmed_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "flush"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "confirmed_revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "choice": {
+              "$ref": "#/$defs/RecoveryChoice"
+            },
+            "operation": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "recover"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "operation",
+            "choice"
+          ]
+        }
+      ]
+    },
+    "Command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "state"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "watch"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "check_artwork"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_play_sounds"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "enabled"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_launch_on_startup"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "enabled"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/ShortcutAction"
+            },
+            "type": {
+              "type": "string",
+              "const": "execute_active"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "action"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "explorer_targets"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "path"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "game_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "explore"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "game_id"
+          ]
+        },
+        {
+          "description": "None resets to the sole detected location; ambiguous games require a choice.",
+          "type": "object",
+          "properties": {
+            "game_id": {
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GameLocation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "select_detected_location"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "game_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data_dir": {
+              "type": "string"
+            },
+            "executables": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "string"
+              }
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "configure"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "name",
+            "data_dir"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "game_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "history"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "game_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/Action"
+            },
+            "game_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "execute"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "game_id",
+            "action"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "operation_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "game_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "flush_preview"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "game_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "rescan"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "shutdown"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "GameLocation": {
+      "type": "object",
+      "properties": {
+        "data_dir": {
+          "type": "string"
+        },
+        "executables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "data_dir",
+        "executables"
+      ]
+    },
+    "RecoveryChoice": {
+      "type": "string",
+      "enum": [
+        "retry",
+        "keep_current",
+        "restore_before"
+      ]
+    },
+    "ShortcutAction": {
+      "type": "string",
+      "enum": [
+        "save",
+        "load"
+      ]
+    }
+  }
+}

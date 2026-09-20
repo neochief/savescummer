@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Save Scummer · Sounds</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #17191c; color: #eef0f3; }
+    body { max-width: 800px; margin: 40px auto; padding: 0 22px 40px; }
+    h1 { font-size: 28px; font-weight: 650; margin-bottom: 8px; }
+    p { color: #b7bec8; line-height: 1.6; margin-top: 6px; }
+    h2 { font-size: 17px; margin: 0 0 4px; }
+    .sequences { background: #22262b; border-radius: 12px; padding: 22px; margin: 26px 0 12px; }
+    .sequences section + section { margin-top: 24px; }
+    .cue { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: center; padding: 22px 0; border-bottom: 1px solid #33383f; }
+    .cue p { margin: 0; font-size: 14px; }
+    audio { width: 100%; max-width: 100%; display: block; }
+    footer { margin-top: 24px; color: #9ba4af; font-size: 13px; line-height: 1.6; }
+    @media (max-width: 620px) { .cue { grid-template-columns: 1fr; } body { margin-top: 24px; } }
+  </style>
+</head>
+<body>
+  <h1>Save Scummer sounds</h1>
+  <p>Soft ascending tones for Save. Rounded descending tones for Load.<br>Start with a comfortable volume and compare against your game audio.</p>
+  <div class="sequences">
+    <section>
+      <h2>All six cues</h2>
+      <p>Save start → Save complete → Load start → Load complete → Failure → Busy</p>
+      <audio aria-label="All six cues in order" controls preload="metadata" src="preview/all-cues.wav"></audio>
+    </section>
+    <section>
+      <h2>Fast operations</h2>
+      <p>Save success → Load success → Save failure → Load failure</p>
+      <audio aria-label="Fast operation sequences" controls preload="metadata" src="preview/fast-operations.wav"></audio>
+    </section>
+  </div>
+  <main>
+    <section class="cue"><div><h2>Save started</h2><p>100 ms · Soft ascending notes</p></div><audio aria-label="Save started" controls preload="metadata" src="save-start.wav"></audio></section>
+    <section class="cue"><div><h2>Save completed</h2><p>200 ms · Brighter ascending resolution</p></div><audio aria-label="Save completed" controls preload="metadata" src="save-complete.wav"></audio></section>
+    <section class="cue"><div><h2>Load started</h2><p>100 ms · Soft descending notes</p></div><audio aria-label="Load started" controls preload="metadata" src="load-start.wav"></audio></section>
+    <section class="cue"><div><h2>Load completed</h2><p>200 ms · Rounded descending resolution</p></div><audio aria-label="Load completed" controls preload="metadata" src="load-complete.wav"></audio></section>
+    <section class="cue"><div><h2>Operation failed</h2><p>170 ms · Low double knock</p></div><audio aria-label="Operation failed" controls preload="metadata" src="operation-failed.wav"></audio></section>
+    <section class="cue"><div><h2>Busy</h2><p>28 ms · Quiet, dry tick</p></div><audio aria-label="Busy" controls preload="metadata" src="busy.wav"></audio></section>
+  </main>
+  <footer>Levels are preserved across all previews. Play one at a time to compare.<br>Original procedural audio · 48 kHz mono WAV</footer>
+</body>
+</html>

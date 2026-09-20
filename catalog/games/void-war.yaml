@@ -1,0 +1,20 @@
+id: void-war
+name: Void War
+info: |
+  To save the current game progress:
+  1. Exit to Main Menu (the game saves data here).
+  2. Run "Save" in SaveScummer.
+  3. In-game, choose Continue from Main Menu.
+
+  To load the saved game progress:
+  1. Exit to Main Menu (loading from here won't work because the game data is still in memory).
+  2. Go to Tutorial (this clears the last run from memory).
+  3. Run "Load" in SaveScummer.
+  4. In-game, go to Main Menu, then Continue. You should see the loaded state.
+stores:
+  steam: 2853590
+platforms:
+  windows:
+    executables:
+      - "Void War.exe"
+    data_dir: "{APPDATA}/Void_War"
