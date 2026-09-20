@@ -48,16 +48,20 @@ When the game is terminated, its temp data (such as UNDO PATH) is reset, and all
 
 ## SAVE
 
+Backup copies are always siblings of DIR, in the same parent directory. Existing sibling copies that follow the OS duplicate-directory naming conventions are treated as valid backups, regardless of whether the app created them.
+
 When save is triggered, I want the app to:
 
 1. Check if the game DIR exists. If not, finish the SAVE operation.
 
-2. Create a copy of that dir as a new folder following the OS conventions for duplicate dirs (for example, for Windows, it's "Void_War - Copy", "Void_War - Copy (2)" and so on). There can be multiple copies of the DIR; this is expected.
+2. Create a copy of that dir as a new sibling folder following the OS conventions for duplicate dirs (for example, for Windows, it's "Void_War - Copy", "Void_War - Copy (2)" and so on). There can be multiple copies of the DIR; this is expected.
 
 3. Reset UNDO PATH (so that any undo for load in the UI disappears).
 
 
 ## LOAD
+
+The app restores files on disk. The user is responsible for making the game pick up the restored state, for example by reloading or restarting the game. The same assumption applies to UNDO.
 
 When load is triggered, I want the app to:
 
