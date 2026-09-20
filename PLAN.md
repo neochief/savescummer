@@ -6,38 +6,178 @@ The app's data model should have a library of known games and the directory (we'
 
 Ideally, this app should be cross-platform and work on Windows, Linux and macOS.
 
+## ARCHITECTURE and MODULE BOUNDARIES
+
+The app consists of independently testable modules with explicit interfaces. Keep game and operation rules independent of the UI framework, database implementation and OS integration details. Package the modules as one application; internal modules are libraries, while the background host and UI have separate lifecycles.
+
+### Background host and UI
+
+Run one background host per user. It owns the core application, persistent state, operation locks, startup recovery, scanning and game monitoring. It must operate without a main window or UI client: shortcuts and Explorer commands must still work, operations must finish, history must persist, and sound/notification feedback must remain available.
+
+The UI is an optional client that connects to the host through a local command/query/event interface. Opening the app starts the host if necessary and attaches the UI to the existing instance. Closing or crashing the UI must not stop the host or cancel an operation. Reopening the UI retrieves current state and progress; it must not depend on events received by the previous UI instance.
+
+The host composes modules and manages their lifecycle. Business rules live in the core application and can also run inside a test process without starting a daemon, desktop window or IPC server. The UI depends on the service contract and can run against a fake service during development.
+
+### Modules
+
+| Module | Owns | Boundary |
+| --- | --- | --- |
+| UI | Game widgets, history presentation, progress display, configuration forms and confirmation dialogs | Sends commands and renders returned state/events. Does not copy game files, access SQLite directly, scan installations or implement operation policy. |
+| Core application | SAVE, LOAD, REVERT and Flush workflows; validation, busy/recovery states, operation locking and coordination | Sole entry point for actions from UI, shortcuts and Explorer. Coordinates the other modules through interfaces. |
+| Snapshot engine | Snapshot discovery, native copy naming, file copying, staging, replacement and rollback | Accepts resolved paths and operation context; reports results and progress. Does not select the active game, render UI or decide history policy. |
+| History and settings store | Games, overrides, snapshot metadata, history entries and durable operation records | Repository interface with an initial SQLite implementation. Does not manipulate game files or decide when an operation is permitted. |
+| Game catalog and scanner | Catalog parsing/validation, installation discovery, path resolution and Proton translation | Returns resolved candidates and availability using discovery providers. Does not start backup/restore operations or overwrite user choices. |
+| Game monitor | Process-to-game association, launch/close observations and ACTIVE STACK ordering | Consumes process/focus observations and resolved games. Publishes changes independently of the main window. |
+| Platform integrations | OS discovery providers, known-folder resolution, process/focus observations, shortcuts, file-manager commands, tray, autostart, sounds and notifications | Separate adapters behind narrow interfaces. Translate OS events into core commands/observations and core results into platform feedback. |
+| Background host | Module composition, single-instance ownership, local service transport, startup and shutdown | Supplies concrete implementations. Contains no duplicate SAVE/LOAD/REVERT logic. |
+
+Platform integrations are a family of small adapters, not one interface that every module must depend on. For example, the scanner needs discovery/path providers, the monitor needs process/focus observations, and feedback needs sound/notification delivery. Each can be replaced independently.
+
+### Shared service contract
+
+Expose a small, versioned local API with plain data types and stable IDs:
+
+- Commands: Save, Load (default or an explicit saved history entry), Revert (an explicit operation history entry), confirmed Flush history, configuration updates and rescan.
+- Queries: current games, active stack, configuration, history, operation status and recovery status.
+- Events: game availability/activity changes, history changes, operation start/progress/completion/failure and configuration changes.
+
+Use the same core command handling for every caller. The host validates commands and acquires operation locks; a disabled UI button is never the enforcement mechanism. Commands return an accepted operation ID or a structured rejection such as busy, unavailable or recovery needed. Clients can query an accepted operation after reconnecting instead of reissuing a destructive command. A client disconnect must not cancel an accepted operation.
+
+The connection must provide a consistent current-state snapshot and subsequent events, with revisions or equivalent resynchronization so clients cannot miss a change while attaching. Progress and errors use structured fields; user-facing wording is supplied by the UI or feedback adapter. A transport failure or disconnect must not be reported as success.
+
+Keep IPC local to the signed-in user. The core application must not depend on the selected IPC transport. Module interfaces and service messages must not expose UI controls, framework-specific objects, SQL rows or mutable internal state.
+
+### Independent development and testing
+
+- Define module contracts before implementations. Supply fake implementations for dependencies so each module can be developed and exercised independently.
+- Test core workflows without the UI, using controllable filesystem/store/clock behavior to exercise failures, overlapping requests and recovery transitions.
+- Test the snapshot engine against isolated temporary directories, including locked/unavailable files where supported, partial copies, collisions, failed replacement and rollback.
+- Test scanner providers with fixture catalogs, registry/launcher metadata and directory layouts. No installed Steam client or actual game library should be required for these tests.
+- Test the monitor with recorded or synthetic launch/focus/close sequences, including multiple processes per game.
+- Test the store's persistence, transaction boundaries and restart recovery separately. Replacement store implementations must satisfy the same repository contract.
+- Test the UI against a fake service that can produce busy, progress, failure, unavailable-snapshot and disconnected states.
+- Keep platform-specific integration checks separate from portable module tests. Verify the service contract end to end with the UI absent, including shortcut/Explorer command handling and UI reattachment during an operation.
+
+History policy, operation locks and file replacement behavior must have a single authoritative implementation. Replacing the UI, discovery provider or storage implementation must not require recreating those rules.
+
 
 ## SCAN, GAME LIBRARY, KNOWN GAMES
 
-When the app is launched, it should perform a quick scan for gaming platforms and games that are present on the user's computer. Found platforms and games are displayed in the main app window's list. The scan is performed each time the app starts and periodically (once every 15 minutes).
+When the background host starts, it should perform a quick scan for gaming platforms and games that are present on the user's computer. Found platforms and games are displayed in the main app window's list whenever the UI is attached. The scan is performed each time the host starts and periodically (once every 15 minutes), including while the UI is closed.
+
+The scanner follows three steps:
+
+1. Find candidate installations using launcher metadata, platform application records, known locations and user overrides.
+2. Match candidates to the game library using stable identifiers where available, then validate their expected executable paths. A similar display name alone is insufficient.
+3. Resolve the game's data DIR using the library's path rule in the correct native or Proton environment.
+
+Keep scanning bounded to these sources and declared paths; do not recursively search entire drives. Multiple sources finding the same installation must resolve to one KNOWN GAMES entry. Preserve user overrides across rescans.
+
+Installation detection is separate from save-data availability. An installed game may not have created DIR yet; this must not make the game appear uninstalled. If multiple distinct installations or data locations remain plausible, require a one-time choice in Configure rather than guessing from modification times. A temporarily unavailable drive or unreadable discovery source must not be treated as confirmed uninstallation. Scanning never deletes snapshots or history.
 
 ## Game platforms
 
 ### Steam
 
-%STEAMAPPS% (for example: "C:\Program Files (x86)\Steam\steamapps\common")
+Discover the Steam client and all configured Steam libraries, then read local installed-game metadata. Match games by Steam app ID and resolve the installation directory from the metadata rather than assuming the display name is the installation folder name.
 
-This should be detected first, so that patterns like %STEAMAPPS% can be expanded when the scan for games is being run.
+The Steam discovery implementation is shared across Windows, macOS and Linux, with platform-specific client-location handling. It must account for multiple libraries and supported alternative Steam installation locations. Verify that the expected game executable exists before accepting a candidate as an installed game.
+
+On Windows, the scanner may also derive the uninstall registry key "Steam App <appid>" from the declared Steam ID. This fallback is shared scanner behavior, not a registry declaration repeated in every Steam game's library entry.
+
+### Windows application records
+
+Read installed-app registry records from the current-user and machine-wide uninstall locations, including applicable 32-bit and 64-bit registry views. Treat names, installation locations and icons as discovery hints, then validate them against the game definition and actual files. Registry records are not a complete inventory and do not generally declare a game's save directory.
+
+For non-Steam games, allow a game-specific registry locator when needed. Do not query every application through Windows Installer or assume that all portable games have registry entries.
+
+### macOS applications
+
+For games with a declared native macOS definition, allow lookup by a known bundle identifier and validate the returned application location and executable. A bundle identifier is an optional game-library field for games that need it.
+
+### Known paths and user overrides
+
+Use game-specific known installation paths and explicit user-selected locations as fallbacks for portable games or installations not found through other sources. Broad package-manager discovery is not required for the initial scanner.
 
 ## Game library
 
-Our library should have known data about each game that would let the app detect whether it's installed or running.
+Keep entries declarative and small. Each entry declares:
 
-- Game name (e.g. "Void War")
-- Game icon (path?)
-- Patterns to look for the install location (e.g. "%STEAMAPPS%\Void War")
-- Patterns to look for the save/data DIR (e.g. "%APPDATA%\Void War")
+- A stable game ID and display name.
+- Store identifiers, such as a Steam app ID, when available.
+- Per-platform executable paths, relative to the discovered installation directory.
+- A per-platform data-directory rule declaring both the base location and the game-specific subdirectory. The whole resolved DIR is the snapshot unit.
 
-Any game that was successfully found should have a new entry in the KNOWN GAMES data structure that is filled with:
+Steam discovery, Steam registry fallback, icon discovery, path-root resolution, Proton translation and snapshot naming are shared scanner behavior. Do not repeat those mechanisms in every entry. Add optional game-specific locators, alternative data locations or runtime exceptions only when a game needs them. User overrides are local settings and do not modify the shared catalog.
 
-- Game name
-- Game icon
-- Path to the game executable
-- Path to the game's data DIR
+### Complete example: Void War
+
+```yaml
+id: void-war
+name: Void War
+
+stores:
+  steam: 2853590
+
+platforms:
+  windows:
+    executables:
+      - "Void War.exe"
+
+    data_dir: "{APPDATA}/Void_War"
+```
+
+This is the complete normal entry, not a placeholder requiring extra registry, icon or Proton fields. The Steam app ID is confirmed by the [Steam listing](https://store.steampowered.com/app/2853590/Void_War/), and the developer documents the [Roaming AppData save location](https://itch.io/post/11632754). The Windows executable and data directory were also verified locally when this entry was designed. Native macOS and Linux definitions are omitted until native releases and their paths are verified.
+
+### Data-directory roots
+
+The library declares the root and relative path; the scanner resolves that root on the current machine. It must not assume that all games save under AppData. For example:
+
+```yaml
+# Void War
+data_dir: "{APPDATA}/Void_War"
+```
+
+Other games may use rules such as "{LOCALAPPDATA}/ExampleGame/Saves", "{DOCUMENTS}/My Games/ExampleGame", "{SAVED_GAMES}/ExampleGame" or "{INSTALL_DIR}/saves". These are illustrations, not additional Void War paths.
+
+On native Windows, {APPDATA} means the current user's Roaming AppData directory, {LOCALAPPDATA} means Local AppData, and {DOCUMENTS} and {SAVED_GAMES} mean the corresponding known folders. Resolve them through platform facilities, respecting redirected locations rather than constructing paths from a hardcoded username. {INSTALL_DIR} is the validated installation directory for this candidate.
+
+Games with verified native releases can add macos and linux blocks using the same executable/data_dir structure and appropriate roots, such as the user's home, macOS Application Support, and Linux XDG data/config directories. Respect XDG overrides and defaults. Path templates are data, not shell commands.
+
+### Proton resolution
+
+On Linux, reuse a game's windows definition when its Windows version is running through Proton. Resolve Windows roots such as {APPDATA} inside that game's actual prefix, not against the Linux host user's directories. {INSTALL_DIR} still refers to the discovered game installation.
+
+For a standard Steam installation, the prefix is normally under "<Steam library>/steamapps/compatdata/<appid>/pfx". Discover the relevant library and prefix rather than hardcoding the drive, home directory or prefix user. Custom locations need reliable discovery evidence or an explicit user override.
+
+For Void War, the typical resolved data directory is:
+
+```text
+<Steam library>/steamapps/compatdata/2853590/pfx/
+  drive_c/users/steamuser/AppData/Roaming/Void_War
+```
+
+Separate native Linux from Windows-through-Proton when resolving a game. A leftover Proton prefix alone does not prove which runtime is currently in use. Use installation/runtime evidence, and require a Configure choice if it remains ambiguous. Do not silently switch between native and Proton data locations or mix their histories.
+
+Different Proton releases do not require duplicate game definitions. Prefix resolution is shared behavior; add a game-specific exception only when verified necessary. Resolving a path does not claim compatibility with every Proton release.
+
+### KNOWN GAMES
+
+For each resolved game, retain:
+
+- Stable game ID and display name.
+- Discovered installation identity, source and full installation path.
+- Resolved platform/runtime and Proton prefix when applicable.
+- Full executable paths for process identification.
+- Full data DIR and its current availability.
+- Discovered icon, using installation/store information with executable-icon fallback where supported.
+- Persistent local overrides and the data-location identity used to associate snapshots and history.
+
+History remains associated with its original data location. Changing a configured DIR must not silently retarget existing Restore or Revert actions to a different location.
 
 ## MONITOR and ACTIVE STACK
 
-After the app finishes the initial scan, it should track the launch, activation and termination of the KNOWN GAMES executables in the central data structure called ACTIVE STACK. It would help with displaying the relevant information in the game's widget in the app's UI and also communicate which game to operate on when the global shortcuts are used.
+After the background host finishes the initial scan, the game monitor should track the launch, activation and termination of the KNOWN GAMES executables in the central data structure called ACTIVE STACK. Monitoring continues without a UI client. The core uses this state to select the game for global shortcuts and publishes it for the UI to display in game widgets.
 
 There should be a focus stack of the launched games, and the shortcuts should only work with the latest game in the stack. There should be just one element per launched game in the stack. Two processes for the same game count as one in the stack. If all game processes are terminated, the entry is removed from the stack. If the game is focused, it moves to the top of the stack.
 
@@ -62,7 +202,7 @@ Game/
 `-- Void_War.recovery-000003/     state before a revert
 ```
 
-- Saved snapshots follow the OS duplicate-directory naming conventions. Existing sibling copies matching those conventions are valid saved snapshots, regardless of whether the app created them. Import them as "Existing backup" entries without inventing SAVE events. Their import time must not be presented as the time they were saved.
+- Saved snapshots follow the platform's native duplicate-directory naming convention, including localized names. Manually created sibling copies matching a supported convention are ordinary saved checkpoints, regardless of whether the app created them. Discover them automatically as "Existing backup" entries without inventing SAVE events. Their discovery time must not be presented as the time they were saved.
 - Recovery snapshots use a separate reserved naming convention with unique IDs, such as "Void_War.recovery-000001". Never overwrite an existing directory when allocating a new snapshot. Recovery snapshots are excluded from default LOAD selection.
 - The app treats completed snapshots as read-only. Restoration copies their contents into DIR and leaves the source snapshot intact.
 - A local SQLite database stores game configuration, snapshot IDs, kinds, paths and timestamps, and history entries. Game files remain in the sibling directories, not in the database.
@@ -86,6 +226,16 @@ For example:
 | 19:38 | Saved | Saved C | Restore C |
 | 19:42 | Loaded [19:25] | Restored A; preserved previous state as D | Revert to D |
 | 19:43 | Reverted [19:42] | Restored D; preserved previous state as E | Revert to E |
+
+### Manual checkpoints
+
+Duplicating DIR in the platform's file manager is a supported way to create a checkpoint. The user must not have to register or import the copy manually, rename it into an app-specific format, or add app metadata to it.
+
+Scan DIR's parent directory for matching checkpoints at startup and during periodic scans, and refresh discovery when opening the game's history or resolving the default LOAD target. Match complete native duplicate names derived from DIR's actual name, using the supported platform/file-manager naming rules and their localized variants. Do not treat every folder sharing DIR's name prefix as a checkpoint.
+
+Register newly discovered manual checkpoints in the database without changing their folder names or contents. Repeated discovery must not duplicate their history entries. Offer Restore and include them among the ordinary saved checkpoints eligible for default LOAD and confirmed Flush history. Database IDs identify history entries independently of folder names.
+
+Recovery snapshots and app staging directories are separate from native duplicate copies and must never be discovered as ordinary saved checkpoints.
 
 
 ## OPERATION SAFETY
@@ -113,7 +263,7 @@ When save is triggered, I want the app to:
 
 1. Check if the game DIR exists. If not, finish the SAVE operation.
 
-2. Create a copy of that dir as a new sibling folder following the OS conventions for duplicate dirs (for example, for Windows, it's "Void_War - Copy", "Void_War - Copy (2)" and so on). There can be multiple copies of the DIR; this is expected.
+2. Create a copy of that dir as a new sibling folder following the platform's native convention for duplicate dirs (for example, for English Windows Explorer, it's "Void_War - Copy", "Void_War - Copy (2)" and so on). Choose the next available name, accounting for existing app-created and manual copies. Never overwrite an existing path; if a naming collision occurs, choose another available name. There can be multiple copies of DIR; this is expected.
 
 3. After the copy succeeds, register the saved snapshot and append a Saved history entry. Keep all existing saved snapshots, recovery snapshots and history entries.
 
@@ -149,7 +299,7 @@ Ctrl+F9 (LOAD operation)
 
 ### Shortcut sounds
 
-SAVE and LOAD triggered through global shortcuts have separate start and completion cues. The start cue means the request was accepted and the operation has started; the completion cue means the file operation and its history record have successfully committed.
+SAVE and LOAD triggered through global shortcuts have separate start and completion cues. The background host's feedback adapter plays these independently of the UI. The start cue means the request was accepted and the operation has started; the completion cue means the file operation and its history record have successfully committed.
 
 | Event | Sound |
 | --- | --- |
@@ -309,27 +459,31 @@ Changing the path and saving would update the entry in KNOWN GAMES.
 
 Above the main window list, there should be a checkbox:  [X] Start with the system
 
-The app can be launched minimized with the "--minimized" flag, in which case it starts minimized to the tray.
+The app can be launched with the "--minimized" flag, in which case it starts or reuses the background host and shows its tray icon without opening the main window. The host's core must not require a UI client to initialize or operate.
 
-By default, if you launch the app, the main window is shown and focused. When you close the app, it's minimized to the tray.
+By default, launching the app starts or reuses the host and shows and focuses the main window. Closing the main window leaves the background host running in the tray. UI termination or disconnection does not cancel core operations.
 
-Clicking on the tray icon shows the main window.
+Clicking on the tray icon opens or focuses the UI and connects it to the existing host.
 
 The tray icon's context menu has two items:
 
 - Main window
 - Exit
 
+Exit requests shutdown of the background host and UI. Stop accepting new operations, let any active operation and required rollback reach a safe stopping point, persist state, then release platform integrations and exit. Do not shut down merely because the UI disconnected.
+
 
 # OS specifics
 
 ## Naming conventions for directory copies
 
-Ordinary saved snapshots follow the conventions below. Recovery snapshots use the separate reserved "<DIR name>.recovery-<unique ID>" convention on every platform, with filesystem-safe names and collision handling.
+Ordinary saved snapshots use native duplicate-folder naming, so app-created checkpoints and manual copies fit the same workflow. Naming and recognition must account for the supported file manager's localized conventions; do not replace native saved-checkpoint names with a universal app-specific scheme.
 
-- Windows: "Void_War", "Void_War - Copy", "Void_War - Copy (2)"
-- macOS: unknown
-- Linux: unknown
+- Windows: Explorer's duplicate-folder convention (for example, in English: "Void_War - Copy", "Void_War - Copy (2)").
+- macOS: Finder's duplicate-folder convention, including localized variants.
+- Linux: the supported file manager's duplicate-folder convention, including localized variants. Define and test naming and recognition for each supported file manager rather than assuming one Linux-wide convention.
+
+Recognized native copies are accepted without proof of app ownership. Keep their original names and contents. Recovery snapshots alone use the reserved "<DIR name>.recovery-<unique ID>" convention on every platform, with filesystem-safe names and collision handling. They remain distinguishable from ordinary checkpoints and are excluded from default LOAD selection.
 
 ## Global shortcuts
 
