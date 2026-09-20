@@ -36,6 +36,10 @@ Use temporary platform/game layouts and the real discovery code. Supply test sea
 
 - Resolve platform locations before expanding game patterns, then populate the known game's executable and data paths correctly. Cover multiple candidate locations, missing directories, and paths containing spaces or non-ASCII characters.
 - Repeat scans without duplicating games. Detect a newly installed or removed game and apply configured path overrides. Trigger the periodic scan's actual handler without waiting fifteen minutes in each test.
+- Reject identical, ancestor and descendant DIRs across configured games, including unavailable games. Cover both catalog candidates and user overrides. Verify that the error identifies the conflicting game and that an invalid override leaves the previous configuration unchanged.
+- Exercise equivalent path spellings, filesystem case rules and directory aliases where supported. Reject overlaps after resolution, while accepting distinct sibling names such as Game and Game2. Validate an otherwise valid missing DIR without creating it, and recheck locations if an alias changes before an operation.
+- Reject protected disk/share, user, system, application-data, Documents/Saved Games and shared installation/library roots and their ancestors. Use resolved-root fixtures, including redirected folders and Proton equivalents; no test should copy, replace or delete an actual system directory.
+- Accept game-specific children of protected roots and valid shallow directories. Do not reject an unrelated folder merely because its name resembles a protected root. Verify that invalid discovered DIRs leave games visible with configuration errors and that core validation blocks file operations independently of UI controls.
 - Discover manual sibling copies at startup, during refresh, when opening history, and when resolving the default LOAD target. Register each copy once as an Existing backup without renaming or modifying it.
 - Recognize complete supported native duplicate names, including localized variants and numbered copies. Exclude unrelated folders sharing a prefix, recovery snapshots, and staging directories.
 - Allocate a new saved or recovery snapshot name without overwriting an existing directory, including when a competing directory appears during allocation.
@@ -53,7 +57,7 @@ Use real temporary directories and a real SQLite database. Compare file contents
 - Before LOAD or REVERT changes DIR, preserve its current contents in a new recovery snapshot. The source snapshot remains unchanged after restoration.
 - Exercise a sequence such as Save A, modify, Load A, modify, Revert that load, and Revert that revert. Verify every resulting DIR, recovery snapshot, history reference, and action target.
 - Restore an older checkpoint without deleting later history. Use equal timestamps to verify that IDs and ordering still distinguish separate actions.
-- Reject an unavailable explicit target without substituting a different snapshot or creating unnecessary recovery data. If the current DIR is missing, restoration must stop safely.
+- Reject an unavailable explicit target without substituting a different snapshot or creating unnecessary recovery data. If the current DIR is missing, ordinary LOAD or REVERT must stop safely; dedicated interrupted-operation recovery can recreate it as described below.
 - Restart SaveScummer and verify that configuration, snapshots, history, and exact Restore/Revert relationships survive. Game exit must not clear them either.
 - Flush history only after confirmation, preserve current DIR, and include manual saved copies and retained recovery data in the intended deletion scope. On partial deletion failure, retain records for what remains and report the failure.
 
@@ -66,9 +70,17 @@ Exercise failures in the real operation sequence. Use actual file locks and perm
 - Verify successful rollback after replacement fails. If rollback also fails, retain needed recovery/staging data, report Recovery needed, and block operations that could change or delete that game's data.
 - Terminate a test host running the real operation code at meaningful boundaries, including after filesystem replacement but before the completion record is committed. Reopen the same database and directories through the real startup recovery path.
 - Interrupted or failed work must not appear as a completed history action. Preserve recovery material, surface the interruption, and keep operations blocked while the outcome remains uncertain.
-- Have the fake game write saves slowly, update multiple related files, hold a file open, or exit during copying. Check what is captured and how failure is reported; this also establishes the practical limits of copying a running game's files.
+- Interrupt before live DIR changes. On restart, verify that current data is untouched, retain the failed/interrupted record and recovery material, and allow ordinary operations without an unnecessary recovery prompt.
+- Interrupt after moving the original DIR aside but before installing the replacement. With no UI attached, restart the host and verify automatic rollback restores the exact original data even though DIR is missing. Retain checkpoints and recovery snapshots, persist the resolution before unblocking, and report rollback rather than successful LOAD or REVERT.
+- Interrupt after replacement but before recording completion, then write subsequent game progress into DIR before restarting the host. Verify that recovery does not automatically overwrite it and offers Keep current game data or Restore data from before the interrupted operation.
+- Choose Keep current game data and verify that file contents remain unchanged, the choice is persisted, and ordinary operations resume. Disable and reject this choice if DIR is missing or inaccessible, including if it disappears between displaying the prompt and handling the command.
+- Choose Restore data from before the interrupted operation with DIR present and with DIR missing. Restore the exact pre-operation data; when DIR exists, first preserve its current contents as a new recovery snapshot. If preservation fails, leave DIR untouched and keep recovery unresolved. Keep all earlier snapshots.
+- Fail recovery with locks, permissions or unavailable recovery material. Verify the specific error, Open recovery folder and Retry recovery. Opening the folder must not clear the block. Repair the filesystem, then retry or accept the repaired current DIR without editing SQLite.
+- While recovery is unresolved, reject ordinary SAVE, LOAD, REVERT, Flush history and path changes through every entry point. Permit dedicated recovery commands against the recorded original location, allow only one attempt at a time, and show the same status and choices after UI reconnection.
+- Interrupt a recovery attempt, including after file restoration but before persisting its resolution. Restart and verify that retained data survives and recovery remains possible without fabricating a completed Loaded/Reverted entry or the interrupted operation's success cue.
+- Have the fake game write saves slowly, update multiple related files, hold a file open, or exit during copying. Verify that actual copy errors follow the failure and rollback rules. Successful copying may capture mixed game states; do not require concurrent-write detection, automatic retries or game suspension.
 
-Ordinary file copying does not by itself establish a consistent game-level save across concurrent writes. These cases must inform the supported behavior; a test should not silently assume that consistency has been solved.
+Copying is explicitly best-effort. Tests must distinguish filesystem success from game-level consistency and must not assert a consistent save while the game is writing.
 
 ## 5. Operation entry points, shortcuts, and feedback
 
@@ -118,8 +130,6 @@ Where PLAN.md leaves behavior open, agree on the expected result before turning 
 
 - How to order manual checkpoints whose original save time is unknown when choosing the latest LOAD target.
 - Which launcher/helper processes belong to a game, and how to order several games already running when monitoring begins.
-- What consistency can be promised while the game is actively writing, and what the user sees when that promise cannot be met.
-- How users resolve Recovery needed after an interrupted operation with an uncertain outcome.
 - What should happen when an Explorer request arrives while SaveScummer is not running.
 
 ## Starting order

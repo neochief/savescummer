@@ -6,9 +6,79 @@ The app's data model should have a library of known games and the directory (we'
 
 Ideally, this app should be cross-platform and work on Windows, Linux and macOS.
 
+The app icon is already available at [assets/icon.svg](assets/icon.svg).
+
 ## ARCHITECTURE and MODULE BOUNDARIES
 
 The app consists of independently testable modules with explicit interfaces. Keep game and operation rules independent of the UI framework, database implementation and OS integration details. Package the modules as one application; internal modules are libraries, while the background host and UI have separate lifecycles.
+
+### Selected technology stack
+
+- Rust for the core application, background host, snapshot engine, scanner, monitor and platform adapters; Cargo for Rust builds and tests.
+- Qt 6 Widgets with C++ for the separate desktop UI; CMake for its build. Keep the C++ client focused on presentation and communication with the host.
+- SQLite for history, settings and durable operation records, owned by the Rust host through the storage module.
+- A versioned local JSON command/query/event protocol over Windows named pipes and Unix-domain sockets on macOS/Linux. The UI and host communicate as separate processes; no direct Rust/C++ bindings are required.
+- Windows first, with portable core modules and explicit macOS/Linux adapters. Build, package and test each supported platform separately.
+
+The stack was selected after a small Windows release-build proof of concept demonstrated host/UI communication, busy rejection, progress, UI reconnection and an operation continuing after UI termination. It measured approximately 51 MiB of combined working set (9.3 MiB private resident memory) and a 153 ms median UI reopen with warm caches. These are minimal-demo measurements, not production budgets: real file copying, SQLite, scanning, monitoring and platform integrations were absent. The experimental code is outside the application source tree; the layout below defines the production repository.
+
+### Repository layout
+
+Use one repository, one Cargo workspace for Rust packages, and a CMake build for C++ components. Each backend module is a separately testable Rust crate. These library boundaries do not introduce additional running processes: the background host links the backend modules, and the desktop UI runs separately.
+
+```text
+savescummer/
+├── Cargo.toml
+├── Cargo.lock
+├── CMakeLists.txt
+│
+├── apps/
+│   ├── host/                   # Rust executable; assembles backend modules
+│   └── desktop/                # C++ / Qt Widgets executable
+│       ├── src/
+│       └── tests/
+│
+├── crates/
+│   ├── core/                   # Commands, policies, workflows, interfaces
+│   ├── snapshots/              # Copy, staging, replacement, rollback
+│   ├── storage/                # SQLite implementation and migrations
+│   ├── scanner/                # Catalog parsing and installation discovery
+│   ├── monitor/                # Game activity and active-stack rules
+│   ├── platform/               # OS adapters
+│   │   └── src/
+│   │       ├── windows/
+│   │       ├── macos/
+│   │       └── linux/
+│   └── ipc/                    # Rust transport and wire-message handling
+│
+├── protocol/                   # Shared message schema and example fixtures
+├── catalog/
+│   └── games/
+│       └── void-war.yaml
+├── integrations/
+│   └── windows-explorer/       # Separate native shell extension
+│
+├── tests/
+│   ├── integration/            # Tests spanning modules/processes
+│   ├── fake-game/              # Small controllable test executable
+│   └── fixtures/
+├── assets/                     # Icons and sounds
+├── packaging/                  # Platform-specific distribution files
+├── scripts/                    # Build, test and packaging commands
+├── PLAN.md
+└── PLAN-INTEGRATION-TESTS.md
+```
+
+Repository and dependency rules:
+
+- `apps/host` owns startup, lifecycle and wiring of concrete implementations. `crates/core` owns application policy and workflow coordination; it must not depend on Qt, concrete SQLite storage or OS APIs.
+- Define dependency interfaces with the module that consumes them. Implementations satisfy those interfaces, and the host supplies them. Keep crate dependencies acyclic and each module buildable and testable independently of the full application.
+- `apps/desktop` owns presentation and its client connection to the host. It communicates through the shared service protocol and must not link backend implementations, access SQLite or manipulate game saves.
+- `protocol/` is the authoritative shared wire-contract specification, including versioned message schemas and compatibility fixtures. Both Rust and C++ protocol tests use those fixtures. `crates/ipc` implements Rust transport and message handling; transport details stay outside the core application.
+- Keep module tests in their owning crates and Qt UI tests in `apps/desktop/tests`. Root `tests/integration` holds cross-module and cross-process scenarios, using a Cargo workspace test package where applicable. Share the controllable fake-game executable and test data through `tests/fake-game` and `tests/fixtures`, following `PLAN-INTEGRATION-TESTS.md`.
+- Keep game definitions in `catalog/games`, independently of scanner implementation. Keep the Explorer extension in its own native build target; it forwards requests to the host rather than implementing save/load rules.
+- Build scripts wrap standard Cargo and CMake commands. Use Cargo's test runner and Qt Test; do not introduce a custom test framework. Packaging produces one application distribution containing the host, UI and required integrations.
+- Keep build outputs, downloaded SDKs and local runtime data out of version control. Commit source, game definitions, protocol fixtures, migrations, build configuration and the application Cargo lockfile.
 
 ### Background host and UI
 
@@ -23,7 +93,7 @@ The host composes modules and manages their lifecycle. Business rules live in th
 | Module | Owns | Boundary |
 | --- | --- | --- |
 | UI | Game widgets, history presentation, progress display, configuration forms and confirmation dialogs | Sends commands and renders returned state/events. Does not copy game files, access SQLite directly, scan installations or implement operation policy. |
-| Core application | SAVE, LOAD, REVERT and Flush workflows; validation, busy/recovery states, operation locking and coordination | Sole entry point for actions from UI, shortcuts and Explorer. Coordinates the other modules through interfaces. |
+| Core application | SAVE, LOAD, REVERT, Flush and interrupted-operation recovery workflows; validation, busy/recovery states, operation locking and coordination | Sole entry point for actions from UI, shortcuts and Explorer. Coordinates the other modules through interfaces. |
 | Snapshot engine | Snapshot discovery, native copy naming, file copying, staging, replacement and rollback | Accepts resolved paths and operation context; reports results and progress. Does not select the active game, render UI or decide history policy. |
 | History and settings store | Games, overrides, snapshot metadata, history entries and durable operation records | Repository interface with an initial SQLite implementation. Does not manipulate game files or decide when an operation is permitted. |
 | Game catalog and scanner | Catalog parsing/validation, installation discovery, path resolution and Proton translation | Returns resolved candidates and availability using discovery providers. Does not start backup/restore operations or overwrite user choices. |
@@ -37,9 +107,9 @@ Platform integrations are a family of small adapters, not one interface that eve
 
 Expose a small, versioned local API with plain data types and stable IDs:
 
-- Commands: Save, Load (default or an explicit saved history entry), Revert (an explicit operation history entry), confirmed Flush history, configuration updates and rescan.
+- Commands: Save, Load (default or an explicit saved history entry), Revert (an explicit operation history entry), retry interrupted-operation recovery, resolve recovery (an explicit interrupted operation and choice), confirmed Flush history, configuration updates and rescan.
 - Queries: current games, active stack, configuration, history, operation status and recovery status.
-- Events: game availability/activity changes, history changes, operation start/progress/completion/failure and configuration changes.
+- Events: game availability/activity changes, history changes, operation start/progress/completion/failure, recovery status changes and configuration changes.
 
 Use the same core command handling for every caller. The host validates commands and acquires operation locks; a disabled UI button is never the enforcement mechanism. Commands return an accepted operation ID or a structured rejection such as busy, unavailable or recovery needed. Clients can query an accepted operation after reconnecting instead of reissuing a destructive command. A client disconnect must not cancel an accepted operation.
 
@@ -175,6 +245,18 @@ For each resolved game, retain:
 
 History remains associated with its original data location. Changing a configured DIR must not silently retarget existing Restore or Revert actions to a different location.
 
+### Data-directory validation
+
+The core validates DIR before accepting a discovered location or saving a user override. Apply the same rules to catalog paths and manual choices:
+
+- Reject a DIR that equals, contains or is inside another configured game's DIR, including games that are temporarily unavailable. Identify the conflicting game and path in the error.
+- Reject overly broad locations: disk/volume roots and network-share roots; user-profile/home and shared user roots; OS/system directories; application-data roots such as Roaming AppData, Local AppData, LocalLow and ProgramData; Documents and Saved Games roots; and shared installation containers such as Program Files, Steam library roots, steamapps and common. Include the corresponding locations on other supported platforms and inside a resolved Proton prefix. Reject ancestors of these protected locations as well.
+- Base these checks on resolved platform folders and discovered library locations, not folder names or path depth alone. A game-specific child such as "{APPDATA}/Void_War" or "{DOCUMENTS}/My Games/ExampleGame" is valid if it passes the other checks. A shallow game-specific directory is not automatically invalid.
+
+Normalize paths and resolve existing directory aliases before comparing them, respecting the filesystem's case rules. Compare directory components and identity rather than raw string prefixes, so "Game" and "Game2" do not conflict. DIR may not exist yet: resolve its existing ancestors and validate the intended location without creating it. Recheck resolved locations before file operations so changed paths cannot bypass validation.
+
+Reject an invalid override without changing the previous configuration. If discovery yields an invalid DIR and no valid configured location remains, keep the installed game visible with a concise configuration error and disable its file operations until corrected. For an overly broad path, explain that the user must select the game's own data directory. These are enforced validation errors, not warnings with a proceed-anyway option.
+
 ## MONITOR and ACTIVE STACK
 
 After the background host finishes the initial scan, the game monitor should track the launch, activation and termination of the KNOWN GAMES executables in the central data structure called ACTIVE STACK. Monitoring continues without a UI client. The core uses this state to select the game for global shortcuts and publishes it for the UI to display in game widgets.
@@ -242,6 +324,8 @@ Recovery snapshots and app staging directories are separate from native duplicat
 
 The app restores files on disk. The user is responsible for making the game pick up the restored state, for example by reloading or restarting the game. This applies to both Restore and Revert.
 
+Use ordinary, best-effort file copying for saved and recovery snapshots. Do not suspend the game, detect concurrent writes, add game-specific consistency logic or automatically retry copies. Actual filesystem or copy errors fail the operation under the safety rules below. Successful copying does not guarantee a consistent game save if the game was writing during the copy. The user decides whether to pause or close the game before requesting an operation.
+
 All entry points (UI, global shortcuts and Explorer) use the same operation handling and per-game operation lock. Allow only one operation per game at a time, including Flush history and changes to configured paths. Reject additional requests while that game is busy; do not queue them for later execution. Disable conflicting UI actions and give brief, rate-limited busy feedback for shortcuts and Explorer requests. Holding a shortcut must not repeatedly trigger operations.
 
 For every Restore or Revert:
@@ -252,9 +336,24 @@ For every Restore or Revert:
 4. Replace DIR while retaining enough data to recover if replacement fails. Attempt rollback on failure; retain recovery and staging data needed for recovery if rollback cannot complete, and report the failure.
 5. Mark the operation complete only after successful replacement. Keep both the source snapshot and the newly captured recovery snapshot.
 
-Filesystem changes and database changes cannot share one transaction. Persist a pending/completed/failed operation record so startup can identify interrupted operations. Preserve their recovery files and surface the interruption instead of silently treating it as a successful load or deleting recovery data. Failed and pending operations must not appear as completed history actions.
+Filesystem changes and database changes cannot share one transaction. Persist a pending/completed/failed operation record so startup can identify interrupted operations. Record the original data-location identity, live DIR, source snapshot, recovery snapshot, staging and retained-original paths. Persist the intended replacement step before changing paths and its result afterward, so startup can reconcile the record with the actual directories. Preserve their recovery files and surface the interruption instead of silently treating it as a successful load or deleting recovery data. Failed and pending operations must not appear as completed history actions.
 
 SAVE also publishes a snapshot and its history entry only after its copy succeeds. Flush history reports deletion failures and retains records for remaining snapshots instead of claiming that cleanup completed.
+
+### Interrupted-operation recovery
+
+The host checks interrupted operations before allowing new operations for the affected game. A failure before the app changed live DIR normally needs only an error: verify that the interruption happened before replacement began, retain the operation record and any recovery material, and release the block. A pending record alone must not cause an unnecessary restore or recovery prompt.
+
+Automatically roll back when the operation record and filesystem establish that restoring the retained original data will not overwrite possibly newer current data. For example, if DIR was moved aside and the host crashed before installing the replacement, restore the retained original to DIR. Verify the result and persist the resolution before clearing the block. Report "The previous load was interrupted. Your original save has been restored." Use corresponding wording for an interrupted Revert. Keep saved checkpoints and recovery snapshots; do not automatically retry the requested LOAD or REVERT. This recovery runs even when no UI is attached.
+
+If replacement may have completed or current DIR may contain subsequent game progress, do not blindly roll back. Keep the game in "Recovery needed" and offer two choices in a small recovery prompt:
+
+- **Keep current game data:** accept the current DIR without replacing it. Require an existing, accessible directory; disable this choice while DIR is missing. Recheck it when the command runs, then record the user's choice and resolve the interruption. This accepts the user's chosen files, not a claim that the app has validated the game's save format.
+- **Restore data from before the interrupted operation:** use the complete recovery snapshot or verified retained original associated with that operation. If DIR exists, first preserve its current contents as a new recovery snapshot; if this fails, leave DIR untouched and keep recovery unresolved. Stage and restore the chosen pre-operation data, retaining the source and all earlier snapshots. This dedicated recovery action can recreate a missing DIR and must not fail merely because normal LOAD requires a current directory to preserve.
+
+If permissions, file locks, missing recovery material or disk problems prevent recovery, show the specific error and provide **Open recovery folder** and **Retry recovery** actions. Opening the folder must not resolve the interruption. After fixing the filesystem manually, the user can retry recovery or choose Keep current game data for the repaired DIR; no database editing is required.
+
+Recovery commands use the same core validation and per-game lock, target the interrupted operation's original data location, and remain available while ordinary SAVE, LOAD, REVERT, Flush history and path changes are blocked. Allow only one recovery attempt at a time. Recovery attempts must also be recorded durably and remain recoverable if interrupted again. Preserve all retained snapshots and uncertain files until an explicit Flush after recovery is resolved. Persist the resolution and its retained snapshot references without turning the original failed or interrupted action into a successful Loaded/Reverted history entry or playing its completion cue. Clear the block only after filesystem checks and the resolution record succeed; subsequent ordinary LOAD or REVERT requests are separate operations.
 
 
 ## SAVE
@@ -365,7 +464,7 @@ In this mockup, Save and Load are visually dimmed and inactive; the thin line is
 
 Restore and Revert actions in any already-open history, Flush history, and changes to configured paths are also disabled for that game while busy. Backend locking enforces the same restriction for every entry point; disabling buttons alone is insufficient.
 
-Keep the busy state until the operation and any required rollback have finished. After success or a safely handled failure, remove the progress bar and re-enable controls according to snapshot availability. Show failures as an error, not as a completed progress bar. If rollback cannot finish or an interrupted operation has an uncertain outcome, show "Recovery needed", retain the recovery files, and keep operations that could change or delete the game's data blocked until recovery is resolved.
+Keep the busy state until the operation and any required rollback have finished. After success or a safely handled failure, remove the progress bar and re-enable controls according to snapshot availability. Show failures as an error, not as a completed progress bar. If rollback cannot finish or an interrupted operation has an uncertain outcome, show "Recovery needed" with an action to open the recovery prompt described above. Retain the recovery files and block ordinary SAVE, LOAD, REVERT, Flush history and path changes until recovery is resolved. Keep the dedicated recovery choices and folder access available, disabling conflicting recovery choices while a recovery attempt is running. Opening or reconnecting the UI must retrieve the current recovery status and available choices from the host.
 
 
 ### Save
@@ -443,12 +542,12 @@ Game data dir (DIR): [...prefilled path...][open icon] [Reset]
 
 [Save] [Cancel]
 
-Changing the path and saving would update the entry in KNOWN GAMES.
+Changing the path and saving updates the entry in KNOWN GAMES only after core validation succeeds. Show path errors in Configure and preserve the previous configuration if validation fails.
 
 
 - Flush history...
 
-    Enable this action when any saved snapshots, recovery snapshots or history entries exist, including recovery data retained after interrupted operations.
+    Enable this action when any saved snapshots, recovery snapshots or history entries exist and the game is neither busy nor awaiting recovery. Recovery data retained after an interrupted operation is included only after that interruption has been resolved. Enforce this restriction in the core as well as the UI.
 
     Show a confirmation with separate counts: "This will permanently delete X saved backups and Y recovery points, and clear this game's history. Current game data will be kept." Include any retained incomplete recovery copies in the deletion scope and confirmation.
 
