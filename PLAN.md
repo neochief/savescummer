@@ -430,7 +430,13 @@ Keep the UI slick, minimal and compact. Use spacing, restrained emphasis and con
 
 ### Main window
 
-It should show a scrollable list of widgets, one per game, for games that are in our library and that are detected on this computer. If there are no installed games, the list is empty and shows the text "No known games installed on this computer." The list shows launched games in the ACTIVE STACK first in the proper order, and then all installed known games. The idea is to have the launched active games on top. If the game is closed, it leaves ACTIVE STACK. If a scan finds that the game is no longer installed, the entry should disappear.
+It should show a scrollable list of widgets, one per game, for games that are in our library and that are detected on this computer. If there are no installed games, the list is empty and shows the text "No known games installed on this computer."
+
+When at least one game is running, show launched games in ACTIVE STACK order and group all nonrunning installed games under an expandable "Other games" row with a count. Collapse that group by default when entering this running-games view; the user can expand it to access any nonrunning game's controls and history. Preserve the user's expansion choice during ordinary refreshes while games remain running. When no games are running, show all installed known games directly without requiring expansion. If a game closes, it leaves ACTIVE STACK and moves into the nonrunning group, or into the full list if it was the last running game. If a scan confirms that a game is no longer installed, its entry disappears.
+
+Use the existing `assets/icon.svg` for application branding, including the window icon and tray icon. Game widgets use each game's discovered icon; the application icon does not replace game icons.
+
+Keep the app-wide checkboxes and keyboard hints in a persistent bottom help bar, outside the scrollable game list. Place "Start with the system" and "Shortcut sounds" on the left, with "Save  Ctrl+F5" and "Load  Ctrl+F9" on the right. At narrow widths, wrap these groups into two rows without hiding labels or controls. The shortcut hints refer to the active game at the top of ACTIVE STACK. Do not duplicate these settings above the game list.
 
 Each game widget should show the following:
 
@@ -556,7 +562,7 @@ Changing the path and saving updates the entry in KNOWN GAMES only after core va
 
 ## Autolaunch
 
-Above the main window list, there should be a checkbox:  [X] Start with the system
+The bottom help bar contains the checkbox: [X] Start with the system, alongside the app-wide Shortcut sounds checkbox and the Save/Load keyboard hints described under Main window.
 
 The app can be launched with the "--minimized" flag, in which case it starts or reuses the background host and shows its tray icon without opening the main window. The host's core must not require a UI client to initialize or operate.
 
