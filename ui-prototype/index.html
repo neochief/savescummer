@@ -1,0 +1,2196 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Save Scummer UI prototype</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Save Scummer UI prototype" data-srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Save Scummer UI prototype&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script type=&quot;application/json&quot; id=&quot;codex-visualization-widget-state&quot;&gt;__CODEX_VISUALIZATION_WIDGET_STATE__&lt;/script&gt;
+&lt;script&gt;(() =&gt; {
+  const root = document.documentElement;
+  const mediaQuery = globalThis.matchMedia(&quot;(prefers-color-scheme: dark)&quot;);
+  const apply = Reflect.apply;
+  const isArray = Array.isArray;
+  const hasOwn = Object.hasOwn;
+  const parentWindow = globalThis.parent;
+  const stringify = JSON.stringify;
+  const parse = JSON.parse;
+  const encode = TextEncoder.prototype.encode.bind(new TextEncoder());
+  const initialStateElement = document.getElementById(
+    &quot;codex-visualization-widget-state&quot;,
+  );
+  const initialGlobals = parse(initialStateElement?.textContent ?? &quot;{}&quot;);
+  initialStateElement?.remove();
+  /** @type {Record&lt;string, unknown&gt; | null} */
+  let state = initialGlobals.widgetState ?? null;
+  const statePersistence = initialGlobals.statePersistence ?? &quot;none&quot;;
+  let nextStateRequestId = 0;
+  /** @type {Map&lt;number, { resolve: () =&gt; void; reject: (error: Error) =&gt; void; timeout: ReturnType&lt;typeof globalThis.setTimeout&gt;; serializedState: string }&gt;} */
+  const pendingStateWrites = new Map();
+  const persistenceError = () =&gt;
+    Object.assign(
+      new Error(&quot;The host could not persist the widget state update&quot;),
+      {
+        code: -32000,
+        data: { code: &quot;widget_state_persistence_failed&quot;, retryable: false },
+      },
+    );
+  /**
+   * @param {object} prototype
+   * @param {string} property
+   */
+  const getPrototypeGetter = (prototype, property) =&gt; {
+    // oxlint-disable-next-line typescript/unbound-method -- invoked through captured Reflect.apply
+    const getter = Object.getOwnPropertyDescriptor(prototype, property)?.get;
+    if (getter == null) {
+      throw new Error(`Missing ${property} getter`);
+    }
+    return getter;
+  };
+  const getMessageData = getPrototypeGetter(MessageEvent.prototype, &quot;data&quot;);
+  const getMessagePorts = getPrototypeGetter(MessageEvent.prototype, &quot;ports&quot;);
+  const getMessageSource = getPrototypeGetter(MessageEvent.prototype, &quot;source&quot;);
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const addHostMessageListener = MessagePort.prototype.addEventListener;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const postHostMessage = MessagePort.prototype.postMessage;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const startHostPort = MessagePort.prototype.start;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const stopMessagePropagation = Event.prototype.stopImmediatePropagation;
+  /** @type {MessagePort | null} */
+  let hostPort = null;
+  const postToHost = (type, payload) =&gt; {
+    if (hostPort != null) {
+      apply(postHostMessage, hostPort, [{ type, ...payload }]);
+    }
+  };
+  const openExternal = ({ href }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;open-external&quot;, { href });
+    }
+  };
+  const sendFollowUpMessage = ({ context, prompt, title }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;follow-up&quot;, { context, prompt, title });
+    }
+    return Promise.resolve();
+  };
+  /**
+   * @param {Record&lt;string, unknown&gt; | ((previous: Record&lt;string, unknown&gt; | null) =&gt; Record&lt;string, unknown&gt;)} next
+   * @returns {Promise&lt;void&gt;}
+   */
+  const setWidgetState = async (next) =&gt; {
+    const nextState = typeof next === &quot;function&quot; ? next(state) : next;
+    if (
+      nextState == null ||
+      typeof nextState !== &quot;object&quot; ||
+      isArray(nextState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const inputState = stringify(
+      nextState,
+      (_key, /** @type {unknown} */ value) =&gt; {
+        if (
+          typeof value === &quot;undefined&quot; ||
+          typeof value === &quot;function&quot; ||
+          typeof value === &quot;symbol&quot; ||
+          (typeof value === &quot;number&quot; &amp;&amp; !Number.isFinite(value))
+        ) {
+          throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+        }
+        return value;
+      },
+    );
+    const parsedState = parse(inputState);
+    if (
+      parsedState == null ||
+      typeof parsedState !== &quot;object&quot; ||
+      isArray(parsedState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const storedState = {
+      modelContent: null,
+      privateContent: null,
+      ...parsedState,
+    };
+    const serializedState = stringify(storedState);
+    if (encode(serializedState).length &gt; 16 * 1024) {
+      throw new TypeError(
+        &quot;Widget state must be a JSON object of at most 16 KiB&quot;,
+      );
+    }
+    if (
+      hasOwn(storedState, &quot;imageIds&quot;) &amp;&amp;
+      (!isArray(storedState.imageIds) ||
+        storedState.imageIds.some(
+          (/** @type {unknown} */ id) =&gt; typeof id !== &quot;string&quot;,
+        ))
+    ) {
+      throw new TypeError(&quot;Widget state imageIds must be an array of strings&quot;);
+    }
+    if (storedState.imageIds?.length &gt; 0) {
+      throw Object.assign(
+        new TypeError(&quot;Visualization state does not support image attachments&quot;),
+        { code: -32602, data: { code: &quot;images_unsupported&quot; } },
+      );
+    }
+    state = storedState;
+    globalThis.openai.widgetState = state;
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: { widgetState: state } },
+      }),
+    );
+    if (statePersistence === &quot;none&quot;) {
+      throw persistenceError();
+    }
+    const id = ++nextStateRequestId;
+    return new Promise((resolve, reject) =&gt; {
+      const timeout = globalThis.setTimeout(() =&gt; {
+        pendingStateWrites.delete(id);
+        reject(persistenceError());
+      }, 30_000);
+      pendingStateWrites.set(id, { resolve, reject, timeout, serializedState });
+      postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+    });
+  };
+  const syncTheme = () =&gt; {
+    const theme = mediaQuery.matches ? &quot;dark&quot; : &quot;light&quot;;
+    root.dataset.theme = theme;
+    globalThis.openai = {
+      ...globalThis.openai,
+      openExternal,
+      sendFollowUpMessage,
+      setWidgetState,
+      theme,
+      visualizationStyleVariables: {},
+      visualizationTheme: theme,
+      widgetState: state,
+      statePersistence,
+      stateModelContext: &quot;none&quot;,
+    };
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: globalThis.openai },
+      }),
+    );
+  };
+  const sendHeight = () =&gt; {
+    postToHost(&quot;height&quot;, {
+      height: Math.ceil(
+        Math.max(
+          document.body.scrollHeight,
+          document.body.getBoundingClientRect().height,
+        ),
+      ),
+    });
+  };
+
+  globalThis.addEventListener(
+    &quot;message&quot;,
+    (event) =&gt; {
+      const data = apply(getMessageData, event, []);
+      const ports = apply(getMessagePorts, event, []);
+      const source = apply(getMessageSource, event, []);
+      if (
+        hostPort != null ||
+        source !== parentWindow ||
+        typeof data !== &quot;object&quot; ||
+        data?.type !== &quot;codex-visualization-initialize&quot; ||
+        !isArray(ports) ||
+        ports.length !== 1
+      ) {
+        return;
+      }
+      apply(stopMessagePropagation, event, []);
+      const nextHostPort = ports[0];
+      try {
+        apply(addHostMessageListener, nextHostPort, [
+          &quot;message&quot;,
+          (event) =&gt; {
+            const data = apply(getMessageData, event, []);
+            if (typeof data === &quot;object&quot; &amp;&amp; data?.type === &quot;measure&quot;) {
+              sendHeight();
+            } else if (
+              typeof data === &quot;object&quot; &amp;&amp;
+              data?.type === &quot;widget-state-result&quot;
+            ) {
+              /** @type {unknown} */
+              const id = data.id;
+              if (typeof id !== &quot;number&quot;) {
+                return;
+              }
+              const pending = pendingStateWrites.get(id);
+              if (pending != null) {
+                pendingStateWrites.delete(id);
+                globalThis.clearTimeout(pending.timeout);
+                if (data.ok === true) {
+                  pending.resolve();
+                } else {
+                  pending.reject(persistenceError());
+                }
+              }
+            }
+          },
+        ]);
+        apply(startHostPort, nextHostPort, []);
+      } catch {
+        return;
+      }
+      hostPort = nextHostPort;
+      for (const [id, { serializedState }] of pendingStateWrites) {
+        postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+      }
+      sendHeight();
+    },
+    { capture: true },
+  );
+  document.currentScript?.remove();
+  mediaQuery.addEventListener(&quot;change&quot;, syncTheme);
+  globalThis.addEventListener(&quot;click&quot;, (event) =&gt; {
+    if (event.defaultPrevented) {
+      return;
+    }
+    let element = null;
+    if (event.target instanceof globalThis.Element) {
+      element = event.target;
+    } else if (event.target instanceof globalThis.Node) {
+      element = event.target.parentElement;
+    }
+    const link = element?.closest(&quot;a[href]&quot;);
+    const href = link?.getAttribute(&quot;href&quot;);
+    if (href == null) {
+      return;
+    }
+    if (href.startsWith(&quot;#&quot;)) {
+      let id;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id.length === 0 ? root : document.getElementById(id);
+      if (
+        target == null ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      event.preventDefault();
+      postToHost(&quot;scroll-to&quot;, {
+        top: target.getBoundingClientRect().top + globalThis.scrollY,
+      });
+      return;
+    }
+    event.preventDefault();
+    openExternal({ href });
+  });
+  new ResizeObserver(sendHeight).observe(document.body);
+  syncTheme();
+})();
+&lt;/script&gt;
+&lt;div id=&quot;scummer-sketch&quot; aria-label=&quot;Save Scummer main window&quot; data-accent=&quot;violet&quot;&gt;
+  &lt;style&gt;
+    #scummer-sketch{--ss-bg:light-dark(#f5f5f5,#191919);--ss-chrome:light-dark(#fafafa,#1f1f1f);--ss-surface:light-dark(#fff,#242424);--ss-text:light-dark(#242424,#eee);--ss-muted:light-dark(#686868,#aaa);--ss-line:light-dark(#dcdcdc,#3b3b3b);--ss-soft:light-dark(#ededed,#303030);--ss-brand:#9747ff;--ss-accent:light-dark(#9747ff,#bc8dff);--ss-tint:light-dark(#ededed,#333);--ss-on:light-dark(#fff,#191919);--ss-green:light-dark(#277749,#8bd4ac);--ss-shadow:light-dark(#00000022,#00000060);--ss-row:32px;position:relative;color:var(--ss-text);font-family:&quot;Segoe UI Variable&quot;,&quot;Segoe UI&quot;,sans-serif;font-size:13px;line-height:1.35;width:100%;max-width:620px;margin:0 auto;isolation:isolate}
+    #scummer-sketch *{box-sizing:border-box}
+    #scummer-sketch [hidden]{display:none!important}
+    #scummer-sketch button,#scummer-sketch input{font:inherit}
+    #scummer-sketch button{color:inherit}
+    #scummer-sketch .ss-window{background:var(--ss-bg);border:1px solid var(--ss-line);border-radius:8px;overflow:hidden}
+    #scummer-sketch .ss-titlebar{display:flex;align-items:center;justify-content:space-between;min-height:36px;background:var(--ss-chrome);border-bottom:1px solid var(--ss-line);padding:0 10px 0 18px}
+    #scummer-sketch .ss-brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500}
+    #scummer-sketch #ss-app-icon{display:block;width:27px;height:27px;border-radius:5px;flex-shrink:0}
+    #scummer-sketch .ss-window-controls{display:flex;align-items:center;gap:23px;color:var(--ss-muted);font-size:14px}
+    #scummer-sketch .ss-check{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ss-muted);white-space:nowrap}
+    #scummer-sketch .ss-check input{width:13px;height:13px;margin:0;accent-color:var(--ss-brand)}
+    #scummer-sketch .ss-list{padding:0;position:relative}
+    #scummer-sketch .ss-game{position:relative;width:100%;padding:12px 18px;background:transparent;border:0;border-radius:0;box-shadow:none;margin:0}
+    #scummer-sketch .ss-game:hover{background:light-dark(#ededed,#141414)}
+    #scummer-sketch .ss-game[data-selected=&quot;true&quot;]{background:light-dark(#e7e7e7,#101010)}
+    #scummer-sketch .ss-select{position:absolute;inset:0;z-index:0;width:100%;height:100%;padding:0;border:0;border-radius:0;background:transparent}
+    #scummer-sketch .ss-game-head{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-bottom:0;pointer-events:none}
+    #scummer-sketch .ss-game[data-selected=&quot;true&quot;] .ss-game-head{margin-bottom:7px}
+    #scummer-sketch .ss-game-icon{width:27px;height:27px;border-radius:5px;display:grid;place-items:center;flex-shrink:0;font-size:10px;font-weight:500;letter-spacing:.2px;background:var(--ss-soft);border:1px solid var(--ss-line);color:var(--ss-muted)}
+    #scummer-sketch .ss-game h2{font-size:14px;line-height:1.3;margin:0;font-weight:500}
+    #scummer-sketch .ss-game-status{margin-left:2px;color:var(--ss-muted);font-size:11px;white-space:nowrap}
+    #scummer-sketch .ss-game-status[data-status=&quot;running&quot;]{color:var(--ss-green)}
+    #scummer-sketch .ss-controls{position:relative;z-index:1;display:grid;grid-template-columns:repeat(2,minmax(0,158px)) 28px;gap:6px;align-items:stretch}
+    #scummer-sketch .ss-info{position:relative;z-index:1;margin-top:10px;padding:0;border:0;background:transparent;font-size:12px;line-height:1.45;overflow-wrap:anywhere;user-select:text}
+    #scummer-sketch .ss-info p{margin:0;font-weight:500}
+    #scummer-sketch .ss-info ol{margin:4px 0 10px;padding-left:18px}
+    #scummer-sketch .ss-info li+li{margin-top:3px}
+    #scummer-sketch .ss-info&gt;:last-child{margin-bottom:0}
+    #scummer-sketch .ss-info-empty{color:var(--ss-muted)}
+    #scummer-sketch .ss-more{margin-left:auto;display:grid;place-items:center;width:28px;height:32px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--ss-muted)}
+    #scummer-sketch .ss-controls&gt;.ss-more{grid-column:3;align-self:center}
+    #scummer-sketch .ss-more[aria-expanded=&quot;true&quot;]{background:var(--ss-tint);color:light-dark(#7b2ed7,#cba5ff);border-color:var(--ss-line)}
+    #scummer-sketch .ss-button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:36px;padding:3px 8px;background:var(--ss-surface);border:1px solid var(--ss-line);border-radius:4px;font-size:12px;white-space:nowrap}
+    #scummer-sketch .ss-button:hover,#scummer-sketch .ss-more:hover{background:var(--ss-soft)}
+    #scummer-sketch .ss-load{display:grid;grid-template-columns:minmax(0,1fr) 27px}
+    #scummer-sketch .ss-load-main{min-width:0;border-radius:4px 0 0 4px;flex-direction:column;gap:0;padding:2px 6px}
+    #scummer-sketch .ss-age{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ss-muted);font-size:11px;line-height:1.2}
+    #scummer-sketch .ss-chevron{border-radius:0 4px 4px 0;border-left:0;padding:0}
+    #scummer-sketch .ss-chevron[aria-expanded=&quot;true&quot;]{background:var(--ss-tint);color:light-dark(#7b2ed7,#cba5ff);border-color:color-mix(in srgb,var(--ss-brand) 45%,var(--ss-line))}
+    #scummer-sketch button:disabled{opacity:.42;cursor:default}
+    #scummer-sketch .ss-progress{position:absolute;grid-column:1 / 3;left:0;right:0;bottom:-1px;height:2px;background:var(--ss-line);overflow:hidden;border-radius:0 0 4px 4px}
+    #scummer-sketch .ss-progress&gt;span{display:block;height:100%;background:var(--ss-brand);width:0;transition:width .2s linear}
+    #scummer-sketch .ss-history,#scummer-sketch .ss-menu{position:absolute;z-index:20;background:var(--ss-surface);border:1px solid var(--ss-line);border-radius:6px;box-shadow:0 8px 22px var(--ss-shadow),0 1px 3px var(--ss-shadow);overflow:hidden}
+    #scummer-sketch .ss-history{width:354px}
+    #scummer-sketch .ss-history-list{max-height:326px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--ss-line) var(--ss-surface);padding:3px 4px 5px}
+    #scummer-sketch .ss-day{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 6px 4px;font-size:11px;font-weight:500;color:var(--ss-text)}
+    #scummer-sketch .ss-day span:last-child{color:var(--ss-muted);font-weight:400}
+    #scummer-sketch .ss-day:not(:first-child){border-top:1px solid var(--ss-line);margin-top:4px}
+    #scummer-sketch .ss-history-row{display:grid;grid-template-columns:52px 16px minmax(0,1fr) 63px;gap:6px;align-items:center;min-height:var(--ss-row);padding:3px 6px;border-radius:4px;font-size:12px}
+    #scummer-sketch .ss-time{font-size:11px;font-variant-numeric:tabular-nums;color:var(--ss-muted)}
+    #scummer-sketch .ss-event-icon{display:flex;align-items:center;color:var(--ss-muted)}
+    #scummer-sketch .ss-row-label{min-width:0}
+    #scummer-sketch .ss-reference{color:var(--ss-muted);font-size:11px}
+    #scummer-sketch .ss-marker{min-height:23px;font-size:11px;color:var(--ss-muted)}
+    #scummer-sketch .ss-marker .ss-event-icon{justify-content:center}
+    #scummer-sketch .ss-marker .ss-event-icon::after{content:&quot;&quot;;width:4px;height:4px;border:1px solid var(--ss-muted);border-radius:50%}
+    #scummer-sketch .ss-row-action{border:1px solid var(--ss-line);border-radius:3px;background:var(--ss-surface);padding:3px 6px;font-size:11px;min-height:24px;text-align:center}
+    #scummer-sketch .ss-history-row:not(.ss-marker):hover{background:var(--ss-soft)}
+    #scummer-sketch .ss-history-row.ss-preview{background:var(--ss-tint)}
+    #scummer-sketch .ss-history-row.ss-preview .ss-row-action,#scummer-sketch .ss-row-action:hover{background:var(--ss-accent);color:var(--ss-on);border-color:var(--ss-accent)}
+    #scummer-sketch .ss-history-row.ss-preview .ss-event-icon{color:light-dark(#7b2ed7,#cba5ff)}
+    #scummer-sketch .ss-unavailable{font-size:11px;color:var(--ss-muted);display:block}
+    #scummer-sketch .ss-menu{width:158px;padding:4px}
+    #scummer-sketch .ss-menu button{display:block;width:100%;text-align:left;padding:6px 8px;min-height:28px;background:transparent;border:0;border-radius:3px;font-size:12px}
+    #scummer-sketch .ss-menu button:hover{background:var(--ss-soft)}
+    #scummer-sketch .ss-other-group{width:100%}
+    #scummer-sketch[data-running=&quot;true&quot;] .ss-other-group::before{content:&quot;&quot;;display:block;margin:0;border-top:1px dotted var(--ss-line)}
+    #scummer-sketch .ss-other-toggle{display:flex;align-items:center;gap:7px;width:100%;min-height:27px;padding:8px 18px;border:0;background:transparent;text-align:left;font-size:12px;color:var(--ss-muted)}
+    #scummer-sketch .ss-other-toggle:hover{color:var(--ss-text);background:light-dark(#ededed,#141414)}
+    #scummer-sketch .ss-other-toggle svg{transition:transform .12s ease}
+    #scummer-sketch .ss-other-toggle[aria-expanded=&quot;true&quot;] svg{transform:rotate(90deg)}
+    #scummer-sketch .ss-other-count{font-size:11px;border-radius:3px;background:var(--ss-soft);padding:0 5px;color:var(--ss-muted)}
+    #scummer-sketch #ss-other-games{padding:0}
+    #scummer-sketch .ss-footer{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:6px 12px;padding:7px 10px;background:var(--ss-chrome);border-top:1px solid var(--ss-line);font-size:11px;color:var(--ss-muted)}
+    #scummer-sketch .ss-footer-shortcuts{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+    #scummer-sketch .ss-startup{margin-left:auto}
+    #scummer-sketch .ss-footer span{display:flex;align-items:center;gap:5px}
+    #scummer-sketch kbd{font:inherit;color:var(--ss-muted);background:var(--ss-soft);border:1px solid var(--ss-line);border-radius:3px;padding:1px 4px}
+    #scummer-sketch .ss-notice{padding:6px 10px;background:var(--ss-tint);color:light-dark(#7b2ed7,#cba5ff);font-size:11px;border-bottom:1px solid var(--ss-line)}
+    #scummer-sketch .ss-only-reader{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    @media(max-width:480px){#scummer-sketch .ss-titlebar{padding-left:14px}#scummer-sketch .ss-game{padding:10px 14px}#scummer-sketch .ss-other-toggle{padding-left:14px;padding-right:14px}#scummer-sketch .ss-controls{gap:5px}#scummer-sketch .ss-window-controls{gap:18px}}
+    @media(max-width:360px){#scummer-sketch .ss-history-row{grid-template-columns:51px minmax(0,1fr) 59px;gap:5px}#scummer-sketch .ss-event-icon{display:none}}
+    @media(pointer:coarse){#scummer-sketch .ss-button,#scummer-sketch .ss-row-action,#scummer-sketch .ss-more,#scummer-sketch .ss-other-toggle,#scummer-sketch .ss-menu button{min-height:44px}#scummer-sketch .ss-history-row{min-height:50px}#scummer-sketch .ss-marker{min-height:28px}#scummer-sketch .ss-check{min-height:32px}}
+    @media(prefers-reduced-motion:reduce){#scummer-sketch .ss-progress&gt;span,#scummer-sketch .ss-other-toggle svg{transition:none}#scummer-sketch .ss-history,#scummer-sketch .ss-menu{animation:none}}
+  &lt;/style&gt;
+  &lt;div class=&quot;ss-window&quot;&gt;
+    &lt;header class=&quot;ss-titlebar&quot;&gt;
+      &lt;div class=&quot;ss-brand&quot;&gt;&lt;img id=&quot;ss-app-icon&quot; src=&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiIHJvbGU9ImltZyIgYXJpYS1sYWJlbGxlZGJ5PSJ0aXRsZSBkZXNjIj4KICA8dGl0bGUgaWQ9InRpdGxlIj5TYXZlU2NydW1tZXI8L3RpdGxlPgogIDxkZXNjIGlkPSJkZXNjIj5BbiBpdm9yeSBza3VsbCBpbnNpZGUgYSB2aW9sZXQgY291bnRlcmNsb2Nrd2lzZSB1bmRvIGFycm93IG9uIGEgZGVlcCBwbHVtIGJhY2tncm91bmQuPC9kZXNjPgoKICA8cmVjdCBpZD0iYmFja2dyb3VuZCIgd2lkdGg9IjEwMjQiIGhlaWdodD0iMTAyNCIgZmlsbD0iIzE5MTMyMiIvPgoKICA8ZyBpZD0idW5kby1hcnJvdyIgZmlsbD0iIzk3NDdGRiI+CiAgICA8cGF0aCBkPSJNIDE2MiA1MDYgQSAzNTAgMzUwIDAgMSAwIDI2NC41MSAyNjIuNTEiCiAgICAgICAgICBmaWxsPSJub25lIiBzdHJva2U9IiM5NzQ3RkYiIHN0cm9rZS13aWR0aD0iOTAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogICAgPHBhdGggZD0iTSAxNzQgMTk4CiAgICAgICAgICAgICBRIDE4MSAxNjQgMjA3IDE4OAogICAgICAgICAgICAgTCAzNTAgMzIwCiAgICAgICAgICAgICBRIDM3NiAzNDQgMzQxIDM1NgogICAgICAgICAgICAgTCAxNjYgNDA4CiAgICAgICAgICAgICBRIDEyOCA0MTkgMTM4IDM4MAogICAgICAgICAgICAgWiIvPgogIDwvZz4KCiAgPHBhdGggaWQ9InNrdWxsIiBmaWxsPSIjRkZGMENDIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9IgogICAgTSA1MTIgMzEzCiAgICBDIDQwMSAzMTMgMzEyIDM4NyAzMTIgNDkyCiAgICBDIDMxMiA1MjkgMzIzIDU1NiAzNDEgNTc4CiAgICBDIDMzMCA1ODcgMzI3IDYwMiAzMzMgNjE5CiAgICBDIDMzOSA2MzggMzUzIDY0OCAzNzUgNjQ4CiAgICBMIDM5NyA2NDgKICAgIFEgNDExIDY0OCA0MTEgNjYyCiAgICBMIDQxMSA2ODYKICAgIFEgNDExIDcwOSA0MzggNzExCiAgICBMIDQ2NSA3MTMKICAgIEwgNDY4IDY3OQogICAgTCA0ODUgNjc5CiAgICBMIDQ4NiA3MDcKICAgIFEgNDg2IDcxNSA0OTYgNzE1CiAgICBMIDUyNyA3MTUKICAgIFEgNTM3IDcxNSA1MzcgNzA3CiAgICBMIDUzOCA2NzkKICAgIEwgNTU1IDY3OQogICAgTCA1NTggNzEzCiAgICBMIDU4NSA3MTEKICAgIFEgNjEyIDcwOSA2MTIgNjg2CiAgICBMIDYxMiA2NjIKICAgIFEgNjEyIDY0OCA2MjYgNjQ4CiAgICBMIDY0OCA2NDgKICAgIEMgNjcwIDY0OCA2ODQgNjM4IDY5MCA2MTkKICAgIEMgNjk2IDYwMiA2OTMgNTg3IDY4MiA1NzgKICAgIEMgNzAwIDU1NiA3MTIgNTI5IDcxMiA0OTIKICAgIEMgNzEyIDM4NyA2MjMgMzEzIDUxMiAzMTMKICAgIFoKCiAgICBNIDM4NSA0OTIKICAgIEMgMzczIDQ4NyAzNjMgNDkxIDM2MCA1MDgKICAgIEMgMzUxIDU0MSAzNTcgNTczIDM3NCA1ODYKICAgIEMgMzkzIDYwMiA0MjUgNTk4IDQ0NiA1ODQKICAgIEMgNDYyIDU3MyA0NzQgNTUwIDQ2OCA1MzgKICAgIEMgNDYwIDUyNCA0MDggNTAwIDM4NSA0OTIKICAgIFoKCiAgICBNIDYzOSA0OTIKICAgIEMgNjUxIDQ4NyA2NjEgNDkxIDY2NCA1MDgKICAgIEMgNjczIDU0MSA2NjcgNTczIDY1MCA1ODYKICAgIEMgNjMxIDYwMiA1OTkgNTk4IDU3OCA1ODQKICAgIEMgNTYyIDU3MyA1NTAgNTUwIDU1NiA1MzgKICAgIEMgNTY0IDUyNCA2MTYgNTAwIDYzOSA0OTIKICAgIFoKCiAgICBNIDUwNSA1NzQKICAgIFEgNTEyIDU2MyA1MTkgNTc0CiAgICBMIDU0MCA2MDgKICAgIFEgNTQ2IDYyMiA1MzMgNjIyCiAgICBMIDQ5MSA2MjIKICAgIFEgNDc4IDYyMiA0ODQgNjA4CiAgICBaIi8+Cjwvc3ZnPgo=&quot; alt=&quot;&quot; width=&quot;25&quot; height=&quot;25&quot;&gt;&lt;span&gt;Save Scummer&lt;/span&gt;&lt;/div&gt;
+      &lt;div class=&quot;ss-window-controls&quot; aria-hidden=&quot;true&quot;&gt;&lt;span&gt;−&lt;/span&gt;&lt;span&gt;□&lt;/span&gt;&lt;span&gt;×&lt;/span&gt;&lt;/div&gt;
+    &lt;/header&gt;
+    &lt;div class=&quot;ss-notice&quot; role=&quot;status&quot; hidden&gt;&lt;/div&gt;
+    &lt;main class=&quot;ss-list&quot; aria-label=&quot;Installed games&quot;&gt;
+      &lt;section class=&quot;ss-game&quot; id=&quot;ss-void-game&quot; data-game-id=&quot;void-war&quot; aria-label=&quot;Void War, running&quot;&gt;
+        &lt;div class=&quot;ss-game-head&quot;&gt;&lt;div class=&quot;ss-game-icon&quot; aria-hidden=&quot;true&quot;&gt;VW&lt;/div&gt;&lt;h2&gt;Void War&lt;/h2&gt;&lt;span class=&quot;ss-game-status&quot; data-status=&quot;running&quot;&gt;Running&lt;/span&gt;&lt;button type=&quot;button&quot; class=&quot;ss-more cursor-interaction&quot; aria-label=&quot;Void War options&quot; aria-expanded=&quot;false&quot; data-more&gt;&lt;i data-lucide=&quot;ellipsis&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+        &lt;div class=&quot;ss-controls&quot;&gt;
+          &lt;button type=&quot;button&quot; class=&quot;ss-button cursor-interaction&quot; id=&quot;ss-save&quot; aria-label=&quot;Save Void War&quot;&gt;&lt;i data-lucide=&quot;save&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;Save&lt;/button&gt;
+          &lt;div class=&quot;ss-load&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-load-main cursor-interaction&quot; id=&quot;ss-load&quot; aria-label=&quot;Load latest Void War save&quot;&gt;&lt;span&gt;Load&lt;/span&gt;&lt;span class=&quot;ss-age&quot; id=&quot;ss-latest-age&quot;&gt;2 minutes ago&lt;/span&gt;&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-chevron cursor-interaction&quot; id=&quot;ss-history-toggle&quot; aria-label=&quot;Void War history&quot; aria-expanded=&quot;true&quot; aria-controls=&quot;ss-history&quot;&gt;&lt;i data-lucide=&quot;chevron-down&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+          
+          &lt;div class=&quot;ss-progress&quot; role=&quot;progressbar&quot; aria-label=&quot;Void War file operation&quot; aria-valuemin=&quot;0&quot; aria-valuemax=&quot;100&quot; hidden&gt;&lt;span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;section class=&quot;ss-history&quot; id=&quot;ss-history&quot; aria-label=&quot;Void War history&quot;&gt;
+            &lt;div class=&quot;ss-history-list&quot; id=&quot;ss-history-rows&quot;&gt;&lt;/div&gt;
+          &lt;/section&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;ss-menu&quot; hidden&gt;&lt;button type=&quot;button&quot; class=&quot;cursor-interaction&quot; data-menu-action=&quot;Explore&quot;&gt;Explore&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;cursor-interaction&quot; data-menu-action=&quot;Configure&quot;&gt;Configure&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;cursor-interaction&quot; data-menu-action=&quot;Flush history&quot;&gt;Flush history…&lt;/button&gt;&lt;/div&gt;
+      &lt;/section&gt;
+      &lt;section class=&quot;ss-other-group&quot; aria-label=&quot;Other installed games&quot;&gt;
+        &lt;button type=&quot;button&quot; class=&quot;ss-other-toggle cursor-interaction&quot; id=&quot;ss-other-toggle&quot; aria-expanded=&quot;false&quot; aria-controls=&quot;ss-other-games&quot;&gt;&lt;i data-lucide=&quot;chevron-right&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;span&gt;Other games&lt;/span&gt;&lt;span class=&quot;ss-other-count&quot;&gt;3&lt;/span&gt;&lt;/button&gt;
+        &lt;div id=&quot;ss-other-games&quot; hidden&gt;
+      &lt;section class=&quot;ss-game&quot; data-game-id=&quot;ftl&quot; aria-label=&quot;FTL: Faster Than Light&quot;&gt;
+        &lt;div class=&quot;ss-game-head&quot;&gt;&lt;div class=&quot;ss-game-icon&quot; aria-hidden=&quot;true&quot;&gt;FTL&lt;/div&gt;&lt;h2&gt;FTL: Faster Than Light&lt;/h2&gt;&lt;button type=&quot;button&quot; class=&quot;ss-more cursor-interaction&quot; aria-label=&quot;FTL options&quot; data-demo=&quot;FTL options&quot;&gt;&lt;i data-lucide=&quot;ellipsis&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+        &lt;div class=&quot;ss-controls&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button cursor-interaction&quot; data-demo=&quot;FTL Save&quot;&gt;&lt;i data-lucide=&quot;save&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;Save&lt;/button&gt;&lt;div class=&quot;ss-load&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-load-main cursor-interaction&quot; data-demo=&quot;FTL Load&quot;&gt;&lt;span&gt;Load&lt;/span&gt;&lt;span class=&quot;ss-age&quot;&gt;yesterday, 23:20:12&lt;/span&gt;&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-chevron cursor-interaction&quot; aria-label=&quot;FTL history&quot; data-demo=&quot;FTL history&quot;&gt;&lt;i data-lucide=&quot;chevron-down&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;/section&gt;
+      &lt;section class=&quot;ss-game&quot; data-game-id=&quot;slay-the-spire&quot; aria-label=&quot;Slay the Spire&quot;&gt;
+        &lt;div class=&quot;ss-game-head&quot;&gt;&lt;div class=&quot;ss-game-icon&quot; aria-hidden=&quot;true&quot;&gt;STS&lt;/div&gt;&lt;h2&gt;Slay the Spire&lt;/h2&gt;&lt;button type=&quot;button&quot; class=&quot;ss-more cursor-interaction&quot; aria-label=&quot;Slay the Spire options&quot; data-demo=&quot;Slay the Spire options&quot;&gt;&lt;i data-lucide=&quot;ellipsis&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+        &lt;div class=&quot;ss-controls&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button cursor-interaction&quot; data-demo=&quot;Slay the Spire Save&quot;&gt;&lt;i data-lucide=&quot;save&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;Save&lt;/button&gt;&lt;div class=&quot;ss-load&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-load-main cursor-interaction&quot; data-demo=&quot;Slay the Spire Load&quot;&gt;&lt;span&gt;Load&lt;/span&gt;&lt;span class=&quot;ss-age&quot;&gt;Friday, 21:08:34&lt;/span&gt;&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-chevron cursor-interaction&quot; aria-label=&quot;Slay the Spire history&quot; data-demo=&quot;Slay the Spire history&quot;&gt;&lt;i data-lucide=&quot;chevron-down&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;/section&gt;
+      &lt;section class=&quot;ss-game&quot; id=&quot;ss-never-run-game&quot; data-game-id=&quot;into-the-breach&quot; aria-label=&quot;Into the Breach, detected but never run&quot;&gt;
+        &lt;div class=&quot;ss-game-head&quot;&gt;&lt;div class=&quot;ss-game-icon&quot; aria-hidden=&quot;true&quot;&gt;ITB&lt;/div&gt;&lt;h2&gt;Into the Breach&lt;/h2&gt;&lt;span class=&quot;ss-game-status&quot; data-status=&quot;never-run&quot;&gt;Not run yet&lt;/span&gt;&lt;button type=&quot;button&quot; class=&quot;ss-more cursor-interaction&quot; aria-label=&quot;Into the Breach options&quot; data-demo=&quot;Into the Breach options&quot;&gt;&lt;i data-lucide=&quot;ellipsis&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+        &lt;span class=&quot;ss-only-reader&quot; id=&quot;ss-never-run-description&quot;&gt;Game detected. No game data, backups or history have been created yet.&lt;/span&gt;
+        &lt;div class=&quot;ss-controls&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button&quot; aria-label=&quot;Save Into the Breach&quot; aria-describedby=&quot;ss-never-run-description&quot; disabled&gt;&lt;i data-lucide=&quot;save&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;Save&lt;/button&gt;&lt;div class=&quot;ss-load&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-load-main&quot; aria-label=&quot;Load Into the Breach&quot; aria-describedby=&quot;ss-never-run-description&quot; disabled&gt;&lt;span&gt;Load&lt;/span&gt;&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;ss-button ss-chevron&quot; aria-label=&quot;Into the Breach history&quot; aria-describedby=&quot;ss-never-run-description&quot; disabled&gt;&lt;i data-lucide=&quot;chevron-down&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;/section&gt;
+        &lt;/div&gt;
+      &lt;/section&gt;
+    &lt;/main&gt;
+    &lt;footer class=&quot;ss-footer&quot; aria-label=&quot;Settings and keyboard shortcuts&quot;&gt;
+      &lt;div class=&quot;ss-footer-shortcuts&quot;&gt;&lt;span&gt;Save &lt;kbd&gt;Ctrl + F5&lt;/kbd&gt;&lt;/span&gt;&lt;span&gt;Load &lt;kbd&gt;Ctrl + F9&lt;/kbd&gt;&lt;/span&gt;&lt;/div&gt;
+      &lt;label class=&quot;ss-check cursor-interaction&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;ss-sounds&quot; checked&gt;Play sounds&lt;/label&gt;
+      &lt;label class=&quot;ss-check ss-startup cursor-interaction&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;ss-start&quot; checked&gt;Launch on startup&lt;/label&gt;
+    &lt;/footer&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;ss-only-reader&quot; id=&quot;ss-live&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;
+  &lt;script&gt;
+  (()=&gt;{
+    const root=document.getElementById(&#x27;scummer-sketch&#x27;);
+    const q=s=&gt;root.querySelector(s);
+    const library={
+      &#x27;void-war&#x27;:{info:`To save the current game progress:
+1. Exit to Main Menu (the game saves data here).
+2. Run &quot;Save&quot; in SaveScummer.
+3. In-game, choose Continue from Main Menu.
+
+To load the saved game progress:
+1. Exit to Main Menu (loading from here won&#x27;t work because the game data is still in memory).
+2. Go to Tutorial (this clears the last run from memory).
+3. Run &quot;Load&quot; in SaveScummer.
+4. In-game, go to Main Menu, then Continue. You should see the loaded state.`},
+      &#x27;ftl&#x27;:{info:&#x27;&#x27;},
+      &#x27;slay-the-spire&#x27;:{info:&#x27;&#x27;},
+      &#x27;into-the-breach&#x27;:{info:&#x27;&#x27;}
+    };
+    let selectedGameId=&#x27;void-war&#x27;;
+    root.querySelectorAll(&#x27;.ss-game&#x27;).forEach(game=&gt;{
+      const id=game.dataset.gameId,name=game.querySelector(&#x27;h2&#x27;).textContent;
+      const selectButton=document.createElement(&#x27;button&#x27;);
+      selectButton.type=&#x27;button&#x27;;selectButton.className=&#x27;ss-select cursor-interaction&#x27;;selectButton.dataset.selectGame=id;
+      selectButton.setAttribute(&#x27;aria-label&#x27;,&#x27;Select &#x27;+name);selectButton.setAttribute(&#x27;aria-pressed&#x27;,&#x27;false&#x27;);selectButton.setAttribute(&#x27;aria-expanded&#x27;,&#x27;false&#x27;);selectButton.setAttribute(&#x27;aria-controls&#x27;,&#x27;ss-controls-&#x27;+id+&#x27; ss-info-&#x27;+id);
+      game.prepend(selectButton);game.querySelector(&#x27;.ss-controls&#x27;).id=&#x27;ss-controls-&#x27;+id;
+      const panel=document.createElement(&#x27;section&#x27;);panel.className=&#x27;ss-info&#x27;;panel.id=&#x27;ss-info-&#x27;+id;panel.hidden=true;panel.setAttribute(&#x27;aria-label&#x27;,name+&#x27; instructions&#x27;);
+      const info=library[id].info;
+      if(info.trim()){
+        let list=null;
+        info.split(&#x27;\n&#x27;).forEach(line=&gt;{
+          if(!line.trim()){list=null;return;}
+          const step=line.match(/^\d+\.\s+(.+)$/);
+          if(step){
+            if(!list){list=document.createElement(&#x27;ol&#x27;);panel.append(list);}
+            const item=document.createElement(&#x27;li&#x27;);item.textContent=step[1];list.append(item);
+          }else{list=null;const paragraph=document.createElement(&#x27;p&#x27;);paragraph.textContent=line;panel.append(paragraph);}
+        });
+      }else{panel.textContent=&#x27;No instructions available for this game yet.&#x27;;panel.classList.add(&#x27;ss-info-empty&#x27;);}
+      game.querySelector(&#x27;.ss-controls&#x27;).after(panel);
+      const button=game.querySelector(&#x27;.ss-more&#x27;);
+      game.querySelector(&#x27;.ss-controls&#x27;).append(button);
+      button.dataset.menuTrigger=game.querySelector(&#x27;h2&#x27;).textContent;
+      button.removeAttribute(&#x27;data-demo&#x27;);
+      button.setAttribute(&#x27;aria-controls&#x27;,&#x27;ss-more-menu&#x27;);
+      button.setAttribute(&#x27;aria-haspopup&#x27;,&#x27;true&#x27;);
+    });
+    root.append(q(&#x27;#ss-history&#x27;),q(&#x27;.ss-menu&#x27;));
+    q(&#x27;.ss-menu&#x27;).id=&#x27;ss-more-menu&#x27;;
+    q(&#x27;#ss-history-toggle&#x27;).setAttribute(&#x27;aria-haspopup&#x27;,&#x27;true&#x27;);
+    const design={appearance:&#x27;System&#x27;,accent:&#x27;violet&#x27;,density:&#x27;Compact&#x27;,running:true};
+    const initial=[
+      {id:&#x27;s1950&#x27;,time:&#x27;19:50&#x27;,kind:&#x27;Saved&#x27;},
+      {id:&#x27;start1944&#x27;,time:&#x27;19:44&#x27;,kind:&#x27;Game started&#x27;,marker:true},
+      {id:&#x27;r1943&#x27;,time:&#x27;19:43&#x27;,kind:&#x27;Reverted&#x27;,target:&#x27;19:42&#x27;},
+      {id:&#x27;l1942&#x27;,time:&#x27;19:42&#x27;,kind:&#x27;Loaded&#x27;,target:&#x27;19:25&#x27;},
+      {id:&#x27;close1941&#x27;,time:&#x27;19:41&#x27;,kind:&#x27;Game closed&#x27;,marker:true},
+      {id:&#x27;s1938&#x27;,time:&#x27;19:38&#x27;,kind:&#x27;Saved&#x27;},
+      {id:&#x27;s1925&#x27;,time:&#x27;19:25&#x27;,kind:&#x27;Saved&#x27;},
+      {id:&#x27;start1920&#x27;,time:&#x27;19:20&#x27;,kind:&#x27;Game started&#x27;,marker:true}
+    ];
+    const previous=[{id:&#x27;existing&#x27;,time:&#x27;—&#x27;,kind:&#x27;Existing backup&#x27;,detail:&#x27;Save time unknown&#x27;}, {id:&#x27;missing&#x27;,time:&#x27;21:10&#x27;,kind:&#x27;Saved&#x27;,detail:&#x27;Backup unavailable&#x27;,unavailable:true}];
+    let events=initial.map(e=&gt;({...e})),busy=false,open=false,menuOpen=false,menuAnchor=q(&#x27;[data-more]&#x27;),othersOpen=false,lastRunning=true,latest=&#x27;2 minutes ago&#x27;,counter=0;
+    const escape=s=&gt;String(s).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g,c=&gt;({&#x27;&amp;&#x27;:&#x27;&amp;amp;&#x27;,&#x27;&lt;&#x27;:&#x27;&amp;lt;&#x27;,&#x27;&gt;&#x27;:&#x27;&amp;gt;&#x27;,&#x27;&quot;&#x27;:&#x27;&amp;quot;&#x27;,&quot;&#x27;&quot;:&#x27;&amp;#39;&#x27;}[c]));
+    function row(e){
+      const action=e.kind===&#x27;Saved&#x27;||e.kind===&#x27;Existing backup&#x27;?&#x27;Restore&#x27;:&#x27;Revert&#x27;;
+      const icon=e.kind===&#x27;Saved&#x27;?&#x27;save&#x27;:e.kind===&#x27;Loaded&#x27;?&#x27;corner-down-left&#x27;:e.kind===&#x27;Existing backup&#x27;?&#x27;folder&#x27;:&#x27;rotate-ccw&#x27;;
+      return `&lt;div class=&quot;ss-history-row ${e.marker?&#x27;ss-marker&#x27;:&#x27;&#x27;} ${e.id===&#x27;s1925&#x27;?&#x27;ss-preview&#x27;:&#x27;&#x27;}&quot; data-row=&quot;${escape(e.id)}&quot;&gt;&lt;time class=&quot;ss-time&quot;&gt;${escape(e.time)}&lt;/time&gt;&lt;span class=&quot;ss-event-icon&quot;&gt;${e.marker?&#x27;&#x27;:`&lt;i data-lucide=&quot;${icon}&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;`}&lt;/span&gt;&lt;span class=&quot;ss-row-label&quot;&gt;${escape(e.kind)}${e.target?` &lt;span class=&quot;ss-reference&quot;&gt;[${escape(e.target)}]&lt;/span&gt;`:&#x27;&#x27;}${e.detail?`&lt;span class=&quot;ss-unavailable&quot;&gt;${escape(e.detail)}&lt;/span&gt;`:&#x27;&#x27;}&lt;/span&gt;${e.marker?&#x27;&#x27;:`&lt;button type=&quot;button&quot; class=&quot;ss-row-action cursor-interaction&quot; data-history-action=&quot;${action}&quot; data-id=&quot;${escape(e.id)}&quot; aria-label=&quot;${action} ${escape(e.kind)} ${escape(e.time)}&quot; ${busy||e.unavailable?&#x27;disabled&#x27;:&#x27;&#x27;}&gt;${action}&lt;/button&gt;`}&lt;/div&gt;`;
+    }
+    function renderRows(){
+      q(&#x27;#ss-history-rows&#x27;).innerHTML=&#x27;&lt;div class=&quot;ss-day&quot;&gt;&lt;span&gt;Today&lt;/span&gt;&lt;span&gt;20 September&lt;/span&gt;&lt;/div&gt;&#x27;+events.map(row).join(&#x27;&#x27;)+&#x27;&lt;div class=&quot;ss-day&quot;&gt;&lt;span&gt;Yesterday&lt;/span&gt;&lt;span&gt;19 September&lt;/span&gt;&lt;/div&gt;&#x27;+row(previous[1])+&#x27;&lt;div class=&quot;ss-day&quot;&gt;&lt;span&gt;Other backups&lt;/span&gt;&lt;/div&gt;&#x27;+row(previous[0]);
+      if(globalThis.lucide)lucide.createIcons({attrs:{width:16,height:16}});
+    }
+    function positionDropdowns(){
+      const bounds=root.getBoundingClientRect(),windowBottom=q(&#x27;.ss-window&#x27;).getBoundingClientRect().bottom-bounds.top;
+      let bottom=windowBottom;
+      if(open){
+        const trigger=q(&#x27;#ss-history-toggle&#x27;).getBoundingClientRect(),load=q(&#x27;.ss-load&#x27;).getBoundingClientRect(),panel=q(&#x27;#ss-history&#x27;),width=Math.min(354,root.clientWidth-12);
+        const left=Math.max(6,Math.min(load.left-bounds.left,root.clientWidth-width-6)),top=trigger.bottom-bounds.top+4;
+        panel.style.width=width+&#x27;px&#x27;;panel.style.left=left+&#x27;px&#x27;;panel.style.top=top+&#x27;px&#x27;;
+        bottom=Math.max(bottom,top+panel.offsetHeight+8);
+      }
+      if(menuOpen){
+        const trigger=menuAnchor.getBoundingClientRect(),panel=q(&#x27;.ss-menu&#x27;),width=Math.min(158,root.clientWidth-12),top=trigger.bottom-bounds.top+4;
+        panel.style.width=width+&#x27;px&#x27;;panel.style.left=Math.max(6,Math.min(trigger.right-bounds.left-width,root.clientWidth-width-6))+&#x27;px&#x27;;panel.style.top=top+&#x27;px&#x27;;
+        bottom=Math.max(bottom,top+panel.offsetHeight+8);
+      }
+      root.style.paddingBottom=Math.max(0,bottom-windowBottom)+&#x27;px&#x27;;
+    }
+    function render(){
+      if(design.running!==lastRunning){if(design.running)othersOpen=selectedGameId!==&#x27;void-war&#x27;;lastRunning=design.running;}
+      root.dataset.running=String(design.running);
+      q(&#x27;#ss-void-game&#x27;).setAttribute(&#x27;aria-label&#x27;,design.running?&#x27;Void War, running&#x27;:&#x27;Void War&#x27;);
+      q(&#x27;[data-status=&quot;running&quot;]&#x27;).hidden=!design.running;
+      q(&#x27;#ss-other-toggle&#x27;).hidden=!design.running;
+      q(&#x27;#ss-other-toggle&#x27;).setAttribute(&#x27;aria-expanded&#x27;,String(!design.running||othersOpen));
+      q(&#x27;#ss-other-games&#x27;).hidden=design.running&amp;&amp;!othersOpen;
+      root.querySelectorAll(&#x27;.ss-game&#x27;).forEach(game=&gt;{
+        const selected=game.dataset.gameId===selectedGameId;
+        game.dataset.selected=String(selected);game.querySelector(&#x27;.ss-controls&#x27;).hidden=!selected;game.querySelector(&#x27;.ss-info&#x27;).hidden=!selected;
+        game.querySelector(&#x27;.ss-select&#x27;).setAttribute(&#x27;aria-pressed&#x27;,String(selected));game.querySelector(&#x27;.ss-select&#x27;).setAttribute(&#x27;aria-expanded&#x27;,String(selected));
+      });
+      if(selectedGameId!==&#x27;void-war&#x27;)open=false;
+      if(menuAnchor.closest(&#x27;[hidden]&#x27;))menuOpen=false;
+      root.style.colorScheme=design.appearance===&#x27;System&#x27;?&#x27;&#x27;:design.appearance.toLowerCase();
+      root.dataset.accent=design.accent;
+      root.style.setProperty(&#x27;--ss-row&#x27;,design.density===&#x27;Compact&#x27;?&#x27;32px&#x27;:&#x27;38px&#x27;);
+      q(&#x27;#ss-history&#x27;).hidden=!open;
+      q(&#x27;.ss-menu&#x27;).hidden=!menuOpen;
+      root.querySelectorAll(&#x27;[data-menu-trigger]&#x27;).forEach(button=&gt;button.setAttribute(&#x27;aria-expanded&#x27;,String(menuOpen&amp;&amp;button===menuAnchor)));
+      q(&#x27;.ss-menu&#x27;).setAttribute(&#x27;aria-label&#x27;,menuAnchor.dataset.menuTrigger+&#x27; options&#x27;);
+      q(&#x27;#ss-history-toggle&#x27;).setAttribute(&#x27;aria-expanded&#x27;,String(open));
+      q(&#x27;#ss-latest-age&#x27;).textContent=latest;
+      root.querySelectorAll(&#x27;.ss-age&#x27;).forEach(age=&gt;age.setAttribute(&#x27;data-tooltip&#x27;,age.textContent));
+      for(const id of [&#x27;#ss-save&#x27;,&#x27;#ss-load&#x27;,&#x27;#ss-history-toggle&#x27;])q(id).disabled=busy;
+      q(&#x27;.ss-progress&#x27;).hidden=!busy;
+      root.querySelectorAll(&#x27;[data-history-action]&#x27;).forEach(b=&gt;b.disabled=busy||b.dataset.id===&#x27;missing&#x27;);
+      const menuBusy=busy&amp;&amp;menuAnchor.dataset.menuTrigger===&#x27;Void War&#x27;,emptyHistory=menuAnchor.closest(&#x27;.ss-game&#x27;).id===&#x27;ss-never-run-game&#x27;;
+      root.querySelectorAll(&#x27;[data-menu-action]&#x27;).forEach(b=&gt;b.disabled=b.dataset.menuAction!==&#x27;Explore&#x27;&amp;&amp;(menuBusy||(b.dataset.menuAction===&#x27;Flush history&#x27;&amp;&amp;emptyHistory)));
+      positionDropdowns();
+    }
+    function persist(){
+      if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{screen:&#x27;Save Scummer&#x27;,selectedGameId,design:{...design}},privateContent:{open,menuOpen,menuGame:menuAnchor.dataset.menuTrigger,selectedGameId,othersOpen,latest,events:events.slice(0,30),start:q(&#x27;#ss-start&#x27;).checked,sounds:q(&#x27;#ss-sounds&#x27;).checked}}).catch(()=&gt;{});
+    }
+    function applyState(saved){
+      if(!saved)return;
+      const d=saved.modelContent?.design,p=saved.privateContent;
+      if(d){if([&#x27;System&#x27;,&#x27;Light&#x27;,&#x27;Dark&#x27;].includes(d.appearance))design.appearance=d.appearance;if([&#x27;Compact&#x27;,&#x27;Comfortable&#x27;].includes(d.density))design.density=d.density;if(typeof d.running===&#x27;boolean&#x27;)design.running=d.running;}
+      if(typeof p?.othersOpen===&#x27;boolean&#x27;)othersOpen=p.othersOpen;
+      if(typeof p?.selectedGameId===&#x27;string&#x27;&amp;&amp;Object.hasOwn(library,p.selectedGameId))selectedGameId=p.selectedGameId;
+      if(selectedGameId!==&#x27;void-war&#x27;)othersOpen=true;
+      if(p){if(typeof p.open===&#x27;boolean&#x27;)open=p.open;if(typeof p.latest===&#x27;string&#x27;)latest=p.latest;if(Array.isArray(p.events)&amp;&amp;p.events.every(e=&gt;typeof e.id===&#x27;string&#x27;&amp;&amp;typeof e.kind===&#x27;string&#x27;&amp;&amp;typeof e.time===&#x27;string&#x27;))events=p.events.slice(0,30);if(typeof p.start===&#x27;boolean&#x27;)q(&#x27;#ss-start&#x27;).checked=p.start;if(typeof p.sounds===&#x27;boolean&#x27;)q(&#x27;#ss-sounds&#x27;).checked=p.sounds;}
+      if(typeof p?.menuOpen===&#x27;boolean&#x27;)menuOpen=p.menuOpen&amp;&amp;!open;
+      if(typeof p?.menuGame===&#x27;string&#x27;)menuAnchor=Array.from(root.querySelectorAll(&#x27;[data-menu-trigger]&#x27;)).find(button=&gt;button.dataset.menuTrigger===p.menuGame)||q(&#x27;[data-more]&#x27;);
+      renderRows();render();
+    }
+    function selectGame(id){
+      if(!Object.hasOwn(library,id)||id===selectedGameId)return;
+      selectedGameId=id;if(id!==&#x27;void-war&#x27;)othersOpen=true;open=false;menuOpen=false;render();persist();
+    }
+    let noticeTimer;
+    function notice(text){q(&#x27;.ss-notice&#x27;).textContent=text;q(&#x27;.ss-notice&#x27;).hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=&gt;{q(&#x27;.ss-notice&#x27;).hidden=true;},4200);}
+    function operate(action,entry){
+      if(busy)return;
+      busy=true;render();let value=0;
+      const bar=q(&#x27;.ss-progress&#x27;),fill=q(&#x27;.ss-progress&gt;span&#x27;);fill.style.width=&#x27;0%&#x27;;bar.setAttribute(&#x27;aria-valuenow&#x27;,&#x27;0&#x27;);bar.setAttribute(&#x27;aria-label&#x27;,`${action} Void War — preview`);
+      const timer=setInterval(()=&gt;{
+        value+=20;fill.style.width=value+&#x27;%&#x27;;bar.setAttribute(&#x27;aria-valuenow&#x27;,String(value));
+        if(value&gt;=100){clearInterval(timer);counter++;const minute=52+Math.floor(counter/60),second=counter%60;const time=`19:${String(minute).padStart(2,&#x27;0&#x27;)}:${String(second).padStart(2,&#x27;0&#x27;)}`;
+          events.unshift({id:&#x27;demo-&#x27;+Date.now()+&#x27;-&#x27;+counter,time,kind:action===&#x27;Save&#x27;?&#x27;Saved&#x27;:action===&#x27;Restore&#x27;?&#x27;Loaded&#x27;:&#x27;Reverted&#x27;,...(entry?{target:entry.time}:{})});
+          if(action===&#x27;Save&#x27;)latest=&#x27;just now&#x27;;
+          busy=false;renderRows();render();q(&#x27;#ss-live&#x27;).textContent=`Preview: ${action} completed. No game files changed.`;persist();
+        }
+      },180);
+    }
+    q(&#x27;#ss-history-toggle&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{open=!open;menuOpen=false;render();persist();});
+    q(&#x27;#ss-other-toggle&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{othersOpen=!othersOpen;menuOpen=false;if(othersOpen)open=false;else if(selectedGameId!==&#x27;void-war&#x27;)selectedGameId=&#x27;void-war&#x27;;render();persist();});
+    q(&#x27;#ss-save&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;operate(&#x27;Save&#x27;));
+    q(&#x27;#ss-load&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;operate(&#x27;Restore&#x27;,events.find(e=&gt;e.kind===&#x27;Saved&#x27;)));
+    q(&#x27;#ss-history-rows&#x27;).addEventListener(&#x27;click&#x27;,e=&gt;{const b=e.target.closest(&#x27;[data-history-action]&#x27;);if(!b)return;const entry=[...events,...previous].find(r=&gt;r.id===b.dataset.id);if(entry&amp;&amp;!entry.unavailable)operate(b.dataset.historyAction,entry);});
+    q(&#x27;#ss-history-rows&#x27;).addEventListener(&#x27;pointerover&#x27;,e=&gt;{const r=e.target.closest(&#x27;.ss-history-row&#x27;);if(!r||r.classList.contains(&#x27;ss-marker&#x27;))return;root.querySelectorAll(&#x27;.ss-preview&#x27;).forEach(x=&gt;x.classList.remove(&#x27;ss-preview&#x27;));r.classList.add(&#x27;ss-preview&#x27;);});
+    root.querySelectorAll(&#x27;[data-menu-trigger]&#x27;).forEach(button=&gt;button.addEventListener(&#x27;click&#x27;,()=&gt;{menuOpen=button!==menuAnchor||!menuOpen;menuAnchor=button;open=false;render();persist();}));
+    root.addEventListener(&#x27;click&#x27;,e=&gt;{
+      const game=e.target.closest(&#x27;.ss-game&#x27;);
+      if(game){selectGame(game.dataset.gameId);if(!e.target.closest(&#x27;.ss-controls&#x27;)&amp;&amp;(open||menuOpen)){open=false;menuOpen=false;render();persist();}}
+      else if(e.target.closest(&#x27;#ss-history&#x27;))selectGame(&#x27;void-war&#x27;);
+      else if(e.target.closest(&#x27;.ss-menu&#x27;))selectGame(menuAnchor.closest(&#x27;.ss-game&#x27;).dataset.gameId);
+    },true);
+    root.addEventListener(&#x27;click&#x27;,e=&gt;{const demo=e.target.closest(&#x27;[data-demo]&#x27;),menu=e.target.closest(&#x27;[data-menu-action]&#x27;);if(demo)notice(&#x27;This sketch demonstrates the Void War history.&#x27;);if(menu){const game=menuAnchor.dataset.menuTrigger;menuOpen=false;render();notice(menu.dataset.menuAction===&#x27;Explore&#x27;?`Preview: Explore opens the folder containing ${game}’s game data and backups.`:menu.dataset.menuAction===&#x27;Configure&#x27;?`Preview: Configure opens executable and game-data path settings for ${game}.`:`Preview: Flush history asks for confirmation before deleting ${game} backups and recovery points.`);persist();}});
+    root.addEventListener(&#x27;keydown&#x27;,e=&gt;{if(e.key===&#x27;Escape&#x27;&amp;&amp;(open||menuOpen)){const trigger=menuOpen?menuAnchor:q(&#x27;#ss-history-toggle&#x27;);open=false;menuOpen=false;render();if(!trigger.disabled)trigger.focus();persist();}});
+    document.addEventListener(&#x27;pointerdown&#x27;,e=&gt;{if(!(open||menuOpen))return;if(root.contains(e.target)&amp;&amp;e.target.closest(&#x27;#ss-history,.ss-menu,.ss-game&#x27;))return;open=false;menuOpen=false;render();persist();});
+    q(&#x27;#ss-start&#x27;).addEventListener(&#x27;change&#x27;,persist);q(&#x27;#ss-sounds&#x27;).addEventListener(&#x27;change&#x27;,persist);
+    renderRows();render();applyState(window.openai?.widgetState);
+    new ResizeObserver(positionDropdowns).observe(q(&#x27;.ss-window&#x27;));
+    window.addEventListener(&#x27;openai:set_globals&#x27;,e=&gt;{if(e.detail?.globals?.widgetState&amp;&amp;!busy)applyState(e.detail.globals.widgetState);});
+    if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=&gt;{render();persist();}});tweak.addSelect(design,&#x27;appearance&#x27;,{label:&#x27;Appearance&#x27;,options:[&#x27;System&#x27;,&#x27;Light&#x27;,&#x27;Dark&#x27;]});tweak.addSelect(design,&#x27;density&#x27;,{label:&#x27;History spacing&#x27;,options:[&#x27;Compact&#x27;,&#x27;Comfortable&#x27;]});tweak.addToggle(design,&#x27;running&#x27;,{label:&#x27;Void War running&#x27;});}
+  })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerdown&quot;, handlePointer);
+    document.removeEventListener(&quot;pointercancel&quot;, handlePointer);
+    document.removeEventListener(&quot;click&quot;, handleTouchClick);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerdown&quot;, handlePointer);
+  document.addEventListener(&quot;pointercancel&quot;, handlePointer);
+  document.addEventListener(&quot;click&quot;, handleTouchClick);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+<script>(() => {
+  const frame = document.getElementById("codex-visualization");
+  if (!(frame instanceof HTMLIFrameElement)) {
+    return;
+  }
+  let viewportHeight = globalThis.innerHeight;
+  const storageKey = `codex:visualization-widget-state-v2:${JSON.stringify([
+    globalThis.location.pathname,
+    globalThis.location.search,
+  ])}`;
+  const parseState = (serializedState) => {
+    if (
+      typeof serializedState !== "string" ||
+      new TextEncoder().encode(serializedState).length > 16 * 1024
+    ) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    /** @type {unknown} */
+    const state = JSON.parse(serializedState);
+    if (
+      state == null ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      ("imageIds" in state &&
+        (!Array.isArray(state.imageIds) || state.imageIds.length > 0))
+    ) {
+      throw new TypeError("Widget state must be a JSON object");
+    }
+    const storedState = { modelContent: null, privateContent: null, ...state };
+    const canonicalState = JSON.stringify(
+      storedState,
+      (_key, /** @type {unknown} */ value) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new TypeError("Widget state must contain finite numbers");
+        }
+        return value;
+      },
+    );
+    if (new TextEncoder().encode(canonicalState).length > 16 * 1024) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    return storedState;
+  };
+  let storage = null;
+  let state = null;
+  try {
+    const localStorage = globalThis.localStorage;
+    const probeKey = `${storageKey}:probe`;
+    localStorage.setItem(probeKey, "1");
+    localStorage.removeItem(probeKey);
+    storage = localStorage;
+    const savedState = storage.getItem(storageKey);
+    if (savedState != null) {
+      try {
+        state = parseState(savedState);
+      } catch {
+        // Invalid saved state does not disable future writes.
+      }
+    }
+  } catch {
+    storage = null;
+  }
+  const initialGlobals = {
+    widgetState: state,
+    statePersistence: storage == null ? "none" : "local",
+  };
+
+  const channel = new MessageChannel();
+  channel.port1.addEventListener("message", (event) => {
+    const data = event.data;
+    if (typeof data !== "object" || data == null) {
+      return;
+    }
+    if (data.type === "widget-state-write") {
+      if (!Number.isSafeInteger(data.id) || data.id <= 0) {
+        return;
+      }
+      let ok = false;
+      try {
+        if (storage != null) {
+          const state = parseState(data.state);
+          storage.setItem(storageKey, JSON.stringify(state));
+          ok = true;
+        }
+      } catch {
+        // Storage denial, quota limits, and invalid state return a failed receipt.
+      }
+      channel.port1.postMessage({
+        type: "widget-state-result",
+        id: data.id,
+        ok,
+      });
+      return;
+    }
+    if (data.type === "height") {
+      const height = data.height;
+      if (
+        typeof height === "number" &&
+        Number.isFinite(height) &&
+        height >= 0 &&
+        height <= 10_000
+      ) {
+        frame.style.height = Math.ceil(height) + "px";
+      }
+      return;
+    }
+    if (data.type === "scroll-to") {
+      const top = data.top;
+      if (
+        typeof top === "number" &&
+        Number.isFinite(top) &&
+        top >= 0 &&
+        globalThis.navigator.userActivation?.isActive === true
+      ) {
+        globalThis.scrollTo({
+          top: Math.ceil(
+            globalThis.scrollY + frame.getBoundingClientRect().top + top,
+          ),
+        });
+      }
+      return;
+    }
+    if (data.type === "open-external") {
+      const rawHref = data.href;
+      if (typeof rawHref !== "string") {
+        return;
+      }
+      let href;
+      try {
+        const url = new URL(rawHref, document.baseURI);
+        if (url.protocol !== "https:") {
+          return;
+        }
+        href = url.href;
+      } catch {
+        return;
+      }
+      if (globalThis.navigator.userActivation?.isActive === true) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.rel = "noopener noreferrer";
+        anchor.target = "_blank";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+      return;
+    }
+    if (data.type === "follow-up") {
+      const prompt = data.prompt;
+      if (
+        typeof prompt !== "string" ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      const title = data.title;
+      globalThis.prompt(typeof title === "string" ? title : prompt, prompt);
+    }
+  });
+  channel.port1.start();
+  const srcdoc = frame.dataset.srcdoc;
+  if (srcdoc == null) {
+    return;
+  }
+  globalThis.addEventListener("resize", () => {
+    const height = Number.parseFloat(frame.style.height);
+    if (!Number.isFinite(height) || height <= viewportHeight) {
+      frame.style.removeProperty("height");
+    }
+    viewportHeight = globalThis.innerHeight;
+    channel.port1.postMessage({ type: "measure" });
+  });
+  frame.addEventListener(
+    "load",
+    () => {
+      frame.contentWindow?.postMessage(
+        { type: "codex-visualization-initialize" },
+        "*",
+        [channel.port2],
+      );
+    },
+    { once: true },
+  );
+  // Match the trusted bootstrap element, not the same text in an authored title.
+  frame.srcdoc = srcdoc.replace(
+    '<script type="application/json" id="codex-visualization-widget-state">__CODEX_VISUALIZATION_WIDGET_STATE__<\/script>',
+    () =>
+      '<script type="application/json" id="codex-visualization-widget-state">' +
+      JSON.stringify(initialGlobals).replaceAll("<", "\\u003c") +
+      "<\/script>",
+  );
+  delete frame.dataset.srcdoc;
+})();
+</script>
+</body>
+</html>
