@@ -13,11 +13,14 @@ class LoadButton : public QPushButton {
     using QPushButton::QPushButton;
     void setAge(const QString &age, const QString &full);
     QSize sizeHint() const override;
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override;
 
   protected:
     void paintEvent(QPaintEvent *) override;
 
   private:
+    QFont captionFont() const;
     QString age_;
 };
 
@@ -63,8 +66,12 @@ class MainWindow : public QMainWindow {
 
   protected:
     void resizeEvent(QResizeEvent *event) override;
+#ifdef Q_OS_WIN
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
 
   private:
+    void triggerSelectedShortcut(bool load);
     void scheduleFitHeight();
     void refresh();
     void closePopup();

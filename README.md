@@ -76,7 +76,11 @@ Explore, a revision-bound Flush confirmation, recovery choices, and the shared
 Play sounds and Launch on startup settings. Configure exposes detected locations;
 Reset uses the selected catalog location (or the sole detected default). The host
 registers Ctrl+F5/Ctrl+F9, owns the tray and notifications, and runs without Qt.
-The desktop does not register competing shortcuts. `--minimized` attaches without
+While the desktop is focused, Ctrl+F5/Ctrl+F9 invoke the selected game's Save/Load
+buttons, including their progress and disabled states, even if no game is running.
+Otherwise the host targets the top running game. The desktop uses local shortcuts
+in dev/demo mode and receives forwarded hotkeys from the host in normal mode;
+it does not register competing global shortcuts. `--minimized` attaches without
 showing a window; subsequent launches focus the existing desktop for that host.
 
 To rebuild and package the desktop and Rust binaries with their runtime DLLs:

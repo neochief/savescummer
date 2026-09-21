@@ -11,9 +11,14 @@ Run commands from the repository root in PowerShell. `build.ps1` coordinates Car
 
 The first command is the closest equivalent of `vite dev`: compile, then open a
 development app. There is currently no file watcher or hot module replacement.
-After edits, run it again; it closes the previous development session gracefully,
-rebuilds changed code, then relaunches. Closing its window leaves its host running
-until the next dev build. Ordinary app instances are not stopped by this runner.
+After edits, run it again; it closes desktops running from the exact dev output
+path, rebuilds changed code, then relaunches. This includes hidden instances and
+manual or debugger launches. The desktop gets five seconds to close when it has a
+window; hidden or unresponsive desktops are terminated automatically. Packaged
+apps and desktops built elsewhere are left running. Recorded development hosts
+shut down gracefully so accepted save/restore operations can finish; untracked
+hosts are not terminated. Closing the desktop leaves its host running until the
+next dev build.
 
 `release` corresponds to `vite build`: produce optimized native executables and a
 portable distribution containing the runtime dependencies. Recipients need neither

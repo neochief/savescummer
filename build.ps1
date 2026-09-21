@@ -31,22 +31,43 @@ function Invoke-BuildStep([string]$Name, [scriptblock]$Action) {
     $timings[$Name] = [math]::Round($watch.Elapsed.TotalSeconds, 2)
 }
 
-# Only stop processes launched and recorded by this dev runner. A normal app
-# instance and untracked hosts are never terminated by a build.
+# Windows cannot replace a running executable. Match the exact dev output path
+# so hidden/manual/debugger launches are covered without closing packaged apps.
+# The desktop owns no file operations; hosts must still shut down gracefully.
+if ($Mode -eq 'dev') {
+    $expectedDesktopPath = [IO.Path]::GetFullPath($desktopBinary)
+    foreach ($desktop in @(Get-Process -Name 'savescummer-desktop' -ErrorAction SilentlyContinue)) {
+        if ($desktop.HasExited -or $desktop.Path -ne $expectedDesktopPath) { continue }
+        Write-Host "Closing development desktop (PID $($desktop.Id)) before rebuilding."
+        try {
+            if ($desktop.CloseMainWindow()) {
+                $null = $desktop.WaitForExit(5000)
+            }
+            if (-not $desktop.HasExited) {
+                Write-Host "Terminating hidden or unresponsive development desktop (PID $($desktop.Id))."
+                # Use the captured process object, not a fresh lookup by name/PID.
+                Stop-Process -InputObject $desktop -Force -ErrorAction Stop
+            }
+            if (-not $desktop.WaitForExit(10000)) {
+                throw "Development desktop PID $($desktop.Id) has not exited."
+            }
+        } catch {
+            if (-not $desktop.HasExited) { throw }
+        }
+    }
+}
+# Only recorded hosts are stopped automatically; never forcibly terminate a host
+# that may be finishing a save/restore operation.
 if ($Mode -eq 'dev' -and (Test-Path -LiteralPath $sessionFile)) {
     $session = Get-Content -LiteralPath $sessionFile -Raw | ConvertFrom-Json
-    foreach ($kind in @('desktop', 'host')) {
+    foreach ($kind in @('host')) {
         $record = $session.$kind
         if (-not $record) { continue }
         $process = Get-Process -Id $record.pid -ErrorAction SilentlyContinue
         if (-not $process -or $process.StartTime.ToUniversalTime().Ticks -ne $record.started -or
             $process.Path -ne $record.path) { continue }
-        if ($kind -eq 'desktop') {
-            $null = $process.CloseMainWindow()
-        } else {
-            & $cliBinary --data-dir $devData shutdown
-            if ($LASTEXITCODE -ne 0) { throw 'Could not stop the previous development host safely.' }
-        }
+        & $cliBinary --data-dir $devData shutdown
+        if ($LASTEXITCODE -ne 0) { throw 'Could not stop the previous development host safely.' }
         if (-not $process.WaitForExit(30000)) {
             throw 'Development process is still finishing work. Retry the build after it exits.'
         }

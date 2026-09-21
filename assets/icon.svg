@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">SaveScrummer</title>
-  <desc id="desc">An ivory skull inside a violet counterclockwise undo arrow on a deep plum background.</desc>
-
-  <rect id="background" width="1024" height="1024" fill="#191322"/>
+  <desc id="desc">An ivory skull inside a violet counterclockwise undo arrow on a transparent background.</desc>
 
   <g id="undo-arrow" fill="#9747FF">
     <path d="M 162 506 A 350 350 0 1 0 264.51 262.51"

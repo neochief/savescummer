@@ -23,9 +23,30 @@ fn emit(event: DesktopEvent) {
         }
     });
 }
+// This window property/message pair is shared with MainWindow's native handler.
+// The foreground desktop owns selection and admission feedback. Never fall back
+// to a different running game when its UI is disabled or has a dialog open.
+fn forward_to_desktop(foreground: HWND, action: WPARAM) -> bool {
+    unsafe {
+        let target = GetAncestor(foreground, GA_ROOTOWNER);
+        if target.is_null()
+            || GetPropW(target, wide("SaveScummer.ShortcutTarget.v1").as_ptr()) as usize != 1
+        {
+            return false;
+        }
+        let message = RegisterWindowMessageW(wide("SaveScummer.DesktopShortcut.v1").as_ptr());
+        if message != 0 {
+            PostMessageW(target, message, action, 0);
+        }
+        true
+    }
+}
 unsafe extern "system" fn window(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
         WM_HOTKEY => {
+            if matches!(wp, 1 | 2) && forward_to_desktop(unsafe { GetForegroundWindow() }, wp) {
+                return 0;
+            }
             match wp {
                 1 => emit(DesktopEvent::Save),
                 2 => emit(DesktopEvent::Load),
@@ -181,5 +202,73 @@ pub fn run(
         }
         DestroyWindow(hwnd);
         UnregisterClassW(class_name.as_ptr(), instance);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestWindow(HWND);
+    impl Drop for TestWindow {
+        fn drop(&mut self) {
+            unsafe { DestroyWindow(self.0) };
+        }
+    }
+    fn test_window(owner: HWND) -> TestWindow {
+        let hwnd = unsafe {
+            CreateWindowExW(
+                0,
+                wide("STATIC").as_ptr(),
+                wide("Shortcut routing test").as_ptr(),
+                WS_POPUP,
+                0,
+                0,
+                1,
+                1,
+                owner,
+                std::ptr::null_mut(),
+                GetModuleHandleW(std::ptr::null()),
+                std::ptr::null(),
+            )
+        };
+        assert!(!hwnd.is_null());
+        TestWindow(hwnd)
+    }
+
+    #[test]
+    fn shortcuts_forward_only_to_marked_desktop_and_its_owned_windows() {
+        let desktop = test_window(std::ptr::null_mut());
+        let unrelated = test_window(std::ptr::null_mut());
+        let dialog = test_window(desktop.0);
+        assert!(!forward_to_desktop(desktop.0, 1));
+        assert!(!forward_to_desktop(std::ptr::null_mut(), 1));
+        unsafe {
+            assert_ne!(
+                SetPropW(
+                    desktop.0,
+                    wide("SaveScummer.ShortcutTarget.v1").as_ptr(),
+                    1_usize as HANDLE
+                ),
+                0
+            );
+            let message = RegisterWindowMessageW(wide("SaveScummer.DesktopShortcut.v1").as_ptr());
+            assert_ne!(message, 0);
+            assert!(!forward_to_desktop(unrelated.0, 1));
+            for (source, action) in [(desktop.0, 1), (dialog.0, 2)] {
+                assert!(forward_to_desktop(source, action));
+                let mut received: MSG = std::mem::zeroed();
+                assert_ne!(
+                    PeekMessageW(&mut received, desktop.0, message, message, PM_REMOVE),
+                    0
+                );
+                assert_eq!(received.hwnd, desktop.0);
+                assert_eq!(received.wParam, action);
+                assert_eq!(
+                    PeekMessageW(&mut received, desktop.0, message, message, PM_REMOVE),
+                    0
+                );
+            }
+        }
     }
 }

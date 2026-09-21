@@ -654,7 +654,7 @@ Changing the path and saving updates the entry in KNOWN GAMES only after core va
 
     Enable this action when any saved snapshots, recovery snapshots or history entries exist and the game is neither busy nor awaiting recovery. Recovery data retained after an interrupted operation is included only after that interruption has been resolved. Enforce this restriction in the core as well as the UI.
 
-    Show a confirmation with separate counts: "This will permanently delete X saved backups and Y recovery points, and clear this game's history. Current game data will be kept." Include any retained incomplete recovery copies in the deletion scope and confirmation.
+    Keep the confirmation brief: "Permanently delete all backups and clear this game's history?" Add "Your current game data will be kept." Show separate counts for saved backups, recovery points and incomplete copies, plus their paths, in Details. Include any retained incomplete recovery copies in the deletion scope.
 
     On confirmation, refresh backup discovery before checking the preview revision. External deletion, replacement, modification or discovery of a backup invalidates the old confirmation and requires a new preview. On acceptance, remove the game's saved and recovery snapshots, including imported existing backups, and clear its history. Leave the current DIR untouched. Only clear records for snapshots whose deletion succeeded; report any failures. This is the only app action that deletes retained snapshots and history.
 

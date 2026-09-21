@@ -2,11 +2,15 @@
 #include "mainwindow.h"
 #include "presentation.h"
 #include <QApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QEventLoop>
 #include <QFile>
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QLocalServer>
+#include <QMenu>
+#include <QPlainTextEdit>
 #include <QProcess>
 #include <QScreen>
 #include <QSignalSpy>
@@ -130,6 +134,273 @@ class DesktopTest : public QObject {
                  QString("checkpoint-id"));
         QVERIFY(Presentation::historyAction({{"kind", "game_started"}}).isEmpty());
     }
+    void focusedShortcuts_data() {
+        QTest::addColumn<bool>("load");
+        QTest::addColumn<bool>("gameRunning");
+        QTest::addColumn<bool>("forwarded");
+        for (bool load : {false, true})
+            for (bool running : {false, true})
+                for (bool forwarded : {false, true}) {
+                    const auto name = QString("%1-%2-%3").arg(load ? "load" : "save")
+                        .arg(running ? "other-game-running" : "no-game-running")
+                        .arg(forwarded ? "host-forwarded" : "local");
+                    QTest::newRow(qPrintable(name)) << load << running << forwarded;
+                }
+    }
+    void focusedShortcuts() {
+        QFETCH(bool, load);
+        QFETCH(bool, gameRunning);
+        QFETCH(bool, forwarded);
+        if (forwarded && QGuiApplication::platformName() != "windows")
+            QSKIP("Native host forwarding is tested with the Windows platform.");
+        class PendingService : public FakeService {
+          public:
+            Callback pending;
+            void request(const QJsonObject &command, Callback callback = {}) override {
+                if (command["type"] == "execute") {
+                    requests.append(command);
+                    pending = std::move(callback);
+                } else FakeService::request(command, std::move(callback));
+            }
+        } service;
+        service.state["active_stack"] = gameRunning ? QJsonArray{"void-war"} : QJsonArray();
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        window.setOtherGamesOpen(true);
+        window.selectGame("ftl");
+        window.activateWindow();
+        QTRY_VERIFY(window.isActiveWindow());
+        GameRow *selected = nullptr, *other = nullptr;
+        for (auto *row : window.findChildren<GameRow *>()) {
+            if (row->id == "ftl") selected = row;
+            if (row->id == "void-war") other = row;
+        }
+        QVERIFY(selected && other);
+        selected->header->setFocus();
+        QTRY_COMPARE(QGuiApplication::applicationState(), Qt::ApplicationActive);
+        QTest::qWait(30); // Let native activation/shortcut context events settle.
+        auto pressShortcut = [&] {
+#ifdef Q_OS_WIN
+            if (forwarded) {
+                const auto handle = reinterpret_cast<HWND>(window.winId());
+                QCOMPARE(reinterpret_cast<quintptr>(GetPropW(handle, L"SaveScummer.ShortcutTarget.v1")),
+                         quintptr(1));
+                SendMessageW(handle, RegisterWindowMessageW(L"SaveScummer.DesktopShortcut.v1"),
+                             load ? 2 : 1, 0);
+                return;
+            }
+#endif
+            QTest::keyClick(QApplication::focusWidget(), load ? Qt::Key_F9 : Qt::Key_F5,
+                            Qt::ControlModifier);
+        };
+        pressShortcut();
+        QCOMPARE(service.requests.size(), 1);
+        QCOMPARE(service.requests.first()["type"].toString(), QString("execute"));
+        QCOMPARE(service.requests.first()["game_id"].toString(), QString("ftl"));
+        QCOMPARE(service.requests.first()["action"].toObject()["type"].toString(),
+                 load ? QString("load") : QString("save"));
+        QVERIFY(selected->progress->isVisible());
+        QVERIFY(!other->progress->isVisible());
+        QVERIFY(!selected->save->isEnabled());
+        QVERIFY(!selected->load->isEnabled());
+        pressShortcut();
+        QCOMPARE(service.requests.size(), 1); // Busy/submitting must not send twice.
+
+        auto operation = QJsonObject{{"id", "op"}, {"game_id", "ftl"}, {"status", "pending"},
+                                    {"action", QJsonObject{{"type", load ? "load" : "save"}}}};
+        service.state["operations"] = QJsonObject{{"op", operation}};
+        auto reply = std::move(service.pending);
+        reply({{"type", "accepted"}, {"operation_id", "op"}});
+        QVERIFY(selected->progress->isVisible());
+        operation["status"] = "completed";
+        service.state["operations"] = QJsonObject{{"op", operation}};
+        service.publish();
+        QVERIFY(!selected->progress->isVisible());
+        QVERIFY(selected->save->isEnabled());
+        QVERIFY(selected->load->isEnabled());
+        const auto count = service.requests.size();
+
+        window.setConnected(false, "Disconnected");
+        pressShortcut();
+        QCOMPARE(service.requests.size(), count);
+        window.setConnected(true);
+        QDialog dialog(&window);
+        dialog.setWindowModality(Qt::ApplicationModal);
+        dialog.show();
+        dialog.activateWindow();
+        QTRY_VERIFY(dialog.isActiveWindow());
+        pressShortcut();
+        QCOMPARE(service.requests.size(), count);
+        dialog.close();
+        window.activateWindow();
+        QTRY_VERIFY(window.isActiveWindow());
+        window.selectGame("into-the-breach"); // Installed, but no save directory yet.
+        pressShortcut();
+        QCOMPARE(service.requests.size(), count);
+        window.selectGame("ftl");
+        QWidget otherWindow;
+        otherWindow.show();
+        otherWindow.activateWindow();
+        QTRY_VERIFY(otherWindow.isActiveWindow());
+        QTest::qWait(30);
+        pressShortcut(); // A queued forwarded hotkey must not act after focus leaves.
+        QCOMPARE(service.requests.size(), count);
+    }
+    void actionButtonsKeepTheirWidth_data() {
+        QTest::addColumn<int>("windowWidth");
+        QTest::addColumn<int>("pointSize");
+        QTest::addColumn<bool>("dark");
+        QTest::newRow("narrow-dark") << 340 << 9 << true;
+        QTest::newRow("wide-light") << 650 << 9 << false;
+        QTest::newRow("narrow-large-text") << 340 << 14 << true;
+    }
+    void actionButtonsKeepTheirWidth() {
+        QFETCH(int, windowWidth);
+        QFETCH(int, pointSize);
+        QFETCH(bool, dark);
+        MainWindow::applyTheme(dark);
+        GameRow row("void-war");
+        row.setFont(QFont("Segoe UI", pointSize));
+        row.resize(windowWidth, 550);
+        auto state = demoState();
+        auto availability = state["availability"].toObject();
+        auto available = availability["void-war"].toObject();
+        available["default_snapshot_id"] = QJsonValue::Null;
+        availability["void-war"] = available;
+        state["availability"] = availability;
+        row.updateState(state, true, true, false);
+        for (QPushButton *button : {row.save, static_cast<QPushButton *>(row.load), row.arrow})
+            button->setFont(QFont("Segoe UI", pointSize));
+        row.updateState(state, true, true, false);
+        row.show();
+        QTest::qWait(30);
+        QCOMPARE(row.load->font().pointSize(), pointSize);
+        const int saveWidth = row.save->width();
+        const int loadWidth = row.load->width();
+        const int emptyHeight = row.load->height();
+        QTest::mouseMove(row.info, row.info->rect().center());
+        QCOMPARE(row.info->cursor().shape(), Qt::ArrowCursor);
+        QCOMPARE(row.info->textInteractionFlags(), Qt::TextInteractionFlags(Qt::NoTextInteraction));
+
+        auto snapshots = state["snapshots"].toObject();
+        auto checkpoint = snapshots["void-war-saved"].toObject();
+        available["default_snapshot_id"] = "void-war-saved";
+        availability["void-war"] = available;
+        state["availability"] = availability;
+        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(screenshotRoot);
+        // Existing folder timestamp -> unknown age -> newly saved checkpoint.
+        // None of these state transitions may change the button widths.
+        for (int step = 0; step < 3; ++step) {
+            checkpoint["selection_time"] = step == 0
+                ? QJsonValue(QDateTime(QDate(2020, 12, 31), QTime(23, 59, 59)).toMSecsSinceEpoch())
+                : QJsonValue::Null;
+            checkpoint["saved_at"] = step == 2
+                ? QJsonValue(QDateTime::currentMSecsSinceEpoch()) : QJsonValue::Null;
+            snapshots["void-war-saved"] = checkpoint;
+            state["snapshots"] = snapshots;
+            row.updateState(state, true, true, false);
+            QCoreApplication::processEvents();
+            QCOMPARE(row.save->width(), saveWidth);
+            QCOMPARE(row.load->width(), loadWidth);
+            QCOMPARE(row.save->width(), row.load->width() + row.arrow->width());
+            QCOMPARE(row.save->height(), row.load->height());
+            QVERIFY(row.more->geometry().right() < row.more->parentWidget()->width());
+            QVERIFY(row.info->mapTo(&row, QPoint()).y() >=
+                    row.save->mapTo(&row, QPoint(0, row.save->height())).y());
+            if (step == 2) QCOMPARE(row.load->height(), emptyHeight);
+            QVERIFY(row.grab().save(screenshotRoot + QString("controls-%1-%2.png")
+                .arg(QTest::currentDataTag()).arg(step)));
+        }
+        // Even an unusually long caption gets space instead of an ellipsis.
+        row.load->setAge("Modified 23 hours and 59 minutes ago, additional checkpoint details", "Full timestamp");
+        row.resize(windowWidth + 1, row.height());
+        QTest::qWait(30);
+        QVERIFY(row.load->height() > emptyHeight);
+        QVERIFY(row.info->mapTo(&row, QPoint()).y() >=
+                row.save->mapTo(&row, QPoint(0, row.save->height())).y());
+        QVERIFY(row.grab().save(screenshotRoot + QString("controls-%1-long.png")
+            .arg(QTest::currentDataTag())));
+        MainWindow::applyTheme(true);
+    }
+    void flushDetailsDisclosure_data() {
+        QTest::addColumn<QString>("finish");
+        QTest::newRow("cancel") << "cancel";
+        QTest::newRow("escape") << "escape";
+        QTest::newRow("enter-defaults-to-cancel") << "enter";
+        QTest::newRow("delete") << "delete";
+    }
+    void flushDetailsDisclosure() {
+        QFETCH(QString, finish);
+        class FlushService : public FakeService {
+          public:
+            void request(const QJsonObject &command, Callback callback = {}) override {
+                if (command["type"] != "flush_preview") {
+                    FakeService::request(command, callback);
+                    return;
+                }
+                requests.append(command);
+                callback({{"type", "flush_preview"},
+                          {"preview", QJsonObject{{"saved", 2}, {"recovery", 1}, {"retained", 1},
+                                                  {"revision", "preview-revision"},
+                                                  {"paths", QJsonArray{"C:/Games/Void War/backup"}}}}});
+            }
+        } service;
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        GameRow *row = nullptr;
+        for (auto *candidate : window.findChildren<GameRow *>())
+            if (candidate->id == "void-war") row = candidate;
+        QVERIFY(row);
+        QTest::mouseClick(row->more, Qt::LeftButton);
+        auto *menu = window.findChild<QMenu *>();
+        QVERIFY(menu);
+        auto *flush = menu->actions().last();
+        QVERIFY(flush->isEnabled());
+        flush->trigger();
+        auto *dialog = window.findChild<QDialog *>("flushDialog");
+        QVERIFY(dialog);
+        auto *toggle = dialog->findChild<QPushButton *>("flushDetailsToggle");
+        auto *details = dialog->findChild<QPlainTextEdit *>("flushDetails");
+        auto *buttons = dialog->findChild<QDialogButtonBox *>();
+        QVERIFY(toggle && details && buttons);
+        QTRY_VERIFY(dialog->isVisible());
+        QVERIFY(!details->isVisible());
+        QVERIFY(buttons->button(QDialogButtonBox::Cancel)->isDefault());
+        const auto requestCount = service.requests.size();
+        const auto collapsedHeight = dialog->height();
+        const auto toggleLeft = toggle->x();
+        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(screenshotRoot);
+        QVERIFY(dialog->grab().save(screenshotRoot + "flush-collapsed.png"));
+        QTest::mouseClick(toggle, Qt::LeftButton);
+        QTRY_VERIFY(details->isVisible());
+        QVERIFY(dialog->height() > collapsedHeight);
+        QCOMPARE(toggle->x(), toggleLeft);
+        QVERIFY(details->toPlainText().contains("Incomplete copies: 1"));
+        QVERIFY(details->toPlainText().contains("C:/Games/Void War/backup"));
+        QCOMPARE(service.requests.size(), requestCount);
+        QVERIFY(dialog->grab().save(screenshotRoot + "flush-expanded.png"));
+        QTest::keyClick(toggle, Qt::Key_Space);
+        QTRY_VERIFY(!details->isVisible());
+        QCOMPARE(dialog->height(), collapsedHeight);
+        QCOMPARE(service.requests.size(), requestCount);
+        if (finish == "escape") QTest::keyClick(dialog, Qt::Key_Escape);
+        else if (finish == "enter") QTest::keyClick(toggle, Qt::Key_Return);
+        else QTest::mouseClick(buttons->button(finish == "delete" ? QDialogButtonBox::Yes
+                                                                 : QDialogButtonBox::Cancel),
+                               Qt::LeftButton);
+        QVERIFY(!dialog->isVisible());
+        if (finish == "delete") {
+            QCOMPARE(service.requests.size(), requestCount + 1);
+            QCOMPARE(service.requests.last()["action"].toObject(),
+                     (QJsonObject{{"type", "flush"}, {"confirmed_revision", "preview-revision"}}));
+        } else {
+            QCOMPARE(service.requests.size(), requestCount);
+        }
+    }
     void selectionAndRegrouping() {
         FakeService service;
         MainWindow window(&service, true);
@@ -252,6 +523,60 @@ class DesktopTest : public QObject {
         QTest::mouseClick(action, Qt::LeftButton);
         QCOMPARE(service.requests.last()["action"].toObject()["target"].toString(),
                  QString("void-war-saved"));
+    }
+    void existingBackupsShowFolderTimes() {
+        FakeService service;
+        const auto modified = QDateTime(QDate(2026, 9, 18), QTime(12, 34, 56));
+        const auto discovered = modified.addDays(2).toMSecsSinceEpoch();
+        QJsonObject snapshots;
+        QJsonArray history;
+        for (int i = 0; i < 2; ++i) {
+            const auto id = QString("copy-%1").arg(i);
+            snapshots[id] = QJsonObject{{"saved_at", QJsonValue::Null},
+                                        {"selection_time", modified.addDays(i).toMSecsSinceEpoch()},
+                                        {"discovered_at", discovered},
+                                        {"available", true}};
+            history.append(QJsonObject{{"id", id + "-history"},
+                                       {"game_id", "void-war"},
+                                       {"kind", "existing_backup"},
+                                       {"sequence", i + 1},
+                                       {"recorded_at", discovered},
+                                       {"snapshot_id", id}});
+        }
+        service.state["snapshots"] = snapshots;
+        service.state["history"] = history;
+        service.state["visible_history"] = history;
+        auto availability = service.state["availability"].toObject();
+        availability["void-war"] = QJsonObject{{"data_available", true},
+                                               {"default_snapshot_id", "copy-1"}};
+        service.state["availability"] = availability;
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        GameRow *row = nullptr;
+        for (auto *candidate : window.findChildren<GameRow *>())
+            if (candidate->id == "void-war")
+                row = candidate;
+        QVERIFY(row);
+        QCOMPARE(row->load->toolTip(),
+                 "Folder modified: " + modified.addDays(1).toString("yyyy-MM-dd HH:mm:ss t"));
+        QTest::mouseClick(row->arrow, Qt::LeftButton);
+        auto *popup = window.findChild<QWidget *>("historyPopup");
+        QVERIFY(popup);
+        QStringList labels;
+        for (auto *label : popup->findChildren<QLabel *>())
+            labels.append(label->text());
+        QVERIFY(labels.contains("2026-09-18\n12:34:56"));
+        QVERIFY(labels.contains("2026-09-19\n12:34:56"));
+        QVERIFY(labels.contains("Existing backup\nFolder modified"));
+        QVERIFY(!labels.contains("Existing backup\nSave time unknown"));
+        const auto actions = popup->findChildren<QPushButton *>("historyAction");
+        QCOMPARE(actions.size(), 2);
+        QVERIFY(actions.first()->isEnabled());
+        QCOMPARE(actions.first()->property("checkpoint").toString(), QString("copy-1"));
+        QTest::mouseClick(actions.first(), Qt::LeftButton);
+        QCOMPARE(service.requests.last()["action"].toObject()["target"].toString(),
+                 QString("copy-1"));
     }
     void cachedSteamIconUpdatesWithoutChangingGameRevision() {
         QTemporaryDir temp;

@@ -13,11 +13,19 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPlainTextEdit>
 #include <QScreen>
+#include <QShortcut>
 #include <QResizeEvent>
 #include <QStyleOptionButton>
 #include <QToolButton>
+#include <QTextLayout>
 #include <QUrl>
+#include <QtMath>
+#ifdef Q_OS_WIN
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace {
 QLabel *label(const QString &text, QWidget *parent = nullptr) {
@@ -33,6 +41,23 @@ QString errorText(const QJsonObject &reply) {
 }
 QJsonObject gameOf(const QJsonObject &state, const QString &id) {
     return state["games"].toObject()[id].toObject();
+}
+int layoutCaption(QTextLayout &layout, int width) {
+    QTextOption option;
+    option.setAlignment(Qt::AlignHCenter);
+    option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    layout.setTextOption(option);
+    qreal height = 0;
+    layout.beginLayout();
+    while (true) {
+        auto line = layout.createLine();
+        if (!line.isValid()) break;
+        line.setLineWidth(qMax(1, width));
+        line.setPosition(QPointF(0, height));
+        height += line.height();
+    }
+    layout.endLayout();
+    return qCeil(height);
 }
 
 class HeadingButton : public QPushButton {
@@ -74,7 +99,8 @@ class Footer : public QWidget {
                 item->setObjectName("keycap");
             hints->addWidget(item);
         }
-        hints_->setToolTip("Global shortcuts target the top running game, including while this window is closed.");
+        hints_->setToolTip("When this window is focused, shortcuts use the selected game's Save and Load buttons. "
+                          "Otherwise, global shortcuts target the top running game.");
         sounds_ = new QCheckBox("Play sounds");
         startup_ = new QCheckBox("Launch on startup");
         for (auto *check : {sounds_, startup_}) {
@@ -133,13 +159,25 @@ void LoadButton::setAge(const QString &age, const QString &full) {
     updateGeometry();
     update();
 }
-QSize LoadButton::sizeHint() const {
+QFont LoadButton::captionFont() const {
     auto smaller = font();
-    smaller.setPointSizeF(qMax(8.0, font().pointSizeF() - 1));
-    return {
-        qMax(QPushButton::sizeHint().width(), QFontMetrics(smaller).horizontalAdvance(age_) + 28),
-        qMax(36,
-             fontMetrics().height() + (age_.isEmpty() ? 12 : QFontMetrics(smaller).height() + 4))};
+    if (smaller.pointSizeF() > 0)
+        smaller.setPointSizeF(qMax(8.0, smaller.pointSizeF() - 1));
+    else
+        smaller.setPixelSize(qMax(1, smaller.pixelSize() - 1));
+    return smaller;
+}
+QSize LoadButton::sizeHint() const {
+    // A font-scaled preferred width, independent of the current age caption.
+    const int width = qMax(QPushButton::sizeHint().width(),
+                          QFontMetrics(captionFont()).horizontalAdvance("yyyy-MM-dd, HH:mm:ss") + 24);
+    return {width, heightForWidth(width)};
+}
+int LoadButton::heightForWidth(int width) const {
+    QTextLayout caption(age_, captionFont());
+    const int captionHeight = qMax(2 * QFontMetrics(captionFont()).height(),
+                                  layoutCaption(caption, width - 12));
+    return qMax(QPushButton::sizeHint().height(), fontMetrics().height() + captionHeight + 12);
 }
 void LoadButton::paintEvent(QPaintEvent *) {
     QStyleOptionButton option;
@@ -153,14 +191,14 @@ void LoadButton::paintEvent(QPaintEvent *) {
         painter.drawText(rect(), Qt::AlignCenter, "Load");
         return;
     }
-    painter.drawText(QRect(4, 1, width() - 8, height() / 2), Qt::AlignCenter, "Load");
-    auto smaller = font();
-    smaller.setPointSizeF(qMax(8.0, font().pointSizeF() - 1));
-    painter.setFont(smaller);
+    QTextLayout caption(age_, captionFont());
+    const int captionHeight = layoutCaption(caption, width() - 12);
+    const int titleHeight = fontMetrics().height();
+    const int top = (height() - titleHeight - 2 - captionHeight) / 2;
+    painter.drawText(QRect(6, top, width() - 12, titleHeight), Qt::AlignCenter, "Load");
     painter.setPen(palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled,
                                    QPalette::PlaceholderText));
-    painter.drawText(QRect(6, height() / 2 - 1, width() - 12, height() / 2), Qt::AlignCenter,
-                     painter.fontMetrics().elidedText(age_, Qt::ElideRight, qMax(0, width() - 12)));
+    caption.draw(&painter, QPointF(6, top + titleHeight + 2));
 }
 GameRow::GameRow(const QString &gameId, QWidget *parent) : QWidget(parent), id(gameId) {
     setObjectName("gameRow");
@@ -220,7 +258,8 @@ GameRow::GameRow(const QString &gameId, QWidget *parent) : QWidget(parent), id(g
     info->setObjectName("instructions");
     info->setWordWrap(true);
     info->setTextFormat(Qt::RichText);
-    info->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    info->setTextInteractionFlags(Qt::NoTextInteraction);
+    info->setCursor(Qt::ArrowCursor);
     info->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     detailsLayout->addWidget(info);
     error = label("");
@@ -275,11 +314,11 @@ void GameRow::resizeEvent(QResizeEvent *) {
 }
 void GameRow::arrangeControls() {
     const int arrowWidth = qMax(28, arrow->fontMetrics().height() + 12);
-    const int height = qMax(save->sizeHint().height(), load->sizeHint().height());
     const int preferred = qMax(save->sizeHint().width(), load->sizeHint().width() + arrowWidth);
     const int inset = width() < 500 ? 28 : 36;
     const int available = qMax(40, width() - inset - 40);
     const int equalWidth = qMax(20, qMin(preferred, (available - 6) / 2));
+    const int height = qMax(save->sizeHint().height(), load->heightForWidth(qMax(1, equalWidth - arrowWidth)));
     controls_->setFixedHeight(height);
     pair_->setGeometry(0, 0, equalWidth * 2 + 6, height);
     save->setGeometry(0, 0, equalWidth, height);
@@ -343,11 +382,17 @@ void GameRow::updateState(const QJsonObject &state, bool selected, bool connecte
     more->setEnabled(true);
     QString age, full;
     if (!checkpoint.isEmpty()) {
-        if (checkpoint["saved_at"].isDouble()) {
-            const auto time = checkpoint["saved_at"].toInteger();
+        const bool saved = checkpoint["saved_at"].isDouble();
+        const auto timestamp = saved ? checkpoint["saved_at"] : checkpoint["selection_time"];
+        if (timestamp.isDouble()) {
+            const auto time = timestamp.toInteger();
             age = Presentation::age(time);
             full = QDateTime::fromMSecsSinceEpoch(time).toLocalTime().toString(
                 "yyyy-MM-dd HH:mm:ss t");
+            if (!saved) {
+                age = "Modified " + age;
+                full = "Folder modified: " + full;
+            }
         } else {
             age = "Save time unknown";
             full = "Existing backup — save time unknown";
@@ -407,6 +452,9 @@ void MainWindow::applyTheme(bool dark) {
         QPushButton#more:hover { background:%4; }
         QPushButton#otherGames { text-align:left; border:0; border-top:1px dotted %1; border-radius:0; padding:10px 20px; background:transparent; color:palette(placeholder-text); }
         QPushButton#otherGames:hover { background:%2; }
+        QPushButton#flushDetailsToggle { text-align:left; border:0; border-radius:0; padding:4px 0; background:transparent; color:palette(placeholder-text); }
+        QPushButton#flushDetailsToggle:hover { color:palette(text); }
+        QPushButton#flushDetailsToggle:focus { border-bottom:1px solid #9747ff; }
         QPushButton#load { border-top-right-radius:0; border-bottom-right-radius:0; }
         QPushButton#historyArrow { border-top-left-radius:0; border-bottom-left-radius:0; padding:0; }
         QProgressBar { border:0; background:%1; }
@@ -418,7 +466,7 @@ void MainWindow::applyTheme(bool dark) {
         QMenu, QWidget#historyPopup { background:palette(window); border:1px solid %1; }
         QMenu::item { padding:7px 16px; }
         QMenu::item:selected { background:%4; }
-        QPushButton#historyAction { color:#9747ff; padding:3px 8px; }
+        QPushButton#historyAction { color:palette(placeholder-text); padding:3px 8px; }
         QPushButton#historyAction:disabled { color:palette(disabled,button-text); }
         QLabel#day { color:palette(placeholder-text); font-weight:600; padding-top:6px; }
         QLineEdit { padding:5px; border:1px solid %1; background:palette(base); }
@@ -501,11 +549,46 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     setCentralWidget(central);
     connect(service_, &Service::stateChanged, this, &MainWindow::applyState);
     connect(service_, &Service::connectionChanged, this, &MainWindow::setConnected);
+    for (const bool load : {false, true}) {
+        auto *shortcut = new QShortcut(QKeySequence(load ? "Ctrl+F9" : "Ctrl+F5"), this);
+        shortcut->setAutoRepeat(false);
+        connect(shortcut, &QShortcut::activated, this, [this, load] { triggerSelectedShortcut(load); });
+    }
+#ifdef Q_OS_WIN
+    // The host owns the global hotkeys. Its WM_HOTKEY handler forwards them to
+    // this window when it (or an owned dialog) has focus. Local QShortcuts also
+    // work in dev/demo sessions with host integrations disabled.
+    SetPropW(reinterpret_cast<HWND>(winId()), L"SaveScummer.ShortcutTarget.v1",
+             reinterpret_cast<HANDLE>(1));
+#endif
     auto *clock = new QTimer(this);
     clock->setInterval(10000);
     connect(clock, &QTimer::timeout, this, &MainWindow::refresh);
     clock->start();
 }
+void MainWindow::triggerSelectedShortcut(bool load) {
+    if (!isActiveWindow() || QApplication::activeModalWidget() || QApplication::activePopupWidget())
+        return;
+    auto *row = rows_.value(selected_, nullptr);
+    if (!row || !row->isVisible()) return;
+    QPushButton *button = load ? row->load : row->save;
+    if (button->isVisible() && button->isEnabled()) button->click();
+}
+#ifdef Q_OS_WIN
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result) {
+    const auto *event = static_cast<MSG *>(message);
+    static const UINT shortcutMessage = RegisterWindowMessageW(L"SaveScummer.DesktopShortcut.v1");
+    if (shortcutMessage && event->message == shortcutMessage) {
+        // A queued hotkey must not act after focus has moved to another app.
+        if (GetAncestor(GetForegroundWindow(), GA_ROOTOWNER) == reinterpret_cast<HWND>(winId()) &&
+            (event->wParam == 1 || event->wParam == 2))
+            triggerSelectedShortcut(event->wParam == 2);
+        *result = 0;
+        return true;
+    }
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
     if (event->size().width() != event->oldSize().width())
@@ -794,6 +877,11 @@ void MainWindow::populateHistory() {
                                        {"game_closed", "Game closed"}};
     for (const auto &row : rows) {
         const bool existing = row["kind"] == "existing_backup";
+        const auto snapshot = snapshots[row["snapshot_id"].toString()].toObject();
+        const auto timestamp = existing ? snapshot["selection_time"] : row["recorded_at"];
+        const auto date = timestamp.isDouble()
+                              ? QDateTime::fromMSecsSinceEpoch(timestamp.toInteger()).toLocalTime()
+                              : QDateTime();
         const auto group =
             existing ? QString("Other backups") : Presentation::day(row["recorded_at"].toInteger());
         if (group != previousDay) {
@@ -806,10 +894,12 @@ void MainWindow::populateHistory() {
         auto *line = new QHBoxLayout(widget);
         line->setContentsMargins(0, 3, 0, 3);
         line->setSpacing(8);
-        auto *time = label(existing ? "—"
-                                    : QDateTime::fromMSecsSinceEpoch(row["recorded_at"].toInteger())
-                                          .toLocalTime()
-                                          .toString("HH:mm:ss"));
+        auto *time = label(date.isValid()
+                               ? date.toString(existing ? "yyyy-MM-dd\nHH:mm:ss" : "HH:mm:ss")
+                               : "—");
+        if (date.isValid())
+            time->setToolTip((existing ? QString("Folder modified: ") : QString()) +
+                             date.toString("yyyy-MM-dd HH:mm:ss t"));
         line->addWidget(time);
         QString caption = names.value(str(row, "kind"), str(row, "kind"));
         if (row["target_id"].isString())
@@ -826,7 +916,7 @@ void MainWindow::populateHistory() {
         const bool available =
             snapshots[action["target"].toString()].toObject()["available"].toBool();
         if (existing)
-            caption += "\nSave time unknown";
+            caption += date.isValid() ? "\nFolder modified" : "\nSave time unknown";
         if (!action.isEmpty() && !available)
             caption += "\nBackup unavailable";
         auto *text = label(caption);
@@ -841,7 +931,7 @@ void MainWindow::populateHistory() {
             const auto game = historyGame_;
             connect(button, &QPushButton::clicked, this,
                     [this, game, action] { execute(game, action); });
-            line->addWidget(button);
+            line->insertWidget(0, button);
         }
         layout->addWidget(widget);
     }
@@ -980,27 +1070,63 @@ void MainWindow::flush(const QString &game) {
             return;
         }
         const auto preview = reply["preview"].toObject();
-        auto *box =
-            new QMessageBox(QMessageBox::Warning, "Flush history",
-                            QString("This will permanently delete %1 saved backups and %2 recovery "
-                                    "points, and clear this game's history. Current game data will "
-                                    "be kept.\n\nRetained incomplete copies: %3.")
-                                .arg(preview["saved"].toInteger())
-                                .arg(preview["recovery"].toInteger())
-                                .arg(preview["retained"].toInteger()),
-                            QMessageBox::Yes | QMessageBox::Cancel, this);
+        auto *dialog = new QDialog(this);
+        dialog->setObjectName("flushDialog");
+        dialog->setWindowTitle("Flush history");
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setFixedWidth(520);
+        auto *layout = new QGridLayout(dialog);
+        layout->setContentsMargins(20, 20, 20, 16);
+        layout->setHorizontalSpacing(16);
+        layout->setVerticalSpacing(12);
+        layout->setColumnStretch(1, 1);
+        auto *warning = label("");
+        warning->setPixmap(style()->standardIcon(QStyle::SP_MessageBoxWarning).pixmap(40, 40));
+        layout->addWidget(warning, 0, 0, 2, 1, Qt::AlignTop);
+        auto *message = label("Permanently delete all backups and clear this game's history?");
+        message->setWordWrap(true);
+        layout->addWidget(message, 0, 1);
+        auto *reassurance = label("Your current game data will be kept.");
+        reassurance->setWordWrap(true);
+        layout->addWidget(reassurance, 1, 1);
+        auto *toggle = new QPushButton(QIcon(":/chevron-right.svg"), "Show details");
+        toggle->setObjectName("flushDetailsToggle");
+        toggle->setCheckable(true);
+        toggle->setAutoDefault(false);
+        toggle->setCursor(Qt::PointingHandCursor);
+        layout->addWidget(toggle, 2, 1, Qt::AlignLeft);
         QStringList paths;
         for (const auto &path : preview["paths"].toArray())
             paths.append(path.toString());
-        box->setDetailedText(paths.join('\n'));
-        box->setDefaultButton(QMessageBox::Cancel);
-        box->setAttribute(Qt::WA_DeleteOnClose);
-        box->button(QMessageBox::Yes)->setText("Delete backups");
-        connect(box, &QMessageBox::finished, this, [this, game, preview](int result) {
-            if (result == QMessageBox::Yes)
-                execute(game, {{"type", "flush"}, {"confirmed_revision", preview["revision"]}});
+        QString details = QString("Saved backups: %1\nRecovery points: %2\nIncomplete copies: %3")
+                              .arg(preview["saved"].toInteger())
+                              .arg(preview["recovery"].toInteger())
+                              .arg(preview["retained"].toInteger());
+        if (!paths.isEmpty())
+            details += "\n\n" + paths.join('\n');
+        auto *detailsView = new QPlainTextEdit(details);
+        detailsView->setObjectName("flushDetails");
+        detailsView->setReadOnly(true);
+        detailsView->setFixedHeight(160);
+        detailsView->hide();
+        layout->addWidget(detailsView, 3, 1);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Yes | QDialogButtonBox::Cancel);
+        buttons->button(QDialogButtonBox::Yes)->setText("Delete backups");
+        buttons->button(QDialogButtonBox::Yes)->setAutoDefault(false);
+        buttons->button(QDialogButtonBox::Cancel)->setDefault(true);
+        layout->addWidget(buttons, 4, 0, 1, 2);
+        connect(toggle, &QPushButton::toggled, dialog, [dialog, toggle, detailsView](bool expanded) {
+            toggle->setIcon(QIcon(expanded ? ":/chevron.svg" : ":/chevron-right.svg"));
+            toggle->setText(expanded ? "Hide details" : "Show details");
+            detailsView->setVisible(expanded);
+            dialog->adjustSize();
         });
-        box->open();
+        connect(buttons->button(QDialogButtonBox::Yes), &QPushButton::clicked, dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+        connect(dialog, &QDialog::accepted, this, [this, game, preview] {
+            execute(game, {{"type", "flush"}, {"confirmed_revision", preview["revision"]}});
+        });
+        dialog->open();
     });
 }
 void MainWindow::recover(const QString &game) {
