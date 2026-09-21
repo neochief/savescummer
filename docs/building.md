@@ -118,10 +118,13 @@ For each mode, output lives under `build/<mode>`:
 - `desktop`: CMake build tree (not the distribution).
 
 The folder includes Qt plugins, Qt/Visual C++ DLLs, license notices, and SHA-256
-checksums. Keep it together. Existing packages must be closed, including their
-background host, before replacing them. A compile failure stops the build before
-deployment, so an old successful package can remain on disk; check the command's
-exit status and report timestamp. Packages are unsigned.
+checksums. Keep it together. When replacing a package, the packaging step closes
+desktops running from that exact generated folder and asks its background host to
+shut down gracefully. The host gets up to 30 seconds to finish accepted work;
+hidden, unresponsive, or custom-data-directory processes still running from that
+folder are then terminated. Apps running elsewhere are left alone. A compile
+failure stops the build before deployment, so an old successful package can remain
+on disk; check the command's exit status and report timestamp. Packages are unsigned.
 
 ## Development data
 
@@ -137,7 +140,7 @@ by default, including a dev package launched directly.
 
 Open the repository folder in VS Code and install the recommended Microsoft C/C++
 extension (PowerShell 7, `pwsh`, must be on PATH). In Run and Debug, select
-**Save Scummer: app** and press **F5**. **Save Scummer: demo** runs simulated data.
+**SaveScummer: app** and press **F5**. **SaveScummer: demo** runs simulated data.
 Both compile Rust and Qt first using the existing dev build. **Ctrl+F5** runs
 without debugging; **Ctrl+Shift+B** builds the dev binaries.
 
@@ -145,7 +148,7 @@ The app configuration starts a background host with OS integrations disabled and
 data in `.runtime/vscode`, then debugs the Qt executable using MSVC symbols.
 Stopping the debug session gracefully shuts down that host. After an interrupted
 VS Code session, the next pre-launch task cleans up its recorded host; you can
-also run **Save Scummer: stop debug host** from Tasks. Stop the current debug
+also run **SaveScummer: stop debug host** from Tasks. Stop the current debug
 session before launching another configuration. Configured game paths are real;
 use the demo for simulated operations. These configurations debug the Qt UI, not
 the separate Rust host. Because Qt dev uses RelWithDebInfo, some locals may be
@@ -153,7 +156,7 @@ optimized out and stepping may skip source lines.
 
 The configurations use the local Qt 6.5.3 SDK. If you build with another SDK,
 update the PATH entries in `.vscode/launch.json` and the build's QtPrefix together.
-The **Save Scummer: package release** task runs the standard release command.
+The **SaveScummer: package release** task runs the standard release command.
 
 ## Lower-level entry points
 

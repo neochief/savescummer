@@ -183,7 +183,7 @@ pub fn run(
         if icon.hIcon.is_null() {
             icon.hIcon = LoadIconW(std::ptr::null_mut(), IDI_APPLICATION);
         }
-        text(&mut icon.szTip, "Save Scummer");
+        text(&mut icon.szTip, "SaveScummer");
         let save = RegisterHotKey(hwnd, 1, MOD_CONTROL | MOD_NOREPEAT, VK_F5 as u32) != 0;
         let load = RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_NOREPEAT, VK_F9 as u32) != 0;
         let tray = Shell_NotifyIconW(NIM_ADD, &icon) != 0;
@@ -223,7 +223,7 @@ pub fn run(
                             let mut notice = icon;
                             notice.uFlags = NIF_INFO;
                             notice.dwInfoFlags = NIIF_ERROR | NIIF_NOSOUND;
-                            text(&mut notice.szInfoTitle, "Save Scummer");
+                            text(&mut notice.szInfoTitle, "SaveScummer");
                             text(&mut notice.szInfo, &value);
                             Shell_NotifyIconW(NIM_MODIFY, &notice);
                             last_notification = Instant::now();

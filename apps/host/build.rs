@@ -7,7 +7,7 @@ fn main() {
         let mut resource = winresource::WindowsResource::new();
         resource
             .set_icon_with_id(icon.to_str().expect("UTF-8 icon path"), "1")
-            .set("CompanyName", "Save Scummer contributors")
+            .set("CompanyName", "SaveScummer contributors")
             .compile()
             .expect("compile Windows application resources");
     }

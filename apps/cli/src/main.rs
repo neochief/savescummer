@@ -5,7 +5,7 @@ use savescummer_ipc::*;
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Parser)]
-#[command(about = "Command-line client for the Save Scummer background runtime")]
+#[command(about = "Command-line client for the SaveScummer background runtime")]
 struct Cli {
     #[arg(long, global = true)]
     data_dir: Option<PathBuf>,

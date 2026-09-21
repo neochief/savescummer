@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Save Scummer: app",
+            "name": "SaveScummer: app",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe",
@@ -16,11 +16,11 @@
             ],
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Save Scummer: prepare app",
-            "postDebugTask": "Save Scummer: stop debug host"
+            "preLaunchTask": "SaveScummer: prepare app",
+            "postDebugTask": "SaveScummer: stop debug host"
         },
         {
-            "name": "Save Scummer: demo",
+            "name": "SaveScummer: demo",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe",
@@ -31,7 +31,7 @@
             ],
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Save Scummer: build dev"
+            "preLaunchTask": "SaveScummer: build dev"
         }
     ]
 }

@@ -30,10 +30,121 @@ if ((Test-Path -LiteralPath $package) -and
     throw "Refusing to replace an unmanaged directory: $package"
 }
 $packagePrefix = $package + [IO.Path]::DirectorySeparatorChar
-$running = Get-Process | Where-Object {
-    $_.Path -and $_.Path.StartsWith($packagePrefix, [StringComparison]::OrdinalIgnoreCase)
+function Get-PackageProcess {
+    @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Path -and $_.Path.StartsWith($packagePrefix, [StringComparison]::OrdinalIgnoreCase)
+    })
 }
-if ($running) { throw 'Close the existing packaged app and shut down its host before replacing this package.' }
+function Wait-PackageProcess([object[]]$Process, [int]$TimeoutMilliseconds) {
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+    foreach ($item in $Process) {
+        try {
+            if ($item.HasExited) { continue }
+            $remaining = [math]::Max(0, [int]($deadline - [DateTime]::UtcNow).TotalMilliseconds)
+            if ($remaining -gt 0) { $null = $item.WaitForExit($remaining) }
+        } catch [InvalidOperationException] {
+            # The process exited between the snapshot and the wait.
+        }
+    }
+}
+function Get-HostDataDirectory([Diagnostics.Process]$Process) {
+    try {
+        $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($Process.Id)" `
+            -ErrorAction Stop).CommandLine
+    } catch {
+        return $null
+    }
+    if ($commandLine -match '(?i)(?:^|\s)--data-dir(?:\s+|=)(?:"([^"]+)"|(\S+))') {
+        if ($Matches[1]) { return $Matches[1] }
+        return $Matches[2]
+    }
+    return $null
+}
+function Request-HostShutdown([string]$Cli, [string]$DataDirectory) {
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $Cli
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('--data-dir', $DataDirectory, '--no-start', 'shutdown')) {
+        $start.ArgumentList.Add($argument)
+    }
+    $client = $null
+    try {
+        $client = [Diagnostics.Process]::Start($start)
+        if (-not $client.WaitForExit(10000)) {
+            $client.Kill()
+            $null = $client.WaitForExit(5000)
+            return $false
+        }
+        return $client.ExitCode -eq 0
+    } catch {
+        return $false
+    } finally {
+        if ($client) { $client.Dispose() }
+    }
+}
+function Stop-PackageProcess {
+    $running = @(Get-PackageProcess)
+    if ($running.Count -eq 0) { return }
+    Write-Host 'Stopping the existing portable package before replacing it.'
+
+    # Closing the UI first prevents it from reconnecting while its host exits.
+    foreach ($desktop in @($running | Where-Object {
+        [IO.Path]::GetFileName($_.Path) -eq 'SaveScummer.exe'
+    })) {
+        Write-Host "Closing packaged desktop (PID $($desktop.Id))."
+        try {
+            if ($desktop.CloseMainWindow()) { $null = $desktop.WaitForExit(5000) }
+            if (-not $desktop.HasExited) {
+                Stop-Process -InputObject $desktop -Force -ErrorAction Stop
+                $null = $desktop.WaitForExit(10000)
+            }
+        } catch {
+            if (-not $desktop.HasExited) { throw }
+        }
+    }
+
+    $hosts = @(Get-PackageProcess | Where-Object {
+        [IO.Path]::GetFileName($_.Path) -eq 'SaveScummer.Host.exe'
+    })
+    $packageCli = Join-Path $package 'bin/SaveScummer.CLI.exe'
+    if ($hosts.Count -gt 0 -and (Test-Path -LiteralPath $packageCli)) {
+        $gracefulHosts = @()
+        foreach ($hostProcess in $hosts) {
+            $dataDirectory = Get-HostDataDirectory -Process $hostProcess
+            if (-not $dataDirectory) {
+                Write-Warning "Cannot resolve the data directory for packaged host PID $($hostProcess.Id); it will be terminated."
+                continue
+            }
+            Write-Host "Requesting graceful shutdown of packaged host PID $($hostProcess.Id)."
+            if (-not (Request-HostShutdown -Cli $packageCli -DataDirectory $dataDirectory)) {
+                Write-Warning "Packaged host PID $($hostProcess.Id) did not accept graceful shutdown; it will be terminated."
+            } else {
+                $gracefulHosts += $hostProcess
+            }
+        }
+        Wait-PackageProcess -Process $gracefulHosts -TimeoutMilliseconds 30000
+    }
+
+    # This final exact-path pass covers hidden/unresponsive desktops, hosts whose
+    # data directory could not be resolved, and any newly started packaged process.
+    foreach ($process in @(Get-PackageProcess)) {
+        Write-Host "Terminating packaged process $($process.ProcessName) (PID $($process.Id))."
+        try {
+            Stop-Process -InputObject $process -Force -ErrorAction Stop
+        } catch {
+            if (-not $process.HasExited) { throw }
+        }
+    }
+    $remaining = @(Get-PackageProcess)
+    Wait-PackageProcess -Process $remaining -TimeoutMilliseconds 10000
+    $remaining = @(Get-PackageProcess)
+    if ($remaining.Count -gt 0) {
+        throw "Could not stop packaged process PID(s): $($remaining.Id -join ', ')."
+    }
+}
 $hostFile = (Resolve-Path -LiteralPath $HostBinary).Path
 $cliFile = (Resolve-Path -LiteralPath $CliBinary).Path
 $qtVersion = & (Join-Path $QtPrefix 'bin/qmake.exe') -query QT_VERSION
@@ -69,7 +180,7 @@ try {
     Get-ChildItem -LiteralPath $crt.FullName -Filter '*.dll' | Copy-Item -Destination $bin
     Copy-Item -LiteralPath (Join-Path $root 'packaging/licenses') -Destination $stage -Recurse
     @"
-Save Scummer — Windows x64 ($Mode)
+SaveScummer — Windows x64 ($Mode)
 
 Open bin\SaveScummer.exe. Keep this entire folder together.
 Qt and the Visual C++ runtime are included; no SDK or PowerShell launcher is needed.
@@ -96,6 +207,7 @@ The Qt DLLs can be replaced with interface-compatible builds.
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $temporaryZip
     # Only replace marked generated output after every build/deployment step succeeds.
     # Both absolute paths were validated as descendants of repository/build above.
+    Stop-PackageProcess
     if (Test-Path -LiteralPath $package) { Remove-Item -LiteralPath $package -Recurse -Force }
     Move-Item -LiteralPath $stage -Destination $package
     Move-Item -LiteralPath $temporaryZip -Destination $archive -Force

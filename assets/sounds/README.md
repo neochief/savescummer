@@ -1,4 +1,4 @@
-# Save Scummer sounds
+# SaveScummer sounds
 
 Six original, procedurally synthesized cues matching the Play sounds section of
 `PLAN.md`. All production files are mono, 48 kHz, 16-bit PCM WAV. No recordings,

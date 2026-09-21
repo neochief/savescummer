@@ -1,4 +1,4 @@
-# Save Scummer UI prototype
+# SaveScummer UI prototype
 
 Open `index.html` directly in a modern browser to use the interactive prototype.
 It contains the preview runtime, icons and styles; no build step or server is required.

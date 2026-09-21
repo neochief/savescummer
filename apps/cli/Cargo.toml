@@ -16,9 +16,9 @@ anyhow.workspace = true
 winresource = "0.1.31"
 
 [package.metadata.winresource]
-ProductName = "Save Scummer"
-FileDescription = "Save Scummer Command-Line Client"
+ProductName = "SaveScummer"
+FileDescription = "SaveScummer Command-Line Client"
 OriginalFilename = "SaveScummer.CLI.exe"
 InternalName = "SaveScummer.CLI"
-CompanyName = "Save Scummer contributors"
-LegalCopyright = "Save Scummer contributors"
+CompanyName = "SaveScummer contributors"
+LegalCopyright = "SaveScummer contributors"

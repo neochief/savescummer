@@ -44,9 +44,7 @@ fn window(options: &Options) {
     }
     std::thread::sleep(std::time::Duration::from_millis(options.window_delay_ms));
     let class = "SaveScummerFakeGame\0".encode_utf16().collect::<Vec<_>>();
-    let title = "Save Scummer test game\0"
-        .encode_utf16()
-        .collect::<Vec<_>>();
+    let title = "SaveScummer test game\0".encode_utf16().collect::<Vec<_>>();
     unsafe {
         let instance = GetModuleHandleW(std::ptr::null());
         let descriptor = WNDCLASSW {

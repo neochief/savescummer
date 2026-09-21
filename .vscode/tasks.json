@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Save Scummer: build dev",
+            "label": "SaveScummer: build dev",
             "type": "process",
             "command": "pwsh",
             "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "demo"],
@@ -11,7 +11,7 @@
             "problemMatcher": ["$msCompile"]
         },
         {
-            "label": "Save Scummer: test Rust and Qt",
+            "label": "SaveScummer: test Rust and Qt",
             "type": "process",
             "command": "pwsh",
             "args": ["-NoProfile", "-File", "${workspaceFolder}/build.ps1", "dev", "-Test"],
@@ -20,7 +20,7 @@
             "problemMatcher": ["$msCompile"]
         },
         {
-            "label": "Save Scummer: prepare app",
+            "label": "SaveScummer: prepare app",
             "type": "process",
             "command": "pwsh",
             "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "prepare"],
@@ -28,7 +28,7 @@
             "problemMatcher": ["$msCompile"]
         },
         {
-            "label": "Save Scummer: stop debug host",
+            "label": "SaveScummer: stop debug host",
             "type": "process",
             "command": "pwsh",
             "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "stop"],
@@ -36,7 +36,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Save Scummer: package release",
+            "label": "SaveScummer: package release",
             "type": "process",
             "command": "pwsh",
             "args": ["-NoProfile", "-File", "${workspaceFolder}/build.ps1", "release"],

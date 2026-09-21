@@ -75,6 +75,8 @@ class MainWindow : public QMainWindow {
 
   private:
     void triggerSelectedShortcut(bool load);
+    void scanForGames();
+    void finishScan(const QJsonObject &state);
     void arrangeOtherHeader();
     void scheduleFitHeight();
     void refresh();
@@ -98,6 +100,9 @@ class MainWindow : public QMainWindow {
     QString selected_, historyGame_;
     bool connected_ = false, othersOpen_ = false, hadRunning_ = false;
     bool groupInitialized_ = false, scanPending_ = false;
+    QSet<QString> gamesAtScanStart_;
+    QString scanResultText_;
+    QTimer *scanResultTimer_;
     bool resetRevision_ = true;
     bool soundSettingPending_ = false;
     QCheckBox *sounds_;

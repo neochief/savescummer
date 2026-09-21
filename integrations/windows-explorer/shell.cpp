@@ -64,7 +64,7 @@ public:
         if (!info || !menu_ || HIWORD(info->lpVerb) || LOWORD(info->lpVerb) != 0) return E_INVALIDARG;
         if (sc_invoke(menu_)) return S_OK;
         if (!(info->fMask & CMIC_MASK_FLAG_NO_UI)) {
-            MessageBoxW(info->hwnd, L"The host could not confirm acceptance. Check Save Scummer for the operation result before trying again.", L"Save Scummer", MB_OK | MB_ICONERROR);
+            MessageBoxW(info->hwnd, L"The host could not confirm acceptance. Check SaveScummer for the operation result before trying again.", L"SaveScummer", MB_OK | MB_ICONERROR);
         }
         return E_FAIL;
     }

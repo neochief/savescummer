@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     app.setOrganizationName("SaveScummer");
     app.setStyle("Fusion");
     QCommandLineParser parser;
-    parser.setApplicationDescription("Save Scummer desktop application");
+    parser.setApplicationDescription("SaveScummer desktop application");
     parser.addHelpOption();
     parser.addOption({"minimized", "Start the host without showing the main window."});
     parser.addOption(
@@ -58,13 +58,13 @@ int main(int argc, char **argv) {
             }
             directory = QDir(directory).absolutePath();
             if (!QDir().mkpath(directory)) {
-                QMessageBox::critical(nullptr, "Save Scummer",
+                QMessageBox::critical(nullptr, "SaveScummer",
                                       "Cannot create the application data directory.");
                 return 1;
             }
             endpoint = Wire::endpoint(directory);
             if (endpoint.isEmpty()) {
-                QMessageBox::critical(nullptr, "Save Scummer",
+                QMessageBox::critical(nullptr, "SaveScummer",
                                       "Cannot resolve the local host endpoint.");
                 return 1;
             }

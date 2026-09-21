@@ -15,13 +15,13 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "CompanyName", "Save Scummer contributors\0"
-            VALUE "FileDescription", "Save Scummer\0"
+            VALUE "CompanyName", "SaveScummer contributors\0"
+            VALUE "FileDescription", "SaveScummer\0"
             VALUE "FileVersion", "@PROJECT_VERSION@\0"
             VALUE "InternalName", "SaveScummer\0"
-            VALUE "LegalCopyright", "Save Scummer contributors\0"
+            VALUE "LegalCopyright", "SaveScummer contributors\0"
             VALUE "OriginalFilename", "SaveScummer.exe\0"
-            VALUE "ProductName", "Save Scummer\0"
+            VALUE "ProductName", "SaveScummer\0"
             VALUE "ProductVersion", "@PROJECT_VERSION@\0"
         END
     END

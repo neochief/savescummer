@@ -1,4 +1,4 @@
-# Save Scummer
+# SaveScummer
 
 The first Windows runtime is implemented in Rust. The background host owns SQLite,
 game monitoring and file operations. The C++ / Qt 6 Widgets desktop and command-line

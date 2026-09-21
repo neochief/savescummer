@@ -31,9 +31,9 @@ tempfile.workspace = true
 winresource = "0.1.31"
 
 [package.metadata.winresource]
-ProductName = "Save Scummer"
-FileDescription = "Save Scummer Background Host"
+ProductName = "SaveScummer"
+FileDescription = "SaveScummer Background Host"
 OriginalFilename = "SaveScummer.Host.exe"
 InternalName = "SaveScummer.Host"
-CompanyName = "Save Scummer contributors"
-LegalCopyright = "Save Scummer contributors"
+CompanyName = "SaveScummer contributors"
+LegalCopyright = "SaveScummer contributors"

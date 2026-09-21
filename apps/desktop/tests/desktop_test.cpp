@@ -6,7 +6,10 @@
 #include <QDialogButtonBox>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFontDatabase>
+#include <QFormLayout>
 #include <QJsonDocument>
 #include <QLocalServer>
 #include <QLineEdit>
@@ -20,6 +23,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextDocument>
+#include <QTimer>
 #include <QWidgetAction>
 #include <algorithm>
 #include <QUuid>
@@ -325,12 +329,29 @@ class DesktopTest : public QObject {
         QVERIFY(!row.load->icon().isNull());
         QVERIFY(!row.arrow->icon().isNull());
         QVERIFY(!row.more->icon().isNull());
+        const auto solidIconColor = [](const QIcon &icon, QIcon::Mode mode) {
+            const auto image = icon.pixmap(QSize(64, 64), mode).toImage()
+                                   .convertToFormat(QImage::Format_ARGB32);
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    const auto color = image.pixelColor(x, y);
+                    if (color.alpha() == 255)
+                        return color;
+                }
+            }
+            return QColor();
+        };
+        QCOMPARE(solidIconColor(row.save->icon(), QIcon::Normal),
+                 qApp->palette().color(QPalette::Active, QPalette::ButtonText));
+        QCOMPARE(solidIconColor(row.save->icon(), QIcon::Disabled),
+                 qApp->palette().color(QPalette::Disabled, QPalette::ButtonText));
         QCOMPARE(row.load->font().pointSize(), pointSize);
         const int saveWidth = row.save->width();
         const int loadWidth = row.load->width();
         const int emptyHeight = row.load->height();
         QCOMPARE(row.load->accessibleName(), QString("Load, No checkpoints saved"));
         QCOMPARE(row.load->cursor().shape(), Qt::ForbiddenCursor);
+        QCOMPARE(row.load->parentWidget()->cursor().shape(), Qt::ForbiddenCursor);
         QCOMPARE(row.more->width(), row.arrow->width());
         const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
         QDir().mkpath(screenshotRoot);
@@ -378,6 +399,28 @@ class DesktopTest : public QObject {
             .arg(QTest::currentDataTag())));
         MainWindow::applyTheme(true);
     }
+    void paletteIconsFollowThemeChanges() {
+        const auto solidIconColor = [](const QIcon &icon) {
+            const auto image = icon.pixmap(QSize(64, 64), QIcon::Normal).toImage()
+                                   .convertToFormat(QImage::Format_ARGB32);
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    const auto color = image.pixelColor(x, y);
+                    if (color.alpha() == 255)
+                        return color;
+                }
+            }
+            return QColor();
+        };
+        MainWindow::applyTheme(true);
+        GameRow row("void-war");
+        QCOMPARE(solidIconColor(row.save->icon()),
+                 qApp->palette().color(QPalette::Active, QPalette::ButtonText));
+        MainWindow::applyTheme(false);
+        QCOMPARE(solidIconColor(row.save->icon()),
+                 qApp->palette().color(QPalette::Active, QPalette::ButtonText));
+        MainWindow::applyTheme(true);
+    }
     void flushDetailsDisclosure_data() {
         QTest::addColumn<QString>("finish");
         QTest::newRow("cancel") << "cancel";
@@ -423,7 +466,17 @@ class DesktopTest : public QObject {
         QTRY_VERIFY(dialog->isVisible());
         QVERIFY(!details->isVisible());
         QCOMPARE(toggle->iconSize(), QSize(20, 20));
-        QVERIFY(buttons->button(QDialogButtonBox::Cancel)->isDefault());
+        auto *cancel = buttons->button(QDialogButtonBox::Cancel);
+        auto *remove = buttons->button(QDialogButtonBox::Yes);
+        QVERIFY(cancel->isDefault());
+        QVERIFY(!cancel->autoDefault());
+        QVERIFY(!remove->autoDefault());
+        QVERIFY(cancel->icon().isNull());
+        QVERIFY(remove->icon().isNull());
+        remove->setFocus();
+        QCoreApplication::processEvents();
+        QVERIFY(cancel->isDefault());
+        QVERIFY(!remove->isDefault());
         const auto requestCount = service.requests.size();
         const auto collapsedHeight = dialog->height();
         const auto toggleLeft = toggle->x();
@@ -498,6 +551,7 @@ class DesktopTest : public QObject {
                 QVERIFY(!row->arrow->isEnabled());
                 QCOMPARE(row->save->cursor().shape(), Qt::ForbiddenCursor);
                 QCOMPARE(row->load->cursor().shape(), Qt::ForbiddenCursor);
+                QCOMPARE(row->load->parentWidget()->cursor().shape(), Qt::ForbiddenCursor);
                 QCOMPARE(row->arrow->cursor().shape(), Qt::ForbiddenCursor);
                 QVERIFY(row->more->isEnabled());
                 QTest::keyClick(row->header, Qt::Key_Space);
@@ -539,6 +593,23 @@ class DesktopTest : public QObject {
         auto *save = dialog->findChild<QPushButton *>("configureSave");
         QVERIFY(save && save->isDefault());
         QVERIFY(save->icon().isNull());
+        auto *buttons = dialog->findChild<QDialogButtonBox *>();
+        auto *cancel = buttons->button(QDialogButtonBox::Cancel);
+        QVERIFY(!save->autoDefault());
+        QVERIFY(!cancel->autoDefault());
+        QVERIFY(cancel->icon().isNull());
+        const auto saveGeometry = save->geometry();
+        const auto cancelGeometry = cancel->geometry();
+        const auto saveSizeHint = save->sizeHint();
+        const auto cancelSizeHint = cancel->sizeHint();
+        cancel->setFocus();
+        QCoreApplication::processEvents();
+        QVERIFY(save->isDefault());
+        QVERIFY(!cancel->isDefault());
+        QCOMPARE(save->geometry(), saveGeometry);
+        QCOMPARE(cancel->geometry(), cancelGeometry);
+        QCOMPARE(save->sizeHint(), saveSizeHint);
+        QCOMPARE(cancel->sizeHint(), cancelSizeHint);
         const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
         QDir().mkpath(screenshotRoot);
         QVERIFY(dialog->grab().save(screenshotRoot + "configure-known.png"));
@@ -574,6 +645,7 @@ class DesktopTest : public QObject {
         auto *more = window.findChild<QPushButton *>("installedGamesMore");
         QVERIFY(header && header->isVisible());
         QVERIFY(toggle && count && scan && more);
+        QCOMPARE(header->property("interactive").toBool(), false);
         QCOMPARE(toggle->text(), QString("Installed games"));
         QCOMPARE(count->text(), QString("5"));
         QVERIFY(count->height() < toggle->height());
@@ -588,6 +660,10 @@ class DesktopTest : public QObject {
         QTest::mouseClick(count, Qt::LeftButton);
         QVERIFY(toggle->isChecked());
         QCOMPARE(window.selectedGame(), QString());
+        service.state["active_stack"] = QJsonArray{"void-war"};
+        service.publish();
+        QCOMPARE(header->property("interactive").toBool(), true);
+        QVERIFY(toggle->isEnabled());
         QTest::mouseClick(scan, Qt::LeftButton);
         QVERIFY(std::any_of(service.requests.begin(), service.requests.end(), [](const auto &request) {
             return request["type"] == "rescan";
@@ -617,9 +693,89 @@ class DesktopTest : public QObject {
         add->trigger();
         auto *addDialog = window.findChild<QDialog *>("addCustomGameDialog");
         QVERIFY(addDialog);
-        QVERIFY(addDialog->findChild<QLineEdit *>("customGameName"));
-        QVERIFY(addDialog->findChild<QLineEdit *>("customGameExecutable"));
-        QVERIFY(addDialog->findChild<QLineEdit *>("customGameSaveLocation"));
+        QTRY_VERIFY(addDialog->isVisible());
+        QCOMPARE(addDialog->minimumSize(), addDialog->maximumSize());
+        const auto addDialogSize = addDialog->size();
+        addDialog->resize(addDialogSize + QSize(200, 200));
+        QCoreApplication::processEvents();
+        QCOMPARE(addDialog->size(), addDialogSize);
+        auto *customName = addDialog->findChild<QLineEdit *>("customGameName");
+        auto *customExecutable = addDialog->findChild<QLineEdit *>("customGameExecutable");
+        auto *customSaveLocation = addDialog->findChild<QLineEdit *>("customGameSaveLocation");
+        QVERIFY(customName && customExecutable && customSaveLocation);
+        auto *addForm = qobject_cast<QFormLayout *>(addDialog->layout());
+        QVERIFY(addForm);
+        const auto rowOf = [addForm](QWidget *field) {
+            int row = -1;
+            QFormLayout::ItemRole role = QFormLayout::SpanningRole;
+            addForm->getWidgetPosition(field, &row, &role);
+            return row;
+        };
+        const int executableRow = rowOf(customExecutable->parentWidget());
+        const int saveLocationRow = rowOf(customSaveLocation->parentWidget());
+        const int nameRow = rowOf(customName);
+        QVERIFY(executableRow >= 0);
+        QVERIFY(executableRow < saveLocationRow);
+        QVERIFY(saveLocationRow < nameRow);
+
+        QTemporaryDir executableDirectory;
+        QVERIFY(executableDirectory.isValid());
+        const auto selectedExecutable = executableDirectory.filePath("My.Custom.Game.exe");
+        QFile executableFile(selectedExecutable);
+        QVERIFY(executableFile.open(QIODevice::WriteOnly));
+        executableFile.close();
+        auto *executableBrowse =
+            addDialog->findChild<QPushButton *>("customGameExecutableBrowse");
+        QVERIFY(executableBrowse);
+        const auto chooseExecutable = [&](const QString &path) {
+            bool selected = false;
+            QTimer dialogTimer;
+            dialogTimer.setInterval(1);
+            connect(&dialogTimer, &QTimer::timeout, addDialog, [&] {
+                for (auto *widget : QApplication::topLevelWidgets()) {
+                    auto *picker = qobject_cast<QFileDialog *>(widget);
+                    if (!picker || !picker->isVisible())
+                        continue;
+                    picker->selectFile(path);
+                    static_cast<QDialog *>(picker)->accept();
+                    selected = true;
+                    dialogTimer.stop();
+                    break;
+                }
+            });
+            dialogTimer.start();
+            QTest::mouseClick(executableBrowse, Qt::LeftButton);
+            dialogTimer.stop();
+            return selected;
+        };
+        QVERIFY(chooseExecutable(selectedExecutable));
+        QCOMPARE(customExecutable->text(), QDir::toNativeSeparators(selectedExecutable));
+        QCOMPARE(customName->text(), QString("My.Custom.Game"));
+        customName->setText("Chosen Name");
+        const auto replacementExecutable = executableDirectory.filePath("Other.Game.exe");
+        executableFile.setFileName(replacementExecutable);
+        QVERIFY(executableFile.open(QIODevice::WriteOnly));
+        executableFile.close();
+        QVERIFY(chooseExecutable(replacementExecutable));
+        QCOMPARE(customExecutable->text(), QDir::toNativeSeparators(replacementExecutable));
+        QCOMPARE(customName->text(), QString("Chosen Name"));
+        auto *addButtons = addDialog->findChild<QDialogButtonBox *>();
+        auto *addSubmit = addButtons->button(QDialogButtonBox::Ok);
+        auto *addCancel = addButtons->button(QDialogButtonBox::Cancel);
+        QVERIFY(addSubmit->isDefault());
+        QVERIFY(!addSubmit->autoDefault());
+        QVERIFY(!addCancel->autoDefault());
+        QVERIFY(addSubmit->icon().isNull());
+        QVERIFY(addCancel->icon().isNull());
+        addDialog->activateWindow();
+        addSubmit->setFocus(Qt::TabFocusReason);
+        QTRY_VERIFY(addSubmit->hasFocus());
+        QVERIFY(addDialog->grab().save(screenshotRoot + "add-custom-game-focused.png"));
+        addCancel->setFocus(Qt::TabFocusReason);
+        QTRY_VERIFY(addCancel->hasFocus());
+        QVERIFY(addSubmit->isDefault());
+        QVERIFY(!addCancel->isDefault());
+        QVERIFY(addDialog->grab().save(screenshotRoot + "add-custom-game.png"));
         addDialog->reject();
 
         window.setOtherGamesOpen(true);
@@ -662,7 +818,11 @@ class DesktopTest : public QObject {
         QVERIFY(configureButtons);
         auto *configureSave = configureButtons->button(QDialogButtonBox::Save);
         QVERIFY(configureSave->isDefault());
+        QVERIFY(!configureSave->autoDefault());
         QVERIFY(configureSave->icon().isNull());
+        auto *configureCancel = configureButtons->button(QDialogButtonBox::Cancel);
+        QVERIFY(!configureCancel->autoDefault());
+        QVERIFY(configureCancel->icon().isNull());
         QVERIFY(configureDialog->grab().save(screenshotRoot + "configure.png"));
         configureDialog->reject();
 
@@ -685,6 +845,101 @@ class DesktopTest : public QObject {
             return request["type"] == "execute" &&
                    request["action"].toObject()["type"] == "forget";
         }));
+    }
+    void scanReportsNewKnownGamesTemporarily() {
+        class ScanService : public FakeService {
+          public:
+            int scan = 0;
+            void request(const QJsonObject &command, Callback callback = {}) override {
+                if (command["type"] != "rescan") {
+                    FakeService::request(command, callback);
+                    return;
+                }
+                requests.append(command);
+                auto games = state["games"].toObject();
+                auto availability = state["availability"].toObject();
+                const int additions = scan++;
+                for (int i = 0; i < additions; ++i) {
+                    const auto id = QString("found-%1-%2").arg(scan).arg(i);
+                    games[id] = QJsonObject{{"id", id},
+                                            {"name", QString("Found %1").arg(i)},
+                                            {"origin", "known"},
+                                            {"installed", true}};
+                    availability[id] = QJsonObject{{"data_available", false}};
+                }
+                state["games"] = games;
+                state["availability"] = availability;
+                state["revision"] = state["revision"].toInteger() + 1;
+                if (callback)
+                    callback({{"type", "state"}, {"state", demoSummary(state)}});
+            }
+        } service;
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        auto *scan = window.findChild<QPushButton *>("scanGames");
+        auto *timer = window.findChild<QTimer *>("scanResultTimer");
+        QVERIFY(scan && timer);
+
+        QTest::mouseClick(scan, Qt::LeftButton);
+        QCOMPARE(scan->text(), QString("No games found"));
+        QVERIFY(timer->isActive());
+        QCOMPARE(timer->interval(), 3000);
+        QVERIFY(QMetaObject::invokeMethod(timer, "timeout"));
+        QCOMPARE(scan->text(), QString("Scan for known games"));
+
+        QTest::mouseClick(scan, Qt::LeftButton);
+        QCOMPARE(scan->text(), QString("1 game found"));
+        QVERIFY(QMetaObject::invokeMethod(timer, "timeout"));
+
+        QTest::mouseClick(scan, Qt::LeftButton);
+        QCOMPARE(scan->text(), QString("2 games found"));
+    }
+    void scanKeepsFocusAndGeometryWhilePending() {
+        class PendingScanService : public FakeService {
+          public:
+            Callback pendingScan;
+            void request(const QJsonObject &command, Callback callback = {}) override {
+                if (command["type"] == "rescan") {
+                    requests.append(command);
+                    pendingScan = callback;
+                    return;
+                }
+                FakeService::request(command, callback);
+            }
+        } service;
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        auto *scan = window.findChild<QPushButton *>("scanGames");
+        auto *more = window.findChild<QPushButton *>("installedGamesMore");
+        QVERIFY(scan && more);
+        scan->setFocus();
+        QTRY_COMPARE(QApplication::focusWidget(), static_cast<QWidget *>(scan));
+        const auto geometry = scan->geometry();
+
+        QTest::mouseClick(scan, Qt::LeftButton);
+        QCoreApplication::processEvents();
+        QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(scan));
+        QVERIFY(scan->isEnabled());
+        QCOMPARE(scan->cursor().shape(), Qt::ForbiddenCursor);
+        QCOMPARE(scan->text(), QString("Scanning…"));
+        QCOMPARE(scan->geometry(), geometry);
+        QCOMPARE(service.requests.size(), 1);
+
+        // The busy button retains focus but remains behaviorally disabled.
+        QTest::mouseClick(scan, Qt::LeftButton);
+        QCOMPARE(service.requests.size(), 1);
+        QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(scan));
+        QVERIFY(!more->hasFocus());
+
+        QVERIFY(service.pendingScan);
+        service.pendingScan({{"type", "state"}, {"state", demoSummary(service.state)}});
+        QCoreApplication::processEvents();
+        QCOMPARE(scan->text(), QString("No games found"));
+        QCOMPARE(scan->cursor().shape(), Qt::ArrowCursor);
+        QCOMPARE(scan->geometry(), geometry);
+        QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(scan));
     }
     void busyRecoveryDisconnectAndFailure() {
         FakeService service;
@@ -853,6 +1108,10 @@ class DesktopTest : public QObject {
         QTest::qWait(50);
         const auto historyRows = popup->findChildren<QWidget *>(QRegularExpression("historyRow-.*"));
         QVERIFY(!historyRows.isEmpty());
+        auto *historyScroll = popup->findChild<QScrollArea *>();
+        QVERIFY(historyScroll);
+        QCOMPARE(historyRows.first()->mapTo(historyScroll->viewport(), QPoint()).x(), 0);
+        QCOMPARE(historyRows.first()->width(), historyScroll->viewport()->width());
         QTest::mouseMove(historyRows.first(), historyRows.first()->rect().center());
         const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
         QDir().mkpath(screenshotRoot);
@@ -880,6 +1139,15 @@ class DesktopTest : public QObject {
         QCOMPARE(entryIcons.size(), 2);
         for (auto *icon : entryIcons)
             QVERIFY(!icon->pixmap().isNull());
+        const auto entryLabels = popup->findChildren<QLabel *>("historyEntryLabel");
+        QCOMPARE(entryLabels.size(), entryIcons.size());
+        for (qsizetype i = 0; i < entryIcons.size(); ++i)
+            QCOMPARE(entryLabels[i]->x() - entryIcons[i]->geometry().right() - 1, 4);
+        const auto dateDividers = popup->findChildren<QFrame *>("historyDateDivider");
+        QCOMPARE(dateDividers.size(), historyRows.size());
+        for (auto *divider : dateDividers)
+            QCOMPARE(divider->mapTo(popup, QPoint()).x(),
+                     dateDividers.first()->mapTo(popup, QPoint()).x());
         QVERIFY(actions.first()->isEnabled());
         QVERIFY(!actions.first()->icon().isNull());
         QVERIFY(actions.first()->toolTip().contains("current game data"));
