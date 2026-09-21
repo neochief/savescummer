@@ -596,3 +596,76 @@ async fn external_catalog_discovery_configuration_reset_and_uninstall_are_headle
     host.send(Command::Shutdown).await;
     assert!(host.child.wait().unwrap().success());
 }
+
+#[tokio::test]
+async fn custom_game_addition_and_forget_flush_are_headless_and_persistent() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("state");
+    let live = temp.path().join("Custom saves");
+    let executable = temp.path().join("Custom.exe");
+    fs::create_dir(&live).unwrap();
+    fs::write(live.join("save"), b"current").unwrap();
+    fs::write(&executable, b"fixture").unwrap();
+    let mut host = Host::start(&root);
+    let Reply::Configured { game } = host
+        .send(Command::AddCustomGame {
+            name: "Custom".into(),
+            executable,
+            data_dir: live.clone(),
+        })
+        .await
+    else {
+        panic!("custom game was not configured")
+    };
+    assert_eq!(game.origin, GameOrigin::Custom);
+    assert!(game.installed);
+    let Reply::Accepted { operation_id } = host
+        .send(Command::Execute {
+            game_id: game.id.clone(),
+            action: Action::Save,
+        })
+        .await
+    else {
+        panic!("save was not accepted")
+    };
+    assert_eq!(
+        host.wait(&operation_id).await.status,
+        OperationStatus::Completed
+    );
+    let Reply::FlushPreview { preview } = host
+        .send(Command::FlushPreview {
+            game_id: game.id.clone(),
+        })
+        .await
+    else {
+        panic!("forget preview was not returned")
+    };
+    let paths = preview.paths.clone();
+    let Reply::Accepted { operation_id } = host
+        .send(Command::Execute {
+            game_id: game.id.clone(),
+            action: Action::Forget {
+                confirmed_revision: preview.revision,
+            },
+        })
+        .await
+    else {
+        panic!("forget was not accepted")
+    };
+    assert_eq!(
+        host.wait(&operation_id).await.status,
+        OperationStatus::Completed
+    );
+    assert!(!host.state().await.games.contains_key(&game.id));
+    assert_eq!(fs::read(live.join("save")).unwrap(), b"current");
+    for path in paths {
+        assert!(!path.exists(), "{} survived Forget", path.display());
+    }
+    assert!(matches!(host.send(Command::Shutdown).await, Reply::Ok));
+    assert!(host.child.wait().unwrap().success());
+    drop(host);
+    let mut host = Host::start(&root);
+    assert!(!host.state().await.games.contains_key(&game.id));
+    assert!(matches!(host.send(Command::Shutdown).await, Reply::Ok));
+    assert!(host.child.wait().unwrap().success());
+}

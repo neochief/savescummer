@@ -64,6 +64,7 @@ fn discovers_real_processes_by_full_path_and_retains_game_until_last_exit() {
         user_configured: true,
         id: "game".into(),
         name: "Game".into(),
+        origin: GameOrigin::Known,
         info: String::new(),
         data_dir: temp.path().join("saves"),
         executables: vec![paths.resolve(&path).unwrap()],

@@ -11,6 +11,7 @@
 #include <QGridLayout>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
@@ -44,6 +45,16 @@ QString str(const QJsonObject &obj, const char *key) {
 }
 QString errorText(const QJsonObject &reply) {
     return reply["error"].toObject()["message"].toString();
+}
+int historyTimeWidth(const QFont &font) {
+    const QFontMetrics metrics(font);
+    QStringList labels{"Today", "Yesterday", "0000-00-00"};
+    for (int day = 1; day <= 7; ++day)
+        labels.append(QLocale().dayName(day, QLocale::LongFormat));
+    int width = 0;
+    for (const auto &text : labels)
+        width = qMax(width, metrics.horizontalAdvance(text));
+    return width + 8;
 }
 QJsonObject gameOf(const QJsonObject &state, const QString &id) {
     return state["games"].toObject()[id].toObject();
@@ -189,19 +200,30 @@ void LoadButton::paintEvent(QPaintEvent *) {
     QStyleOptionButton option;
     initStyleOption(&option);
     option.text.clear();
+    option.icon = {};
     QPainter painter(this);
     style()->drawControl(QStyle::CE_PushButton, &option, &painter, this);
     painter.setPen(
         palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled, QPalette::ButtonText));
+    const auto drawTitle = [this, &painter](const QRect &area) {
+        const int glyph = qMin(16, qMax(12, area.height() - 2));
+        const int textWidth = fontMetrics().horizontalAdvance("Load");
+        const int spacing = 5;
+        const int left = area.center().x() - (glyph + spacing + textWidth) / 2;
+        icon().paint(&painter, QRect(left, area.center().y() - glyph / 2, glyph, glyph),
+                     Qt::AlignCenter, isEnabled() ? QIcon::Normal : QIcon::Disabled);
+        painter.drawText(QRect(left + glyph + spacing, area.y(), textWidth, area.height()),
+                         Qt::AlignLeft | Qt::AlignVCenter, "Load");
+    };
     if (age_.isEmpty()) {
-        painter.drawText(rect(), Qt::AlignCenter, "Load");
+        drawTitle(rect());
         return;
     }
     QTextLayout caption(age_, captionFont());
     const int captionHeight = layoutCaption(caption, width() - 12);
     const int titleHeight = fontMetrics().height();
     const int top = (height() - titleHeight - 2 - captionHeight) / 2;
-    painter.drawText(QRect(6, top, width() - 12, titleHeight), Qt::AlignCenter, "Load");
+    drawTitle(QRect(6, top, width() - 12, titleHeight));
     painter.setPen(palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled,
                                    QPalette::PlaceholderText));
     caption.draw(&painter, QPointF(6, top + titleHeight + 2));
@@ -240,18 +262,20 @@ GameRow::GameRow(const QString &gameId, QWidget *parent) : QWidget(parent), id(g
     pair_ = new QWidget(controls_);
     save = new QPushButton("Save", pair_);
     save->setObjectName("save");
-    // Small neutral line icon, using Qt's SVG renderer through QIcon.
-    save->setIcon(QIcon(":/save.svg"));
+    save->setIcon(QIcon(":/icons/save.svg"));
+    save->setIconSize(QSize(16, 16));
     split_ = new QWidget(pair_);
     load = new LoadButton("Load", split_);
     load->setObjectName("load");
+    load->setIcon(QIcon(":/icons/load.svg"));
+    load->setIconSize(QSize(16, 16));
     arrow = new QPushButton(split_);
-    arrow->setIcon(QIcon(":/chevron.svg"));
+    arrow->setIcon(QIcon(":/icons/chevron-down.svg"));
     arrow->setObjectName("historyArrow");
     arrow->setAccessibleName("Load history");
     arrow->setToolTip("Load history");
     more = new QPushButton(controls_);
-    more->setIcon(QIcon(":/ellipsis.svg"));
+    more->setIcon(QIcon(":/icons/ellipsis.svg"));
     more->setObjectName("more");
     more->setAccessibleName("Game options");
     progress = new QProgressBar(pair_);
@@ -275,6 +299,7 @@ GameRow::GameRow(const QString &gameId, QWidget *parent) : QWidget(parent), id(g
     detailsLayout->addWidget(error);
     recovery = new QPushButton("Recovery needed…");
     recovery->setObjectName("recovery");
+    recovery->setIcon(QIcon(":/icons/warning.svg"));
     recovery->hide();
     detailsLayout->addWidget(recovery, 0, Qt::AlignLeft);
     layout->addWidget(details_);
@@ -374,8 +399,10 @@ void GameRow::updateState(const QJsonObject &state, bool selected, bool connecte
     const bool busy = submitting || op["status"] == "pending";
     const bool blocked =
         !connected || busy || !op.isEmpty() || game["configuration_error"].isString();
+    const bool uninstalled = game["origin"] == "custom" && !game["installed"].toBool();
     status_->setText(op["status"] == "recovery_needed"                          ? "Recovery needed"
                      : running                                                  ? "Running"
+                     : uninstalled                                              ? "Uninstalled"
                      : !dataAvailable && !hasHistory && checkpoint.isEmpty() ? "Not run yet"
                                                                                 : "");
     status_->setProperty("running", running);
@@ -455,7 +482,9 @@ void MainWindow::applyTheme(bool dark) {
         QLabel#gameStatus[running="true"] { color:%5; }
         QPushButton#more { background:transparent; border:0; padding:0; color:palette(placeholder-text); }
         QPushButton#more:hover { background:%4; }
-        QPushButton#otherGames { text-align:left; border:0; border-top:1px dotted %1; border-radius:0; padding:10px 20px; background:transparent; color:palette(placeholder-text); }
+        QWidget#otherHeader { background:transparent; }
+        QWidget#otherHeader[hasRunning="true"] { border-top:1px dotted %1; }
+        QPushButton#otherGames { text-align:left; border:0; border-radius:0; padding:10px 4px; background:transparent; color:palette(placeholder-text); }
         QPushButton#otherGames:hover { background:%2; }
         QPushButton#flushDetailsToggle { text-align:left; border:0; border-radius:0; padding:4px 0; background:transparent; color:palette(placeholder-text); }
         QPushButton#flushDetailsToggle:hover { color:palette(text); }
@@ -479,7 +508,7 @@ void MainWindow::applyTheme(bool dark) {
         QLineEdit { padding:5px; border:1px solid %1; background:palette(base); }
         QCheckBox { spacing:6px; }
         QCheckBox::indicator { width:12px; height:12px; border:1px solid %1; border-radius:2px; }
-        QCheckBox::indicator:checked { image:url(:/check.svg); background:#9747ff; border:1px solid #9747ff; }
+        QCheckBox::indicator:checked { image:url(:/icons/check.svg); background:#9747ff; border:1px solid #9747ff; }
     )")
                             .arg(dark ? "#3b3b3b" : "#cecece", dark ? "#1f1f1f" : "#eaeaea",
                                  dark ? "#101010" : "#dedede", dark ? "#303030" : "#d8d8d8",
@@ -504,14 +533,49 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     gamesLayout_->setContentsMargins(0, 0, 0, 0);
     gamesLayout_->setSpacing(0);
     gamesLayout_->setAlignment(Qt::AlignTop);
-    empty_ = label("No known games are detected on this computer. Once you install a supported game, it will show up in this window automatically.", games_);
+    empty_ = label("No other games. Scan for known games or add a custom game.", games_);
     empty_->setObjectName("emptyState");
     empty_->setWordWrap(true);
     empty_->setContentsMargins(contentInsets(width()));
-    otherToggle_ = new QPushButton(games_);
+    otherHeader_ = new QWidget(games_);
+    otherHeader_->setObjectName("otherHeader");
+    otherHeader_->setAttribute(Qt::WA_StyledBackground);
+    otherHeaderLayout_ = new QGridLayout(otherHeader_);
+    otherHeaderLayout_->setContentsMargins(contentInsets(width()));
+    otherHeaderLayout_->setVerticalSpacing(6);
+    otherHeaderLayout_->setHorizontalSpacing(8);
+    otherToggle_ = new QPushButton(otherHeader_);
     otherToggle_->setObjectName("otherGames");
     otherToggle_->setCheckable(true);
+    otherToggle_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     connect(otherToggle_, &QPushButton::clicked, this, [this] { setOtherGamesOpen(!othersOpen_); });
+    otherActions_ = new QWidget(otherHeader_);
+    auto *otherActionsLayout = new QHBoxLayout(otherActions_);
+    otherActionsLayout->setContentsMargins(0, 0, 0, 0);
+    otherActionsLayout->setSpacing(6);
+    otherActionsLayout->addStretch();
+    scanGames_ = new QPushButton("Scan for known games", otherActions_);
+    scanGames_->setObjectName("scanGames");
+    scanGames_->setIcon(QIcon(":/icons/search.svg"));
+    addGame_ = new QPushButton("Add custom game", otherActions_);
+    addGame_->setObjectName("addCustomGame");
+    addGame_->setIcon(QIcon(":/icons/add.svg"));
+    otherActionsLayout->addWidget(scanGames_);
+    otherActionsLayout->addWidget(addGame_);
+    connect(scanGames_, &QPushButton::clicked, this, [this] {
+        if (!connected_ || scanPending_)
+            return;
+        scanPending_ = true;
+        refresh();
+        service_->request({{"type", "rescan"}}, [this](const auto &reply) {
+            scanPending_ = false;
+            if (reply["type"] == "error")
+                QMessageBox::warning(this, "Scan for known games", errorText(reply));
+            refresh();
+        });
+    });
+    connect(addGame_, &QPushButton::clicked, this, &MainWindow::addCustomGame);
+    arrangeOtherHeader();
     scroll->setWidget(games_);
     layout->addWidget(scroll, 1);
     auto *footer = new Footer(demo, this);
@@ -598,7 +662,22 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
     if (event->size().width() != event->oldSize().width()) {
         const auto insets = contentInsets(event->size().width());
         empty_->setContentsMargins(insets);
+        otherHeaderLayout_->setContentsMargins(insets);
+        arrangeOtherHeader();
         scheduleFitHeight();
+    }
+}
+void MainWindow::arrangeOtherHeader() {
+    if (!otherHeaderLayout_)
+        return;
+    otherHeaderLayout_->removeWidget(otherToggle_);
+    otherHeaderLayout_->removeWidget(otherActions_);
+    if (width() < 560) {
+        otherHeaderLayout_->addWidget(otherToggle_, 0, 0);
+        otherHeaderLayout_->addWidget(otherActions_, 1, 0);
+    } else {
+        otherHeaderLayout_->addWidget(otherToggle_, 0, 0);
+        otherHeaderLayout_->addWidget(otherActions_, 0, 1);
     }
 }
 void MainWindow::scheduleFitHeight() {
@@ -639,6 +718,8 @@ void MainWindow::setConnected(bool connected, const QString &) {
     startup_->setEnabled(connected && !startupSettingPending_);
     if (!connected)
         submitting_.clear();
+    if (!connected)
+        scanPending_ = false;
     refresh();
 }
 void MainWindow::applyState(const QJsonObject &state) {
@@ -676,11 +757,23 @@ void MainWindow::refresh() {
     for (const auto &id : state_["active_stack"].toArray())
         if (order.contains(id.toString()))
             running.append(id.toString());
+    QStringList other;
+    for (const auto &id : order)
+        if (!running.contains(id))
+            other.append(id);
+    if (!groupInitialized_) {
+        othersOpen_ = running.isEmpty();
+        groupInitialized_ = true;
+    }
     if (!order.contains(selected_))
-        selected_ = order.value(0);
+        selected_ = !running.isEmpty() ? running.first()
+                    : othersOpen_ && !other.isEmpty() ? other.first()
+                                                      : QString();
     if (!running.isEmpty() && !hadRunning_)
         othersOpen_ = !running.contains(selected_);
     if (!running.isEmpty() && !selected_.isEmpty() && !running.contains(selected_))
+        othersOpen_ = true;
+    if (running.isEmpty() && hadRunning_)
         othersOpen_ = true;
     hadRunning_ = !running.isEmpty();
     for (auto it = rows_.begin(); it != rows_.end();) {
@@ -694,18 +787,27 @@ void MainWindow::refresh() {
     }
     while (auto *item = gamesLayout_->takeAt(0))
         delete item;
-    empty_->setVisible(order.isEmpty());
-    gamesLayout_->addWidget(empty_);
-    const bool showOther = !running.isEmpty() && order.size() > running.size();
-    otherToggle_->setVisible(showOther);
-    otherToggle_->setText(QString("  Other games   %1").arg(order.size() - running.size()));
-    otherToggle_->setIcon(QIcon(othersOpen_ ? ":/chevron.svg" : ":/chevron-right.svg"));
+    otherHeader_->setVisible(true);
+    if (otherHeader_->property("hasRunning").toBool() != !running.isEmpty()) {
+        otherHeader_->setProperty("hasRunning", !running.isEmpty());
+        otherHeader_->style()->unpolish(otherHeader_);
+        otherHeader_->style()->polish(otherHeader_);
+    }
+    otherToggle_->setText(QString("  Other games   %1").arg(other.size()));
+    otherToggle_->setIcon(QIcon(othersOpen_ ? ":/icons/chevron-down.svg"
+                                           : ":/icons/chevron-right.svg"));
     otherToggle_->setChecked(othersOpen_);
     otherToggle_->setAccessibleName("Other games");
+    const bool scanning = scanPending_ || state_["scan_in_progress"].toBool();
+    scanGames_->setText(scanning ? "Scanning…" : "Scan for known games");
+    scanGames_->setEnabled(connected_ && !scanning);
+    addGame_->setEnabled(connected_);
     bool inserted = false;
     for (const auto &id : order) {
-        if (!running.contains(id) && showOther && !inserted) {
-            gamesLayout_->addWidget(otherToggle_);
+        if (!running.contains(id) && !inserted) {
+            gamesLayout_->addWidget(otherHeader_);
+            empty_->setVisible(othersOpen_ && other.isEmpty());
+            gamesLayout_->addWidget(empty_);
             inserted = true;
         }
         if (!rows_.contains(id)) {
@@ -725,7 +827,12 @@ void MainWindow::refresh() {
         const auto error = configurationError.isEmpty() ? errors_.value(id) : configurationError;
         row->error->setText(error);
         row->error->setVisible(!error.isEmpty());
-        row->setVisible(!showOther || running.contains(id) || othersOpen_);
+        row->setVisible(running.contains(id) || othersOpen_);
+    }
+    if (!inserted) {
+        gamesLayout_->addWidget(otherHeader_);
+        empty_->setVisible(othersOpen_ && other.isEmpty());
+        gamesLayout_->addWidget(empty_);
     }
     if (historyBody_) {
         populateHistory();
@@ -763,7 +870,20 @@ void MainWindow::setOtherGamesOpen(bool open) {
     closePopup();
     if (!open && !state_["active_stack"].toArray().contains(selected_)) {
         const auto order = Presentation::orderedGames(state_);
-        selected_ = order.value(0);
+        selected_.clear();
+        for (const auto &value : state_["active_stack"].toArray())
+            if (order.contains(value.toString())) {
+                selected_ = value.toString();
+                break;
+            }
+    } else if (open && selected_.isEmpty()) {
+        const auto order = Presentation::orderedGames(state_);
+        const auto active = state_["active_stack"].toArray();
+        for (const auto &id : order)
+            if (!active.contains(id)) {
+                selected_ = id;
+                break;
+            }
     }
     refresh();
 }
@@ -949,9 +1069,12 @@ void MainWindow::populateHistory() {
         auto *line = new QHBoxLayout(widget);
         line->setContentsMargins(6, 3, 6, 3);
         line->setSpacing(8);
-        auto *time = label(date.isValid() ? Presentation::age(timestamp.toInteger(),
-                                                               QDateTime::currentDateTime())
+        auto *time = label(date.isValid() ? Presentation::historyTime(timestamp.toInteger(),
+                                                                       QDateTime::currentDateTime())
                                           : "—");
+        time->setObjectName("historyTime");
+        time->setFixedWidth(historyTimeWidth(time->font()));
+        time->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         if (date.isValid())
             time->setToolTip((existing ? QString("Folder modified: ") : QString()) +
                              date.toString("yyyy-MM-dd HH:mm:ss t"));
@@ -969,14 +1092,18 @@ void MainWindow::populateHistory() {
         text->setWordWrap(true);
         line->addWidget(text, 1);
         if (!action.isEmpty()) {
-            const auto actionName = action["type"] == "load" ? QString("Restore") : QString("Revert");
+            const bool restore = action["type"] == "load";
+            const auto actionName = restore ? QString("Restore") : QString("Revert");
             auto *button = new QPushButton;
             button->setObjectName("historyAction");
             button->setProperty("checkpoint", action["target"]);
-            button->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+            button->setIcon(QIcon(":/icons/restore.svg"));
             button->setFixedSize(28, 28);
             button->setEnabled(enabled && available);
-            button->setToolTip(actionName);
+            button->setToolTip(
+                restore
+                    ? "Load this saved reset point; current game data will be kept as an undo point."
+                    : "Restore the game data from before this operation; current data will be kept as another undo point.");
             button->setAccessibleName(actionName + " " + caption + " " + time->text());
             const auto game = historyGame_;
             connect(button, &QPushButton::clicked, this,
@@ -986,10 +1113,11 @@ void MainWindow::populateHistory() {
             auto *remove = new QPushButton;
             remove->setObjectName("historyDelete");
             remove->setProperty("checkpoint", action["target"]);
-            remove->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+            remove->setIcon(QIcon(":/icons/delete.svg"));
             remove->setFixedSize(button->size());
             remove->setEnabled(enabled && available);
-            remove->setToolTip("Delete reset point");
+            remove->setToolTip(
+                "Permanently delete this reset point; current game data will not be changed.");
             remove->setAccessibleName("Delete reset point " + caption + " " + time->text());
             const auto target = action["target"];
             connect(remove, &QPushButton::clicked, this, [this, game, target] {
@@ -1002,6 +1130,7 @@ void MainWindow::populateHistory() {
     if (!historyCursor_.isEmpty()) {
         auto *older = new QPushButton("Load older");
         older->setObjectName("historyOlder");
+        older->setIcon(QIcon(":/icons/history.svg"));
         older->setEnabled(connected_ && !historyLoading_);
         connect(older, &QPushButton::clicked, this, [this] { fetchHistory(true); });
         layout->addWidget(older);
@@ -1015,21 +1144,117 @@ void MainWindow::options(const QString &game) {
     menu->setProperty("game", game);
     const bool idle = connected_ && !submitting_.contains(game) &&
                       Presentation::blockingOperation(state_, game).isEmpty();
-    menu->addAction("Open in File Explorer", this, [this, game] {
+    menu->addAction(QIcon(":/icons/explore.svg"), "Open in File Explorer", this, [this, game] {
         service_->request({{"type", "explore"}, {"game_id", game}}, [this, game](const auto &reply) {
             if (reply["type"] == "error") showError(game, errorText(reply));
         });
     });
-    auto *configureAction = menu->addAction("Configure…", this, [this, game] { configure(game); });
+    auto *configureAction = menu->addAction(QIcon(":/icons/configure.svg"), "Configure…", this,
+                                            [this, game] { configure(game); });
     configureAction->setEnabled(idle);
     configureAction->setProperty("requiresIdle", true);
     configureAction->setProperty("available", true);
     const bool any = state_["history_status"].toObject()[game].toObject()["can_flush"].toBool();
-    auto *flushAction = menu->addAction("Flush history…", this, [this, game] { flush(game); });
+    auto *flushAction = menu->addAction(QIcon(":/icons/flush.svg"), "Flush history…", this,
+                                        [this, game] { flush(game); });
     flushAction->setEnabled(idle && any);
     flushAction->setProperty("requiresIdle", true);
     flushAction->setProperty("available", any);
+    if (gameOf(state_, game)["origin"] == "custom") {
+        menu->addSeparator();
+        auto *forgetAction = menu->addAction(QIcon(":/icons/delete.svg"), "Forget this game", this,
+                                             [this, game] { flush(game, true); });
+        forgetAction->setEnabled(idle);
+        forgetAction->setProperty("requiresIdle", true);
+        forgetAction->setProperty("available", true);
+    }
     placePopup(menu, rows_[game]->more);
+}
+void MainWindow::addCustomGame() {
+    closePopup();
+    auto *dialog = new QDialog(this);
+    dialog->setObjectName("addCustomGameDialog");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle("Add custom game");
+    auto *form = new QFormLayout(dialog);
+    auto *name = new QLineEdit;
+    name->setObjectName("customGameName");
+    auto *executable = new QLineEdit;
+    executable->setObjectName("customGameExecutable");
+    auto *directory = new QLineEdit;
+    directory->setObjectName("customGameSaveLocation");
+    form->addRow("Name:", name);
+    auto addPath = [this, dialog, form](const QString &caption, QLineEdit *edit, bool folder) {
+        auto *row = new QWidget;
+        auto *layout = new QHBoxLayout(row);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->addWidget(edit);
+        auto *browse = new QPushButton("Browse…");
+        browse->setIcon(QIcon(":/icons/explore.svg"));
+        layout->addWidget(browse);
+        QObject::connect(browse, &QPushButton::clicked, dialog, [dialog, edit, folder] {
+            const auto path = folder
+                                  ? QFileDialog::getExistingDirectory(dialog, "Save location",
+                                                                      edit->text())
+                                  : QFileDialog::getOpenFileName(dialog, "Game executable",
+                                                                 edit->text());
+            if (!path.isEmpty())
+                edit->setText(QDir::toNativeSeparators(path));
+        });
+        form->addRow(caption, row);
+    };
+    addPath("Game executable:", executable, false);
+    addPath("Save location:", directory, true);
+    auto *error = label("");
+    error->setObjectName("error");
+    error->setWordWrap(true);
+    form->addRow(error);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    auto *add = buttons->button(QDialogButtonBox::Ok);
+    add->setObjectName("addCustomGameSubmit");
+    add->setText("Add");
+    add->setIcon(QIcon(":/icons/add.svg"));
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+    const QPointer<QDialog> guard(dialog);
+    connect(buttons, &QDialogButtonBox::accepted, dialog,
+            [this, guard, name, executable, directory, error, add] {
+                if (!guard)
+                    return;
+                if (name->text().trimmed().isEmpty() || executable->text().trimmed().isEmpty() ||
+                    directory->text().trimmed().isEmpty()) {
+                    error->setText("Name, executable and save location are required.");
+                    return;
+                }
+                guard->setProperty("submitting", true);
+                add->setEnabled(false);
+                service_->request({{"type", "add_custom_game"},
+                                   {"name", name->text().trimmed()},
+                                   {"executable", executable->text()},
+                                   {"data_dir", directory->text()}},
+                                  [this, guard, error, add](const auto &reply) {
+                                      if (!guard)
+                                          return;
+                                      guard->setProperty("submitting", false);
+                                      if (reply["type"] != "configured") {
+                                          error->setText(errorText(reply));
+                                          add->setEnabled(true);
+                                          return;
+                                      }
+                                      const auto id = reply["game"].toObject()["id"].toString();
+                                      guard->accept();
+                                      othersOpen_ = true;
+                                      service_->request({{"type", "state"}}, [this, id](const auto &state) {
+                                          if (state["type"] == "state") {
+                                              applyState(state["state"].toObject());
+                                              selectGame(id);
+                                          }
+                                      });
+                                  });
+            });
+    dialog->resize(640, 190);
+    dialog->open();
+    name->setFocus();
 }
 void MainWindow::configure(const QString &id) {
     closePopup();
@@ -1039,6 +1264,12 @@ void MainWindow::configure(const QString &id) {
     dialog->setWindowTitle("Configure " + str(game, "name"));
     dialog->setProperty("configuredGame", id);
     auto *form = new QFormLayout(dialog);
+    auto *name = new QLineEdit(str(game, "name"));
+    const bool custom = game["origin"] == "custom";
+    if (custom)
+        form->addRow("Name:", name);
+    else
+        name->setParent(dialog);
     const auto paths = game["executables"].toArray();
     auto *executable = new QLineEdit(paths.isEmpty() ? QString() : paths.first().toString());
     auto *directory = new QLineEdit(str(game, "data_dir"));
@@ -1057,15 +1288,20 @@ void MainWindow::configure(const QString &id) {
         executable->setText(location["executables"].toArray().first().toString());
         directory->setText(location["data_dir"].toString());
     });
-    auto addPath = [this, dialog, form, choices, locations](const QString &caption, QLineEdit *edit, bool folder) {
+    auto addPath = [this, dialog, form, choices, locations, custom](const QString &caption, QLineEdit *edit, bool folder) {
         auto *row = new QWidget;
         auto *layout = new QHBoxLayout(row);
         layout->setContentsMargins(0, 0, 0, 0);
         layout->addWidget(edit);
         auto *browse = new QPushButton("Browse…");
         auto *reset = new QPushButton("Reset");
+        browse->setIcon(QIcon(":/icons/explore.svg"));
+        reset->setIcon(QIcon(":/icons/reset.svg"));
         layout->addWidget(browse);
-        layout->addWidget(reset);
+        if (!custom)
+            layout->addWidget(reset);
+        else
+            reset->setParent(dialog);
         reset->setEnabled(!locations.isEmpty());
         reset->setToolTip("Use the selected detected location, or the sole catalog default.");
         QObject::connect(reset, &QPushButton::clicked, dialog,
@@ -1086,7 +1322,7 @@ void MainWindow::configure(const QString &id) {
         form->addRow(caption, row);
     };
     addPath("Game executable:", executable, false);
-    addPath("Game data dir (DIR):", directory, true);
+    addPath(custom ? "Save location:" : "Game data dir (DIR):", directory, true);
     auto *error = label("");
     error->setObjectName("error");
     error->setWordWrap(true);
@@ -1094,10 +1330,11 @@ void MainWindow::configure(const QString &id) {
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     form->addRow(buttons);
     buttons->button(QDialogButtonBox::Save)->setObjectName("configureSave");
+    buttons->button(QDialogButtonBox::Save)->setIcon(QIcon(":/icons/save.svg"));
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
     const QPointer<QDialog> guard(dialog);
     connect(buttons, &QDialogButtonBox::accepted, dialog,
-            [this, guard, game, id, directory, executable, error, buttons, choices] {
+            [this, guard, game, id, name, directory, executable, error, buttons, choices] {
                 if (!guard)
                     return;
                 guard->setProperty("submitting", true);
@@ -1111,7 +1348,7 @@ void MainWindow::configure(const QString &id) {
                     executables.replace(0, executable->text());
                 service_->request({{"type", "configure"},
                                    {"id", id},
-                                   {"name", game["name"]},
+                                   {"name", name->text()},
                                    {"data_dir", directory->text()},
                                    {"executables", executables}},
                                   [guard, error, buttons](const auto &reply) {
@@ -1129,18 +1366,17 @@ void MainWindow::configure(const QString &id) {
     dialog->resize(640, 180);
     dialog->open();
 }
-void MainWindow::flush(const QString &game) {
+void MainWindow::flush(const QString &game, bool forget) {
     closePopup();
-    service_->request({{"type", "flush_preview"}, {"game_id", game}}, [this,
-                                                                       game](const auto &reply) {
+    service_->request({{"type", "flush_preview"}, {"game_id", game}}, [this, game, forget](const auto &reply) {
         if (reply["type"] != "flush_preview") {
             showError(game, errorText(reply));
             return;
         }
         const auto preview = reply["preview"].toObject();
         auto *dialog = new QDialog(this);
-        dialog->setObjectName("flushDialog");
-        dialog->setWindowTitle("Flush history");
+        dialog->setObjectName(forget ? "forgetDialog" : "flushDialog");
+        dialog->setWindowTitle(forget ? "Forget this game" : "Flush history");
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         dialog->setFixedWidth(520);
         auto *layout = new QGridLayout(dialog);
@@ -1149,15 +1385,22 @@ void MainWindow::flush(const QString &game) {
         layout->setVerticalSpacing(12);
         layout->setColumnStretch(1, 1);
         auto *warning = label("");
-        warning->setPixmap(style()->standardIcon(QStyle::SP_MessageBoxWarning).pixmap(40, 40));
+        warning->setPixmap(QIcon(":/icons/warning.svg").pixmap(40, 40));
         layout->addWidget(warning, 0, 0, 2, 1, Qt::AlignTop);
-        auto *message = label("Permanently delete all backups and clear this game's history?");
+        auto *message = label(forget
+                                  ? QString("Forget \"%1\"?")
+                                        .arg(gameOf(state_, game)["name"].toString())
+                                  : QString("Permanently delete all backups and clear this game's history?"));
         message->setWordWrap(true);
         layout->addWidget(message, 0, 1);
-        auto *reassurance = label("Your current game data will be kept.");
+        auto *reassurance = label(
+            forget ? "All backups, recovery points, incomplete copies, and history for this game "
+                     "will be permanently deleted. The installed game, executable, and current "
+                     "save data will be kept."
+                   : "Your current game data will be kept.");
         reassurance->setWordWrap(true);
         layout->addWidget(reassurance, 1, 1);
-        auto *toggle = new QPushButton(QIcon(":/chevron-right.svg"), "Show details");
+        auto *toggle = new QPushButton(QIcon(":/icons/chevron-right.svg"), "Show details");
         toggle->setObjectName("flushDetailsToggle");
         toggle->setIconSize(QSize(20, 20));
         toggle->setCheckable(true);
@@ -1180,10 +1423,12 @@ void MainWindow::flush(const QString &game) {
         detailsView->hide();
         layout->addWidget(detailsView, 3, 1);
         auto *buttons = new QDialogButtonBox(QDialogButtonBox::Yes | QDialogButtonBox::Cancel);
-        buttons->button(QDialogButtonBox::Yes)->setText("Delete backups");
+        buttons->button(QDialogButtonBox::Yes)->setText(forget ? "Forget game" : "Delete backups");
+        buttons->button(QDialogButtonBox::Yes)->setIcon(QIcon(":/icons/delete.svg"));
         buttons->button(QDialogButtonBox::Yes)->setAutoDefault(false);
         buttons->button(QDialogButtonBox::Cancel)->setDefault(true);
         auto *nextPaths = new QPushButton("Next paths");
+        nextPaths->setIcon(QIcon(":/icons/chevron-right.svg"));
         nextPaths->setAutoDefault(false);
         nextPaths->setObjectName("flushNextPaths");
         nextPaths->setProperty("cursor",preview["next_cursor"].toString());
@@ -1211,7 +1456,8 @@ void MainWindow::flush(const QString &game) {
         });
         layout->addWidget(buttons, 5, 0, 1, 2);
         connect(toggle, &QPushButton::toggled, dialog, [dialog, toggle, detailsView,nextPaths](bool expanded) {
-            toggle->setIcon(QIcon(expanded ? ":/chevron.svg" : ":/chevron-right.svg"));
+            toggle->setIcon(QIcon(expanded ? ":/icons/chevron-down.svg"
+                                           : ":/icons/chevron-right.svg"));
             toggle->setText(expanded ? "Hide details" : "Show details");
             detailsView->setVisible(expanded);
             nextPaths->setVisible(expanded && !nextPaths->property("cursor").toString().isEmpty());
@@ -1219,8 +1465,9 @@ void MainWindow::flush(const QString &game) {
         });
         connect(buttons->button(QDialogButtonBox::Yes), &QPushButton::clicked, dialog, &QDialog::accept);
         connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-        connect(dialog, &QDialog::accepted, this, [this, game, preview] {
-            execute(game, {{"type", "flush"}, {"confirmed_revision", preview["revision"]}});
+        connect(dialog, &QDialog::accepted, this, [this, game, preview, forget] {
+            execute(game, {{"type", forget ? "forget" : "flush"},
+                           {"confirmed_revision", preview["revision"]}});
         });
         dialog->open();
     });
@@ -1235,6 +1482,7 @@ void MainWindow::recover(const QString &game) {
                         "restore the pre-operation data, or retry recovery. Retained files remain "
                         "available until recovery is resolved and history is flushed.",
                         QMessageBox::Cancel, this);
+    box->setIconPixmap(QIcon(":/icons/warning.svg").pixmap(40, 40));
     box->setInformativeText(op["error"].toObject()["message"].toString());
     box->setDetailedText("Current data: " + str(op, "live") + "\nRecovery: " + str(op, "recovery") +
                          "\nOriginal: " + str(op, "original") + "\nStaging: " + str(op, "staging"));
@@ -1244,6 +1492,9 @@ void MainWindow::recover(const QString &game) {
     for (auto it = choices.begin(); it != choices.end(); ++it) {
         auto *button = box->addButton(it.key(), QMessageBox::ActionRole);
         const auto choice = it.value();
+        button->setIcon(QIcon(choice == "retry"                ? ":/icons/reset.svg"
+                              : choice == "restore_before"     ? ":/icons/restore.svg"
+                                                               : ":/icons/save.svg"));
         connect(button, &QPushButton::clicked, this, [this, game, op, choice] {
             execute(game, {{"type", "recover"}, {"operation", op["id"]}, {"choice", choice}});
         });

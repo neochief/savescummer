@@ -1,6 +1,7 @@
 #pragma once
 #include "service.h"
 #include <QCheckBox>
+#include <QGridLayout>
 #include <QLabel>
 #include <QJsonArray>
 #include <QMainWindow>
@@ -73,6 +74,7 @@ class MainWindow : public QMainWindow {
 
   private:
     void triggerSelectedShortcut(bool load);
+    void arrangeOtherHeader();
     void scheduleFitHeight();
     void refresh();
     void closePopup();
@@ -82,7 +84,8 @@ class MainWindow : public QMainWindow {
     void fetchHistory(bool older = false, bool preserveAnchor = false);
     void options(const QString &game);
     void configure(const QString &game);
-    void flush(const QString &game);
+    void addCustomGame();
+    void flush(const QString &game, bool forget = false);
     void recover(const QString &game);
     void showError(const QString &game, const QString &message);
     void placePopup(QWidget *popup, QWidget *anchor);
@@ -93,13 +96,16 @@ class MainWindow : public QMainWindow {
     QSet<QString> submitting_;
     QString selected_, historyGame_;
     bool connected_ = false, othersOpen_ = false, hadRunning_ = false;
+    bool groupInitialized_ = false, scanPending_ = false;
     bool resetRevision_ = true;
     bool soundSettingPending_ = false;
     QCheckBox *sounds_;
     QCheckBox *startup_;
     bool startupSettingPending_ = false;
     QLabel *empty_;
-    QPushButton *otherToggle_;
+    QWidget *otherHeader_, *otherActions_;
+    QPushButton *otherToggle_, *scanGames_, *addGame_;
+    QGridLayout *otherHeaderLayout_;
     QVBoxLayout *gamesLayout_;
     QWidget *games_;
     QScrollArea *scroll_;
@@ -107,6 +113,7 @@ class MainWindow : public QMainWindow {
     bool fitQueued_ = false;
     int lastContentHeight_ = -1;
     int lastFitWidth_ = -1;
+    QString pendingSelection_;
     QPointer<QWidget> popup_;
     QPointer<QWidget> historyBody_;
     QJsonArray historyRows_;

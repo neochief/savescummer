@@ -1,0 +1,1 @@
+{"version":4,"request_id":"forget-fixture","command":{"type":"execute","game_id":"custom-game","action":{"type":"forget","confirmed_revision":42}}}

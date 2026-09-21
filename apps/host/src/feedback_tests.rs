@@ -85,6 +85,9 @@ fn fixture() -> (
         sounds: Arc::new(Sounds::new(true, Arc::new(RecordingPlayer(tx)))),
         host_id: new_id(),
         stopping: AtomicBool::new(false),
+        scan_in_progress: AtomicBool::new(false),
+        scan_revision: AtomicU64::new(0),
+        scan_gate: Mutex::new(()),
         shutdown: Notify::new(),
         options: HostOptions {
             cache_dir: None,

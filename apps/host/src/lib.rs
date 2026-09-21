@@ -14,8 +14,8 @@ use std::{
     fs::OpenOptions,
     path::PathBuf,
     sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -82,6 +82,9 @@ struct Service {
     paths: Arc<Paths>,
     host_id: Id,
     stopping: AtomicBool,
+    scan_in_progress: AtomicBool,
+    scan_revision: AtomicU64,
+    scan_gate: Mutex<()>,
     shutdown: Notify,
     options: HostOptions,
     /// Serializes request admission with shutdown; filesystem work runs outside it.
@@ -146,7 +149,9 @@ impl Service {
         if let Some(artwork) = &self.artwork {
             artwork.project(&mut state);
         }
-        Ok(state.into())
+        let mut state: LibraryState = state.into();
+        state.scan_in_progress = self.scan_in_progress.load(Ordering::SeqCst);
+        Ok(state)
     }
     fn execute(
         self: &Arc<Self>,
@@ -179,6 +184,17 @@ impl Service {
         Ok(Reply::Accepted { operation_id: id })
     }
     fn scan(&self) -> anyhow::Result<()> {
+        let Ok(_gate) = self.scan_gate.try_lock() else {
+            return Ok(());
+        };
+        self.scan_in_progress.store(true, Ordering::SeqCst);
+        self.scan_revision.fetch_add(1, Ordering::SeqCst);
+        let result = self.scan_inner();
+        self.scan_in_progress.store(false, Ordering::SeqCst);
+        self.scan_revision.fetch_add(1, Ordering::SeqCst);
+        result
+    }
+    fn scan_inner(&self) -> anyhow::Result<()> {
         let mut catalog_errors = vec![];
         let catalog = if let Some(directory) = &self.options.catalog_dir {
             let mut texts = vec![];
@@ -214,6 +230,12 @@ impl Service {
             }
         }
         let definitions: Vec<_> = definitions.into_values().collect();
+        self.runtime.classify_game_origins(
+            &definitions
+                .iter()
+                .map(|definition| definition.id.clone())
+                .collect(),
+        )?;
         let scan = savescummer_scanner::scan(
             &definitions,
             &NativeDiscovery {
@@ -400,12 +422,30 @@ impl Service {
                     name,
                     data_dir,
                     executables,
-                } => Reply::Configured {
-                    game: self.runtime.configure(
+                } => {
+                    let mut game = self.runtime.configure(
                         id.clone(),
                         name.clone(),
                         data_dir.clone(),
                         executables.clone(),
+                    )?;
+                    if game.origin == GameOrigin::Custom {
+                        let installed = game.executables.iter().any(|path| path.is_file());
+                        self.runtime.set_installed(&game.id, installed)?;
+                        game.installed = installed;
+                    }
+                    Reply::Configured { game }
+                }
+                Command::AddCustomGame {
+                    name,
+                    executable,
+                    data_dir,
+                } => Reply::Configured {
+                    game: self.runtime.add_custom_game(
+                        name.clone(),
+                        data_dir.clone(),
+                        executable.clone(),
+                        executable.is_file(),
                     )?,
                 },
                 Command::SelectDetectedLocation { game_id, location } => Reply::Configured {
@@ -483,7 +523,11 @@ async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
     let command = request.clone();
     let result = tokio::task::spawn_blocking(move || handler.handle(&command)).await?;
     let mut revision = if let Reply::State { state } = &result {
-        Some((state.revision, state.artwork_revision))
+        Some((
+            state.revision,
+            state.artwork_revision,
+            service.scan_revision.load(Ordering::SeqCst),
+        ))
     } else {
         None
     };
@@ -519,13 +563,19 @@ async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
             let versions = (
                 service.runtime.revision()?,
                 service.artwork.as_ref().map_or(0, |a| a.revision()),
+                service.scan_revision.load(Ordering::SeqCst),
             );
             if revision == Some(versions) {
                 continue;
             }
             let state = service.state()?;
-            if revision != Some((state.revision, state.artwork_revision)) {
-                revision = Some((state.revision, state.artwork_revision));
+            let versions = (
+                state.revision,
+                state.artwork_revision,
+                service.scan_revision.load(Ordering::SeqCst),
+            );
+            if revision != Some(versions) {
+                revision = Some(versions);
                 let response = Response {
                     version: VERSION,
                     request_id: request.request_id.clone(),
@@ -661,6 +711,9 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
         paths,
         host_id: new_id(),
         stopping: AtomicBool::new(false),
+        scan_in_progress: AtomicBool::new(false),
+        scan_revision: AtomicU64::new(0),
+        scan_gate: Mutex::new(()),
         shutdown: Notify::new(),
         options,
         admission: std::sync::Mutex::new(()),

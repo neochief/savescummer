@@ -555,6 +555,17 @@ impl Runtime {
         path: PathBuf,
         executables: Vec<PathBuf>,
     ) -> Result<Game> {
+        self.configure_game(id, name, path, executables, None, None)
+    }
+    fn configure_game(
+        &self,
+        id: Id,
+        name: String,
+        path: PathBuf,
+        executables: Vec<PathBuf>,
+        origin: Option<GameOrigin>,
+        installed: Option<bool>,
+    ) -> Result<Game> {
         if id.is_empty() || name.trim().is_empty() {
             return Err(Error::new(
                 ErrorCode::InvalidRequest,
@@ -584,21 +595,17 @@ impl Runtime {
             .iter()
             .map(|p| self.policy.resolve(p))
             .collect::<Result<Vec<_>>>()?;
+        let existing = state.games.get(&id);
         let game = Game {
             id: id.clone(),
-            name,
-            info: state
-                .games
-                .get(&id)
-                .map(|g| g.info.clone())
-                .unwrap_or_default(),
+            name: name.trim().into(),
+            origin: origin.unwrap_or_else(|| existing.map_or(GameOrigin::Custom, |g| g.origin)),
+            info: existing.map(|g| g.info.clone()).unwrap_or_default(),
             data_dir,
             executables,
-            installed: true,
+            installed: installed.unwrap_or_else(|| existing.is_none_or(|g| g.installed)),
             configuration_error: None,
-            detected_locations: state
-                .games
-                .get(&id)
+            detected_locations: existing
                 .map(|g| g.detected_locations.clone())
                 .unwrap_or_default(),
             user_configured: true,
@@ -607,6 +614,28 @@ impl Runtime {
         next.games.insert(id, game.clone());
         self.commit(&mut state, next)?;
         Ok(game)
+    }
+    pub fn add_custom_game(
+        &self,
+        name: String,
+        path: PathBuf,
+        executable: PathBuf,
+        installed: bool,
+    ) -> Result<Game> {
+        if name.trim().is_empty() || executable.as_os_str().is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidRequest,
+                "name, executable and save location must not be empty",
+            ));
+        }
+        self.configure_game(
+            format!("custom-{}", new_id()),
+            name,
+            path,
+            vec![executable],
+            Some(GameOrigin::Custom),
+            Some(installed),
+        )
     }
     /// Record scanner facts without replacing a user's validated configuration.
     /// Called by the composition root; the policy and ambiguity rules live here.
@@ -630,11 +659,13 @@ impl Runtime {
             .is_none_or(|game| !game.user_configured && game.configuration_error.is_some());
         if automatic && locations.len() == 1 {
             let location = &locations[0];
-            if let Err(error) = self.configure(
+            if let Err(error) = self.configure_game(
                 id.clone(),
                 name.clone(),
                 location.data_dir.clone(),
                 location.executables.clone(),
+                Some(GameOrigin::Known),
+                Some(true),
             ) {
                 if matches!(error.code, ErrorCode::Busy | ErrorCode::RecoveryNeeded) {
                     return Ok(());
@@ -652,6 +683,7 @@ impl Runtime {
         let game = next.games.entry(id.clone()).or_insert_with(|| Game {
             id,
             name,
+            origin: GameOrigin::Known,
             info: info.clone(),
             data_dir: locations[0].data_dir.clone(),
             executables: locations[0].executables.clone(),
@@ -660,6 +692,7 @@ impl Runtime {
             detected_locations: vec![],
             user_configured: false,
         });
+        game.origin = GameOrigin::Known;
         game.info = info;
         game.detected_locations = locations;
         if automatic {
@@ -710,6 +743,29 @@ impl Runtime {
         if state.discovery_errors != errors {
             state.guard.discovery_errors = errors;
             state.guard.revision += 1;
+        }
+        Ok(())
+    }
+    pub fn classify_game_origins(&self, known_ids: &BTreeSet<Id>) -> Result<()> {
+        let mut state = self.lock()?;
+        let mut next = state.clone();
+        let mut changed = false;
+        for game in next.games.values_mut() {
+            if game.origin != GameOrigin::Legacy {
+                continue;
+            }
+            let origin = if known_ids.contains(&game.id) {
+                GameOrigin::Known
+            } else {
+                GameOrigin::Custom
+            };
+            if game.origin != origin {
+                game.origin = origin;
+                changed = true;
+            }
+        }
+        if changed {
+            self.commit(&mut state, next)?;
         }
         Ok(())
     }
@@ -904,6 +960,7 @@ impl Runtime {
                 | Action::Revert { .. }
                 | Action::Delete { .. }
                 | Action::Flush { .. }
+                | Action::Forget { .. }
         ) {
             self.refresh(game_id)?;
         }
@@ -951,12 +1008,19 @@ impl Runtime {
         } else {
             Self::check_idle(&state, game_id)?;
         }
-        if let Action::Flush { confirmed_revision } = &action
+        if let Action::Flush { confirmed_revision } | Action::Forget { confirmed_revision } =
+            &action
             && *confirmed_revision != state.revision
         {
             return Err(Error::new(
                 ErrorCode::ConfirmationRequired,
-                "obtain a new flush preview and confirm its revision",
+                "obtain a new cleanup preview and confirm its revision",
+            ));
+        }
+        if matches!(action, Action::Forget { .. }) && game.origin != GameOrigin::Custom {
+            return Err(Error::new(
+                ErrorCode::InvalidTarget,
+                "only custom games can be forgotten",
             ));
         }
         let (source, target) = self.resolve_target(&state, &game, &action)?;
@@ -1150,6 +1214,7 @@ impl Runtime {
             Action::Load { .. } | Action::Revert { .. } => self.restore(id, false),
             Action::Delete { .. } => self.delete_checkpoint(id),
             Action::Flush { .. } => self.flush(id),
+            Action::Forget { .. } => self.forget(id),
             Action::Recover { .. } => self.resolve_recovery(id),
         });
         if let Err(error) = result {
@@ -1647,8 +1712,25 @@ impl Runtime {
         })
     }
     fn flush(&self, id: &str) -> Result<()> {
+        self.cleanup(id, false)
+    }
+    fn forget(&self, id: &str) -> Result<()> {
+        self.cleanup(id, true)
+    }
+    fn cleanup(&self, id: &str, forget: bool) -> Result<()> {
         let op = self.operation(id)?;
         let state = self.lock_game(&op.game_id)?.clone();
+        if forget
+            && state
+                .games
+                .get(&op.game_id)
+                .is_none_or(|game| game.origin != GameOrigin::Custom)
+        {
+            return Err(Error::new(
+                ErrorCode::InvalidTarget,
+                "only custom games can be forgotten",
+            ));
+        }
         let mut paths = BTreeSet::new();
         for snapshot in state
             .snapshots
@@ -1708,6 +1790,12 @@ impl Runtime {
             next.snapshots.retain(|_, s| s.game_id != op.game_id);
             next.history.retain(|h| h.game_id != op.game_id);
             next.clear_history.push(op.game_id.clone());
+            if forget {
+                next.games.remove(&op.game_id);
+                next.active_stack.retain(|game| game != &op.game_id);
+                next.availability.remove(&op.game_id);
+                next.history_status.remove(&op.game_id);
+            }
             // Keep durable request IDs so retries cannot execute a second flush.
             for old in next
                 .operations
@@ -1726,6 +1814,12 @@ impl Runtime {
         current.error = failure.clone();
         current.phase = Phase::Finished;
         self.commit(&mut guard, next)?;
+        if forget
+            && failure.is_none()
+            && let Ok(mut cache) = self.summary_cache.lock()
+        {
+            cache.remove(&op.game_id);
+        }
         if let Some(error) = failure {
             Err(error)
         } else {

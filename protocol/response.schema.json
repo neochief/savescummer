@@ -119,6 +119,25 @@
         {
           "type": "object",
           "properties": {
+            "confirmed_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "forget"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "confirmed_revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "choice": {
               "$ref": "#/$defs/RecoveryChoice"
             },
@@ -271,6 +290,10 @@
         "name": {
           "type": "string"
         },
+        "origin": {
+          "$ref": "#/$defs/GameOrigin",
+          "default": "legacy"
+        },
         "user_configured": {
           "description": "Older configured games are conservatively treated as user overrides.",
           "type": "boolean",
@@ -338,6 +361,14 @@
       "required": [
         "data_dir",
         "executables"
+      ]
+    },
+    "GameOrigin": {
+      "type": "string",
+      "enum": [
+        "legacy",
+        "known",
+        "custom"
       ]
     },
     "HistoryKind": {
@@ -540,6 +571,10 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "scan_in_progress": {
+          "type": "boolean",
+          "default": false
         },
         "settings": {
           "$ref": "#/$defs/Settings"

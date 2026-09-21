@@ -9,6 +9,8 @@
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QLocalServer>
+#include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QPlainTextEdit>
 #include <QProcess>
@@ -18,6 +20,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextDocument>
+#include <algorithm>
 #include <QUuid>
 #include <QtEndian>
 #ifdef Q_OS_WIN
@@ -72,7 +75,7 @@ class DesktopTest : public QObject {
         MainWindow::applyTheme(true);
     }
     void wireFixtures() {
-        for (const auto &name : {"state", "save", "load", "revert", "delete", "sounds", "startup", "active", "explorer", "reset", "artwork", "history", "flush-details"}) {
+        for (const auto &name : {"state", "save", "load", "revert", "delete", "sounds", "startup", "active", "explorer", "reset", "artwork", "history", "flush-details", "add-custom-game", "forget"}) {
             QFile file(QString(FIXTURE_DIR) + "/" + name + "-request.json");
             QVERIFY(file.open(QIODevice::ReadOnly));
             const auto fixture = QJsonDocument::fromJson(file.readAll()).object();
@@ -141,6 +144,19 @@ class DesktopTest : public QObject {
                      .toString(),
                  QString("checkpoint-id"));
         QVERIFY(Presentation::historyAction({{"kind", "game_started"}}).isEmpty());
+        const QDateTime now(QDate(2026, 9, 21), QTime(18, 0, 0));
+        QCOMPARE(Presentation::historyTime(
+                     QDateTime(QDate(2026, 9, 21), QTime(12, 34, 56)).toMSecsSinceEpoch(), now),
+                 QString("Today\n12:34:56"));
+        QCOMPARE(Presentation::historyTime(
+                     QDateTime(QDate(2026, 9, 20), QTime(12, 34, 56)).toMSecsSinceEpoch(), now),
+                 QString("Yesterday\n12:34:56"));
+        QCOMPARE(Presentation::historyTime(
+                     QDateTime(QDate(2026, 9, 18), QTime(12, 34, 56)).toMSecsSinceEpoch(), now),
+                 QLocale().toString(QDate(2026, 9, 18), "dddd") + "\n12:34:56");
+        QCOMPARE(Presentation::historyTime(
+                     QDateTime(QDate(2024, 2, 3), QTime(4, 5, 6)).toMSecsSinceEpoch(), now),
+                 QString("2024-02-03\n04:05:06"));
     }
     void focusedShortcuts_data() {
         QTest::addColumn<bool>("load");
@@ -302,6 +318,10 @@ class DesktopTest : public QObject {
         row.updateState(state, true, true, false);
         row.show();
         QTest::qWait(30);
+        QVERIFY(!row.save->icon().isNull());
+        QVERIFY(!row.load->icon().isNull());
+        QVERIFY(!row.arrow->icon().isNull());
+        QVERIFY(!row.more->icon().isNull());
         QCOMPARE(row.load->font().pointSize(), pointSize);
         const int saveWidth = row.save->width();
         const int loadWidth = row.load->width();
@@ -472,6 +492,72 @@ class DesktopTest : public QObject {
                 QTest::keyClick(row->header, Qt::Key_Space);
                 QCOMPARE(window.selectedGame(), row->id);
             }
+    }
+    void customLibraryControlsAndForget() {
+        class CustomService : public FakeService {
+          public:
+            void request(const QJsonObject &command, Callback callback = {}) override {
+                requests.append(command);
+                if (command["type"] == "flush_preview") {
+                    if (callback)
+                        callback({{"type", "flush_preview"},
+                                  {"preview",
+                                   QJsonObject{{"revision", state["revision"]},
+                                               {"saved", 0},
+                                               {"recovery", 0},
+                                               {"retained", 0},
+                                               {"paths", QJsonArray()}}}});
+                    return;
+                }
+                FakeService::request(command, callback);
+            }
+        } service;
+        service.state["active_stack"] = QJsonArray();
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        auto *header = window.findChild<QWidget *>("otherHeader");
+        auto *scan = window.findChild<QPushButton *>("scanGames");
+        auto *add = window.findChild<QPushButton *>("addCustomGame");
+        QVERIFY(header && header->isVisible());
+        QVERIFY(scan && add);
+        QTest::mouseClick(scan, Qt::LeftButton);
+        QVERIFY(std::any_of(service.requests.begin(), service.requests.end(), [](const auto &request) {
+            return request["type"] == "rescan";
+        }));
+
+        QTest::mouseClick(add, Qt::LeftButton);
+        auto *addDialog = window.findChild<QDialog *>("addCustomGameDialog");
+        QVERIFY(addDialog);
+        QVERIFY(addDialog->findChild<QLineEdit *>("customGameName"));
+        QVERIFY(addDialog->findChild<QLineEdit *>("customGameExecutable"));
+        QVERIFY(addDialog->findChild<QLineEdit *>("customGameSaveLocation"));
+        addDialog->reject();
+
+        window.setOtherGamesOpen(true);
+        window.selectGame("custom-demo");
+        GameRow *custom = nullptr;
+        for (auto *row : window.findChildren<GameRow *>())
+            if (row->id == "custom-demo")
+                custom = row;
+        QVERIFY(custom && custom->isVisible());
+        QCOMPARE(custom->findChild<QLabel *>("gameStatus")->text(), QString("Uninstalled"));
+        QTest::mouseClick(custom->more, Qt::LeftButton);
+        auto *menu = window.findChild<QMenu *>();
+        QVERIFY(menu);
+        QAction *forget = nullptr;
+        for (auto *action : menu->actions())
+            if (action->text() == "Forget this game")
+                forget = action;
+        QVERIFY(forget && forget->isEnabled());
+        forget->trigger();
+        auto *dialog = window.findChild<QDialog *>("forgetDialog");
+        QVERIFY(dialog);
+        dialog->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Yes)->click();
+        QVERIFY(std::any_of(service.requests.begin(), service.requests.end(), [](const auto &request) {
+            return request["type"] == "execute" &&
+                   request["action"].toObject()["type"] == "forget";
+        }));
     }
     void busyRecoveryDisconnectAndFailure() {
         FakeService service;
@@ -648,15 +734,22 @@ class DesktopTest : public QObject {
         QStringList labels;
         for (auto *label : popup->findChildren<QLabel *>())
             labels.append(label->text());
-        QVERIFY(labels.contains(Presentation::age(modified.toMSecsSinceEpoch(),
-                                                  QDateTime::currentDateTime())));
-        QVERIFY(labels.contains(Presentation::age(modified.addDays(1).toMSecsSinceEpoch(),
-                                                  QDateTime::currentDateTime())));
+        QVERIFY(labels.contains(Presentation::historyTime(modified.toMSecsSinceEpoch(),
+                                                          QDateTime::currentDateTime())));
+        QVERIFY(labels.contains(Presentation::historyTime(modified.addDays(1).toMSecsSinceEpoch(),
+                                                          QDateTime::currentDateTime())));
         QVERIFY(labels.contains("Existing backup\nFolder modified"));
         QVERIFY(!labels.contains("Existing backup\nSave time unknown"));
         const auto actions = popup->findChildren<QPushButton *>("historyAction");
         QCOMPARE(actions.size(), 2);
+        const auto times = popup->findChildren<QLabel *>("historyTime");
+        QCOMPARE(times.size(), 2);
+        QCOMPARE(times.first()->width(), times.last()->width());
+        QVERIFY(times.first()->text().contains('\n'));
         QVERIFY(actions.first()->isEnabled());
+        QVERIFY(!actions.first()->icon().isNull());
+        QVERIFY(actions.first()->toolTip().contains("current game data"));
+        QVERIFY(actions.first()->toolTip() != QString("Restore"));
         QCOMPARE(actions.first()->property("checkpoint").toString(), QString("copy-1"));
         QTest::mouseClick(actions.first(), Qt::LeftButton);
         QCOMPARE(service.requests.last()["action"].toObject()["target"].toString(),
@@ -664,6 +757,9 @@ class DesktopTest : public QObject {
         const auto deletes = popup->findChildren<QPushButton *>("historyDelete");
         QCOMPARE(deletes.size(), 2);
         QCOMPARE(deletes.first()->size(), actions.first()->size());
+        QVERIFY(!deletes.first()->icon().isNull());
+        QVERIFY(deletes.first()->toolTip().contains("Permanently delete"));
+        QVERIFY(deletes.first()->toolTip().contains("will not be changed"));
         QTest::mouseClick(deletes.first(), Qt::LeftButton);
         QCOMPARE(service.requests.last()["action"].toObject(),
                  (QJsonObject{{"type", "delete"}, {"target", "copy-1"}}));

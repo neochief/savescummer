@@ -145,6 +145,8 @@ pub struct HistoryPage {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct LibraryState {
     pub revision: u64,
+    #[serde(default)]
+    pub scan_in_progress: bool,
     pub artwork_revision: u64,
     pub artwork: BTreeMap<Id, GameArtwork>,
     pub settings: Settings,
@@ -161,8 +163,14 @@ pub struct LibraryState {
 
 impl From<State> for LibraryState {
     fn from(s: State) -> Self {
+        let game_ids = s
+            .games
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
         Self {
             revision: s.revision,
+            scan_in_progress: false,
             artwork_revision: s.artwork_revision,
             artwork: s.artwork,
             settings: s.settings,
@@ -170,7 +178,11 @@ impl From<State> for LibraryState {
             active_stack: s.active_stack,
             availability: s.availability,
             snapshots: s.snapshots,
-            operations: s.operations,
+            operations: s
+                .operations
+                .into_iter()
+                .filter(|(_, operation)| game_ids.contains(&operation.game_id))
+                .collect(),
             history_status: s.history_status,
             discovery_errors: s.discovery_errors,
         }

@@ -1,3 +1,5 @@
+#[cfg(test)]
+use savescummer_core::GameOrigin;
 use savescummer_core::{Game, Id, Result};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -96,6 +98,7 @@ mod tests {
             user_configured: true,
             id: id.into(),
             name: id.into(),
+            origin: GameOrigin::Known,
             info: String::new(),
             data_dir: PathBuf::from(id),
             executables: vec![PathBuf::from(format!("/{id}/game.exe"))],

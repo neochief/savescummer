@@ -1,1 +1,1 @@
-{"version": 3,"request_id":"load-fixture","command":{"type":"execute","game_id":"void-war","action":{"type":"load","target":"saved-checkpoint-id"}}}
+{"version":4,"request_id":"load-fixture","command":{"type":"execute","game_id":"void-war","action":{"type":"load","target":"saved-checkpoint-id"}}}

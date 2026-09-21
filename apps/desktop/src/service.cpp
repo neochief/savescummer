@@ -77,7 +77,7 @@ QString Wire::endpoint(const QString &directory) {
         return {};
     const QString user = QString::fromWCharArray(sid);
     LocalFree(sid);
-    return QStringLiteral("savescummer-v3-%1-%2").arg(user, QString::number(hash, 16));
+    return QStringLiteral("savescummer-v4-%1-%2").arg(user, QString::number(hash, 16));
 #else
     return QDir(directory).absoluteFilePath("host.sock");
 #endif
@@ -147,14 +147,18 @@ void LocalService::watch() {
                     hostId_ = host;
                     revision_ = -1;
                     artworkRevision_ = -1;
+                    scanInProgress_ = false;
                 }
                 connected_ = true;
                 emit connectionChanged(true, {});
                 const auto revision = state["revision"].toInteger();
                 const auto artworkRevision = state["artwork_revision"].toInteger();
-                if (reconnected || revision > revision_ || artworkRevision > artworkRevision_) {
+                const auto scanInProgress = state["scan_in_progress"].toBool();
+                if (reconnected || revision > revision_ || artworkRevision > artworkRevision_ ||
+                    scanInProgress != scanInProgress_) {
                     revision_ = revision;
                     artworkRevision_ = artworkRevision;
+                    scanInProgress_ = scanInProgress;
                     emit stateChanged(state);
                 }
                 const auto operations = state["operations"].toObject();

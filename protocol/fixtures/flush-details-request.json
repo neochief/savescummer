@@ -1,1 +1,1 @@
-{"version":3,"request_id":"flush-details-fixture","command":{"type":"flush_details","game_id":"void-war","cursor":"opaque-cursor"}}
+{"version":4,"request_id":"flush-details-fixture","command":{"type":"flush_details","game_id":"void-war","cursor":"opaque-cursor"}}

@@ -1,4 +1,4 @@
-# Local service protocol v3
+# Local service protocol v4
 
 The checked-in JSON schemas and fixtures in this directory are the shared contract
 for Rust and C++/Qt clients. Changes must update the schemas, fixtures and
@@ -17,7 +17,7 @@ the connection. A disconnect never means the operation succeeded or was cancelle
 
 Use one request per connection. Ordinary queries and commands return one response.
 `watch` returns the current library summary, followed by summaries when its
-`revision` or `artwork_revision` changes. Intermediate progress updates may be coalesced; every delivered
+`revision`, `artwork_revision` or host scan state changes. Intermediate progress updates may be coalesced; every delivered
 state is self-contained. Revisions increase within one `host_id`; a different
 `host_id` means the host restarted and clients must discard their old revision.
 After reconnecting, obtain a new snapshot and query any accepted operation IDs.
@@ -63,7 +63,7 @@ and recovery journals. Legacy manual checkpoints with no retained original-path
 mapping have null `original_data_dir` and remain ineligible until a scan verifies
 the same generation at the configured directory. New checkpoints always have an
 original directory. Existing explicit operation targets migrate to checkpoint IDs
-so accepted requests remain idempotent when retried through protocol v3.
+so accepted requests remain idempotent when retried through protocol v4.
 
 The client requests `history` with `game_id`, `cursor` (null for the first page)
 and `limit` (default 50, range 1–200). The `history_page` reply contains `page` with
@@ -134,6 +134,14 @@ compatible defaults for existing databases. Invalid or ambiguous discoveries hav
 publishes source/integration diagnostics independently of a UI client. These errors
 do not erase valid configurations, checkpoints or history.
 
+Game records also publish `origin` as `known` or `custom`; `legacy` is a
+migration-only value resolved against the current catalog during startup scan.
+`add_custom_game`
+accepts a display name, one executable and one data directory; the host allocates
+the stable ID. Custom games remain in the library while uninstalled. The
+`scan_in_progress` summary field lets clients represent the host-owned startup,
+periodic or manual scan without starting duplicates.
+
 Flush is two-step: request `flush_preview`, show counts and optional path pages, then execute
 `flush` with its `confirmed_revision`. The host refreshes backup discovery before
 checking this revision, so external backup changes also invalidate the confirmation
@@ -144,6 +152,10 @@ another page. Counts cover all paths. A stale cursor requires a fresh preview an
 confirmation; the UI must not silently replace the revision being confirmed.
 Oversized single rows/paths or other responses return `response_too_large` rather
 than truncating results or raising the frame limit.
+`forget` uses the same preview and confirmation revision, is accepted only for a
+custom game, and performs the complete Flush cleanup before removing the game
+record. Cleanup failure leaves the custom game registered; retries remain
+idempotent through the accepted operation ID.
 Recovery commands use an explicit interrupted operation ID and one
 of `keep_current`, `restore_before` or `retry`.
 
@@ -154,7 +166,7 @@ data-directory lock for its entire lifetime. Alternate data directories are for
 isolated development/test instances; normal use has one default host per user.
 
 Deploy the host, CLI, desktop and Explorer bridge together. Version mismatches are
-rejected. Exit an older host before launching v3 (the per-data-directory lock still
+rejected. Exit an older host before launching v4 (the per-data-directory lock still
 prevents concurrent hosts), and rebuild/re-register older Explorer DLLs. The
 database migration adds visibility/query indexes and durable ordering counters;
 it does not change checkpoint IDs, stored backup paths or request IDs.

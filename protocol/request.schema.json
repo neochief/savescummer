@@ -115,6 +115,25 @@
         {
           "type": "object",
           "properties": {
+            "confirmed_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "forget"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "confirmed_revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "choice": {
               "$ref": "#/$defs/RecoveryChoice"
             },
@@ -318,6 +337,31 @@
             "type",
             "id",
             "name",
+            "data_dir"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data_dir": {
+              "type": "string"
+            },
+            "executable": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "add_custom_game"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "name",
+            "executable",
             "data_dir"
           ]
         },

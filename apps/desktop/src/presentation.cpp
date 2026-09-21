@@ -56,6 +56,16 @@ QString Presentation::age(qint64 milliseconds, const QDateTime &now) {
         return QLocale().toString(date, "dddd, HH:mm:ss");
     return date.toString("yyyy-MM-dd, HH:mm:ss");
 }
+QString Presentation::historyTime(qint64 milliseconds, const QDateTime &now) {
+    const auto date = QDateTime::fromMSecsSinceEpoch(milliseconds).toLocalTime();
+    const auto days = date.date().daysTo(now.date());
+    const auto day = days == 0       ? QString("Today")
+                     : days == 1     ? QString("Yesterday")
+                     : days < 7 && days > 1
+                         ? QLocale().toString(date.date(), "dddd")
+                         : date.toString("yyyy-MM-dd");
+    return day + "\n" + date.toString("HH:mm:ss");
+}
 QString Presentation::day(qint64 milliseconds) {
     const auto date = QDateTime::fromMSecsSinceEpoch(milliseconds).toLocalTime().date();
     if (date == QDate::currentDate())
@@ -100,12 +110,15 @@ QStringList Presentation::orderedGames(const QJsonObject &state) {
     const auto games = state["games"].toObject();
     QStringList result;
     for (const auto &id : state["active_stack"].toArray())
-        if (games[id.toString()].toObject()["installed"].toBool() &&
+        if ((games[id.toString()].toObject()["installed"].toBool() ||
+             games[id.toString()].toObject()["origin"] == "custom") &&
             !result.contains(id.toString()))
             result.append(id.toString());
     QStringList rest;
     for (auto it = games.begin(); it != games.end(); ++it)
-        if (it.value().toObject()["installed"].toBool() && !result.contains(it.key()))
+        if ((it.value().toObject()["installed"].toBool() ||
+             it.value().toObject()["origin"] == "custom") &&
+            !result.contains(it.key()))
             rest.append(it.key());
     const auto availability = state["availability"].toObject();
     std::sort(rest.begin(), rest.end(), [&games, &availability](const auto &a, const auto &b) {

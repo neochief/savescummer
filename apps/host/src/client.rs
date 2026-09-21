@@ -63,6 +63,14 @@ enum CliCommand {
         #[arg(long)]
         exe: Vec<PathBuf>,
     },
+    AddCustom {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        dir: PathBuf,
+        #[arg(long)]
+        exe: PathBuf,
+    },
     History {
         game: String,
         #[arg(long, default_value_t = 50)]
@@ -105,6 +113,11 @@ enum CliCommand {
         cursor: String,
     },
     Flush {
+        game: String,
+        #[arg(long)]
+        confirmed_revision: u64,
+    },
+    Forget {
         game: String,
         #[arg(long)]
         confirmed_revision: u64,
@@ -210,6 +223,11 @@ async fn main() -> anyhow::Result<()> {
             data_dir: dir,
             executables: exe,
         },
+        CliCommand::AddCustom { name, dir, exe } => Command::AddCustomGame {
+            name,
+            executable: exe,
+            data_dir: dir,
+        },
         CliCommand::History {
             game,
             cursor,
@@ -260,6 +278,13 @@ async fn main() -> anyhow::Result<()> {
         } => Command::Execute {
             game_id: game,
             action: Action::Flush { confirmed_revision },
+        },
+        CliCommand::Forget {
+            game,
+            confirmed_revision,
+        } => Command::Execute {
+            game_id: game,
+            action: Action::Forget { confirmed_revision },
         },
         CliCommand::Rescan => Command::Rescan,
         CliCommand::Shutdown => Command::Shutdown,

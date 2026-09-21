@@ -2,11 +2,13 @@
 #include "presentation.h"
 #include <QDateTime>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QUuid>
 
 QJsonObject demoSummary(const QJsonObject &state) {
     auto summary = state;
+    summary["scan_in_progress"] = false;
     QJsonObject statuses;
     const auto games = state["games"].toObject();
     for (auto it = games.begin(); it != games.end(); ++it) {
@@ -71,6 +73,7 @@ QJsonObject demoState() {
         const auto id = pair.first;
         games[id] = QJsonObject{{"id", id},
                                 {"name", pair.second},
+                                {"origin", "known"},
                                 {"info", id == "void-war" ? info : QString()},
                                 {"installed", true},
                                 {"data_dir", ""},
@@ -99,6 +102,16 @@ QJsonObject demoState() {
                                        {"snapshot_id", id + "-saved"}});
         }
     }
+    games["custom-demo"] = QJsonObject{{"id", "custom-demo"},
+                                        {"name", "Custom game"},
+                                        {"origin", "custom"},
+                                        {"info", ""},
+                                        {"installed", false},
+                                        {"data_dir", "C:/Games/Custom/Saves"},
+                                        {"executables", QJsonArray{"C:/Games/Custom/Game.exe"}},
+                                        {"configuration_error", QJsonValue::Null}};
+    availability["custom-demo"] = QJsonObject{{"data_available", false},
+                                                {"default_snapshot_id", QJsonValue::Null}};
     return {{"revision", 1},
             {"settings", QJsonObject{{"play_sounds", true}}},
             {"games", games},
@@ -129,9 +142,29 @@ void DemoService::request(const QJsonObject &command, Callback callback) {
         settings[type == "set_play_sounds" ? "play_sounds" : "launch_on_startup"] = command["enabled"].toBool();
         state_["settings"] = settings;
         publish();
+    } else if (type == "add_custom_game") {
+        auto games = state_["games"].toObject();
+        const auto id = "custom-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        const auto item = QJsonObject{{"id", id},
+                                      {"name", command["name"]},
+                                      {"origin", "custom"},
+                                      {"info", ""},
+                                      {"installed", QFileInfo::exists(command["executable"].toString())},
+                                      {"data_dir", command["data_dir"]},
+                                      {"executables", QJsonArray{command["executable"]}},
+                                      {"configuration_error", QJsonValue::Null}};
+        games[id] = item;
+        state_["games"] = games;
+        auto availability = state_["availability"].toObject();
+        availability[id] = QJsonObject{{"data_available", false},
+                                       {"default_snapshot_id", QJsonValue::Null}};
+        state_["availability"] = availability;
+        publish();
+        reply = {{"type", "configured"}, {"game", item}};
     } else if (type == "configure") {
         auto games = state_["games"].toObject();
         auto item = games[command["id"].toString()].toObject();
+        item["name"] = command["name"];
         item["data_dir"] = command["data_dir"];
         item["executables"] = command["executables"];
         games[command["id"].toString()] = item;
@@ -177,7 +210,7 @@ void DemoService::request(const QJsonObject &command, Callback callback) {
             auto rows = state_["visible_history"].toArray();
             auto availability = state_["availability"].toObject();
             const auto type = action["type"].toString();
-            if (type == "flush") {
+            if (type == "flush" || type == "forget") {
                 for (auto it = snapshots.begin(); it != snapshots.end();)
                     if (it.value().toObject()["game_id"] == game)
                         it = snapshots.erase(it);
@@ -191,6 +224,18 @@ void DemoService::request(const QJsonObject &command, Callback callback) {
                 auto a = availability[game].toObject();
                 a["default_snapshot_id"] = QJsonValue::Null;
                 availability[game] = a;
+                if (type == "forget") {
+                    auto games = state_["games"].toObject();
+                    games.remove(game);
+                    state_["games"] = games;
+                    availability.remove(game);
+                    auto stack = state_["active_stack"].toArray();
+                    QJsonArray keptStack;
+                    for (const auto &entry : stack)
+                        if (entry != game)
+                            keptStack.append(entry);
+                    state_["active_stack"] = keptStack;
+                }
             } else if (type == "delete") {
                 const auto target = action["target"].toString();
                 snapshots.remove(target);

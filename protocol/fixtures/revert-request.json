@@ -1,1 +1,1 @@
-{"version": 3,"request_id":"revert-fixture","command":{"type":"execute","game_id":"void-war","action":{"type":"revert","target":"recovery-checkpoint-id"}}}
+{"version":4,"request_id":"revert-fixture","command":{"type":"execute","game_id":"void-war","action":{"type":"revert","target":"recovery-checkpoint-id"}}}

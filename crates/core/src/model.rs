@@ -47,6 +47,8 @@ pub struct Game {
     pub id: Id,
     pub name: String,
     #[serde(default)]
+    pub origin: GameOrigin,
+    #[serde(default)]
     pub info: String,
     pub data_dir: PathBuf,
     pub executables: Vec<PathBuf>,
@@ -57,6 +59,16 @@ pub struct Game {
     /// Older configured games are conservatively treated as user overrides.
     #[serde(default = "default_true")]
     pub user_configured: bool,
+}
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum GameOrigin {
+    #[default]
+    Legacy,
+    Known,
+    Custom,
 }
 fn default_true() -> bool {
     true
@@ -139,6 +151,9 @@ pub enum Action {
         target: Id,
     },
     Flush {
+        confirmed_revision: u64,
+    },
+    Forget {
         confirmed_revision: u64,
     },
     Recover {

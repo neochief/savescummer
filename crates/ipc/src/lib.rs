@@ -6,7 +6,7 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 pub const MAX_FRAME: usize = 8 * 1024 * 1024;
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -47,6 +47,11 @@ pub enum Command {
         data_dir: PathBuf,
         #[serde(default)]
         executables: Vec<PathBuf>,
+    },
+    AddCustomGame {
+        name: String,
+        executable: PathBuf,
+        data_dir: PathBuf,
     },
     History {
         game_id: Id,
@@ -223,6 +228,8 @@ mod tests {
             include_str!("../../../protocol/fixtures/reset-request.json"),
             include_str!("../../../protocol/fixtures/history-request.json"),
             include_str!("../../../protocol/fixtures/flush-details-request.json"),
+            include_str!("../../../protocol/fixtures/add-custom-game-request.json"),
+            include_str!("../../../protocol/fixtures/forget-request.json"),
         ] {
             let request: Request = serde_json::from_str(fixture).unwrap();
             assert_eq!(request.version, VERSION);

@@ -83,6 +83,12 @@ in dev/demo mode and receives forwarded hotkeys from the host in normal mode;
 it does not register competing global shortcuts. `--minimized` attaches without
 showing a window; subsequent launches focus the existing desktop for that host.
 
+The **Other games** section is always present. Use **Scan for known games** to
+refresh catalog discovery, or **Add custom game** to register a name, executable,
+and save location. Custom games remain listed when their executable is unavailable
+and can be removed with **Forget this game** after confirming the same cleanup
+preview used by Flush.
+
 To rebuild and package the desktop and Rust binaries with their runtime DLLs:
 
 ```powershell
@@ -130,10 +136,11 @@ cargo run --bin savescummer -- watch
 cargo run --bin savescummer -- shutdown
 ```
 
-For a manually configured game, supply its absolute save directory and executable:
+To add a custom game, supply its absolute save directory and executable. The host
+assigns the stable game ID and prints the configured record:
 
 ```powershell
-cargo run --bin savescummer -- configure my-game --name "My game" --dir "D:\Games\MyGame\saves" --exe "D:\Games\MyGame\game.exe"
+cargo run --bin savescummer -- add-custom --name "My game" --dir "D:\Games\MyGame\saves" --exe "D:\Games\MyGame\game.exe"
 ```
 
 For an isolated development instance, pass `--data-dir .runtime --no-scan` to the
@@ -161,6 +168,8 @@ Other commands:
 - `flush-details <game> --cursor <next_cursor>` reads the next page of paths from
   that preview. Counts always cover the complete deletion scope.
 - `flush <game> --confirmed-revision <preview-revision>` confirms that preview.
+- `forget <custom-game> --confirmed-revision <preview-revision>` performs the same
+  cleanup, then permanently removes the custom game registration.
 - `rescan` refreshes discovery immediately.
 - `sounds on` / `sounds off` persist the app-wide Play sounds setting (on by default).
 - `startup on|off` updates the current-user Windows sign-in registration and persisted
@@ -310,7 +319,7 @@ exact action targets and availability, with 50 rows by default, a 200-row maximu
 and a 512 KiB row-data budget. The desktop keeps at most 200 loaded history rows.
 Use Load older to browse; reopening history returns to recent entries.
 
-Protocol v3 publishes library summaries, current progress and the most recent
+Protocol v4 publishes library summaries, current progress and the most recent
 terminal result per game. It does not broadcast accumulated history or journals.
 History cursors expire on relevant changes to that game or host restart; unrelated
 games and artwork updates do not invalidate them. Flush details are paginated and

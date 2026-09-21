@@ -1,1 +1,1 @@
-{"version": 3,"request_id":"fixture-startup","command":{"type":"set_launch_on_startup","enabled":true}}
+{"version":4,"request_id":"fixture-startup","command":{"type":"set_launch_on_startup","enabled":true}}

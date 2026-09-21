@@ -2,7 +2,7 @@
 
 I want to create a Windows app that would help me save and load backups of game save files or data, mainly for roguelike games.
 
-The app's data model should have a library of known games and the directory (we'll call it DIR) to back up for each game (basically, either the save game dir or the entire game data dir if the game is clever enough to prevent tampering with the saves).
+The app's data model should have a game library containing catalog-known games discovered on the computer and custom games added by the user, together with the directory (we'll call it DIR) to back up for each game (basically, either the save game dir or the entire game data dir if the game is clever enough to prevent tampering with the saves).
 
 Ideally, this app should be cross-platform and work on Windows, Linux and macOS.
 
@@ -116,15 +116,15 @@ Keep active configuration, current operation/recovery state and bounded read cac
 
 The core owns visible-history and checkpoint-eligibility rules. Maintain per-game summaries and an indexed visible-history projection that supports bounded page reads, with session context calculated independently of page boundaries. Storage may persist derived indexes supplied by the core but must not implement a second version of the policy. Invalidate or update the affected game's projection after checkpoint, history, configuration or session changes; artwork changes and unrelated game activity do not rebuild it. Make any rebuild coherent with its source revision, and process large rebuilds in bounded batches.
 
-Retain durable records until the existing Flush rules permit their removal. Pagination and cache eviction do not delete history, checkpoints or recovery data. Schema migrations preserve IDs, ordering, original-directory ownership, exact action references and operation journals atomically.
+Retain durable records until the existing Flush rules permit their removal. Pagination and cache eviction do not delete history, checkpoints or recovery data. Persist whether a game is catalog-known or custom independently of whether its paths were configured by the user; a path override on a known game must not make it custom. Schema migrations preserve game origin, IDs, ordering, original-directory ownership, exact action references and operation journals atomically. When migrating older records that predate explicit origin, classify catalog IDs as known and other manually configured IDs as custom so existing user-created games remain manageable.
 
 ### Shared service contract
 
 Expose a small, versioned local API with plain data types and stable IDs:
 
-- Commands: Save, Load (default or an explicit saved checkpoint ID), Revert (the exact recovery checkpoint ID referenced by a selected Loaded/Reverted history entry), retry interrupted-operation recovery, resolve recovery (an explicit interrupted operation and choice), confirmed Flush history, configuration updates, rescan and request an asynchronous artwork cache check for known games.
+- Commands: Save, Load (default or an explicit saved checkpoint ID), Revert (the exact recovery checkpoint ID referenced by a selected Loaded/Reverted history entry), retry interrupted-operation recovery, resolve recovery (an explicit interrupted operation and choice), confirmed Flush history, add and configure a custom game, atomically forget a custom game after confirmed cleanup, configuration updates for known games, rescan and request an asynchronous artwork cache check for known games.
 - Queries: current library summaries, active stack, configuration, exact checkpoints and their restore eligibility, paginated per-game history, operation status by ID and recovery status.
-- Events: game availability/activity changes, artwork availability changes, history changes, operation start/progress/completion/failure, recovery status changes and configuration changes.
+- Events: game availability/activity changes, scan state and discovery changes, artwork availability changes, history changes, operation start/progress/completion/failure, recovery status changes and configuration changes.
 
 The game read model and IPC state expose the catalog's optional Steam app ID (`stores.steam`) and the artwork service's current asset availability and validated local cache paths. Include artwork state in the initial snapshot and publish changes so a newly attached UI can display cached icons and update as downloads finish. Steam metadata resolution and download state belong to the host's artwork service; artwork URLs, image hashes and cache paths are not catalog fields or durable game records. Keep the Rust read model, request/response schemas, fixtures and desktop parser aligned with the artwork check command, state and events.
 
@@ -134,13 +134,13 @@ History responses expose the exact saved or recovery checkpoint reference for ea
 
 The connection must provide a consistent current-state snapshot and subsequent events, with revisions or equivalent resynchronization so clients cannot miss a change while attaching. Progress and errors use structured fields; user-facing wording is supplied by the UI or feedback adapter. A transport failure or disconnect must not be reported as success.
 
-Routine state snapshots contain library summaries: settings, game configuration, active stack, artwork, diagnostics, per-game availability, the default checkpoint's display metadata, whether visible history and Flush are available, and current operation/recovery and failure information. Do not include accumulated history, all checkpoints or terminal operation journals. Historical details are queried separately. Watch checks lightweight revisions before constructing a response; unchanged polling must not clone the library or rebuild history. Live-directory availability checks still run when needed even without a metadata event.
+Routine state snapshots contain library summaries: settings, game configuration and origin, active stack, scan-in-progress state, artwork, diagnostics, per-game availability, the default checkpoint's display metadata, whether visible history and Flush are available, and current operation/recovery and failure information. Do not include accumulated history, all checkpoints or terminal operation journals. Historical details are queried separately. Watch checks lightweight revisions before constructing a response; unchanged polling must not clone the library or rebuild history. Live-directory availability checks still run when needed even without a metadata event.
 
 History queries require a game ID and accept an opaque cursor and a bounded page size. Default to 50 rows and cap requests at 200, with a serialized byte budget below the 8 MiB frame limit. Each row includes its display timestamps, exact checkpoint action target and current action availability, so the client does not need a global checkpoint map. Order the visible timeline newest first by durable history sequence, using stable IDs as an additional cursor key; equal timestamps never cause omissions or duplicates. Manual-copy modification estimates continue to govern default LOAD selection and session association as specified separately.
 
 Bind each history cursor to its game, host instance and history-projection revision. Read each page from one coherent revision. A relevant same-game change invalidates existing cursors with an explicit reload response; unrelated games, progress-only updates and artwork changes do not. Host restart invalidates old cursors. Compute session-marker visibility using the full relevant session context, never just the raw records inside a page.
 
-All potentially large collections have bounded responses. Flush returns counts and a confirmation revision, with optional Details paths fetched in pages bound to that revision. Preserve the confirmation's existing revalidation rules. Other oversized replies require pagination or an explicit size error, never silent truncation; report a specific error if one item exceeds the response budget. Keep historical record growth out of routine state payloads rather than increasing the frame limit.
+All potentially large collections have bounded responses. Flush and Forget previews return counts and a confirmation revision, with optional Details paths fetched in pages bound to that revision. Forget uses the same cleanup scope and revalidation rules as Flush. Other oversized replies require pagination or an explicit size error, never silent truncation; report a specific error if one item exceeds the response budget. Keep historical record growth out of routine state payloads rather than increasing the frame limit.
 
 Define wire read models independently of internal mutable state. Version incompatible service changes explicitly and update the host, CLI, desktop, Explorer bridge, schemas and shared fixtures together. Reject mismatched versions clearly and document the required host/integration upgrade steps; do not fall back to unbounded state transfer. CLI history supports explicit paging and a streaming all-pages mode with bounded memory; if its cursor becomes invalid, report that history changed instead of silently duplicating or omitting entries.
 
@@ -149,21 +149,22 @@ Keep IPC local to the signed-in user. The core application must not depend on th
 ### Independent development and testing
 
 - Define module contracts before implementations. Supply fake implementations for dependencies so each module can be developed and exercised independently.
-- Test core workflows without the UI, using controllable filesystem/store/clock behavior to exercise failures, overlapping requests and recovery transitions.
+- Test core workflows without the UI, using controllable filesystem/store/clock behavior to exercise failures, overlapping requests and recovery transitions. For Forget, inject deletion, commit and interruption failures and verify that the custom entry remains visible until its entire Flush phase and final removal commit succeed; retries must be idempotent.
 - Test the snapshot engine against isolated temporary directories, including locked/unavailable files where supported, partial copies, collisions, failed replacement and rollback.
 - Test scanner providers with fixture catalogs, registry/launcher metadata and directory layouts. No installed Steam client or actual game library should be required for these tests.
+- Test custom-game creation, restart persistence, name and path editing, installed/uninstalled transitions, monitoring, and coexistence with catalog entries. Verify that rescans neither discard nor recreate forgotten custom games.
 - Test the monitor with recorded or synthetic launch/focus/close sequences, including multiple processes per game.
 - Test the store's persistence, incremental row writes, indexed per-game queries, transaction boundaries and restart recovery separately. Verify actual writes, including the absence of writes to unchanged records. Replacement store implementations must satisfy the same repository contract.
-- Test the UI against a fake service that can produce busy, progress, failure, unavailable-snapshot and disconnected states.
+- Test the UI against a fake service that can produce busy, progress, failure, unavailable-snapshot and disconnected states. Cover the always-present Other games section, scan progress, custom-game validation, narrow-width action wrapping, uninstalled custom rows and Forget confirmation/failure behavior.
 - Test the host's artwork service with a fake downloader and temporary cache: cache reuse after restart, missing/deleted/corrupt icon downloads, post-scan discovery, UI attachment, duplicate queue suppression, offline failures and interrupted writes. Verify that slow downloads do not block scanning, service requests or Save/Load. These tests must not require live Steam access.
 - Keep platform-specific integration checks separate from portable module tests. Verify the service contract end to end with the UI absent, including shortcut/Explorer command handling and UI reattachment during an operation.
 
 History policy, operation locks and file replacement behavior must have a single authoritative implementation. Replacing the UI, discovery provider or storage implementation must not require recreating those rules.
 
 
-## SCAN, GAME LIBRARY, KNOWN GAMES
+## SCAN, GAME LIBRARY, KNOWN AND CUSTOM GAMES
 
-When the background host starts, it should perform a quick scan for gaming platforms and games that are present on the user's computer. Found platforms and games are displayed in the main app window's list whenever the UI is attached. The scan is performed each time the host starts and periodically (once every 15 minutes), including while the UI is closed.
+When the background host starts, it should perform a quick scan for gaming platforms and catalog-known games that are present on the user's computer. Found platforms and games are displayed in the main app window's list whenever the UI is attached. The scan is performed each time the host starts, when the user selects **Scan for known games**, and periodically (once every 15 minutes), including while the UI is closed. Coalesce or serialize overlapping scan requests so manual, startup and periodic scans cannot race. Publish scan-in-progress state so every attached UI represents the same host-owned activity.
 
 The scanner follows three steps:
 
@@ -171,9 +172,9 @@ The scanner follows three steps:
 2. Match candidates to the game library using stable identifiers where available, then validate their expected executable paths. A similar display name alone is insufficient.
 3. Resolve the game's data DIR using the library's path rule in the correct native or Proton environment.
 
-Keep scanning bounded to these sources and declared paths; do not recursively search entire drives. Multiple sources finding the same installation must resolve to one KNOWN GAMES entry. Deduplicate by the installation directory's filesystem identity using native Windows or Unix facilities, not by lowercasing paths: aliases of one directory are one candidate, while distinct directories on case-sensitive filesystems remain distinct. Preserve user overrides across rescans.
+Keep scanning bounded to these sources and declared paths; do not recursively search entire drives. Multiple sources finding the same installation must resolve to one known-game entry. Deduplicate by the installation directory's filesystem identity using native Windows or Unix facilities, not by lowercasing paths: aliases of one directory are one candidate, while distinct directories on case-sensitive filesystems remain distinct. Preserve user overrides and all custom-game records across rescans. A scan does not attempt to rediscover forgotten custom games from their old paths.
 
-Installation detection is separate from save-data availability. An installed game may not have created DIR yet; this must not make the game appear uninstalled. If multiple distinct installations or data locations remain plausible, require a one-time choice in Configure rather than guessing from modification times. A temporarily unavailable drive or unreadable discovery source must not be treated as confirmed uninstallation. Scanning never deletes snapshot files or durable history records; it can retire externally removed or changed checkpoints and update the visible history as described below.
+Installation detection is separate from save-data availability. An installed game may not have created DIR yet; this must not make the game appear uninstalled. If multiple distinct installations or data locations remain plausible, require a one-time choice in Configure rather than guessing from modification times. A temporarily unavailable drive or unreadable discovery source must not be treated as confirmed uninstallation. For a custom game, the configured executable path is its installation evidence: mark it installed when the executable is a file, mark it uninstalled only when absence is confirmed through an accessible ancestor, and retain the previous state for unavailable drives or inconclusive access failures. Every scan refreshes this status without changing the configured path. Scanning never deletes snapshot files, custom-game records or durable history records; it can retire externally removed or changed checkpoints and update the visible history as described below.
 
 ## Game platforms
 
@@ -212,6 +213,23 @@ Keep entries declarative and small. Each entry declares:
 Steam discovery, Steam registry fallback, path-root resolution, Proton translation and snapshot naming are shared scanner behavior. Steam artwork resolution, downloading and caching belong to a separate artwork service within the same background host process. Do not declare icon paths, artwork URLs or image hashes in library entries; the Steam app ID is sufficient input for the artwork resolver. Add optional game-specific locators, alternative data locations or runtime exceptions only when a game needs them. User overrides are local settings and do not modify the shared catalog.
 
 Store `info` as a UTF-8 multiline string in the shared game definition. Support paragraphs and plain-text numbered lists, preserving their order and displaying each procedure as an ordered list starting at 1; treat the content as text, without interpreting HTML or executable commands. Instructions describe the manual steps the player takes around SaveScummer operations. They do not automate the game or change core Save/Load behavior. Include `info` in new definitions; allow an empty string while instructions are unavailable and treat a missing field in older definitions as empty. Do not invent generic instructions for games whose procedure has not been documented.
+
+### Custom game library
+
+Users can add games that are not in the shared catalog. Persist these entries in the same per-user game library and subject them to the same core validation, monitoring, snapshot, history, operation-lock and recovery rules as known games. A custom entry contains:
+
+- An opaque, host-generated stable ID that is independent of its display name and cannot collide with catalog IDs.
+- A nonempty, user-editable display name.
+- One absolute executable path used for installation status and process monitoring.
+- One absolute data DIR used by Save, Load, Revert, Explore and backup discovery.
+- Explicit `custom` origin. Keep origin separate from the existing notion of user-configured paths because known games can also have path overrides.
+- Empty `info`; the ordinary no-instructions presentation applies.
+
+Adding a custom game must not require either configured path to exist. This allows a user to register an expected executable before installation and an expected DIR before first launch. Resolve each path through its existing ancestor, enforce absolute-path and data-directory safety rules, and do not create the executable, installation directory or DIR while validating. Compute the initial installed state from the executable using the same conclusive-presence rules as a scan. Reject an invalid addition atomically without leaving a partial library entry. Data-directory overlap rules apply across known and custom games. Display names do not identify games and need not be unique; path safety and opaque IDs prevent accidental ownership collisions.
+
+Configure allows a custom game's name, executable and DIR to be edited. Known-game names and catalog instructions remain catalog-controlled, while their existing executable and DIR override workflow remains available. A configuration update preserves the game's stable ID, origin, snapshots and history, and commits only after all new values validate. Returning to an earlier resolved DIR restores eligibility for its surviving checkpoints under the ordinary path rules.
+
+Custom entries persist regardless of installation state. A missing executable produces the `Uninstalled` status but does not by itself disable Save, Load, history or recovery when the configured DIR and required checkpoints remain available. Rescanning re-evaluates the configured executable; it never replaces custom paths with catalog discoveries or converts a custom entry into a known one merely because names or paths resemble a catalog game.
 
 ### Complete example: Void War
 
@@ -275,11 +293,12 @@ Separate native Linux from Windows-through-Proton when resolving a game. A lefto
 
 Different Proton releases do not require duplicate game definitions. Prefix resolution is shared behavior; add a game-specific exception only when verified necessary. Resolving a path does not claim compatibility with every Proton release.
 
-### KNOWN GAMES
+### Resolved games
 
 For each resolved game, retain:
 
 - Stable game ID and display name.
+- Explicit known/custom origin, independent of whether the user has overridden paths.
 - The library entry's `info` text, exposed through the host's game read model and IPC state to the UI. Keep the catalog as its source so instructions are not duplicated in Qt code or local path overrides.
 - Discovered installation identity, source and full installation path.
 - Resolved platform/runtime and Proton prefix when applicable.
@@ -288,11 +307,13 @@ For each resolved game, retain:
 - The catalog's optional Steam app ID, used by the host's artwork service independently of the installation's discovery source.
 - Persistent local overrides, including the resolved current data-directory path.
 
+Catalog metadata such as discovery source, platform/runtime and Steam app ID is optional for custom games. Custom games instead retain the user-supplied executable and DIR as their authoritative configuration. Both origins use one resolved-game read model so downstream monitoring and file operations do not duplicate behavior.
+
 Do not maintain a separate `location_id` or a registry of location UUIDs. Each checkpoint records the original resolved data-directory path it belongs to. Changing a configured DIR must not silently retarget existing Restore or Revert actions: compare the checkpoint's recorded directory with the game's current DIR using the shared platform-aware path rules. Returning to the same resolved directory makes its surviving checkpoints eligible again without changing their IDs or registering duplicate checkpoints. History stays associated with the game and references checkpoints for its actions.
 
 ### Steam artwork loading and cache
 
-Use Steam as the source of game artwork. The current UI uses game icons; library backgrounds, covers, headers and logos can use the same loader when a UI design calls for them. Do not fetch unused artwork by default. Games without a Steam app ID or available Steam artwork keep a neutral initials placeholder in the icon box; executable and registry icons are not alternative artwork sources.
+Use Steam as the source of game artwork for catalog entries that declare a Steam app ID. The current UI uses game icons; library backgrounds, covers, headers and logos can use the same loader when a UI design calls for them. Do not fetch unused artwork by default. Custom games and known games without an available Steam icon keep a neutral initials placeholder in the icon box; executable and registry icons are not alternative artwork sources.
 
 Use the existing background host process that performs scanning; do not launch an additional artwork process. After each scan publishes discovered games, the host queues cache checks and missing icon downloads in its artwork service. Run network requests asynchronously and blocking cache I/O and image validation on background workers within that process. Startup and UI-attachment checks use the same queue. Scanning, the UI event loop, game monitoring and Save/Load operations never wait for artwork; do not hold scan or operation locks during artwork work. Publish completed cache entries through IPC and update the matching UI rows without changing their layout or selection. Deduplicate queued and in-flight requests by Steam app ID and asset kind, with bounded download concurrency.
 
@@ -318,7 +339,7 @@ Reject an invalid override without changing the previous configuration. If disco
 
 ## MONITOR and ACTIVE STACK
 
-After the background host finishes the initial scan, the game monitor should track the launch, activation and termination of the KNOWN GAMES executables in the central data structure called ACTIVE STACK. Monitoring continues without a UI client. The core uses this state to select the game for global shortcuts and publishes it for the UI to display in game widgets.
+After the background host finishes the initial scan, the game monitor should track the launch, activation and termination of every resolved known or custom game's configured executables in the central data structure called ACTIVE STACK. Monitoring continues without a UI client. The core uses this state to select the game for global shortcuts and publishes it for the UI to display in game widgets.
 
 There should be a focus stack of the launched games, and the shortcuts should only work with the latest game in the stack. There should be just one element per launched game in the stack. Two processes for the same game count as one in the stack. If all game processes are terminated, the entry is removed from the stack. If the game is focused, it moves to the top of the stack.
 
@@ -369,7 +390,7 @@ Game/
 - The app treats completed snapshots as read-only. Restoration copies their contents into DIR and leaves the source snapshot intact.
 - A local SQLite database stores game configuration, checkpoint metadata including original data-directory paths and registration order, history entries and operation journals. Game files remain in the sibling directories, not in the database.
 - History entries have stable IDs and a stable chronological order, including when timestamps are equal. Saved and Existing backup entries reference their saved checkpoints. Loaded and Reverted entries reference the checkpoint restored and the recovery checkpoint captured immediately before the operation. They may also reference the selected earlier history entry for display and audit; that relationship does not determine restore eligibility.
-- SAVE, game exit and app restart never delete existing snapshots or history. Only an explicit, confirmed Flush history operation deletes them. There is no automatic expiry or single UNDO PATH.
+- SAVE, game exit and app restart never delete existing snapshots or history. Only an explicit, confirmed Flush history operation, including the mandatory Flush phase of Forget this game, deletes them. There is no automatic expiry or single UNDO PATH.
 - If a snapshot is confirmed deleted or changed externally, mark that snapshot generation removed and hide history rows whose Restore/Revert action depended on it. Keep the original IDs and references internally for audit and interrupted-operation recovery. A newer folder at the same path never becomes the target of an older action. Temporary access failures remain unavailable states, not proof of removal.
 
 The two history actions have fixed meanings:
@@ -415,7 +436,7 @@ The core supplies the visible history consistently to every client:
 - Show the observed launch and close markers bounding a session only when that session contains at least one visible backup-backed action. Use the saved/action time, or the explicitly estimated modification time for a manual checkpoint, to associate it with a session. Hide intervening sessions with no remaining checkpoints, not just sessions older than the first checkpoint. Do not invent missing session boundaries.
 - With no surviving saved or recovery points, the normal history is empty even if internal launch/close or removed-checkpoint records remain. Recompute the visible timeline after external changes, new checkpoints, Flush and restart. History-arrow availability follows visible history rather than internal audit-record counts.
 
-Removing a row from the visible timeline does not delete files or rewrite old action references. Only confirmed Flush deletes retained snapshot files and clears durable history.
+Removing a row from the visible timeline does not delete files or rewrite old action references. Only confirmed Flush, either on its own or as the cleanup phase of Forget this game, deletes retained snapshot files and clears durable history.
 
 
 ## OPERATION SAFETY
@@ -424,7 +445,7 @@ The app restores files on disk. The user is responsible for making the game pick
 
 Use ordinary, best-effort file copying for saved and recovery snapshots. Do not suspend the game, detect concurrent writes, add game-specific consistency logic or automatically retry copies. Actual filesystem or copy errors fail the operation under the safety rules below. Successful copying does not guarantee a consistent game save if the game was writing during the copy. The user decides whether to pause or close the game before requesting an operation.
 
-All entry points (UI, global shortcuts and Explorer) use the same operation handling and per-game operation lock. Allow only one operation per game at a time, including Flush history and changes to configured paths. Reject additional requests while that game is busy; do not queue them for later execution. Disable conflicting UI actions and give brief, rate-limited busy feedback for shortcuts and Explorer requests. Holding a shortcut must not repeatedly trigger operations.
+All entry points (UI, global shortcuts and Explorer) use the same operation handling and per-game operation lock. Allow only one operation per game at a time, including Flush history, Forget this game and changes to configured paths. Reject additional requests while that game is busy; do not queue them for later execution. Disable conflicting UI actions and give brief, rate-limited busy feedback for shortcuts and Explorer requests. Holding a shortcut must not repeatedly trigger operations.
 
 For every Restore or Revert:
 
@@ -436,7 +457,7 @@ For every Restore or Revert:
 
 Filesystem changes and database changes cannot share one transaction. Persist a pending/completed/failed operation record so startup can identify interrupted operations. Record the original resolved live DIR, source checkpoint ID and exact source path, recovery snapshot, staging and retained-original paths, together with the filesystem identities/change signatures required to validate them. Persist the intended replacement step before changing paths and its result afterward, so startup can reconcile the record with the actual directories. Preserve their recovery files and surface the interruption instead of silently treating it as a successful load or deleting recovery data. Failed and pending operations must not appear as completed history actions.
 
-SAVE also publishes a snapshot and its history entry only after its copy succeeds. Flush history reports deletion failures and retains records for remaining snapshots instead of claiming that cleanup completed.
+SAVE also publishes a snapshot and its history entry only after its copy succeeds. Flush history and the Flush phase of Forget report deletion failures and retain records for remaining snapshots instead of claiming that cleanup completed.
 
 ### Interrupted-operation recovery
 
@@ -451,7 +472,21 @@ If replacement may have completed or current DIR may contain subsequent game pro
 
 If permissions, file locks, missing recovery material or disk problems prevent recovery, show the specific error and provide **Open recovery folder** and **Retry recovery** actions. Opening the folder must not resolve the interruption. After fixing the filesystem manually, the user can retry recovery or choose Keep current game data for the repaired DIR; no database editing is required.
 
-Recovery commands use the same core validation and per-game lock, target the interrupted operation's original data location, and remain available while ordinary SAVE, LOAD, REVERT, Flush history and path changes are blocked. Allow only one recovery attempt at a time. Recovery attempts must also be recorded durably and remain recoverable if interrupted again. Preserve all retained snapshots and uncertain files until an explicit Flush after recovery is resolved. Persist the resolution and its retained snapshot references without turning the original failed or interrupted action into a successful Loaded/Reverted history entry or playing its completion cue. Clear the block only after filesystem checks and the resolution record succeed; subsequent ordinary LOAD or REVERT requests are separate operations.
+Recovery commands use the same core validation and per-game lock, target the interrupted operation's original data location, and remain available while ordinary SAVE, LOAD, REVERT, Flush history, Forget and path changes are blocked. Allow only one recovery attempt at a time. Recovery attempts must also be recorded durably and remain recoverable if interrupted again. Preserve all retained snapshots and uncertain files until an explicit Flush after recovery is resolved. Persist the resolution and its retained snapshot references without turning the original failed or interrupted action into a successful Loaded/Reverted history entry or playing its completion cue. Clear the block only after filesystem checks and the resolution record succeed; subsequent ordinary LOAD or REVERT requests are separate operations.
+
+### Forget custom game
+
+Forgetting is available only for a custom game and requires explicit confirmation. It is a single host-owned, idempotent operation, not a client-side sequence of Flush followed by an unrelated record deletion. The confirmation is bound to the same refreshed, revision-checked deletion scope as Flush and shows the saved-backup, recovery-point and incomplete-copy counts, with paginated Details paths when requested.
+
+On confirmation:
+
+1. Reconcile externally added, changed or removed checkpoints and reject a stale confirmation revision.
+2. Acquire the game's operation lock and revalidate that it still exists, is custom, is idle and has no unresolved recovery.
+3. Run the complete Flush deletion workflow, including retained incomplete copies. Leave the configured live DIR, game installation and executable untouched.
+4. If every required deletion and metadata cleanup succeeds, atomically remove the custom game, its remaining per-game configuration and summaries, and its ACTIVE STACK reference from the visible library. Preserve only the minimal request/operation receipt needed to make a retry idempotent, outside the visible game library.
+5. If any deletion, persistence step or crash recovery remains incomplete, keep the custom game registered and report or recover the operation; never show a forgotten result while cleanup is partial.
+
+A custom game with no backups or history still passes through this zero-item Flush workflow before removal. A forgotten game cannot be recreated by known-game scanning. The user may explicitly add the paths again later, producing a fresh custom-game ID with no connection to the deleted history. Known games reject Forget at the core even if a client incorrectly presents the command.
 
 
 ## SAVE
@@ -530,17 +565,25 @@ Keep the UI slick, minimal and compact. Use spacing, restrained emphasis and con
 
 ### Main window
 
-It should show a scrollable list of widgets, one per game, for games that are in our library and that are detected on this computer. If there are no installed games, the list is empty and shows the text "No known games are detected on this computer. Once you install a supported game, it will show up in this window automatically."
+The main list shows running games followed by one permanent, expandable **Other games** section. The section header is present even when its count is zero so discovery and manual addition are always reachable. Put its chevron, label and count on the left, and two ordinary buttons on the right in this order: **Scan for known games** and **Add custom game**. At narrow widths, keep the labels readable and wrap the actions onto a second, right-aligned line within the same header instead of truncating them, hiding them or increasing the application's minimum width.
 
-When at least one game is running, show launched games in ACTIVE STACK order and group all nonrunning installed games under an expandable "Other games" row with a count. Collapse that group by default when entering this running-games view, unless it contains the currently selected game. Expanding the group exposes its rows; selecting a row reveals that game's controls and instructions. Preserve the user's expansion choice during ordinary refreshes while games remain running. When no games are running, show all installed known games directly without requiring expansion. If a game closes, it leaves ACTIVE STACK and moves into the nonrunning group, or into the full list if it was the last running game; preserve its selection and expand the group if needed to keep it visible. If a scan confirms that a game is no longer installed, its entry disappears.
+Show launched known and custom games above the section in ACTIVE STACK order. Group every nonrunning installed known game and every nonrunning custom game under Other games; custom games remain there even when uninstalled. The count is the number of rows currently inside the section. A running custom game behaves normally: it moves into the running area and returns to Other games when it closes. Confirmed-uninstalled known games are absent, while confirmed-uninstalled custom games remain visible. This visibility distinction comes from explicit game origin, not from whether paths were user-configured.
+
+Expand Other games by default when no game is running. When entering a running-games view, collapse it by default unless it contains the selected game; thereafter preserve the user's choice during ordinary refreshes. Expanding exposes its rows, and selecting a row reveals that game's controls and instructions. If a game closes, preserve its selection, move it into Other games and expand the section if necessary to keep it visible. Collapsing the section while it contains the selection selects the first visible running game. If there are no rows inside the expanded section, show the compact text "No other games. Scan for known games or add a custom game." within the section; do not replace the permanent section header with a whole-window empty state.
+
+**Scan for known games** requests the host's ordinary rescan. Disable it while the host reports a scan in progress and temporarily label it **Scanning…**; do not start duplicate scans from repeated clicks. A completed scan updates rows through normal state publication without changing an existing valid selection or expansion choice. Report a scan failure next to the section or in a concise error surface associated with the action, rather than attaching it to an arbitrary game row.
+
+**Add custom game** opens the dialog specified below. After a successful addition, expand Other games, select the new row and show its normal details. Cancel or validation failure preserves the previous selection and library state.
 
 Use the existing `assets/icon.svg` for application branding, including the window icon and tray icon. Game widgets use each game's downloaded, cached Steam icon, with a neutral initials placeholder while missing or loading, as described under Steam artwork loading and cache. The application icon does not replace game icons. Give the main window icon and game icons matching 27 px boxes aligned to the same left edge, with the title-bar and game names aligned after the same 8 px gap. Preserve this alignment at narrower window widths.
 
 Keep the window, title bar, help bar, game list, menus, ordinary text and borders in neutral grayscale for both light and dark appearances. Limit the icon's violet (`#9747FF`, adjusted for contrast where needed) to small functional accents: checked checkboxes, selected history actions, open dropdown controls and progress. Retain distinct semantic colors where needed, such as the Running indicator.
 
-Game rows fill the entire list width and meet their neighbors with no outer gaps, rounded row corners, surrounding borders, decorative left stripes, shadows or dividers between individual games. Hovering anywhere over a row gives its full width a subtle darker neutral background. The selected row retains a darker neutral background after the pointer leaves, extending to both inner window edges and touching adjacent rows. Keep text and controls at full readability; dim the background rather than reducing the row's opacity. Group each game's name, status and controls with internal padding. Give nonrunning games the same full-width geometry. The "Other games" toggle also fills the width and uses matching hover shading, with one subtle neutral dotted divider immediately above it and no surrounding gap; show this divider only while the running-games view includes that group. All statuses, including "Running" and "Not run yet", share the same text treatment and position immediately after the game title with the same small gap. Statuses have no dot or decorative icon; semantic text color can vary. ACTIVE STACK ordering and the inline Running status communicate process activity, independently of row selection.
+Use Font Awesome Pro's rounded **Duotone** SVG family for functional UI icons throughout the desktop app. Copy only the required SVGs from the shared asset library into the project, preserve their embedded license comments, and bundle them as Qt resources; do not depend on an installed icon font or external files at runtime. Keep application branding and downloaded game artwork unchanged. Use one consistent neutral two-tone treatment at compact sizes, with semantic or violet accents only for the states described above.
 
-Keep the main list container's padding at zero. Place spacing inside each game row: approximately 12 px vertically and 18 px horizontally on desktop, reduced to 10 px vertically and 14 px horizontally in narrow windows. Align the title-bar icon with this same horizontal inset. Do not impose a minimum or maximum width on game rows, the nonrunning group or instruction text; they use the window's available width. Keep the controls compact and aligned left, with 6 px between controls and 32–36 px action buttons on desktop. The selected game's action row contains Save first, then split Load and "...". There is no info button. Put Explore inside every game's "..." menu. Keep the "Other games" row immediately after the running widgets. Do not reserve space for hidden controls, hidden instructions or a closed dropdown.
+Game rows fill the entire list width and meet their neighbors with no outer gaps, rounded row corners, surrounding borders, decorative left stripes, shadows or dividers between individual games. Hovering anywhere over a row gives its full width a subtle darker neutral background. The selected row retains a darker neutral background after the pointer leaves, extending to both inner window edges and touching adjacent rows. Keep text and controls at full readability; dim the background rather than reducing the row's opacity. Group each game's name, status and controls with internal padding. Give nonrunning and uninstalled custom games the same full-width geometry. The Other games header also fills the width and uses matching hover shading for its toggle area, with one subtle neutral dotted divider immediately above it and no surrounding gap; show this divider when one or more running widgets precede the section. Its two action buttons are independent of the toggle, so clicking either does not expand or collapse the section. All statuses, including "Running", "Uninstalled" and "Not run yet", share the same text treatment and position immediately after the game title with the same small gap. Statuses have no dot or decorative icon; semantic text color can vary. ACTIVE STACK ordering and the inline Running status communicate process activity, independently of row selection.
+
+Keep the main list container's padding at zero. Place spacing inside each game row: approximately 12 px vertically and 18 px horizontally on desktop, reduced to 10 px vertically and 14 px horizontally in narrow windows. Align the title-bar icon with this same horizontal inset. Do not impose a minimum or maximum width on game rows, the nonrunning group or instruction text; they use the window's available width. Keep the controls compact and aligned left, with 6 px between controls and 32–36 px action buttons on desktop. The selected game's action row contains Save first, then split Load and "...". There is no info button. Put Explore inside every game's "..." menu. Keep the Other games header immediately after the running widgets. Do not reserve space for hidden controls, hidden instructions or a closed dropdown.
 
 Both the Load history and the "..." menu open downwards, directly below their own triggering button with a small gap. Position them from the actual button bounds, not a fixed offset from the game header. Use floating popup surfaces that can extend beyond the main window, without enlarging the game widget or shifting the underlying controls. Keep popups within the available screen width and constrain long history lists with scrolling. Only one popup is open at a time; clicking outside or pressing Escape dismisses it.
 
@@ -561,17 +604,31 @@ ICON + NAME (Running)
 
 The action row appears above the instructions. Give Save and the complete split Load control (including its dropdown arrow) the same outer width and height. Use the larger of their preferred sizes, accounting for the Load timestamp, font scaling and translated labels; in Qt, derive this from their size hints rather than assuming the Save label is wider. Keep the pair compact and left-aligned. In narrow windows, shrink both equally to fit, preserving equal widths; elide the timestamp if necessary and expose its full value on hover and through accessibility. The "..." button stays compact and separate.
 
-Include a detected-but-never-run state in the UI demo: the game is installed, but has not created DIR and has no saved snapshots or history. Keep it listed among the nonrunning games. Disable Save and both parts of Load, and omit the timestamp beneath Load entirely, with the Load caption vertically centered. A subdued "Not run yet" label beside the game name can identify this demo state. Keep configuration accessible.
+Include a detected-but-never-run state in the UI demo: the game is installed, but has not created DIR and has no saved snapshots or history. Keep it listed among the nonrunning games. Disable Save and both parts of Load, and omit the timestamp beneath Load entirely, with the Load caption vertically centered. A subdued "Not run yet" label beside the game name can identify this demo state. Also include an uninstalled custom game to verify its persistent row and status. Keep configuration accessible in both states.
 
-Determine action availability from the resolved data and snapshot/history availability, not merely from whether the monitor has observed a launch. A closed game with existing data and backups retains its normal Save/Load controls. The absence of observed launch events alone does not establish that a game has never run.
+Determine action availability from the resolved data and snapshot/history availability, not merely from installation state or whether the monitor has observed a launch. A closed or uninstalled custom game with existing data and backups retains its normal Save/Load controls. The absence of observed launch events alone does not establish that a game has never run. Status precedence is `Recovery needed`, then `Running`, then `Uninstalled`, then `Not run yet`; omit the status when none applies.
+
+### Add custom game
+
+Open a small modal dialog with this content:
+
+```text
+Name:            [................................]
+Game executable: [................................] [Browse…]
+Save location:   [................................] [Browse…]
+
+                                      [Add] [Cancel]
+```
+
+Require a nonblank trimmed name and nonblank absolute executable and save-location paths. Browse uses a file picker for the executable and a directory picker for the save location, while retaining editable fields so expected paths that do not exist yet can be entered. Do not show Reset controls because a custom game has no catalog defaults. Disable Add while a request is pending, show validation errors in the dialog, preserve all entered values after rejection and create no partial entry. The host generates the stable ID; the desktop must not derive it from the name.
 
 ### Game selection and info
 
-Clicking anywhere in a game's row selects it. Exactly one visible game is selected when the library is nonempty. The selected game shows both its action buttons and its `info` directly below them; every other game hides both controls and instructions and leaves no space for them. Clicking the selected row again keeps it selected. Selecting another game hides the previous game's controls and instructions and dismisses its open popups. This replaces the separate info toggle and all per-game info expansion preferences.
+Clicking anywhere in a game's row selects it. Exactly one visible game is selected whenever at least one game row is visible. The selected game shows both its action buttons and its `info` directly below them; every other game hides both controls and instructions and leaves no space for them. Clicking the selected row again keeps it selected. Selecting another game hides the previous game's controls and instructions and dismisses its open popups. This replaces the separate info toggle and all per-game info expansion preferences.
 
 Activating any game action button also selects its owning game and performs the action once; selection must not consume the action or require a second click. This includes Save, both parts of Load, "...", its menu actions and history Restore/Revert actions. Keep row selection available when the game is closed, has never run, is busy or needs recovery; action availability still follows the existing rules. Expose an accessible selected state and allow keyboard selection with Enter or Space, while retaining ordinary keyboard access to each action and selectable instruction text.
 
-Initially select the game at the top of ACTIVE STACK, or the first listed game when none is running. Preserve an existing selection through state refreshes and running/nonrunning regrouping rather than switching whenever process focus changes. If the selected game disappears, select the first visible game. If the user collapses "Other games" while it contains the selection, select the first visible running game. Row selection is UI state: it does not launch a game, mark it Running, reorder ACTIVE STACK or change the target of global shortcuts.
+Initially select the game at the top of ACTIVE STACK, or the first row inside the initially expanded Other games section when none is running. Preserve an existing selection through state refreshes and running/nonrunning regrouping rather than switching whenever process focus changes. If the selected game disappears, select the first visible game. If the user collapses Other games while it contains the selection, select the first visible running game; if there is none, clear the visible selection until the section is expanded again, then restore the previous surviving selection or select its first row. Row selection is UI state: it does not launch a game, mark it Running, reorder ACTIVE STACK or change the target of global shortcuts.
 
 Show the selected game's instructions as selectable, wrapping text with compact paragraph and numbered-list spacing. Let the text expand across all available row content width. Number Save and Load procedures separately, each starting at 1. Remove the instruction area's gray border, rounded box and additional inset padding. Use the row's shared horizontal padding for the title, controls and text; leave approximately 10 px between the controls and instructions, and retain the row's bottom padding so text stays clear of adjacent rows and the outer window border. The selected row's darker surface extends behind the instructions. Showing details increases the row's height and moves following games down; it must not overlay controls or introduce an inner scroll area. The main game list handles scrolling when needed. Popups do not reset selection. The demo initially shows running Void War selected with its controls and instructions visible and its history dropdown closed.
 
@@ -579,7 +636,7 @@ When the selected game's `info` is empty, show "No instructions available for th
 
 ### Busy state and progress
 
-Whenever SAVE, LOAD or REVERT runs for a game, immediately disable both its Save and Load buttons, including the Load dropdown arrow. Keep their normal labels and subtly dim the disabled controls. Show one thin shared progress bar integrated along the bottom of the Save/Load control group, without expanding the widget or shifting its layout. Apply this state regardless of whether the operation was started from a button, history, a shortcut or Explorer. If the window was hidden, opening it must show the current busy state and progress.
+Whenever SAVE, LOAD, REVERT, Flush history or Forget runs for a game, immediately disable both its Save and Load buttons, including the Load dropdown arrow. Keep their normal labels and subtly dim the disabled controls. Show one thin shared progress bar integrated along the bottom of the Save/Load control group, without expanding the widget or shifting its layout. Apply this state regardless of whether the operation was started from a button, history, a shortcut, Explorer or a confirmation dialog. If the window was hidden, opening it must show the current busy state and progress.
 
 Do not add routine status captions such as "Saving...", "Loading..." or "Finishing...", percentage text, or "disabled" labels. The control state and progress bar provide the visible feedback. Expose the operation and progress through accessibility properties. Show measured progress when the amount of work is known, covering all required copies rather than only the first copy. Use an indeterminate bar while calculating the work or during phases without measurable progress. Do not fill the bar completely or announce completion until the files and history record have successfully committed.
 
@@ -592,9 +649,9 @@ Do not add routine status captions such as "Saving...", "Loading..." or "Finishi
 
 In this mockup, Save and Load are visually dimmed and inactive; the thin line is the progress bar. No extra visible label is added.
 
-Restore and Revert actions in any already-open history, Flush history, and changes to configured paths are also disabled for that game while busy. Backend locking enforces the same restriction for every entry point; disabling buttons alone is insufficient.
+Restore and Revert actions in any already-open history, Flush history, Forget this game, and changes to configured paths are also disabled for that game while busy. Backend locking enforces the same restriction for every entry point; disabling buttons alone is insufficient.
 
-Keep the busy state until the operation and any required rollback have finished. After success or a safely handled failure, remove the progress bar and re-enable controls according to snapshot availability. Show failures as an error, not as a completed progress bar. If rollback cannot finish or an interrupted operation has an uncertain outcome, show "Recovery needed" with an action to open the recovery prompt described above. Retain the recovery files and block ordinary SAVE, LOAD, REVERT, Flush history and path changes until recovery is resolved. Keep the dedicated recovery choices and folder access available, disabling conflicting recovery choices while a recovery attempt is running. Opening or reconnecting the UI must retrieve the current recovery status and available choices from the host.
+Keep the busy state until the operation and any required rollback have finished. After success or a safely handled failure, remove the progress bar and re-enable controls according to snapshot availability. Show failures as an error, not as a completed progress bar. If rollback cannot finish or an interrupted operation has an uncertain outcome, show "Recovery needed" with an action to open the recovery prompt described above. Retain the recovery files and block ordinary SAVE, LOAD, REVERT, Flush history, Forget and path changes until recovery is resolved. Keep the dedicated recovery choices and folder access available, disabling conflicting recovery choices while a recovery attempt is running. Opening or reconnecting the UI must retrieve the current recovery status and available choices from the host.
 
 
 ### Save
@@ -622,7 +679,7 @@ The core-selected eligible saved checkpoint's time appears below the main Load c
 - Wednesday, 12:23:22
 - 2012-12-12, 12:12:21
 
-History rows use explicit times within their day groups so that operations and their targets can be distinguished. The history list scrolls when it exceeds the dropdown's available height.
+History rows use a consistent-width, two-line time column so that operations and their targets can be distinguished and row content stays aligned. Show a concise relative day or date on the first line (`Today`, `Yesterday`, a full localized weekday, or `yyyy-MM-dd`) and the exact `HH:mm:ss` time on the second line. Size every row's time column from the longest localized weekday so full day names are never abbreviated. The history list scrolls when it exceeds the dropdown's available height.
 
 Opening history requests the first page for that game. Load older pages as the user scrolls, preserving day grouping, stable row IDs and exact Restore/Revert targets. Bound cached pages and rendered widgets so a long browsing session does not retain the entire timeline. The history arrow's availability comes from the host summary, not from whether the client has fetched any rows.
 
@@ -668,14 +725,14 @@ Should open a dropdown with miscellaneous actions:
 
 - Configure
 
-    Should open a small popup where you would see:
+    For a known game, open a small popup where you would see:
 
 Game executable: [...prefilled path...][open icon] [Reset]
 Game data dir (DIR): [...prefilled path...][open icon] [Reset]
 
 [Save] [Cancel]
 
-Changing the path and saving updates the entry in KNOWN GAMES only after core validation succeeds. Show path errors in Configure and preserve the previous configuration if validation fails.
+    For a custom game, also show an editable Name field, label DIR as Save location consistently with the Add dialog, and omit Reset because no catalog defaults exist. Changing and saving configuration updates the resolved game only after core validation succeeds. Show field and path errors in Configure, preserve the previous committed configuration if validation fails, and keep the entered values in the open dialog for correction.
 
 
 - Flush history...
@@ -684,7 +741,15 @@ Changing the path and saving updates the entry in KNOWN GAMES only after core va
 
     Keep the confirmation brief: "Permanently delete all backups and clear this game's history?" Add "Your current game data will be kept." Show separate counts for saved backups, recovery points and incomplete copies, plus their paths, in Details. Include any retained incomplete recovery copies in the deletion scope.
 
-    On confirmation, refresh backup discovery before checking the preview revision. External deletion, replacement, modification or discovery of a backup invalidates the old confirmation and requires a new preview. On acceptance, remove the game's saved and recovery snapshots, including imported existing backups, and clear its history. Leave the current DIR untouched. Only clear records for snapshots whose deletion succeeded; report any failures. This is the only app action that deletes retained snapshots and history.
+    On confirmation, refresh backup discovery before checking the preview revision. External deletion, replacement, modification or discovery of a backup invalidates the old confirmation and requires a new preview. On acceptance, remove the game's saved and recovery snapshots, including imported existing backups, and clear its history. Leave the current DIR untouched. Only clear records for snapshots whose deletion succeeded; report any failures. Forget this game invokes this same cleanup as its mandatory first phase; no other app action deletes retained snapshots and history.
+
+- Forget this game
+
+    Show this item only for custom games, separated from the ordinary actions at the bottom of the menu. Disable it while the game is busy or has unresolved recovery. Known games never expose it.
+
+    Open a revision-bound confirmation headed `Forget "GAME NAME"?` and explain: "All backups, recovery points, incomplete copies, and history for this game will be permanently deleted. The installed game, executable, and current save data will be kept." Show the same separate counts and expandable, paginated path details as Flush. If there is nothing to delete, show zero counts but still require confirmation and execute the zero-item cleanup phase.
+
+    Confirmation starts the single Forget operation described under operation safety. Keep the row present and busy until cleanup and library removal have both committed. If cleanup fails or is interrupted, retain the row and show the failure or recovery state so the user can retry. On success, remove the row, close its popups, and select the first remaining visible game without showing a second success prompt.
 
 
 ## Autolaunch

@@ -317,6 +317,70 @@ fn flush_requires_current_confirmation_and_preserves_live_data() {
         assert!(!path.exists(), "{} survived flush", path.display());
     }
 }
+#[test]
+fn custom_game_creation_and_forget_are_persistent_and_preserve_live_data() {
+    let temp = tempfile::tempdir().unwrap();
+    let rt = runtime(temp.path());
+    let live = temp.path().join("Custom saves");
+    fs::create_dir(&live).unwrap();
+    fs::write(live.join("save"), b"current").unwrap();
+    let executable = temp.path().join("Missing game.exe");
+    let game = rt
+        .add_custom_game("  Custom game  ".into(), live.clone(), executable, false)
+        .unwrap();
+    assert_eq!(game.name, "Custom game");
+    assert_eq!(game.origin, GameOrigin::Custom);
+    assert!(!game.installed);
+    let save = rt.accept(&game.id, Action::Save, new_id()).unwrap();
+    rt.execute(&save).unwrap();
+    let preview = rt.flush_preview(&game.id).unwrap();
+    assert_eq!(preview.saved, 1);
+    let forget = rt
+        .accept(
+            &game.id,
+            Action::Forget {
+                confirmed_revision: preview.revision,
+            },
+            new_id(),
+        )
+        .unwrap();
+    rt.execute(&forget).unwrap();
+    assert_eq!(
+        rt.operation(&forget).unwrap().status,
+        OperationStatus::Completed
+    );
+    assert!(!rt.games().unwrap().contains_key(&game.id));
+    assert_eq!(fs::read(live.join("save")).unwrap(), b"current");
+    for path in preview.paths {
+        assert!(!path.exists(), "{} survived Forget", path.display());
+    }
+    assert!(!runtime(temp.path()).games().unwrap().contains_key(&game.id));
+
+    let known_dir = temp.path().join("Known saves");
+    rt.record_discovery(
+        "known".into(),
+        "Known".into(),
+        String::new(),
+        vec![GameLocation {
+            data_dir: known_dir,
+            executables: vec![temp.path().join("Known.exe")],
+        }],
+    )
+    .unwrap();
+    let known_preview = rt.flush_preview("known").unwrap();
+    assert_eq!(
+        rt.accept(
+            "known",
+            Action::Forget {
+                confirmed_revision: known_preview.revision,
+            },
+            new_id(),
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::InvalidTarget
+    );
+}
 #[cfg(windows)]
 #[test]
 fn actual_windows_file_lock_fails_copy_without_publishing_a_checkpoint() {
