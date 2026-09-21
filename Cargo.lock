@@ -1312,6 +1312,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "savescummer-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "savescummer-core",
+ "savescummer-ipc",
+ "savescummer-platform",
+ "serde_json",
+ "tokio",
+ "winresource",
+]
+
+[[package]]
 name = "savescummer-core"
 version = "0.1.0"
 dependencies = [

@@ -15,10 +15,12 @@ The main Windows entry point builds **both Rust and Qt** from current source:
 ./build.ps1 release -Test  # Also run Rust and Qt/host integration tests
 ```
 
-Release output: `build/release/SaveScummer/bin/savescummer-desktop.exe` and
+Release output: `build/release/SaveScummer/bin/SaveScummer.exe` and
 `build/release/SaveScummer-windows-x64-release.zip`. Keep the extracted folder
-together. See [the build guide](docs/building.md) for prerequisites, profiles,
-development data, timings, and lower-level commands.
+together. Its application executables are `SaveScummer.exe`,
+`SaveScummer.Host.exe`, and `SaveScummer.CLI.exe`. See
+[the build guide](docs/building.md) for prerequisites, profiles, development data,
+timings, and lower-level commands.
 
 Install Rust with rustup and the Visual Studio C++ build tools. The repository pins
 the toolchain in `rust-toolchain.toml`; SQLite is built from its bundled source.
@@ -95,7 +97,7 @@ To rebuild and package the desktop and Rust binaries with their runtime DLLs:
 ./build.ps1 release
 ```
 
-The output is `build/release/SaveScummer/bin/savescummer-desktop.exe` and the portable
+The output is `build/release/SaveScummer/bin/SaveScummer.exe` and the portable
 `build/release/SaveScummer-windows-x64-release.zip`. Keep the entire extracted folder together.
 No Qt installation or PowerShell launcher is needed to run that executable.
 Both components must build successfully before packaging; the command does not
@@ -128,19 +130,19 @@ and covers are not used by the current UI.
 In another terminal:
 
 ```powershell
-cargo run --bin savescummer -- state
-cargo run --bin savescummer -- save void-war
-cargo run --bin savescummer -- history void-war
-cargo run --bin savescummer -- load void-war
-cargo run --bin savescummer -- watch
-cargo run --bin savescummer -- shutdown
+cargo run --bin savescummer-cli -- state
+cargo run --bin savescummer-cli -- save void-war
+cargo run --bin savescummer-cli -- history void-war
+cargo run --bin savescummer-cli -- load void-war
+cargo run --bin savescummer-cli -- watch
+cargo run --bin savescummer-cli -- shutdown
 ```
 
 To add a custom game, supply its absolute save directory and executable. The host
 assigns the stable game ID and prints the configured record:
 
 ```powershell
-cargo run --bin savescummer -- add-custom --name "My game" --dir "D:\Games\MyGame\saves" --exe "D:\Games\MyGame\game.exe"
+cargo run --bin savescummer-cli -- add-custom --name "My game" --dir "D:\Games\MyGame\saves" --exe "D:\Games\MyGame\game.exe"
 ```
 
 For an isolated development instance, pass `--data-dir .runtime --no-scan` to the
@@ -189,6 +191,8 @@ Other commands:
   `select-location <game> --dir <detected-dir> --exe <detected-exe>`.
 
 The CLI starts the host when necessary; `--no-start` makes it connect only.
+`--host <absolute-exe>` selects a host executable for development or testing;
+packaged clients find `SaveScummer.Host` beside themselves automatically.
 Use `--no-integrations` on isolated test hosts to disable global shortcuts, tray,
 notifications and OS startup changes. `--desktop <absolute-exe>` selects the desktop
 launched from the tray; by default it is beside the host. Tray Exit stops admission,

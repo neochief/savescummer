@@ -53,9 +53,9 @@ Retries of already accepted requests do not replay cues. Recovery resolution nev
 plays a Save/Load completion sound. Playback errors do not fail file operations.
 
 The app-wide Play sounds checkbox is enabled by default and persists through the
-host's settings. The CLI can also change it with `savescummer sounds on` or
-`savescummer sounds off`. Disabling it discards queued cues; an already playing
-short cue can finish. `savescummer-host --no-audio` silences an isolated host run
+host's settings. The CLI can also change it with `SaveScummer.CLI sounds on` or
+`SaveScummer.CLI sounds off`. Disabling it discards queued cues; an already playing
+short cue can finish. `SaveScummer.Host --no-audio` silences an isolated host run
 without changing the saved preference. Native audio on other platforms is not
 implemented yet.
 

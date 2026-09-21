@@ -5,7 +5,7 @@
             "name": "Save Scummer: app",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/savescummer-desktop.exe",
+            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe",
             "args": [
                 "--data-dir", "${workspaceFolder}/.runtime/vscode",
                 "--host", "${workspaceFolder}/target/debug/savescummer-host.exe"
@@ -23,7 +23,7 @@
             "name": "Save Scummer: demo",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/savescummer-desktop.exe",
+            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe",
             "args": ["--demo"],
             "cwd": "${workspaceFolder}",
             "environment": [

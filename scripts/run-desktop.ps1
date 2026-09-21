@@ -6,7 +6,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot/..").Path
-$desktop = Join-Path $root 'build/desktop/apps/desktop/Release/savescummer-desktop.exe'
+$desktop = Join-Path $root 'build/desktop/apps/desktop/Release/SaveScummer.exe'
 if (-not (Test-Path -LiteralPath $desktop)) { throw 'Run scripts/build-desktop.ps1 first.' }
 $env:PATH = "$(Join-Path $QtPrefix 'bin');$env:PATH"
 $desktopArgs = @('--theme', $Theme)

@@ -112,7 +112,7 @@ formatting and lint checks are available through `scripts/check.ps1`.
 
 For each mode, output lives under `build/<mode>`:
 
-- `SaveScummer/bin/savescummer-desktop.exe`: portable entry point after packaging.
+- `SaveScummer/bin/SaveScummer.exe`: portable entry point after packaging.
 - `SaveScummer-windows-x64-<mode>.zip`: complete portable folder contents.
 - `build-report.json`: last successful command's timings and executable sizes.
 - `desktop`: CMake build tree (not the distribution).

@@ -9,6 +9,9 @@ use std::{path::PathBuf, time::Duration};
 struct Cli {
     #[arg(long, global = true)]
     data_dir: Option<PathBuf>,
+    /// Background host executable override for development and tests.
+    #[arg(long, global = true, value_name = "EXECUTABLE")]
+    host: Option<PathBuf>,
     /// Reuse after a transport error to retrieve the same accepted operation.
     #[arg(long, global = true)]
     request_id: Option<String>,
@@ -142,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
     let data_dir = cli
         .data_dir
         .map(Ok)
-        .unwrap_or_else(savescummer_host::default_data_dir)?;
+        .unwrap_or_else(savescummer_platform::app_data_dir)?;
     std::fs::create_dir_all(&data_dir)?;
     let data_dir = std::fs::canonicalize(data_dir)?;
     let address = endpoint(&data_dir)?;
@@ -154,11 +157,14 @@ async fn main() -> anyhow::Result<()> {
         && connect(&address).await.is_err()
         && !matches!(cli.command, CliCommand::Shutdown)
     {
-        let executable = std::env::current_exe()?.with_file_name(if cfg!(windows) {
-            "savescummer-host.exe"
-        } else {
-            "savescummer-host"
-        });
+        let executable = cli
+            .host
+            .clone()
+            .unwrap_or(std::env::current_exe()?.with_file_name(if cfg!(windows) {
+                "SaveScummer.Host.exe"
+            } else {
+                "SaveScummer.Host"
+            }));
         let mut host = std::process::Command::new(executable);
         host.arg("--data-dir")
             .arg(&data_dir)

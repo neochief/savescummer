@@ -13,8 +13,13 @@ if(MSVC)
 endif()
 qt_add_executable(savescummer-desktop WIN32 src/main.cpp resources.qrc)
 if(WIN32)
-    target_sources(savescummer-desktop PRIVATE savescummer-desktop.rc)
+    configure_file(savescummer-desktop.rc.in ${CMAKE_CURRENT_BINARY_DIR}/SaveScummer.rc @ONLY)
+    target_sources(savescummer-desktop PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/SaveScummer.rc)
 endif()
+set_target_properties(savescummer-desktop PROPERTIES
+    OUTPUT_NAME SaveScummer
+    PDB_NAME SaveScummer
+)
 target_link_libraries(savescummer-desktop PRIVATE desktop-ui)
 install(TARGETS savescummer-desktop RUNTIME DESTINATION bin)
 qt_generate_deploy_app_script(TARGET savescummer-desktop OUTPUT_SCRIPT deploy_script

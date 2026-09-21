@@ -16,8 +16,8 @@ $desktopBuild = Join-Path $modeDirectory 'desktop'
 $configuration = if ($Mode -eq 'dev') { 'RelWithDebInfo' } else { 'Release' }
 $rustProfile = if ($Mode -eq 'dev') { 'debug' } else { 'release' }
 $hostBinary = Join-Path $root "target/$rustProfile/savescummer-host.exe"
-$cliBinary = Join-Path $root "target/$rustProfile/savescummer.exe"
-$desktopBinary = Join-Path $desktopBuild "apps/desktop/$configuration/savescummer-desktop.exe"
+$cliBinary = Join-Path $root "target/$rustProfile/savescummer-cli.exe"
+$desktopBinary = Join-Path $desktopBuild "apps/desktop/$configuration/SaveScummer.exe"
 $sessionFile = Join-Path $root 'build/dev/session.json'
 $devData = Join-Path $root '.runtime/dev'
 New-Item -ItemType Directory -Force -Path $modeDirectory | Out-Null
@@ -36,7 +36,7 @@ function Invoke-BuildStep([string]$Name, [scriptblock]$Action) {
 # The desktop owns no file operations; hosts must still shut down gracefully.
 if ($Mode -eq 'dev') {
     $expectedDesktopPath = [IO.Path]::GetFullPath($desktopBinary)
-    foreach ($desktop in @(Get-Process -Name 'savescummer-desktop' -ErrorAction SilentlyContinue)) {
+    foreach ($desktop in @(Get-Process -Name 'SaveScummer' -ErrorAction SilentlyContinue)) {
         if ($desktop.HasExited -or $desktop.Path -ne $expectedDesktopPath) { continue }
         Write-Host "Closing development desktop (PID $($desktop.Id)) before rebuilding."
         try {
@@ -81,7 +81,8 @@ Push-Location $root
 try {
     Invoke-BuildStep 'Rust compilation' {
         $cargoArgs = @('build', '--manifest-path', (Join-Path $root 'Cargo.toml'),
-            '--target-dir', (Join-Path $root 'target'), '-p', 'savescummer-host')
+            '--target-dir', (Join-Path $root 'target'),
+            '-p', 'savescummer-host', '-p', 'savescummer-cli')
         if ($Mode -eq 'release') { $cargoArgs += @('--release', '--locked') }
         & cargo @cargoArgs
         if ($LASTEXITCODE -ne 0) { throw 'Rust compilation failed. No package was produced from old binaries.' }

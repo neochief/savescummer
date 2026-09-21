@@ -15,7 +15,7 @@ $root = (Resolve-Path "$PSScriptRoot/..").Path
 $profile = if ($Mode -eq 'dev') { 'debug' } else { 'release' }
 if (-not $DesktopBuildDirectory) { $DesktopBuildDirectory = Join-Path $root "build/$Mode/desktop" }
 if (-not $HostBinary) { $HostBinary = Join-Path $root "target/$profile/savescummer-host.exe" }
-if (-not $CliBinary) { $CliBinary = Join-Path $root "target/$profile/savescummer.exe" }
+if (-not $CliBinary) { $CliBinary = Join-Path $root "target/$profile/savescummer-cli.exe" }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root "build/$Mode/SaveScummer" }
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 if (-not $cmake) { $cmake = Join-Path $root '.runtime/qt-tools/cmake/data/bin/cmake.exe' }
@@ -45,13 +45,17 @@ try {
     & $cmake --install $DesktopBuildDirectory --config $Configuration --prefix $stage
     if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed.' }
     $bin = Join-Path $stage 'bin'
-    Copy-Item -LiteralPath $hostFile -Destination (Join-Path $bin 'savescummer-host.exe')
-    Copy-Item -LiteralPath $cliFile -Destination (Join-Path $bin 'savescummer.exe')
+    Copy-Item -LiteralPath $hostFile -Destination (Join-Path $bin 'SaveScummer.Host.exe')
+    Copy-Item -LiteralPath $cliFile -Destination (Join-Path $bin 'SaveScummer.CLI.exe')
     if ($Mode -eq 'dev') {
-        foreach ($symbol in @((Join-Path (Split-Path $hostFile) 'savescummer_host.pdb'),
-            [IO.Path]::ChangeExtension($cliFile, '.pdb'),
-            (Join-Path $DesktopBuildDirectory "apps/desktop/$Configuration/savescummer-desktop.pdb"))) {
-            if (Test-Path -LiteralPath $symbol) { Copy-Item -LiteralPath $symbol -Destination $bin }
+        foreach ($symbol in @(
+            @((Join-Path (Split-Path $hostFile) 'savescummer_host.pdb'), 'SaveScummer.Host.pdb'),
+            @((Join-Path (Split-Path $cliFile) 'savescummer_cli.pdb'), 'SaveScummer.CLI.pdb'),
+            @((Join-Path $DesktopBuildDirectory "apps/desktop/$Configuration/SaveScummer.pdb"), 'SaveScummer.pdb')
+        )) {
+            if (Test-Path -LiteralPath $symbol[0]) {
+                Copy-Item -LiteralPath $symbol[0] -Destination (Join-Path $bin $symbol[1])
+            }
         }
     }
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -67,7 +71,7 @@ try {
     @"
 Save Scummer — Windows x64 ($Mode)
 
-Open bin\savescummer-desktop.exe. Keep this entire folder together.
+Open bin\SaveScummer.exe. Keep this entire folder together.
 Qt and the Visual C++ runtime are included; no SDK or PowerShell launcher is needed.
 The background host continues running after the UI closes.
 For a simulation that changes no game files, run the desktop with --demo.
@@ -96,7 +100,7 @@ The Qt DLLs can be replaced with interface-compatible builds.
     Move-Item -LiteralPath $stage -Destination $package
     Move-Item -LiteralPath $temporaryZip -Destination $archive -Force
     $folderBytes = (Get-ChildItem -LiteralPath $package -Recurse -File | Measure-Object Length -Sum).Sum
-    Write-Output "Executable: $(Join-Path $package 'bin/savescummer-desktop.exe')"
+    Write-Output "Executable: $(Join-Path $package 'bin/SaveScummer.exe')"
     Write-Output "Archive: $archive"
     Write-Output ('Package: {0:N1} MiB unpacked; {1:N1} MiB ZIP' -f ($folderBytes / 1MB), ((Get-Item $archive).Length / 1MB))
 } finally {

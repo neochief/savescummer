@@ -256,6 +256,20 @@ pub fn known_folders() -> BTreeMap<String, PathBuf> {
         folders
     }
 }
+/// Durable per-user application data shared by the desktop, host and CLI.
+pub fn app_data_dir() -> std::io::Result<PathBuf> {
+    let folders = known_folders();
+    let root = folders
+        .get("LOCALAPPDATA")
+        .or_else(|| folders.get("XDG_DATA_HOME"))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "cannot resolve per-user application data directory",
+            )
+        })?;
+    Ok(root.join("SaveScummer"))
+}
 /// Disposable application cache, independent of Steam and game installation paths.
 pub fn artwork_cache_dir() -> std::io::Result<PathBuf> {
     let folders = known_folders();

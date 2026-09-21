@@ -10,7 +10,7 @@ The app icon is already available at [assets/icon.svg](assets/icon.svg).
 
 ## ARCHITECTURE and MODULE BOUNDARIES
 
-The app consists of independently testable modules with explicit interfaces. Keep game and operation rules independent of the UI framework, database implementation and OS integration details. Package the modules as one application; internal modules are libraries, while the background host and UI have separate lifecycles.
+The app consists of independently testable modules with explicit interfaces. Keep game and operation rules independent of the UI framework, database implementation and OS integration details. Package the modules as one application; internal modules are libraries, while the main desktop executable, background host and command-line client have distinct responsibilities and lifecycles.
 
 ### Selected technology stack
 
@@ -21,6 +21,22 @@ The app consists of independently testable modules with explicit interfaces. Kee
 - Windows first, with portable core modules and explicit macOS/Linux adapters. Build, package and test each supported platform separately.
 
 The stack was selected after a small Windows release-build proof of concept demonstrated host/UI communication, busy rejection, progress, UI reconnection and an operation continuing after UI termination. It measured approximately 51 MiB of combined working set (9.3 MiB private resident memory) and a 153 ms median UI reopen with warm caches. These are minimal-demo measurements, not production budgets: real file copying, SQLite, scanning, monitoring and platform integrations were absent. The experimental code is outside the application source tree; the layout below defines the production repository.
+
+### Application executables
+
+The application distribution contains three executables with one canonical identity each:
+
+| Component | Windows filename | macOS/Linux filename | Role |
+| --- | --- | --- | --- |
+| Main application | `SaveScummer.exe` | `SaveScummer` | The user-facing Qt desktop application and normal entry point. It starts or reuses the background host, connects to it and presents the main window. |
+| Background host | `SaveScummer.Host.exe` | `SaveScummer.Host` | The single per-user background process. It owns application state, operations, monitoring, integrations, tray behavior and the local service endpoint. |
+| Command-line client | `SaveScummer.CLI.exe` | `SaveScummer.CLI` | The console client for scripting, diagnostics and every supported host command/query. It starts the host when a command requires one and no host is running. |
+
+Treat these filenames, including capitalization and suffixes, as part of the application contract. The main application is the only unsuffixed executable. Do not ship aliases, duplicate launchers or another executable named only `savescummer`. Installed components locate one another by their canonical sibling filenames. Explicit executable-path overrides are allowed for development and tests, but are not required in a complete distribution.
+
+Use descriptive lowercase build-target identifiers independently of installed filenames: `savescummer-desktop` for the CMake target, and `savescummer-host` and `savescummer-cli` for the Cargo binary targets. Configure or package those targets to produce the canonical platform filenames above. Debug-symbol filenames use the same canonical stem as their executable, such as `SaveScummer.pdb`, `SaveScummer.Host.pdb` and `SaveScummer.CLI.pdb` on Windows.
+
+Embed consistent application identity in every Windows executable. Set the product name to `Save Scummer`; use `Save Scummer`, `Save Scummer Background Host` and `Save Scummer Command-Line Client` as the respective file descriptions; set each original filename to its canonical Windows filename; and apply the application version, company/copyright fields and icon through the native version resource. Explorer, Task Manager, crash reports, startup registration, process management and build reports must therefore use coherent names.
 
 ### Repository layout
 
@@ -33,8 +49,9 @@ savescummer/
 ├── CMakeLists.txt
 │
 ├── apps/
-│   ├── host/                   # Rust executable; assembles backend modules
-│   └── desktop/                # C++ / Qt Widgets executable
+│   ├── host/                   # Rust background-host executable
+│   ├── cli/                    # Rust command-line client executable
+│   └── desktop/                # C++ / Qt Widgets main executable
 │       ├── src/
 │       └── tests/
 │
@@ -71,22 +88,25 @@ savescummer/
 
 Repository and dependency rules:
 
-- `apps/host` owns startup, lifecycle and wiring of concrete implementations. `crates/core` owns application policy and workflow coordination; it must not depend on Qt, concrete SQLite storage or OS APIs.
+- `apps/host` owns background startup, lifecycle and wiring of concrete implementations. `crates/core` owns application policy and workflow coordination; it must not depend on Qt, concrete SQLite storage or OS APIs.
+- `apps/cli` is a protocol client with console input/output. It does not link or reproduce host workflows; it sends the same commands and queries as other clients and renders structured replies for people and scripts.
 - Define dependency interfaces with the module that consumes them. Implementations satisfy those interfaces, and the host supplies them. Keep crate dependencies acyclic and each module buildable and testable independently of the full application.
 - `apps/desktop` owns presentation and its client connection to the host. It communicates through the shared service protocol and must not link backend implementations, access SQLite or manipulate game saves.
 - `protocol/` is the authoritative shared wire-contract specification, including versioned message schemas and compatibility fixtures. Both Rust and C++ protocol tests use those fixtures. `crates/ipc` implements Rust transport and message handling; transport details stay outside the core application.
 - Keep module tests in their owning crates and Qt UI tests in `apps/desktop/tests`. Root `tests/integration` holds cross-module and cross-process scenarios, using a Cargo workspace test package where applicable. Share the controllable fake-game executable and test data through `tests/fake-game` and `tests/fixtures`, following `PLAN-INTEGRATION-TESTS.md`.
 - Keep game definitions in `catalog/games`, independently of scanner implementation. Keep the Explorer extension in its own native build target; it forwards requests to the host rather than implementing save/load rules.
-- Build scripts wrap standard Cargo and CMake commands. Use Cargo's test runner and Qt Test; do not introduce a custom test framework. Packaging produces one application distribution containing the host, UI and required integrations.
+- Build scripts wrap standard Cargo and CMake commands. Use Cargo's test runner and Qt Test; do not introduce a custom test framework. Packaging produces one application distribution containing `SaveScummer`, `SaveScummer.Host`, `SaveScummer.CLI`, their runtime dependencies and required integrations.
 - Keep build outputs, downloaded SDKs and local runtime data out of version control. Commit source, game definitions, protocol fixtures, migrations, build configuration and the application Cargo lockfile.
 
-### Background host and UI
+### Application processes
 
-Run one background host per user. It owns the core application, persistent state, operation locks, startup recovery, scanning and game monitoring. It must operate without a main window or UI client: shortcuts and Explorer commands must still work, operations must finish, history must persist, and sound/notification feedback must remain available.
+Run one `SaveScummer.Host` process per user. It owns the core application, persistent state, operation locks, startup recovery, scanning and game monitoring. It must operate without a main window or client: shortcuts, Explorer commands and CLI commands must still work, operations must finish, history must persist, and sound/notification feedback must remain available.
 
-The UI is an optional client that connects to the host through a local command/query/event interface. Opening the app starts the host if necessary and attaches the UI to the existing instance. Closing or crashing the UI must not stop the host or cancel an operation. Reopening the UI retrieves current state and progress; it must not depend on events received by the previous UI instance.
+`SaveScummer` is an optional graphical client that connects to the host through a local command/query/event interface. Opening it starts `SaveScummer.Host` from the same application directory when necessary and attaches to the single existing host otherwise. Closing or crashing the UI must not stop the host or cancel an operation. Reopening the UI retrieves current state and progress; it must not depend on events received by the previous UI instance.
 
-The host composes modules and manages their lifecycle. Business rules live in the core application and can also run inside a test process without starting a daemon, desktop window or IPC server. The UI depends on the service contract and can run against a fake service during development.
+`SaveScummer.CLI` is an optional console client of the same service contract. A command that needs a host starts the canonical sibling `SaveScummer.Host` when necessary, waits for readiness and sends the request. The CLI never becomes a second host and never implements application operations locally. Commands that only resolve local CLI syntax or print help do not start the host.
+
+The host composes modules and manages their lifecycle. Business rules live in the core application and can also run inside a test process without starting a background host, desktop window or IPC server. The UI and CLI depend on the service contract and can run against a fake service during development.
 
 ### Modules
 
@@ -101,6 +121,7 @@ The host composes modules and manages their lifecycle. Business rules live in th
 | Game monitor | Process-to-game association, launch/close observations and ACTIVE STACK ordering | Consumes process/focus observations and resolved games. Publishes changes independently of the main window. |
 | Platform integrations | OS discovery providers, known-folder resolution, process/focus observations, shortcuts, file-manager commands, tray, autostart, sounds and notifications | Separate adapters behind narrow interfaces. Translate OS events into core commands/observations and core results into platform feedback. |
 | Background host | Module composition, single-instance ownership, local service transport, startup and shutdown | Supplies concrete implementations. Contains no duplicate SAVE/LOAD/REVERT logic. |
+| Command-line client | Command parsing, script-friendly output and protocol connection management | Uses the public service contract. Contains no persistence, scanning, monitoring or SAVE/LOAD/REVERT implementation. |
 
 Platform integrations are a family of small adapters, not one interface that every module must depend on. For example, the scanner needs discovery/path providers, the monitor needs process/focus observations, and feedback needs sound/notification delivery. Each can be replaced independently.
 
@@ -142,7 +163,7 @@ Bind each history cursor to its game, host instance and history-projection revis
 
 All potentially large collections have bounded responses. Flush and Forget previews return counts and a confirmation revision, with optional Details paths fetched in pages bound to that revision. Forget uses the same cleanup scope and revalidation rules as Flush. Other oversized replies require pagination or an explicit size error, never silent truncation; report a specific error if one item exceeds the response budget. Keep historical record growth out of routine state payloads rather than increasing the frame limit.
 
-Define wire read models independently of internal mutable state. Version incompatible service changes explicitly and update the host, CLI, desktop, Explorer bridge, schemas and shared fixtures together. Reject mismatched versions clearly and document the required host/integration upgrade steps; do not fall back to unbounded state transfer. CLI history supports explicit paging and a streaming all-pages mode with bounded memory; if its cursor becomes invalid, report that history changed instead of silently duplicating or omitting entries.
+Define wire read models independently of internal mutable state. Version incompatible service changes explicitly and update `SaveScummer.Host`, `SaveScummer.CLI`, `SaveScummer`, the Explorer bridge, schemas and shared fixtures together. Reject mismatched versions clearly and document the required host/integration upgrade steps; do not fall back to unbounded state transfer. `SaveScummer.CLI` history supports explicit paging and a streaming all-pages mode with bounded memory; if its cursor becomes invalid, report that history changed instead of silently duplicating or omitting entries.
 
 Keep IPC local to the signed-in user. The core application must not depend on the selected IPC transport. Module interfaces and service messages must not expose UI controls, framework-specific objects, SQL rows or mutable internal state.
 
@@ -156,8 +177,9 @@ Keep IPC local to the signed-in user. The core application must not depend on th
 - Test the monitor with recorded or synthetic launch/focus/close sequences, including multiple processes per game.
 - Test the store's persistence, incremental row writes, indexed per-game queries, transaction boundaries and restart recovery separately. Verify actual writes, including the absence of writes to unchanged records. Replacement store implementations must satisfy the same repository contract.
 - Test the UI against a fake service that can produce busy, progress, failure, unavailable-snapshot and disconnected states. Cover the always-present Other games section, scan progress, custom-game validation, narrow-width action wrapping, uninstalled custom rows and Forget confirmation/failure behavior.
+- Test `SaveScummer.CLI` against a fake service and the real host contract. Cover host autostart, every command/query family, bounded history paging and streaming, structured failures, exit codes and script-friendly output.
 - Test the host's artwork service with a fake downloader and temporary cache: cache reuse after restart, missing/deleted/corrupt icon downloads, post-scan discovery, UI attachment, duplicate queue suppression, offline failures and interrupted writes. Verify that slow downloads do not block scanning, service requests or Save/Load. These tests must not require live Steam access.
-- Keep platform-specific integration checks separate from portable module tests. Verify the service contract end to end with the UI absent, including shortcut/Explorer command handling and UI reattachment during an operation.
+- Keep platform-specific integration checks separate from portable module tests. Verify the service contract end to end with the UI absent, including shortcut/Explorer/CLI command handling and UI reattachment during an operation. On every packaged platform, verify that the main application starts its canonical sibling host, the CLI starts and connects to that same host, and the host opens or focuses the canonical main application from the tray.
 
 History policy, operation locks and file replacement behavior must have a single authoritative implementation. Replacing the UI, discovery provider or storage implementation must not require recreating those rules.
 
@@ -369,7 +391,7 @@ Store the original data-directory association on the checkpoint, not another cop
 
 Use known save time for app-created saved checkpoints and the recorded folder-modification estimate for manual ones. Break equal selection times by durable checkpoint registration order. History sequence orders timeline events only; changing or filtering the timeline must not change default LOAD selection.
 
-When implementing this simplification, update Rust records, SQLite persistence, the service schemas/fixtures and CLI/entry-point target handling together. Preserve existing checkpoint/history IDs, chronological relationships and interrupted-operation paths when converting stored records. Do not recreate backup folders or discard journals as part of removing `location_id`.
+When implementing this simplification, update Rust records, SQLite persistence, the service schemas/fixtures, `SaveScummer.CLI` and other entry-point target handling together. Preserve existing checkpoint/history IDs, chronological relationships and interrupted-operation paths when converting stored records. Do not recreate backup folders or discard journals as part of removing `location_id`.
 
 ### Snapshot storage and history relationships
 
@@ -756,11 +778,11 @@ Game data dir (DIR): [...prefilled path...][open icon] [Reset]
 
 The bottom help bar ends with [X] Launch on startup, detached on the far right. The Save/Load keyboard hints and Play sounds checkbox appear before it as described under Main window.
 
-The app can be launched with the "--minimized" flag, in which case it starts or reuses the background host and shows its tray icon without opening the main window. The host's core must not require a UI client to initialize or operate.
+Enabling Launch on startup registers the canonical `SaveScummer.Host` executable from the application directory with `--minimized` and the canonical absolute `SaveScummer` path. At sign-in, this starts or reuses the background host and shows its tray icon without opening the main window. The host's core must not require a UI client to initialize or operate.
 
-By default, launching the app starts or reuses the host and shows and focuses the main window. Closing the main window leaves the background host running in the tray. UI termination or disconnection does not cancel core operations.
+By default, launching `SaveScummer` starts or reuses `SaveScummer.Host` and shows and focuses the main window. Closing the main window leaves the background host running in the tray. UI termination or disconnection does not cancel core operations.
 
-Clicking on the tray icon opens or focuses the UI and connects it to the existing host.
+Clicking on the tray icon launches or focuses the canonical sibling `SaveScummer` executable and connects it to the existing host.
 
 The tray icon's context menu has two items:
 

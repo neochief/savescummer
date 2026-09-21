@@ -29,14 +29,6 @@ mod artwork;
 mod feedback_tests;
 include!(concat!(env!("OUT_DIR"), "/catalog.rs"));
 
-pub fn default_data_dir() -> anyhow::Result<PathBuf> {
-    let folders = savescummer_platform::known_folders();
-    let root = folders
-        .get("LOCALAPPDATA")
-        .or_else(|| folders.get("XDG_DATA_HOME"))
-        .context("cannot resolve per-user application data directory")?;
-    Ok(root.join("SaveScummer"))
-}
 #[derive(clap::Parser, Debug, Clone)]
 pub struct HostOptions {
     #[arg(long)]
@@ -597,7 +589,7 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
         .data_dir
         .clone()
         .map(Ok)
-        .unwrap_or_else(default_data_dir)?;
+        .unwrap_or_else(savescummer_platform::app_data_dir)?;
     let data_dir = if data_dir.is_absolute() {
         data_dir
     } else {
@@ -790,7 +782,13 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
                 while let Ok(event) = desktop_rx.try_recv() {
                     match event {
                         DesktopEvent::Open => {
-                            let executable = service.options.desktop.clone().unwrap_or(std::env::current_exe()?.with_file_name("savescummer-desktop.exe"));
+                            let executable = service.options.desktop.clone().unwrap_or(
+                                std::env::current_exe()?.with_file_name(if cfg!(windows) {
+                                    "SaveScummer.exe"
+                                } else {
+                                    "SaveScummer"
+                                }),
+                            );
                             let mut command = std::process::Command::new(executable);
                             command.arg("--data-dir").arg(&data_dir);
                             #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x08000000); }

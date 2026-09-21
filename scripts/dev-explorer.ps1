@@ -93,7 +93,8 @@ try {
     Push-Location $root
     try {
         Write-Host 'Building the development host and CLI...'
-        & cargo build --locked -p savescummer-host --bins --target-dir (Join-Path $buildDirectory 'host')
+        & cargo build --locked -p savescummer-host -p savescummer-cli `
+            --target-dir (Join-Path $buildDirectory 'host')
         if ($LASTEXITCODE -ne 0) { throw 'Host build failed.' }
         & (Join-Path $PSScriptRoot 'build-explorer.ps1') -BuildDirectory (Join-Path $buildDirectory 'extension') `
             -Generator $Generator -DevDataDirectory $dataDirectory
@@ -102,20 +103,24 @@ try {
 
     # Register staged copies: Explorer can keep an old DLL loaded without locking
     # the next build output. Host copies likewise avoid executable linker locks.
-    foreach ($name in @('savescummer-host.exe', 'savescummer.exe')) {
-        Copy-Item -LiteralPath (Join-Path $buildDirectory "host/debug/$name") -Destination $binaryDirectory
+    foreach ($binary in @(
+        @{ source = 'savescummer-host.exe'; destination = 'SaveScummer.Host.exe' },
+        @{ source = 'savescummer-cli.exe'; destination = 'SaveScummer.CLI.exe' }
+    )) {
+        Copy-Item -LiteralPath (Join-Path $buildDirectory "host/debug/$($binary.source)") `
+            -Destination (Join-Path $binaryDirectory $binary.destination)
     }
     $dll = Join-Path $binaryDirectory 'savescummer-explorer.dll'
     Copy-Item -LiteralPath (Join-Path $buildDirectory 'extension/Release/savescummer-explorer.dll') -Destination $dll
     $stdout = Join-Path $runDirectory 'host.stdout.log'
     $stderr = Join-Path $runDirectory 'host.stderr.log'
-    $hostPath = Join-Path $binaryDirectory 'savescummer-host.exe'
+    $hostPath = Join-Path $binaryDirectory 'SaveScummer.Host.exe'
     $hostProcess = Start-Process -FilePath $hostPath -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
         -ArgumentList @('--data-dir', "`"$dataDirectory`"", '--no-scan', '--no-monitor',
             '--no-artwork', '--no-audio', '--no-integrations')
     $record = @{ pid = $hostProcess.Id; started = $hostProcess.StartTime.ToUniversalTime().Ticks;
-        hostPath = $hostPath; cliPath = (Join-Path $binaryDirectory 'savescummer.exe');
+        hostPath = $hostPath; cliPath = (Join-Path $binaryDirectory 'SaveScummer.CLI.exe');
         dataDirectory = $dataDirectory; saveDirectory = $saveDirectory; dll = $dll }
     if (-not $CheckOnly) { $record | ConvertTo-Json | Set-Content -LiteralPath $sessionFile }
     $deadline = [DateTime]::UtcNow.AddSeconds(30)

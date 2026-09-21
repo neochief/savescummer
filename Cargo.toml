@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/host", "crates/core", "crates/snapshots", "crates/storage", "crates/scanner", "crates/monitor", "crates/platform", "crates/ipc", "integrations/windows-explorer/bridge", "tests/fake-game", "tests/integration"]
+members = ["apps/host", "apps/cli", "crates/core", "crates/snapshots", "crates/storage", "crates/scanner", "crates/monitor", "crates/platform", "crates/ipc", "integrations/windows-explorer/bridge", "tests/fake-game", "tests/integration"]
 
 [workspace.package]
 version = "0.1.0"

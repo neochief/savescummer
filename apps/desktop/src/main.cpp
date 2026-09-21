@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     app.setOrganizationName("SaveScummer");
     app.setStyle("Fusion");
     QCommandLineParser parser;
-    parser.setApplicationDescription("Save Scummer Qt desktop client");
+    parser.setApplicationDescription("Save Scummer desktop application");
     parser.addHelpOption();
     parser.addOption({"minimized", "Start the host without showing the main window."});
     parser.addOption(
@@ -71,9 +71,9 @@ int main(int argc, char **argv) {
             args = {"--data-dir", directory, "--minimized", "--desktop", app.applicationFilePath()};
             if (host.isEmpty()) {
 #ifdef Q_OS_WIN
-                const QString filename = "savescummer-host.exe";
+                const QString filename = "SaveScummer.Host.exe";
 #else
-                const QString filename = "savescummer-host";
+                const QString filename = "SaveScummer.Host";
 #endif
                 host = QDir(app.applicationDirPath()).filePath(filename);
                 if (!QFileInfo::exists(host))

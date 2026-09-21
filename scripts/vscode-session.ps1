@@ -7,7 +7,7 @@ $stateDirectory = Join-Path $root 'build/vscode'
 $dataDirectory = Join-Path $root '.runtime/vscode'
 $sessionFile = Join-Path $stateDirectory 'host.json'
 $hostBinary = Join-Path $root 'target/debug/savescummer-host.exe'
-$cliBinary = Join-Path $root 'target/debug/savescummer.exe'
+$cliBinary = Join-Path $root 'target/debug/savescummer-cli.exe'
 
 # Stop only the host this task owns; PID + start time guard against PID reuse.
 if (Test-Path -LiteralPath $sessionFile) {
@@ -31,7 +31,7 @@ if ($Action -eq 'demo') { return }
 New-Item -ItemType Directory -Force -Path $stateDirectory, $dataDirectory | Out-Null
 $stdout = Join-Path $stateDirectory 'host.stdout.log'
 $stderr = Join-Path $stateDirectory 'host.stderr.log'
-$desktopBinary = Join-Path $root 'build/dev/desktop/apps/desktop/RelWithDebInfo/savescummer-desktop.exe'
+$desktopBinary = Join-Path $root 'build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe'
 $hostProcess = Start-Process -FilePath $hostBinary -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
     -ArgumentList @('--data-dir', "`"$dataDirectory`"", '--no-integrations', '--minimized',
