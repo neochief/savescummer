@@ -7,16 +7,46 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::*,
-    System::LibraryLoader::GetModuleHandleW,
+    System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW},
     UI::{Input::KeyboardAndMouse::*, Shell::*, WindowsAndMessaging::*},
 };
 
 thread_local! { static EVENTS: RefCell<Option<mpsc::Sender<DesktopEvent>>> = const { RefCell::new(None) }; }
 const TRAY: u32 = WM_APP + 1;
 const APP_ICON_ID: usize = 1;
+const UXTHEME_SET_PREFERRED_APP_MODE: usize = 135;
+const UXTHEME_FLUSH_MENU_THEMES: usize = 136;
+const PREFERRED_APP_MODE_FORCE_DARK: i32 = 2;
+
+type SetPreferredAppMode = unsafe extern "system" fn(i32) -> i32;
+type FlushMenuThemes = unsafe extern "system" fn();
+
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
 }
+
+unsafe fn enable_dark_menus() {
+    // Win32 still has no public API for dark popup menus. These uxtheme exports are
+    // used by Windows applications but remain undocumented, so load them at runtime
+    // and retain the normal system rendering when they are unavailable.
+    let theme = unsafe { LoadLibraryW(wide("uxtheme.dll").as_ptr()) };
+    if theme.is_null() {
+        return;
+    }
+    let Some(set_preferred) =
+        (unsafe { GetProcAddress(theme, UXTHEME_SET_PREFERRED_APP_MODE as *const u8) })
+    else {
+        return;
+    };
+    let set_preferred: SetPreferredAppMode = unsafe { std::mem::transmute(set_preferred) };
+    unsafe { set_preferred(PREFERRED_APP_MODE_FORCE_DARK) };
+
+    if let Some(flush) = unsafe { GetProcAddress(theme, UXTHEME_FLUSH_MENU_THEMES as *const u8) } {
+        let flush: FlushMenuThemes = unsafe { std::mem::transmute(flush) };
+        unsafe { flush() };
+    }
+}
+
 fn emit(event: DesktopEvent) {
     EVENTS.with(|tx| {
         if let Some(tx) = tx.borrow().as_ref() {
@@ -61,6 +91,13 @@ unsafe extern "system" fn window(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                 WM_RBUTTONUP => unsafe {
                     let menu = CreatePopupMenu();
                     if !menu.is_null() {
+                        let menu_info = MENUINFO {
+                            cbSize: std::mem::size_of::<MENUINFO>() as u32,
+                            fMask: MIM_STYLE,
+                            dwStyle: MNS_NOCHECK,
+                            ..std::mem::zeroed()
+                        };
+                        SetMenuInfo(menu, &menu_info);
                         AppendMenuW(menu, MF_STRING, 1, wide("Main window").as_ptr());
                         AppendMenuW(menu, MF_STRING, 2, wide("Exit").as_ptr());
                         let mut point = POINT::default();
@@ -103,6 +140,7 @@ pub fn run(
 ) {
     EVENTS.with(|tx| *tx.borrow_mut() = Some(events));
     unsafe {
+        enable_dark_menus();
         let class_name = wide("SaveScummerHostIntegration");
         let instance = GetModuleHandleW(std::ptr::null());
         let class = WNDCLASSW {

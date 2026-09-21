@@ -16,5 +16,7 @@
   <file alias="icons/configure.svg">src/icons/gear.svg</file>
   <file alias="icons/reset.svg">src/icons/rotate.svg</file>
   <file alias="icons/flush.svg">src/icons/broom.svg</file>
+  <file alias="icons/play.svg">src/icons/play.svg</file>
+  <file alias="icons/stop.svg">src/icons/stop.svg</file>
   <file alias="void-war.yaml">../../catalog/games/void-war.yaml</file>
 </qresource></RCC>

@@ -68,6 +68,7 @@ class MainWindow : public QMainWindow {
 
   protected:
     void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 #ifdef Q_OS_WIN
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 #endif
@@ -104,6 +105,7 @@ class MainWindow : public QMainWindow {
     bool startupSettingPending_ = false;
     QLabel *empty_;
     QWidget *otherHeader_, *otherActions_;
+    QLabel *otherCount_;
     QPushButton *otherToggle_, *scanGames_, *addGame_;
     QGridLayout *otherHeaderLayout_;
     QVBoxLayout *gamesLayout_;

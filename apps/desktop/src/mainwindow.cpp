@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGridLayout>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -23,7 +24,9 @@
 #include <QToolButton>
 #include <QTextLayout>
 #include <QUrl>
+#include <QWidgetAction>
 #include <QtMath>
+#include <functional>
 #ifdef Q_OS_WIN
 #define NOMINMAX
 #include <windows.h>
@@ -48,7 +51,8 @@ QString errorText(const QJsonObject &reply) {
 }
 int historyTimeWidth(const QFont &font) {
     const QFontMetrics metrics(font);
-    QStringList labels{"Today", "Yesterday", "0000-00-00"};
+    QStringList labels{"59 seconds ago", "59 minutes ago", "23 hours and 59 minutes ago",
+                       "Yesterday", "0000-00-00"};
     for (int day = 1; day <= 7; ++day)
         labels.append(QLocale().dayName(day, QLocale::LongFormat));
     int width = 0;
@@ -97,6 +101,96 @@ class HeadingButton : public QPushButton {
         option.text = fontMetrics().elidedText(text(), Qt::ElideRight, width());
         QPainter painter(this);
         style()->drawControl(QStyle::CE_PushButton, &option, &painter, this);
+    }
+};
+class SquareButton : public QPushButton {
+  public:
+    using QPushButton::QPushButton;
+    QSize sizeHint() const override {
+        const int side = QPushButton::sizeHint().height();
+        return {side, side};
+    }
+};
+class IconMenuRow : public QPushButton {
+  public:
+    static constexpr int ItemHeight = 36;
+    IconMenuRow(QAction *action, QMenu *menu) : QPushButton(menu), action_(action) {
+        setObjectName("iconMenuItem");
+        setFixedHeight(ItemHeight);
+        setCursor(action->isEnabled() ? Qt::PointingHandCursor : Qt::ForbiddenCursor);
+        setAccessibleName(action->text());
+        auto *line = new QHBoxLayout(this);
+        line->setContentsMargins(0, 0, 16, 0);
+        line->setSpacing(6);
+        icon_ = label("", this);
+        icon_->setObjectName("iconMenuIcon");
+        icon_->setFixedSize(ItemHeight, ItemHeight);
+        icon_->setAlignment(Qt::AlignCenter);
+        icon_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        text_ = label(action->text(), this);
+        text_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        line->addWidget(icon_);
+        line->addWidget(text_, 1);
+        setMinimumWidth(ItemHeight + fontMetrics().horizontalAdvance(action->text()) + 46);
+        const auto sync = [this] {
+            setEnabled(action_->isEnabled());
+            setToolTip(action_->toolTip());
+            setCursor(action_->isEnabled() ? Qt::PointingHandCursor : Qt::ForbiddenCursor);
+            icon_->setPixmap(action_->icon().pixmap(
+                QSize(18, 18), action_->isEnabled() ? QIcon::Normal : QIcon::Disabled));
+        };
+        sync();
+        connect(action, &QAction::changed, this, sync);
+        connect(this, &QPushButton::clicked, menu, [action, menu] {
+            menu->close();
+            action->trigger();
+        });
+    }
+
+  private:
+    QAction *action_;
+    QLabel *icon_, *text_;
+};
+class IconMenu : public QMenu {
+  public:
+    explicit IconMenu(QWidget *parent = nullptr) : QMenu(parent) { setObjectName("iconMenu"); }
+    QAction *addIconAction(const QIcon &icon, const QString &text,
+                           std::function<void()> callback) {
+        auto *action = new QWidgetAction(this);
+        action->setIcon(icon);
+        action->setText(text);
+        action->setDefaultWidget(new IconMenuRow(action, this));
+        connect(action, &QAction::triggered, this,
+                [callback = std::move(callback)] { callback(); });
+        addAction(action);
+        return action;
+    }
+    void addIconSeparator() {
+        auto *action = new QWidgetAction(this);
+        auto *separator = new QFrame(this);
+        separator->setObjectName("iconMenuSeparator");
+        separator->setFrameShape(QFrame::HLine);
+        separator->setFixedHeight(7);
+        action->setDefaultWidget(separator);
+        addAction(action);
+    }
+    int iconColumnCenter() const {
+        return style()->pixelMetric(QStyle::PM_MenuPanelWidth) + IconMenuRow::ItemHeight / 2;
+    }
+};
+class DisabledButtonCursorFilter : public QObject {
+  public:
+    using QObject::QObject;
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        auto *button = qobject_cast<QPushButton *>(watched);
+        if (button && (event->type() == QEvent::EnabledChange ||
+                       event->type() == QEvent::Show || event->type() == QEvent::Enter)) {
+            if (!button->isEnabled())
+                button->setCursor(Qt::ForbiddenCursor);
+            else if (button->cursor().shape() == Qt::ForbiddenCursor)
+                button->unsetCursor();
+        }
+        return false;
     }
 };
 class Footer : public QWidget {
@@ -172,7 +266,7 @@ class Footer : public QWidget {
 void LoadButton::setAge(const QString &age, const QString &full) {
     age_ = age;
     setToolTip(full);
-    setAccessibleName(age.isEmpty() ? "Load" : "Load, " + full);
+    setAccessibleName(age.isEmpty() ? "Load" : "Load, " + (full.isEmpty() ? age : full));
     updateGeometry();
     update();
 }
@@ -194,7 +288,8 @@ int LoadButton::heightForWidth(int width) const {
     QTextLayout caption(age_, captionFont());
     const int captionHeight = qMax(2 * QFontMetrics(captionFont()).height(),
                                   layoutCaption(caption, width - 12));
-    return qMax(QPushButton::sizeHint().height(), fontMetrics().height() + captionHeight + 12);
+    const int titleHeight = qMax(fontMetrics().height(), iconSize().height());
+    return qMax(QPushButton::sizeHint().height(), titleHeight + captionHeight + 12);
 }
 void LoadButton::paintEvent(QPaintEvent *) {
     QStyleOptionButton option;
@@ -206,7 +301,7 @@ void LoadButton::paintEvent(QPaintEvent *) {
     painter.setPen(
         palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled, QPalette::ButtonText));
     const auto drawTitle = [this, &painter](const QRect &area) {
-        const int glyph = qMin(16, qMax(12, area.height() - 2));
+        const int glyph = qMin(iconSize().width(), qMax(12, area.height()));
         const int textWidth = fontMetrics().horizontalAdvance("Load");
         const int spacing = 5;
         const int left = area.center().x() - (glyph + spacing + textWidth) / 2;
@@ -221,7 +316,7 @@ void LoadButton::paintEvent(QPaintEvent *) {
     }
     QTextLayout caption(age_, captionFont());
     const int captionHeight = layoutCaption(caption, width() - 12);
-    const int titleHeight = fontMetrics().height();
+    const int titleHeight = qMax(fontMetrics().height(), iconSize().height());
     const int top = (height() - titleHeight - 2 - captionHeight) / 2;
     drawTitle(QRect(6, top, width() - 12, titleHeight));
     painter.setPen(palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled,
@@ -263,12 +358,12 @@ GameRow::GameRow(const QString &gameId, QWidget *parent) : QWidget(parent), id(g
     save = new QPushButton("Save", pair_);
     save->setObjectName("save");
     save->setIcon(QIcon(":/icons/save.svg"));
-    save->setIconSize(QSize(16, 16));
+    save->setIconSize(QSize(24, 24));
     split_ = new QWidget(pair_);
     load = new LoadButton("Load", split_);
     load->setObjectName("load");
     load->setIcon(QIcon(":/icons/load.svg"));
-    load->setIconSize(QSize(16, 16));
+    load->setIconSize(QSize(24, 24));
     arrow = new QPushButton(split_);
     arrow->setIcon(QIcon(":/icons/chevron-down.svg"));
     arrow->setObjectName("historyArrow");
@@ -346,7 +441,7 @@ void GameRow::arrangeControls() {
     const int arrowWidth = qMax(28, arrow->fontMetrics().height() + 12);
     const int preferred = qMax(save->sizeHint().width(), load->sizeHint().width() + arrowWidth);
     const int inset = width() < 500 ? 28 : 36;
-    const int available = qMax(40, width() - inset - 40);
+    const int available = qMax(40, width() - inset - arrowWidth - 6);
     const int equalWidth = qMax(20, qMin(preferred, (available - 6) / 2));
     const int height = qMax(save->sizeHint().height(), load->heightForWidth(qMax(1, equalWidth - arrowWidth)));
     controls_->setFixedHeight(height);
@@ -355,7 +450,7 @@ void GameRow::arrangeControls() {
     split_->setGeometry(equalWidth + 6, 0, equalWidth, height);
     load->setGeometry(0, 0, qMax(1, equalWidth - arrowWidth), height);
     arrow->setGeometry(qMax(1, equalWidth - arrowWidth), 0, arrowWidth, height);
-    more->setGeometry(pair_->width() + 6, 0, 28, height);
+    more->setGeometry(pair_->width() + 6, 0, arrowWidth, height);
     progress->setGeometry(0, height - 2, pair_->width(), 2);
     progress->raise();
 }
@@ -430,6 +525,10 @@ void GameRow::updateState(const QJsonObject &state, bool selected, bool connecte
             full = "Existing backup — save time unknown";
         }
     }
+    if (checkpoint.isEmpty()) {
+        age = "No checkpoints saved";
+        full = age;
+    }
     load->setAge(age, full);
     progress->setVisible(busy);
     progress->setAccessibleName(op["action"].toObject()["type"].toString() + " in progress");
@@ -437,6 +536,8 @@ void GameRow::updateState(const QJsonObject &state, bool selected, bool connecte
         QString("%1 bytes copied; %2").arg(op["bytes_copied"].toInteger()).arg(str(op, "phase")));
     recovery->setVisible(op["status"] == "recovery_needed");
     recovery->setEnabled(connected && !busy);
+    for (auto *button : {save, static_cast<QPushButton *>(load), arrow, recovery})
+        button->setCursor(button->isEnabled() ? Qt::ArrowCursor : Qt::ForbiddenCursor);
     info->setText(Presentation::instructions(str(game, "info")));
     if (selected_ != selected) {
         selected_ = selected;
@@ -445,6 +546,8 @@ void GameRow::updateState(const QJsonObject &state, bool selected, bool connecte
         style()->polish(this);
         update();
     }
+    setCursor(selected ? Qt::ArrowCursor : Qt::PointingHandCursor);
+    header->setCursor(selected ? Qt::ArrowCursor : Qt::PointingHandCursor);
     details_->setVisible(selected);
     arrangeControls();
 }
@@ -474,22 +577,28 @@ void MainWindow::applyTheme(bool dark) {
         QPushButton { background:palette(button); border:1px solid %1; border-radius:4px; padding:4px 12px; }
         QPushButton:hover { background:%4; }
         QPushButton:focus { border-color:#9747ff; }
+        QPushButton:default { background:#9747ff; border-color:#9747ff; color:white; }
+        QPushButton:default:hover { background:#8435e8; }
         QPushButton:disabled { color:palette(disabled,button-text); }
+        QPushButton:default:disabled { background:palette(button); border-color:%1; color:palette(disabled,button-text); }
         QPushButton#gameTitle { background:transparent; border:0; padding:0; font-size:14px; font-weight:600; text-align:left; }
         QPushButton#gameTitle:focus { border-bottom:1px solid #9747ff; }
         QLabel#gameIcon { background:%4; border:1px solid %1; border-radius:5px; color:palette(placeholder-text); font-size:10px; }
         QLabel#gameStatus { color:palette(placeholder-text); }
         QLabel#gameStatus[running="true"] { color:%5; }
-        QPushButton#more { background:transparent; border:0; padding:0; color:palette(placeholder-text); }
-        QPushButton#more:hover { background:%4; }
+        QPushButton#more { padding:0; color:palette(placeholder-text); }
         QWidget#otherHeader { background:transparent; }
+        QWidget#otherHeader:hover { background:%2; }
         QWidget#otherHeader[hasRunning="true"] { border-top:1px dotted %1; }
-        QPushButton#otherGames { text-align:left; border:0; border-radius:0; padding:10px 4px; background:transparent; color:palette(placeholder-text); }
-        QPushButton#otherGames:hover { background:%2; }
+        QPushButton#otherGames { text-align:left; border:0; border-radius:0; padding:10px 0; background:transparent; color:palette(placeholder-text); }
+        QPushButton#otherGames:hover { background:transparent; }
+        QLabel#installedGamesCount { border:1px solid %1; border-radius:5px; padding:1px 6px; color:palette(placeholder-text); }
+        QPushButton#installedGamesMore { padding:0; }
         QPushButton#flushDetailsToggle { text-align:left; border:0; border-radius:0; padding:4px 0; background:transparent; color:palette(placeholder-text); }
         QPushButton#flushDetailsToggle:hover { color:palette(text); }
         QPushButton#flushDetailsToggle:focus { border:0; }
         QPushButton#load { border-top-right-radius:0; border-bottom-right-radius:0; }
+        QPushButton#save, QPushButton#load { font-size:15px; }
         QPushButton#historyArrow { border-top-left-radius:0; border-bottom-left-radius:0; padding:0; }
         QProgressBar { border:0; background:%1; }
         QProgressBar::chunk { background:#9747ff; }
@@ -498,10 +607,14 @@ void MainWindow::applyTheme(bool dark) {
         QLabel#keycap { background:%4; border-radius:3px; padding:2px 4px; color:palette(placeholder-text); }
         QLabel#error { color:%6; }
         QMenu, QWidget#historyPopup { background:palette(window); border:1px solid %1; }
+        QMenu#iconMenu { padding:0; }
+        QPushButton#iconMenuItem { background:transparent; border:0; border-radius:0; padding:0; text-align:left; }
+        QPushButton#iconMenuItem:hover { background:%4; }
+        QPushButton#iconMenuItem:disabled { background:transparent; }
+        QLabel#iconMenuIcon { background:transparent; border:0; }
+        QFrame#iconMenuSeparator { color:%1; margin:3px 8px; }
         QWidget[historyRow="true"] { border-radius:4px; }
         QWidget[historyRow="true"]:hover { background:%4; }
-        QMenu::item { padding:7px 16px; }
-        QMenu::item:selected { background:%4; }
         QPushButton#historyAction, QPushButton#historyDelete { color:palette(placeholder-text); padding:3px; }
         QPushButton#historyAction:disabled, QPushButton#historyDelete:disabled { color:palette(disabled,button-text); }
         QLabel#day { color:palette(placeholder-text); font-weight:600; padding-top:6px; }
@@ -516,6 +629,11 @@ void MainWindow::applyTheme(bool dark) {
 }
 MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     : QMainWindow(parent), service_(service) {
+    if (!qApp->findChild<QObject *>("disabledButtonCursorFilter")) {
+        auto *filter = new DisabledButtonCursorFilter(qApp);
+        filter->setObjectName("disabledButtonCursorFilter");
+        qApp->installEventFilter(filter);
+    }
     setWindowTitle(demo ? "Save Scummer — Demo" : "Save Scummer");
     setWindowIcon(QIcon(":/icon.svg"));
     setMinimumWidth(340);
@@ -533,7 +651,7 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     gamesLayout_->setContentsMargins(0, 0, 0, 0);
     gamesLayout_->setSpacing(0);
     gamesLayout_->setAlignment(Qt::AlignTop);
-    empty_ = label("No other games. Scan for known games or add a custom game.", games_);
+    empty_ = label("No installed games. Scan for known games or add a custom game.", games_);
     empty_->setObjectName("emptyState");
     empty_->setWordWrap(true);
     empty_->setContentsMargins(contentInsets(width()));
@@ -541,14 +659,19 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     otherHeader_->setObjectName("otherHeader");
     otherHeader_->setAttribute(Qt::WA_StyledBackground);
     otherHeaderLayout_ = new QGridLayout(otherHeader_);
-    otherHeaderLayout_->setContentsMargins(contentInsets(width()));
+    const auto headerInsets = contentInsets(width());
+    otherHeaderLayout_->setContentsMargins(headerInsets.left(), 0, headerInsets.right(), 0);
     otherHeaderLayout_->setVerticalSpacing(6);
     otherHeaderLayout_->setHorizontalSpacing(8);
     otherToggle_ = new QPushButton(otherHeader_);
     otherToggle_->setObjectName("otherGames");
     otherToggle_->setCheckable(true);
-    otherToggle_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    otherToggle_->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
     connect(otherToggle_, &QPushButton::clicked, this, [this] { setOtherGamesOpen(!othersOpen_); });
+    otherCount_ = label("0", otherHeader_);
+    otherCount_->setObjectName("installedGamesCount");
+    otherCount_->setAlignment(Qt::AlignCenter);
+    otherCount_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     otherActions_ = new QWidget(otherHeader_);
     auto *otherActionsLayout = new QHBoxLayout(otherActions_);
     otherActionsLayout->setContentsMargins(0, 0, 0, 0);
@@ -557,11 +680,15 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     scanGames_ = new QPushButton("Scan for known games", otherActions_);
     scanGames_->setObjectName("scanGames");
     scanGames_->setIcon(QIcon(":/icons/search.svg"));
-    addGame_ = new QPushButton("Add custom game", otherActions_);
-    addGame_->setObjectName("addCustomGame");
-    addGame_->setIcon(QIcon(":/icons/add.svg"));
+    addGame_ = new SquareButton(otherActions_);
+    addGame_->setObjectName("installedGamesMore");
+    addGame_->setIcon(QIcon(":/icons/ellipsis.svg"));
+    addGame_->setAccessibleName("Installed games options");
+    addGame_->setToolTip("Installed games options");
     otherActionsLayout->addWidget(scanGames_);
     otherActionsLayout->addWidget(addGame_);
+    const int installedActionHeight = scanGames_->sizeHint().height();
+    addGame_->setFixedSize(installedActionHeight, installedActionHeight);
     connect(scanGames_, &QPushButton::clicked, this, [this] {
         if (!connected_ || scanPending_)
             return;
@@ -574,7 +701,18 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
             refresh();
         });
     });
-    connect(addGame_, &QPushButton::clicked, this, &MainWindow::addCustomGame);
+    connect(addGame_, &QPushButton::clicked, this, [this] {
+        closePopup();
+        auto *menu = new IconMenu(this);
+        popup_ = menu;
+        menu->addIconAction(QIcon(":/icons/add.svg"), "Add custom game",
+                            [this] { addCustomGame(); });
+        placePopup(menu, addGame_);
+    });
+    for (auto *clickable : {otherHeader_, otherActions_, static_cast<QWidget *>(otherCount_)}) {
+        clickable->installEventFilter(this);
+        clickable->setCursor(Qt::PointingHandCursor);
+    }
     arrangeOtherHeader();
     scroll->setWidget(games_);
     layout->addWidget(scroll, 1);
@@ -662,22 +800,36 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
     if (event->size().width() != event->oldSize().width()) {
         const auto insets = contentInsets(event->size().width());
         empty_->setContentsMargins(insets);
-        otherHeaderLayout_->setContentsMargins(insets);
+        otherHeaderLayout_->setContentsMargins(insets.left(), 0, insets.right(), 0);
         arrangeOtherHeader();
         scheduleFitHeight();
     }
+}
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    if ((watched == otherHeader_ || watched == otherActions_ || watched == otherCount_) &&
+        otherToggle_->isEnabled() &&
+        event->type() == QEvent::MouseButtonRelease &&
+        static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+        setOtherGamesOpen(!othersOpen_);
+        return true;
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 void MainWindow::arrangeOtherHeader() {
     if (!otherHeaderLayout_)
         return;
     otherHeaderLayout_->removeWidget(otherToggle_);
+    otherHeaderLayout_->removeWidget(otherCount_);
     otherHeaderLayout_->removeWidget(otherActions_);
+    for (int col = 0; col < 4; ++col)
+        otherHeaderLayout_->setColumnStretch(col, 0);
+    otherHeaderLayout_->addWidget(otherToggle_, 0, 0);
+    otherHeaderLayout_->addWidget(otherCount_, 0, 1);
+    otherHeaderLayout_->setColumnStretch(2, 1);
     if (width() < 560) {
-        otherHeaderLayout_->addWidget(otherToggle_, 0, 0);
-        otherHeaderLayout_->addWidget(otherActions_, 1, 0);
+        otherHeaderLayout_->addWidget(otherActions_, 1, 0, 1, 4);
     } else {
-        otherHeaderLayout_->addWidget(otherToggle_, 0, 0);
-        otherHeaderLayout_->addWidget(otherActions_, 0, 1);
+        otherHeaderLayout_->addWidget(otherActions_, 0, 3);
     }
 }
 void MainWindow::scheduleFitHeight() {
@@ -766,9 +918,7 @@ void MainWindow::refresh() {
         groupInitialized_ = true;
     }
     if (!order.contains(selected_))
-        selected_ = !running.isEmpty() ? running.first()
-                    : othersOpen_ && !other.isEmpty() ? other.first()
-                                                      : QString();
+        selected_ = !running.isEmpty() ? running.first() : QString();
     if (!running.isEmpty() && !hadRunning_)
         othersOpen_ = !running.contains(selected_);
     if (!running.isEmpty() && !selected_.isEmpty() && !running.contains(selected_))
@@ -793,15 +943,26 @@ void MainWindow::refresh() {
         otherHeader_->style()->unpolish(otherHeader_);
         otherHeader_->style()->polish(otherHeader_);
     }
-    otherToggle_->setText(QString("  Other games   %1").arg(other.size()));
+    otherToggle_->setText("Installed games");
+    otherCount_->setText(QString::number(other.size()));
     otherToggle_->setIcon(QIcon(othersOpen_ ? ":/icons/chevron-down.svg"
                                            : ":/icons/chevron-right.svg"));
     otherToggle_->setChecked(othersOpen_);
-    otherToggle_->setAccessibleName("Other games");
+    const bool canToggleInstalled = !running.isEmpty();
+    otherToggle_->setEnabled(canToggleInstalled);
+    const auto installedCursor = canToggleInstalled ? Qt::PointingHandCursor : Qt::ArrowCursor;
+    otherHeader_->setCursor(installedCursor);
+    otherActions_->setCursor(installedCursor);
+    otherCount_->setCursor(installedCursor);
+    otherToggle_->setCursor(installedCursor);
+    otherToggle_->setAccessibleName(
+        QString("Installed games, %1").arg(other.size()));
     const bool scanning = scanPending_ || state_["scan_in_progress"].toBool();
     scanGames_->setText(scanning ? "Scanning…" : "Scan for known games");
     scanGames_->setEnabled(connected_ && !scanning);
     addGame_->setEnabled(connected_);
+    scanGames_->setCursor(scanGames_->isEnabled() ? Qt::ArrowCursor : Qt::ForbiddenCursor);
+    addGame_->setCursor(addGame_->isEnabled() ? Qt::ArrowCursor : Qt::ForbiddenCursor);
     bool inserted = false;
     for (const auto &id : order) {
         if (!running.contains(id) && !inserted) {
@@ -866,6 +1027,8 @@ void MainWindow::selectGame(const QString &id) {
     refresh();
 }
 void MainWindow::setOtherGamesOpen(bool open) {
+    if (state_["active_stack"].toArray().isEmpty())
+        open = true;
     othersOpen_ = open;
     closePopup();
     if (!open && !state_["active_stack"].toArray().contains(selected_)) {
@@ -874,14 +1037,6 @@ void MainWindow::setOtherGamesOpen(bool open) {
         for (const auto &value : state_["active_stack"].toArray())
             if (order.contains(value.toString())) {
                 selected_ = value.toString();
-                break;
-            }
-    } else if (open && selected_.isEmpty()) {
-        const auto order = Presentation::orderedGames(state_);
-        const auto active = state_["active_stack"].toArray();
-        for (const auto &id : order)
-            if (!active.contains(id)) {
-                selected_ = id;
                 break;
             }
     }
@@ -941,7 +1096,12 @@ void MainWindow::placePopup(QWidget *popup, QWidget *anchor) {
     popup->adjustSize();
     popup->resize(qMin(popup->width(), screen.width() - 12),
                   qMin(popup->height(), qMax(80, screen.bottom() - point.y() - 6)));
-    popup->move(qBound(screen.left() + 6, point.x(), screen.right() - popup->width() - 6),
+    int popupX = point.x();
+    if (auto *menu = dynamic_cast<IconMenu *>(popup)) {
+        popupX = anchor->mapToGlobal(QPoint(anchor->width() / 2, 0)).x() -
+                 menu->iconColumnCenter();
+    }
+    popup->move(qBound(screen.left() + 6, popupX, screen.right() - popup->width() - 6),
                 qMin(point.y(), screen.bottom() - popup->height() - 6));
     popup->show();
     popup->setFocus();
@@ -1047,6 +1207,12 @@ void MainWindow::populateHistory() {
                                        {"reverted", "Reverted"},
                                        {"game_started", "Game started"},
                                        {"game_closed", "Game closed"}};
+    const QMap<QString, QString> icons{{"saved", ":/icons/save.svg"},
+                                       {"existing_backup", ":/icons/explore.svg"},
+                                       {"loaded", ":/icons/load.svg"},
+                                       {"reverted", ":/icons/restore.svg"},
+                                       {"game_started", ":/icons/play.svg"},
+                                       {"game_closed", ":/icons/stop.svg"}};
     for (const auto &value : historyRows_) {
         const auto row = value.toObject();
         const bool existing = row["kind"] == "existing_backup";
@@ -1067,7 +1233,7 @@ void MainWindow::populateHistory() {
         widget->setProperty("historyRow", true);
         widget->setAttribute(Qt::WA_Hover);
         auto *line = new QHBoxLayout(widget);
-        line->setContentsMargins(6, 3, 6, 3);
+        line->setContentsMargins(0, 3, 6, 3);
         line->setSpacing(8);
         auto *time = label(date.isValid() ? Presentation::historyTime(timestamp.toInteger(),
                                                                        QDateTime::currentDateTime())
@@ -1088,6 +1254,12 @@ void MainWindow::populateHistory() {
             caption += date.isValid() ? "\nFolder modified" : "\nSave time unknown";
         if (!action.isEmpty() && !available)
             caption += "\nBackup unavailable";
+        auto *entryIcon = label("");
+        entryIcon->setObjectName("historyEntryIcon");
+        entryIcon->setFixedSize(22, 22);
+        entryIcon->setAlignment(Qt::AlignCenter);
+        entryIcon->setPixmap(QIcon(icons.value(str(row, "kind"))).pixmap(16, 16));
+        line->addWidget(entryIcon);
         auto *text = label(caption);
         text->setWordWrap(true);
         line->addWidget(text, 1);
@@ -1100,6 +1272,7 @@ void MainWindow::populateHistory() {
             button->setIcon(QIcon(":/icons/restore.svg"));
             button->setFixedSize(28, 28);
             button->setEnabled(enabled && available);
+            button->setCursor(button->isEnabled() ? Qt::ArrowCursor : Qt::ForbiddenCursor);
             button->setToolTip(
                 restore
                     ? "Load this saved reset point; current game data will be kept as an undo point."
@@ -1116,6 +1289,7 @@ void MainWindow::populateHistory() {
             remove->setIcon(QIcon(":/icons/delete.svg"));
             remove->setFixedSize(button->size());
             remove->setEnabled(enabled && available);
+            remove->setCursor(remove->isEnabled() ? Qt::ArrowCursor : Qt::ForbiddenCursor);
             remove->setToolTip(
                 "Permanently delete this reset point; current game data will not be changed.");
             remove->setAccessibleName("Delete reset point " + caption + " " + time->text());
@@ -1132,6 +1306,7 @@ void MainWindow::populateHistory() {
         older->setObjectName("historyOlder");
         older->setIcon(QIcon(":/icons/history.svg"));
         older->setEnabled(connected_ && !historyLoading_);
+        older->setCursor(older->isEnabled() ? Qt::ArrowCursor : Qt::ForbiddenCursor);
         connect(older, &QPushButton::clicked, this, [this] { fetchHistory(true); });
         layout->addWidget(older);
     }
@@ -1139,31 +1314,31 @@ void MainWindow::populateHistory() {
 }
 void MainWindow::options(const QString &game) {
     closePopup();
-    auto *menu = new QMenu(this);
+    auto *menu = new IconMenu(this);
     popup_ = menu;
     menu->setProperty("game", game);
     const bool idle = connected_ && !submitting_.contains(game) &&
                       Presentation::blockingOperation(state_, game).isEmpty();
-    menu->addAction(QIcon(":/icons/explore.svg"), "Open in File Explorer", this, [this, game] {
+    menu->addIconAction(QIcon(":/icons/explore.svg"), "Open in File Explorer", [this, game] {
         service_->request({{"type", "explore"}, {"game_id", game}}, [this, game](const auto &reply) {
             if (reply["type"] == "error") showError(game, errorText(reply));
         });
     });
-    auto *configureAction = menu->addAction(QIcon(":/icons/configure.svg"), "Configure…", this,
-                                            [this, game] { configure(game); });
+    auto *configureAction = menu->addIconAction(QIcon(":/icons/configure.svg"), "Configure…",
+                                                [this, game] { configure(game); });
     configureAction->setEnabled(idle);
     configureAction->setProperty("requiresIdle", true);
     configureAction->setProperty("available", true);
     const bool any = state_["history_status"].toObject()[game].toObject()["can_flush"].toBool();
-    auto *flushAction = menu->addAction(QIcon(":/icons/flush.svg"), "Flush history…", this,
-                                        [this, game] { flush(game); });
+    auto *flushAction = menu->addIconAction(QIcon(":/icons/flush.svg"), "Flush history…",
+                                            [this, game] { flush(game); });
     flushAction->setEnabled(idle && any);
     flushAction->setProperty("requiresIdle", true);
     flushAction->setProperty("available", any);
     if (gameOf(state_, game)["origin"] == "custom") {
-        menu->addSeparator();
-        auto *forgetAction = menu->addAction(QIcon(":/icons/delete.svg"), "Forget this game", this,
-                                             [this, game] { flush(game, true); });
+        menu->addIconSeparator();
+        auto *forgetAction = menu->addIconAction(QIcon(":/icons/delete.svg"), "Forget this game",
+                                                 [this, game] { flush(game, true); });
         forgetAction->setEnabled(idle);
         forgetAction->setProperty("requiresIdle", true);
         forgetAction->setProperty("available", true);
@@ -1214,6 +1389,7 @@ void MainWindow::addCustomGame() {
     add->setObjectName("addCustomGameSubmit");
     add->setText("Add");
     add->setIcon(QIcon(":/icons/add.svg"));
+    add->setDefault(true);
     form->addRow(buttons);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
     const QPointer<QDialog> guard(dialog);
@@ -1260,6 +1436,7 @@ void MainWindow::configure(const QString &id) {
     closePopup();
     const auto game = gameOf(state_, id);
     auto *dialog = new QDialog(this);
+    dialog->setObjectName("configureDialog");
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowTitle("Configure " + str(game, "name"));
     dialog->setProperty("configuredGame", id);
@@ -1268,8 +1445,10 @@ void MainWindow::configure(const QString &id) {
     const bool custom = game["origin"] == "custom";
     if (custom)
         form->addRow("Name:", name);
-    else
+    else {
         name->setParent(dialog);
+        name->hide();
+    }
     const auto paths = game["executables"].toArray();
     auto *executable = new QLineEdit(paths.isEmpty() ? QString() : paths.first().toString());
     auto *directory = new QLineEdit(str(game, "data_dir"));
@@ -1281,7 +1460,10 @@ void MainWindow::configure(const QString &id) {
         choices->addItem(location["executables"].toArray().first().toString() + " — " + location["data_dir"].toString(), location);
     }
     if (!locations.isEmpty()) form->addRow("Detected locations:", choices);
-    else choices->setParent(dialog);
+    else {
+        choices->setParent(dialog);
+        choices->hide();
+    }
     connect(choices, &QComboBox::currentIndexChanged, dialog, [choices, executable, directory](int index) {
         if (index <= 0) return;
         const auto location = choices->currentData().toJsonObject();
@@ -1300,8 +1482,10 @@ void MainWindow::configure(const QString &id) {
         layout->addWidget(browse);
         if (!custom)
             layout->addWidget(reset);
-        else
+        else {
             reset->setParent(dialog);
+            reset->hide();
+        }
         reset->setEnabled(!locations.isEmpty());
         reset->setToolTip("Use the selected detected location, or the sole catalog default.");
         QObject::connect(reset, &QPushButton::clicked, dialog,
@@ -1329,8 +1513,9 @@ void MainWindow::configure(const QString &id) {
     form->addRow(error);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     form->addRow(buttons);
-    buttons->button(QDialogButtonBox::Save)->setObjectName("configureSave");
-    buttons->button(QDialogButtonBox::Save)->setIcon(QIcon(":/icons/save.svg"));
+    auto *save = buttons->button(QDialogButtonBox::Save);
+    save->setObjectName("configureSave");
+    save->setDefault(true);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
     const QPointer<QDialog> guard(dialog);
     connect(buttons, &QDialogButtonBox::accepted, dialog,
@@ -1363,7 +1548,11 @@ void MainWindow::configure(const QString &id) {
                                       }
                                   });
             });
-    dialog->resize(640, 180);
+    executable->setMinimumWidth(360);
+    directory->setMinimumWidth(360);
+    form->setSizeConstraint(QLayout::SetFixedSize);
+    dialog->setSizeGripEnabled(false);
+    dialog->setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
     dialog->open();
 }
 void MainWindow::flush(const QString &game, bool forget) {

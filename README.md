@@ -85,9 +85,9 @@ in dev/demo mode and receives forwarded hotkeys from the host in normal mode;
 it does not register competing global shortcuts. `--minimized` attaches without
 showing a window; subsequent launches focus the existing desktop for that host.
 
-The **Other games** section is always present. Use **Scan for known games** to
-refresh catalog discovery, or **Add custom game** to register a name, executable,
-and save location. Custom games remain listed when their executable is unavailable
+The **Installed games** section is always present. Use **Scan for known games** to
+refresh catalog discovery, or open its **…** menu and choose **Add custom game** to
+register a name, executable, and save location. Custom games remain listed when their executable is unavailable
 and can be removed with **Forget this game** after confirming the same cleanup
 preview used by Flush.
 

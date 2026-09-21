@@ -20,6 +20,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextDocument>
+#include <QWidgetAction>
 #include <algorithm>
 #include <QUuid>
 #include <QtEndian>
@@ -145,9 +146,11 @@ class DesktopTest : public QObject {
                  QString("checkpoint-id"));
         QVERIFY(Presentation::historyAction({{"kind", "game_started"}}).isEmpty());
         const QDateTime now(QDate(2026, 9, 21), QTime(18, 0, 0));
+        QCOMPARE(Presentation::historyTime(now.addSecs(-3).toMSecsSinceEpoch(), now),
+                 QString("3 seconds ago\n17:59:57"));
         QCOMPARE(Presentation::historyTime(
                      QDateTime(QDate(2026, 9, 21), QTime(12, 34, 56)).toMSecsSinceEpoch(), now),
-                 QString("Today\n12:34:56"));
+                 QString("5 hours and 25 minutes ago\n12:34:56"));
         QCOMPARE(Presentation::historyTime(
                      QDateTime(QDate(2026, 9, 20), QTime(12, 34, 56)).toMSecsSinceEpoch(), now),
                  QString("Yesterday\n12:34:56"));
@@ -326,6 +329,13 @@ class DesktopTest : public QObject {
         const int saveWidth = row.save->width();
         const int loadWidth = row.load->width();
         const int emptyHeight = row.load->height();
+        QCOMPARE(row.load->accessibleName(), QString("Load, No checkpoints saved"));
+        QCOMPARE(row.load->cursor().shape(), Qt::ForbiddenCursor);
+        QCOMPARE(row.more->width(), row.arrow->width());
+        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(screenshotRoot);
+        QVERIFY(row.grab().save(screenshotRoot + QString("controls-%1-empty.png")
+            .arg(QTest::currentDataTag())));
         QTest::mouseMove(row.info, row.info->rect().center());
         QCOMPARE(row.info->cursor().shape(), Qt::ArrowCursor);
         QCOMPARE(row.info->textInteractionFlags(), Qt::TextInteractionFlags(Qt::NoTextInteraction));
@@ -335,8 +345,6 @@ class DesktopTest : public QObject {
         available["default_snapshot_id"] = "void-war-saved";
         availability["void-war"] = available;
         state["availability"] = availability;
-        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
-        QDir().mkpath(screenshotRoot);
         // Existing folder timestamp -> unknown age -> newly saved checkpoint.
         // None of these state transitions may change the button widths.
         for (int step = 0; step < 3; ++step) {
@@ -356,7 +364,6 @@ class DesktopTest : public QObject {
             QVERIFY(row.more->geometry().right() < row.more->parentWidget()->width());
             QVERIFY(row.info->mapTo(&row, QPoint()).y() >=
                     row.save->mapTo(&row, QPoint(0, row.save->height())).y());
-            if (step == 2) QCOMPARE(row.load->height(), emptyHeight);
             QVERIFY(row.grab().save(screenshotRoot + QString("controls-%1-%2.png")
                 .arg(QTest::currentDataTag()).arg(step)));
         }
@@ -466,6 +473,7 @@ class DesktopTest : public QObject {
         window.setOtherGamesOpen(true);
         for (auto *row : window.findChildren<GameRow *>()) {
             if (row->id == "ftl") {
+                QCOMPARE(row->cursor().shape(), Qt::PointingHandCursor);
                 QTest::keyClick(row->header, Qt::Key_Return);
                 QCOMPARE(window.selectedGame(), QString("ftl"));
             }
@@ -488,10 +496,53 @@ class DesktopTest : public QObject {
                 QVERIFY(!row->save->isEnabled());
                 QVERIFY(!row->load->isEnabled());
                 QVERIFY(!row->arrow->isEnabled());
+                QCOMPARE(row->save->cursor().shape(), Qt::ForbiddenCursor);
+                QCOMPARE(row->load->cursor().shape(), Qt::ForbiddenCursor);
+                QCOMPARE(row->arrow->cursor().shape(), Qt::ForbiddenCursor);
                 QVERIFY(row->more->isEnabled());
                 QTest::keyClick(row->header, Qt::Key_Space);
                 QCOMPARE(window.selectedGame(), row->id);
             }
+    }
+    void configureDialogIsCompactAndNonResizable() {
+        FakeService service;
+        MainWindow window(&service, true);
+        window.show();
+        service.start();
+        GameRow *row = nullptr;
+        for (auto *candidate : window.findChildren<GameRow *>())
+            if (candidate->id == "void-war")
+                row = candidate;
+        QVERIFY(row);
+        QTest::mouseClick(row->more, Qt::LeftButton);
+        QMenu *menu = nullptr;
+        for (auto *candidate : window.findChildren<QMenu *>())
+            if (candidate->isVisible())
+                menu = candidate;
+        QVERIFY(menu);
+        QAction *configure = nullptr;
+        for (auto *action : menu->actions())
+            if (action->text() == "Configure…")
+                configure = action;
+        QVERIFY(configure);
+        configure->trigger();
+        auto *dialog = window.findChild<QDialog *>("configureDialog");
+        QVERIFY(dialog);
+        QTRY_VERIFY(dialog->isVisible());
+        QCOMPARE(dialog->minimumSize(), dialog->maximumSize());
+        const auto fixedSize = dialog->size();
+        dialog->resize(fixedSize + QSize(200, 200));
+        QCoreApplication::processEvents();
+        QCOMPARE(dialog->size(), fixedSize);
+        for (auto *orphan : dialog->findChildren<QLineEdit *>(QString(), Qt::FindDirectChildrenOnly))
+            QVERIFY(!orphan->isVisible());
+        auto *save = dialog->findChild<QPushButton *>("configureSave");
+        QVERIFY(save && save->isDefault());
+        QVERIFY(save->icon().isNull());
+        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(screenshotRoot);
+        QVERIFY(dialog->grab().save(screenshotRoot + "configure-known.png"));
+        dialog->reject();
     }
     void customLibraryControlsAndForget() {
         class CustomService : public FakeService {
@@ -517,16 +568,53 @@ class DesktopTest : public QObject {
         window.show();
         service.start();
         auto *header = window.findChild<QWidget *>("otherHeader");
+        auto *toggle = window.findChild<QPushButton *>("otherGames");
+        auto *count = window.findChild<QLabel *>("installedGamesCount");
         auto *scan = window.findChild<QPushButton *>("scanGames");
-        auto *add = window.findChild<QPushButton *>("addCustomGame");
+        auto *more = window.findChild<QPushButton *>("installedGamesMore");
         QVERIFY(header && header->isVisible());
-        QVERIFY(scan && add);
+        QVERIFY(toggle && count && scan && more);
+        QCOMPARE(toggle->text(), QString("Installed games"));
+        QCOMPARE(count->text(), QString("5"));
+        QVERIFY(count->height() < toggle->height());
+        QCOMPARE(window.selectedGame(), QString());
+        QVERIFY(toggle->isChecked());
+        QTest::mouseClick(header, Qt::LeftButton, Qt::NoModifier,
+                          QPoint(header->width() / 2, 2));
+        QVERIFY(toggle->isChecked());
+        QVERIFY(!toggle->isEnabled());
+        QCOMPARE(toggle->cursor().shape(), Qt::ArrowCursor);
+        QCOMPARE(window.selectedGame(), QString());
+        QTest::mouseClick(count, Qt::LeftButton);
+        QVERIFY(toggle->isChecked());
+        QCOMPARE(window.selectedGame(), QString());
         QTest::mouseClick(scan, Qt::LeftButton);
         QVERIFY(std::any_of(service.requests.begin(), service.requests.end(), [](const auto &request) {
             return request["type"] == "rescan";
         }));
 
-        QTest::mouseClick(add, Qt::LeftButton);
+        QTest::mouseClick(more, Qt::LeftButton);
+        auto *libraryMenu = window.findChild<QMenu *>();
+        QVERIFY(libraryMenu);
+        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(screenshotRoot);
+        QVERIFY(libraryMenu->grab().save(screenshotRoot + "installed-games-menu.png"));
+        QCOMPARE(libraryMenu->objectName(), QString("iconMenu"));
+        QCOMPARE(more->width(), more->height());
+        QCOMPARE(more->height(), scan->height());
+        auto *libraryWidgetAction = qobject_cast<QWidgetAction *>(libraryMenu->actions().first());
+        QVERIFY(libraryWidgetAction && libraryWidgetAction->defaultWidget());
+        auto *libraryIcon = libraryWidgetAction->defaultWidget()->findChild<QLabel *>("iconMenuIcon");
+        QVERIFY(libraryIcon);
+        QCOMPARE(libraryIcon->width(), libraryWidgetAction->defaultWidget()->height());
+        QCOMPARE(libraryIcon->height(), libraryWidgetAction->defaultWidget()->height());
+        QCOMPARE(libraryIcon->alignment(), Qt::Alignment(Qt::AlignCenter));
+        QAction *add = nullptr;
+        for (auto *action : libraryMenu->actions())
+            if (action->text() == "Add custom game")
+                add = action;
+        QVERIFY(add);
+        add->trigger();
         auto *addDialog = window.findChild<QDialog *>("addCustomGameDialog");
         QVERIFY(addDialog);
         QVERIFY(addDialog->findChild<QLineEdit *>("customGameName"));
@@ -543,7 +631,46 @@ class DesktopTest : public QObject {
         QVERIFY(custom && custom->isVisible());
         QCOMPARE(custom->findChild<QLabel *>("gameStatus")->text(), QString("Uninstalled"));
         QTest::mouseClick(custom->more, Qt::LeftButton);
-        auto *menu = window.findChild<QMenu *>();
+        QMenu *menu = nullptr;
+        for (auto *candidate : window.findChildren<QMenu *>())
+            if (candidate->isVisible())
+                menu = candidate;
+        QVERIFY(menu);
+        QVERIFY(menu->grab().save(screenshotRoot + "game-options-menu.png"));
+        QCOMPARE(menu->objectName(), QString("iconMenu"));
+        for (auto *action : menu->actions()) {
+            if (action->text().isEmpty())
+                continue;
+            auto *widgetAction = qobject_cast<QWidgetAction *>(action);
+            QVERIFY(widgetAction && widgetAction->defaultWidget());
+            auto *icon = widgetAction->defaultWidget()->findChild<QLabel *>("iconMenuIcon");
+            QVERIFY(icon);
+            QCOMPARE(icon->width(), widgetAction->defaultWidget()->height());
+            QCOMPARE(icon->height(), widgetAction->defaultWidget()->height());
+        }
+        QAction *configure = nullptr;
+        for (auto *action : menu->actions())
+            if (action->text() == "Configure…")
+                configure = action;
+        QVERIFY(configure);
+        configure->trigger();
+        auto *configureDialog = window.findChild<QDialog *>("configureDialog");
+        QVERIFY(configureDialog);
+        QTRY_VERIFY(configureDialog->isVisible());
+        QCOMPARE(configureDialog->minimumSize(), configureDialog->maximumSize());
+        auto *configureButtons = configureDialog->findChild<QDialogButtonBox *>();
+        QVERIFY(configureButtons);
+        auto *configureSave = configureButtons->button(QDialogButtonBox::Save);
+        QVERIFY(configureSave->isDefault());
+        QVERIFY(configureSave->icon().isNull());
+        QVERIFY(configureDialog->grab().save(screenshotRoot + "configure.png"));
+        configureDialog->reject();
+
+        QTest::mouseClick(custom->more, Qt::LeftButton);
+        menu = nullptr;
+        for (auto *candidate : window.findChildren<QMenu *>())
+            if (candidate->isVisible())
+                menu = candidate;
         QVERIFY(menu);
         QAction *forget = nullptr;
         for (auto *action : menu->actions())
@@ -746,6 +873,13 @@ class DesktopTest : public QObject {
         QCOMPARE(times.size(), 2);
         QCOMPARE(times.first()->width(), times.last()->width());
         QVERIFY(times.first()->text().contains('\n'));
+        auto *day = popup->findChild<QLabel *>("day");
+        QVERIFY(day);
+        QCOMPARE(times.first()->mapTo(popup, QPoint()).x(), day->mapTo(popup, QPoint()).x());
+        const auto entryIcons = popup->findChildren<QLabel *>("historyEntryIcon");
+        QCOMPARE(entryIcons.size(), 2);
+        for (auto *icon : entryIcons)
+            QVERIFY(!icon->pixmap().isNull());
         QVERIFY(actions.first()->isEnabled());
         QVERIFY(!actions.first()->icon().isNull());
         QVERIFY(actions.first()->toolTip().contains("current game data"));

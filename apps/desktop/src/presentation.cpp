@@ -59,7 +59,7 @@ QString Presentation::age(qint64 milliseconds, const QDateTime &now) {
 QString Presentation::historyTime(qint64 milliseconds, const QDateTime &now) {
     const auto date = QDateTime::fromMSecsSinceEpoch(milliseconds).toLocalTime();
     const auto days = date.date().daysTo(now.date());
-    const auto day = days == 0       ? QString("Today")
+    const auto day = days == 0       ? age(milliseconds, now)
                      : days == 1     ? QString("Yesterday")
                      : days < 7 && days > 1
                          ? QLocale().toString(date.date(), "dddd")
