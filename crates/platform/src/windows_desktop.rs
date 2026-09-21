@@ -13,6 +13,7 @@ use windows_sys::Win32::{
 
 thread_local! { static EVENTS: RefCell<Option<mpsc::Sender<DesktopEvent>>> = const { RefCell::new(None) }; }
 const TRAY: u32 = WM_APP + 1;
+const APP_ICON_ID: usize = 1;
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
 }
@@ -140,7 +141,10 @@ pub fn run(
         icon.uID = 1;
         icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         icon.uCallbackMessage = TRAY;
-        icon.hIcon = LoadIconW(std::ptr::null_mut(), IDI_APPLICATION);
+        icon.hIcon = LoadIconW(instance, APP_ICON_ID as *const u16);
+        if icon.hIcon.is_null() {
+            icon.hIcon = LoadIconW(std::ptr::null_mut(), IDI_APPLICATION);
+        }
         text(&mut icon.szTip, "Save Scummer");
         let save = RegisterHotKey(hwnd, 1, MOD_CONTROL | MOD_NOREPEAT, VK_F5 as u32) != 0;
         let load = RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_NOREPEAT, VK_F9 as u32) != 0;

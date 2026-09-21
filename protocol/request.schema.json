@@ -78,6 +78,24 @@
         {
           "type": "object",
           "properties": {
+            "target": {
+              "description": "Exact saved or recovery checkpoint to remove.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "confirmed_revision": {
               "type": "integer",
               "format": "uint64",
@@ -306,8 +324,27 @@
         {
           "type": "object",
           "properties": {
+            "anchor_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            },
             "game_id": {
               "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "format": "uint",
+              "default": 50,
+              "minimum": 0
             },
             "type": {
               "type": "string",
@@ -373,6 +410,27 @@
           "required": [
             "type",
             "game_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "game_id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "flush_details"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "game_id",
+            "cursor"
           ]
         },
         {

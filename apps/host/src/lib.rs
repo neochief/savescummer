@@ -88,12 +88,65 @@ struct Service {
     admission: std::sync::Mutex<()>,
 }
 impl Service {
-    fn state(&self) -> savescummer_core::Result<State> {
-        let mut state = self.runtime.state()?;
+    fn flush_page(
+        &self,
+        game_id: &str,
+        cursor: Option<&str>,
+    ) -> savescummer_core::Result<FlushPreview> {
+        let mut preview = self.runtime.flush_preview(game_id)?;
+        let offset = if let Some(cursor) = cursor {
+            let (host, game, revision, offset): (String, String, u64, usize) =
+                serde_json::from_str(cursor)
+                    .map_err(|_| Error::new(ErrorCode::InvalidRequest, "invalid Flush cursor"))?;
+            if host != self.host_id || game != game_id || revision != preview.revision {
+                return Err(Error::new(
+                    ErrorCode::CursorExpired,
+                    "backups changed; obtain a new Flush preview",
+                ));
+            }
+            offset
+        } else {
+            0
+        };
+        if offset > preview.paths.len() {
+            return Err(Error::new(
+                ErrorCode::InvalidRequest,
+                "invalid Flush offset",
+            ));
+        }
+        let total = preview.paths.len();
+        preview.paths = preview.paths.into_iter().skip(offset).take(50).collect();
+        let mut bytes = 0;
+        let mut count = 0;
+        for path in &preview.paths {
+            let size = serde_json::to_vec(path)
+                .map_err(|e| Error::new(ErrorCode::Storage, e.to_string()))?
+                .len();
+            if size > 512 * 1024 {
+                return Err(Error::new(
+                    ErrorCode::ResponseTooLarge,
+                    "one path exceeds the page byte budget",
+                ));
+            }
+            if bytes + size > 512 * 1024 {
+                break;
+            }
+            bytes += size;
+            count += 1;
+        }
+        preview.paths.truncate(count);
+        preview.next_cursor = (offset + count < total).then(|| {
+            serde_json::to_string(&(&self.host_id, game_id, preview.revision, offset + count))
+                .unwrap()
+        });
+        Ok(preview)
+    }
+    fn state(&self) -> savescummer_core::Result<LibraryState> {
+        let mut state = self.runtime.summary()?;
         if let Some(artwork) = &self.artwork {
             artwork.project(&mut state);
         }
-        Ok(state)
+        Ok(state.into())
     }
     fn execute(
         self: &Arc<Self>,
@@ -206,7 +259,7 @@ impl Service {
                 errors.push(error.to_string());
             }
         }
-        for game in self.runtime.state()?.games.values() {
+        for game in self.runtime.games()?.values() {
             if game.executables.iter().any(|exe| exe.is_file()) {
                 self.runtime.set_installed(&game.id, true)?;
             } else if !game.executables.is_empty()
@@ -220,7 +273,7 @@ impl Service {
         }
         self.runtime.set_discovery_errors(errors)?;
         if let Some(artwork) = &self.artwork {
-            let games = self.runtime.state()?.games;
+            let games = self.runtime.games()?;
             artwork.set_games(
                 definitions
                     .iter()
@@ -234,7 +287,7 @@ impl Service {
                     .collect(),
             );
         }
-        for id in self.runtime.state()?.games.keys() {
+        for id in self.runtime.games()?.keys() {
             if let Err(error) = self.runtime.refresh(id)
                 && !matches!(error.code, ErrorCode::Busy | ErrorCode::RecoveryNeeded)
             {
@@ -314,8 +367,17 @@ impl Service {
                     };
                     self.execute(&game_id, &action.action(), &request.request_id)?
                 }
-                Command::History { game_id } => {
-                    match self.runtime.refresh(game_id) {
+                Command::History {
+                    game_id,
+                    anchor_id,
+                    cursor,
+                    limit,
+                } => {
+                    match if cursor.is_none() {
+                        self.runtime.refresh(game_id)
+                    } else {
+                        Ok(())
+                    } {
                         Ok(()) => (),
                         Err(error)
                             if matches!(
@@ -324,8 +386,13 @@ impl Service {
                             ) => {}
                         Err(error) => return Err(error),
                     }
-                    Reply::State {
-                        state: self.state()?,
+                    Reply::HistoryPage {
+                        page: self.runtime.history_page_at(
+                            game_id,
+                            cursor.as_deref(),
+                            *limit,
+                            anchor_id.as_deref(),
+                        )?,
                     }
                 }
                 Command::Configure {
@@ -353,7 +420,10 @@ impl Service {
                     operation: Box::new(self.runtime.operation(operation_id)?),
                 },
                 Command::FlushPreview { game_id } => Reply::FlushPreview {
-                    preview: self.runtime.flush_preview(game_id)?,
+                    preview: self.flush_page(game_id, None)?,
+                },
+                Command::FlushDetails { game_id, cursor } => Reply::FlushPreview {
+                    preview: self.flush_page(game_id, Some(cursor))?,
                 },
                 Command::Rescan => {
                     self.scan()
@@ -379,6 +449,30 @@ impl Service {
         })
     }
 }
+async fn write_response<T: AsyncWrite + Unpin>(
+    stream: &mut T,
+    response: &Response,
+) -> std::io::Result<()> {
+    if serde_json::to_vec(response)
+        .map_err(std::io::Error::other)?
+        .len()
+        > MAX_FRAME
+    {
+        let error = Response {
+            version: VERSION,
+            request_id: response.request_id.clone(),
+            host_id: response.host_id.clone(),
+            result: Reply::Error {
+                error: Error::new(
+                    ErrorCode::ResponseTooLarge,
+                    "response exceeds the frame limit; request a smaller page or reduce the oversized item",
+                ),
+            },
+        };
+        return write_frame(stream, &error).await;
+    }
+    write_frame(stream, response).await
+}
 async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
     mut stream: T,
     service: Arc<Service>,
@@ -399,7 +493,11 @@ async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
         host_id: service.host_id.clone(),
         result,
     };
-    tokio::time::timeout(Duration::from_secs(10), write_frame(&mut stream, &response)).await??;
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        write_response(&mut stream, &response),
+    )
+    .await??;
     if matches!(request.command, Command::Watch) && revision.is_some() {
         let mut interval = tokio::time::interval(Duration::from_millis(100));
         loop {
@@ -411,9 +509,19 @@ async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
                     host_id: service.host_id.clone(),
                     result: Reply::ShuttingDown,
                 };
-                tokio::time::timeout(Duration::from_secs(10), write_frame(&mut stream, &response))
-                    .await??;
+                tokio::time::timeout(
+                    Duration::from_secs(10),
+                    write_response(&mut stream, &response),
+                )
+                .await??;
                 break;
+            }
+            let versions = (
+                service.runtime.revision()?,
+                service.artwork.as_ref().map_or(0, |a| a.revision()),
+            );
+            if revision == Some(versions) {
+                continue;
             }
             let state = service.state()?;
             if revision != Some((state.revision, state.artwork_revision)) {
@@ -424,8 +532,11 @@ async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
                     host_id: service.host_id.clone(),
                     result: Reply::State { state },
                 };
-                tokio::time::timeout(Duration::from_secs(10), write_frame(&mut stream, &response))
-                    .await??;
+                tokio::time::timeout(
+                    Duration::from_secs(10),
+                    write_response(&mut stream, &response),
+                )
+                .await??;
             }
         }
     }
@@ -508,13 +619,8 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
     } else {
         None
     };
-    // Reconcile a previously opted-in registration after relocation/restart.
-    if runtime.settings()?.launch_on_startup
-        && let Some(startup) = &startup
-        && let Err(error) = startup.set_enabled(true)
-    {
-        integration_errors.push(format!("startup registration: {error}"));
-    }
+    // Only explicit SetLaunchOnStartup requests may change registration. Starting
+    // another build with the same saved preference must not take over autostart.
     runtime.set_discovery_errors(integration_errors.clone())?;
     let artwork = if options.no_artwork {
         None
@@ -562,7 +668,7 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
     if !service.options.no_scan {
         service.scan()?;
     } else {
-        for id in service.runtime.state()?.games.keys() {
+        for id in service.runtime.games()?.keys() {
             let _ = service.runtime.refresh(id);
         }
     }
@@ -588,8 +694,7 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
                 if !service.options.no_monitor {
                     match NativeObserver.observe() {
                         Ok(observation) => {
-                            let activity =
-                                monitor.observe(&service.runtime.state()?.games, observation);
+                            let activity = monitor.observe(&service.runtime.games()?, observation);
                             service.runtime.record_activity(
                                 activity.stack,
                                 activity.started,
@@ -668,13 +773,7 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
         }
     }
     service.stopping.store(true, Ordering::SeqCst);
-    while service
-        .runtime
-        .state()?
-        .operations
-        .values()
-        .any(|op| op.status == OperationStatus::Pending)
-    {
+    while service.runtime.has_pending_operations()? {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     background.await?;

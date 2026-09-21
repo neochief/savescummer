@@ -82,6 +82,24 @@
         {
           "type": "object",
           "properties": {
+            "target": {
+              "description": "Exact saved or recovery checkpoint to remove.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "confirmed_revision": {
               "type": "integer",
               "format": "uint64",
@@ -149,7 +167,9 @@
         "storage",
         "confirmation_required",
         "shutting_down",
-        "invalid_request"
+        "invalid_request",
+        "cursor_expired",
+        "response_too_large"
       ]
     },
     "ExplorerTarget": {
@@ -171,6 +191,13 @@
     "FlushPreview": {
       "type": "object",
       "properties": {
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "paths": {
           "type": "array",
           "items": {
@@ -313,9 +340,68 @@
         "executables"
       ]
     },
-    "History": {
+    "HistoryKind": {
+      "type": "string",
+      "enum": [
+        "saved",
+        "existing_backup",
+        "loaded",
+        "reverted",
+        "game_started",
+        "game_closed"
+      ]
+    },
+    "HistoryPage": {
       "type": "object",
       "properties": {
+        "game_id": {
+          "type": "string"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HistoryRow"
+          }
+        }
+      },
+      "required": [
+        "game_id",
+        "revision",
+        "rows"
+      ]
+    },
+    "HistoryRow": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Action"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "display_time": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
         "game_id": {
           "type": "string"
         },
@@ -356,6 +442,14 @@
             "string",
             "null"
           ]
+        },
+        "target_time": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "required": [
@@ -364,18 +458,112 @@
         "sequence",
         "game_id",
         "kind",
-        "recorded_at"
+        "recorded_at",
+        "display_time",
+        "available"
       ]
     },
-    "HistoryKind": {
-      "type": "string",
-      "enum": [
-        "saved",
-        "existing_backup",
-        "loaded",
-        "reverted",
-        "game_started",
-        "game_closed"
+    "HistoryStatus": {
+      "type": "object",
+      "properties": {
+        "can_flush": {
+          "type": "boolean"
+        },
+        "has_visible_history": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "has_visible_history",
+        "can_flush"
+      ]
+    },
+    "LibraryState": {
+      "description": "The wire summary grows with the library, not with retained audit records.",
+      "type": "object",
+      "properties": {
+        "active_stack": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artwork": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/GameArtwork"
+          }
+        },
+        "artwork_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "availability": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/GameAvailability"
+          }
+        },
+        "discovery_errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "games": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Game"
+          }
+        },
+        "history_status": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/HistoryStatus"
+          }
+        },
+        "operations": {
+          "description": "Blocking operations and the most recent terminal result per game.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Operation"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        },
+        "snapshots": {
+          "description": "Only the default saved checkpoint for each game, never all checkpoints.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Snapshot"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "artwork_revision",
+        "artwork",
+        "settings",
+        "games",
+        "active_stack",
+        "availability",
+        "snapshots",
+        "operations",
+        "history_status",
+        "discovery_errors"
       ]
     },
     "Operation": {
@@ -566,7 +754,7 @@
           "type": "object",
           "properties": {
             "state": {
-              "$ref": "#/$defs/State"
+              "$ref": "#/$defs/LibraryState"
             },
             "type": {
               "type": "string",
@@ -576,6 +764,22 @@
           "required": [
             "type",
             "state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "page": {
+              "$ref": "#/$defs/HistoryPage"
+            },
+            "type": {
+              "type": "string",
+              "const": "history_page"
+            }
+          },
+          "required": [
+            "type",
+            "page"
           ]
         },
         {
@@ -809,99 +1013,6 @@
       "enum": [
         "saved",
         "recovery"
-      ]
-    },
-    "State": {
-      "type": "object",
-      "properties": {
-        "active_stack": {
-          "description": "Most recently activated game first.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "artwork": {
-          "description": "Host artwork projection; not persisted or used for operation revisions.",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/GameArtwork"
-          },
-          "default": {}
-        },
-        "artwork_revision": {
-          "type": "integer",
-          "format": "uint64",
-          "default": 0,
-          "minimum": 0
-        },
-        "availability": {
-          "description": "Derived by the host; clients must not inspect game directories or select\ndefault checkpoints themselves. Not persisted by the repository.",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/GameAvailability"
-          },
-          "default": {}
-        },
-        "discovery_errors": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
-          }
-        },
-        "games": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/Game"
-          }
-        },
-        "history": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/History"
-          }
-        },
-        "operations": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/Operation"
-          }
-        },
-        "revision": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "settings": {
-          "$ref": "#/$defs/Settings",
-          "default": {
-            "launch_on_startup": false,
-            "play_sounds": true
-          }
-        },
-        "snapshots": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/Snapshot"
-          }
-        },
-        "visible_history": {
-          "description": "UI projection. `history` retains audit records and stale action IDs.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/History"
-          }
-        }
-      },
-      "required": [
-        "revision",
-        "games",
-        "snapshots",
-        "history",
-        "visible_history",
-        "operations",
-        "active_stack"
       ]
     }
   }

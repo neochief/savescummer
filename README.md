@@ -151,16 +151,27 @@ Other commands:
 
 - `load <game> --target <checkpoint-id>` restores the saved checkpoint referenced
   by a Saved/Existing backup row's `snapshot_id`.
+- `history <game> --limit 50` returns a page of visible history. Pass its opaque
+  `next_cursor` with `--cursor` for the next page, or use `--all` to stream every
+  page as JSON lines. If history changes during streaming, restart the query.
 - `revert <game> <recovery-checkpoint-id>` restores the recovery checkpoint referenced
   by a Loaded/Reverted row's `recovery_id`.
 - `recover <game> <operation-id> keep-current|restore-before|retry` resolves recovery.
 - `flush-preview <game>` lists the saved, recovery and retained directories to delete.
+- `flush-details <game> --cursor <next_cursor>` reads the next page of paths from
+  that preview. Counts always cover the complete deletion scope.
 - `flush <game> --confirmed-revision <preview-revision>` confirms that preview.
 - `rescan` refreshes discovery immediately.
 - `sounds on` / `sounds off` persist the app-wide Play sounds setting (on by default).
 - `startup on|off` updates the current-user Windows sign-in registration and persisted
   preference. Registration failure preserves the previous preference; persistence
   failure attempts to restore the previous registration.
+  Registration changes only through this command or the Launch on startup checkbox;
+  starting the host never rewrites it, including in debug builds. All builds share
+  one `SaveScummer` entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+  pointing to the host executable and data directory that enabled it. Keep that
+  executable at a stable path. After moving it, run `startup on` from the desired
+  copy (with its host running), or toggle the checkbox off and on, to update the entry.
 - `save-active` / `load-active` target the monitor's top running game. Retrying an
   accepted request ID retains its original game even after focus changes.
 - `explorer-targets <absolute-folder>` returns allowed Save/Load actions with exact
@@ -175,6 +186,30 @@ launched from the tray; by default it is beside the host. Tray Exit stops admiss
 informs connected clients, waits for accepted operations, and releases integrations.
 
 ## Explorer integration
+
+For a complete development session, run:
+
+```powershell
+./scripts/dev-explorer.ps1            # Build, test, register, restart Explorer, open test folder
+./scripts/dev-explorer.ps1 -Stop      # Stop the dev host, unregister, restart Explorer
+./scripts/dev-explorer.ps1 -CheckOnly # Build and test without registration or Explorer restart
+```
+
+The first command builds an isolated host and a separate development extension,
+creates disposable save data, and verifies Save/Load through the actual COM menu
+handler before registering it. Right-click `Saves` or `Saves - Copy`, then select
+**Show more options** on Windows 11 to use **Save (dev)** or **Load (dev)**.
+Edit `Saves/progress.txt` to try restoring it. The script restarts Explorer to load
+the new DLL; open Explorer windows close. Rerun the command to rebuild and start
+a fresh test session. No administrator rights are needed.
+
+The development extension has its own COM registration and baked-in host data
+directory. Your normal host, configuration and production extension are separate.
+Test data and logs are retained under `.runtime/explorer-dev/sessions`, binaries
+under `build/explorer-dev`; the script prints the current session path.
+`-Stop` removes only the dev registration and gracefully stops its recorded host.
+`-CheckOnly` stops its test host automatically and leaves an interactive dev session
+alone. Use `-Generator 'Visual Studio 17 2022'` when building with VS 2022.
 
 The separate native COM extension has no Qt dependency. Its Rust IPC bridge asks
 the host for menu eligibility; Save appears on DIR, and Load on eligible ordinary
@@ -259,13 +294,30 @@ when the parent timestamp is unchanged; it is not a content checksum and cannot
 detect an edit that deliberately preserves every inspected attribute. A failed or
 incomplete inspection marks the generation temporarily unavailable, not removed.
 
-Clients render **`state.visible_history`**. `state.history` is the durable audit
-record. Removed checkpoint rows are absent from the visible projection; a Loaded
+Clients render per-game **`history_page.rows`**. Durable audit records are queried
+separately from library summaries. Removed checkpoint rows are absent from the visible projection; a Loaded
 row can remain if its independent recovery point survives. Launch/close markers
 appear only for sessions containing surviving backup-backed actions. Sessions with
 no remaining checkpoints disappear, and an empty backup history has no orphaned
 session markers. Observation epochs prevent unobserved host downtime from joining
 unrelated sessions.
+
+SQLite commits update only changed records in one transaction. The host starts
+with game configuration and current operation state; it reads old history and
+operation journals by indexed queries. Checkpoint/history completion and recovery
+transitions retain their atomic transaction boundaries. History pages include
+exact action targets and availability, with 50 rows by default, a 200-row maximum,
+and a 512 KiB row-data budget. The desktop keeps at most 200 loaded history rows.
+Use Load older to browse; reopening history returns to recent entries.
+
+Protocol v3 publishes library summaries, current progress and the most recent
+terminal result per game. It does not broadcast accumulated history or journals.
+History cursors expire on relevant changes to that game or host restart; unrelated
+games and artwork updates do not invalidate them. Flush details are paginated and
+remain bound to the confirmation revision. Existing databases migrate automatically
+while preserving IDs, action references and recovery journals. When upgrading from
+an older build, exit its host before starting the new package; rebuild and register
+the matching Explorer extension using the documented scripts.
 
 ## Current limits
 
@@ -297,9 +349,11 @@ contents and empty directories, not arbitrary ACLs, alternate streams or all fil
 metadata. Directory identity/change checks do not make file/database operations
 atomic against arbitrary simultaneous external filesystem edits or power loss.
 Progress reports phases and cumulative bytes, without a precomputed percentage.
-State watch coalesces revisions into complete snapshots and has an 8 MiB frame cap.
-The initial repository uses simple full metadata transactions; very large histories
-will need incremental writes and paginated queries.
+State watch coalesces revisions into complete library summaries and has an 8 MiB
+frame cap. Oversized individual items return an explicit error. Scanning actual
+backup folders and collecting Flush paths still scale with that game's retained
+files. See [history capacity measurements](docs/history-capacity.md) for the
+metadata benchmark, its fixture scope and reproduction command.
 
 See [PLAN.md](PLAN.md), [PLAN-INTEGRATION-TESTS.md](PLAN-INTEGRATION-TESTS.md) and
 [protocol/README.md](protocol/README.md) for the target behavior and service contract.

@@ -1,8 +1,13 @@
-param([string]$Dll, [switch]$Uninstall)
+param([string]$Dll, [switch]$Uninstall, [switch]$Dev)
 $ErrorActionPreference = 'Stop'
 $classId = '{3F8F42CE-463F-41B6-98D1-8C8D16B88931}'
 $classKey = "HKCU:\Software\Classes\CLSID\$classId"
 $handlerKey = 'HKCU:\Software\Classes\Directory\shellex\ContextMenuHandlers\SaveScummer'
+if ($Dev) {
+    $classId = '{43BFBA41-D0AB-44D3-A5D6-600EB5C74D18}'
+    $classKey = "HKCU:\Software\Classes\CLSID\$classId"
+    $handlerKey = 'HKCU:\Software\Classes\Directory\shellex\ContextMenuHandlers\SaveScummerDev'
+}
 if ($Uninstall) {
     foreach ($key in @($handlerKey, $classKey)) {
         if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse }

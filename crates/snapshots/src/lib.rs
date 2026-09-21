@@ -285,12 +285,29 @@ fn wide(path: &Path) -> Vec<u16> {
 }
 #[cfg(windows)]
 fn rename_exclusive(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::time::{Duration, Instant};
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
     use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
+    let from = wide(from);
+    let to = wide(to);
+    let deadline = Instant::now() + Duration::from_millis(500);
     // No REPLACE_EXISTING or COPY_ALLOWED: same-volume atomic rename only.
-    if unsafe { MoveFileExW(wide(from).as_ptr(), wide(to).as_ptr(), 0x8) } == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
+    // Windows can briefly deny a directory rename while another process holds
+    // a handle without delete sharing. Retry only these errors; a persistent
+    // lock still fails into the runtime's normal rollback/recovery path.
+    loop {
+        if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0x8) } != 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if !matches!(
+            error.raw_os_error().map(|code| code as u32),
+            Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION)
+        ) || Instant::now() >= deadline
+        {
+            return Err(error);
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 #[cfg(target_os = "linux")]
@@ -381,5 +398,54 @@ mod tests {
         assert!(FileSnapshots::default().rename(&a, &b).is_err());
         assert_eq!(fs::read(a.join("data")).unwrap(), b"keep");
         assert!(b.is_dir());
+    }
+
+    #[cfg(windows)]
+    fn lock_directory(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        };
+        OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+            .unwrap()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rename_waits_for_a_temporary_directory_lock() {
+        let temp = tempfile::tempdir().unwrap();
+        let from = temp.path().join("from");
+        let to = temp.path().join("to");
+        fs::create_dir(&from).unwrap();
+        fs::write(from.join("data"), b"keep").unwrap();
+        let locked = lock_directory(&from);
+        assert!(fs::rename(&from, &to).is_err());
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            drop(locked);
+        });
+        let result = FileSnapshots::default().rename(&from, &to);
+        release.join().unwrap();
+        result.unwrap();
+        assert!(!from.exists());
+        assert_eq!(fs::read(to.join("data")).unwrap(), b"keep");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rename_fails_without_changing_data_when_directory_stays_locked() {
+        let temp = tempfile::tempdir().unwrap();
+        let from = temp.path().join("from");
+        let to = temp.path().join("to");
+        fs::create_dir(&from).unwrap();
+        fs::write(from.join("data"), b"keep").unwrap();
+        let _locked = lock_directory(&from);
+        assert!(FileSnapshots::default().rename(&from, &to).is_err());
+        assert_eq!(fs::read(from.join("data")).unwrap(), b"keep");
+        assert!(!to.exists());
     }
 }

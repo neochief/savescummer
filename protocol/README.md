@@ -1,4 +1,4 @@
-# Local service protocol v2
+# Local service protocol v3
 
 The checked-in JSON schemas and fixtures in this directory are the shared contract
 for Rust and C++/Qt clients. Changes must update the schemas, fixtures and
@@ -16,11 +16,17 @@ returns a structured `invalid_request` error. Malformed or oversized frames clos
 the connection. A disconnect never means the operation succeeded or was cancelled.
 
 Use one request per connection. Ordinary queries and commands return one response.
-`watch` returns the current complete state, followed by complete states when its
+`watch` returns the current library summary, followed by summaries when its
 `revision` or `artwork_revision` changes. Intermediate progress updates may be coalesced; every delivered
 state is self-contained. Revisions increase within one `host_id`; a different
 `host_id` means the host restarted and clients must discard their old revision.
 After reconnecting, obtain a new snapshot and query any accepted operation IDs.
+Summaries contain games, settings, active stack, artwork, availability,
+`history_status`, blocking operations and the most recent terminal result per
+game. `snapshots` contains only each game's default saved checkpoint. Raw history,
+retired checkpoints and historical journals are excluded. Query `operation` by
+its exact ID to retrieve an older outcome. Unchanged watch ticks check lightweight
+revisions and live-directory availability without rebuilding history.
 The desktop also sends `check_artwork` on attachment. This returns `ok` immediately
 after queueing a host background cache check, without waiting for disk or network.
 `state.artwork` maps game IDs to `{steam_app_id, icon_path}`; `icon_path` is null
@@ -38,7 +44,9 @@ are opaque strings, and timestamps are UTC Unix milliseconds, never identifiers.
 
 Explicit `load.target` is a saved checkpoint ID (`snapshot_id` on a Saved/Existing
 backup history row). `revert.target` is a recovery checkpoint ID (`recovery_id` on
-a Loaded/Reverted row). Version 1 history-ID targets are no longer accepted.
+a Loaded/Reverted row). `delete.target` accepts either exact checkpoint ID and
+permanently removes that saved or recovery reset point. Version 1 history-ID targets
+are no longer accepted.
 Omitting Load's target selects the eligible saved checkpoint with the greatest
 `(selection_time, registration_order)`, independently of history rows. Checkpoints
 carry their `original_data_dir`; the game carries the current `data_dir`. Service
@@ -50,26 +58,44 @@ uses filesystem resolution, preserving distinct case-sensitive paths.
 History and operation `target_id` remain optional audit links to the original
 history row; `snapshot_id`, `recovery_id` and operation `source_id` identify the
 actual checkpoints. A missing audit link never determines restore eligibility.
-The host migrates database schema 1 to 2 atomically, preserving IDs, history links
+The host applies atomic database migrations through schema 3, preserving IDs, history links
 and recovery journals. Legacy manual checkpoints with no retained original-path
 mapping have null `original_data_dir` and remain ineligible until a scan verifies
 the same generation at the configured directory. New checkpoints always have an
 original directory. Existing explicit operation targets migrate to checkpoint IDs
-so accepted requests remain idempotent when retried through protocol v2.
+so accepted requests remain idempotent when retried through protocol v3.
 
-The client must render `state.visible_history` and consult snapshot availability
-for actions. `state.history` and removed snapshot generations are audit records,
-not rows to render. Removed generations never regain availability. A new folder
+The client requests `history` with `game_id`, `cursor` (null for the first page)
+and `limit` (default 50, range 1–200). The `history_page` reply contains `page` with
+`game_id`, `revision`, `rows` and an optional `next_cursor`. Rows flatten their
+history fields and include `display_time`, optional `target_time`, an exact
+`action` and `available`. Render these directly; no global checkpoint map is
+required. The row-data budget is 512 KiB, independently of the row limit.
+On a reload, an optional `anchor_id` with no cursor starts at a still-visible row
+to preserve scroll position. If that row no longer exists in this game's visible
+history, the query returns the latest page. A normal first-page request omits the anchor.
+
+Cursors are opaque, scoped to one game, host instance and visibility/availability
+revision. `cursor_expired` means reload; unrelated games, progress-only changes
+and artwork updates preserve them. At a stable revision, keyset pagination returns
+each visible row once in descending durable sequence order. Session visibility
+uses complete session context, including actions outside the page. Opening the
+first page refreshes backup discovery; subsequent pages read the indexed projection.
+The host revalidates all actions at execution regardless of a page's availability.
+
+`state.history_status[game_id]` gives the history `revision`,
+`has_visible_history` and `can_flush`. It controls history-arrow/Flush availability
+before pages have been fetched; busy/recovery restrictions still apply.
+Removed generations never regain availability. A new folder
 generation receives new IDs even when its path was previously used. For Existing
 backup rows, `selection_time` is a folder-modification estimate, `discovered_at` is
 the observation time, and `saved_at` remains null. These meanings must not be mixed.
 
 `state.availability[game_id]` supplies `data_available` and the core-selected
-`default_snapshot_id` (null when none is eligible). This additive v2 projection
+`default_snapshot_id` (null when none is eligible). This projection
 lets the desktop render Save/Load availability and timestamps without probing
 save directories or recreating selection policy. Live-directory availability
-changes advance the host revision even without a history event. Clients connected
-to older hosts without the field must leave ordinary Save/Load controls disabled.
+changes advance the host revision even without a history event.
 
 Operation `status` is authoritative. `pending` is busy; `completed` is committed;
 `failed` is an unsuccessful operation whose live data is safe; `recovery_needed`
@@ -80,11 +106,11 @@ Errors have a stable `code` and diagnostic `message`. UI wording can use the cod
 `state.settings.play_sounds` is the persisted app-wide audio preference and defaults
 to true for existing databases. Send `{"type":"set_play_sounds","enabled":false}`
 to mute it (or true to enable); `ok` means the setting committed. The state revision
-and watch stream update after a change. This is an additive protocol v2 command.
+and watch stream update after a change.
 The Windows host owns playback for Save/Load commands regardless of client lifetime;
 clients must not play duplicate cues. Replayed accepted requests are silent.
 
-Additional Windows-host entry points (additive v2):
+Windows-host entry points:
 
 - `execute_active` accepts `action: "save"|"load"`. The core chooses the first
   active-stack game. Replaying an accepted ID uses the original game and action.
@@ -108,10 +134,16 @@ compatible defaults for existing databases. Invalid or ambiguous discoveries hav
 publishes source/integration diagnostics independently of a UI client. These errors
 do not erase valid configurations, checkpoints or history.
 
-Flush is two-step: request `flush_preview`, show all counts/paths, then execute
+Flush is two-step: request `flush_preview`, show counts and optional path pages, then execute
 `flush` with its `confirmed_revision`. The host refreshes backup discovery before
 checking this revision, so external backup changes also invalidate the confirmation
 and require a new preview. Any intervening revision invalidates that confirmation.
+`flush_preview.preview.paths` contains at most 50 paths, within a 512 KiB path-data
+budget. Pass its `next_cursor` to `flush_details` with the same `game_id` to read
+another page. Counts cover all paths. A stale cursor requires a fresh preview and
+confirmation; the UI must not silently replace the revision being confirmed.
+Oversized single rows/paths or other responses return `response_too_large` rather
+than truncating results or raising the frame limit.
 Recovery commands use an explicit interrupted operation ID and one
 of `keep_current`, `restore_before` or `retry`.
 
@@ -120,3 +152,9 @@ DACL grants access only to that SID, and remote pipe clients are rejected. Unix
 uses a mode-0600 socket inside a mode-0700 data directory. The host holds the
 data-directory lock for its entire lifetime. Alternate data directories are for
 isolated development/test instances; normal use has one default host per user.
+
+Deploy the host, CLI, desktop and Explorer bridge together. Version mismatches are
+rejected. Exit an older host before launching v3 (the per-data-directory lock still
+prevents concurrent hosts), and rebuild/re-register older Explorer DLLs. The
+database migration adds visibility/query indexes and durable ordering counters;
+it does not change checkpoint IDs, stored backup paths or request IDs.

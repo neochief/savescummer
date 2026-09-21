@@ -1,0 +1,1 @@
+{"version":3,"request_id":"delete-fixture","command":{"type":"execute","game_id":"void-war","action":{"type":"delete","target":"checkpoint-id"}}}

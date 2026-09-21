@@ -13,6 +13,23 @@ pub struct Runtime {
     clock: Arc<dyn Clock>,
     executing: Mutex<BTreeSet<Id>>,
     observation_run: Id,
+    summary_cache: Mutex<std::collections::BTreeMap<Id, (u64, Option<Snapshot>)>>,
+}
+
+struct WorkingState<'a> {
+    guard: MutexGuard<'a, State>,
+    value: State,
+}
+impl std::ops::Deref for WorkingState<'_> {
+    type Target = State;
+    fn deref(&self) -> &State {
+        &self.value
+    }
+}
+impl std::ops::DerefMut for WorkingState<'_> {
+    fn deref_mut(&mut self) -> &mut State {
+        &mut self.value
+    }
 }
 
 impl Runtime {
@@ -22,7 +39,7 @@ impl Runtime {
         policy: Arc<dyn PathPolicy>,
         clock: Arc<dyn Clock>,
     ) -> Result<Self> {
-        let mut state = repository.load()?;
+        let mut state = repository.boot()?;
         // A fresh monitor reconstructs activity; persisted stack is not evidence
         // of launches or closes while the host was stopped.
         state.active_stack.clear();
@@ -34,9 +51,10 @@ impl Runtime {
             clock,
             executing: Mutex::new(BTreeSet::new()),
             observation_run: new_id(),
+            summary_cache: Mutex::new(Default::default()),
         };
         runtime.recover_startup()?;
-        for game_id in runtime.state()?.games.keys() {
+        for game_id in runtime.games()?.keys() {
             if let Err(error) = runtime.refresh(game_id)
                 && error.code == ErrorCode::Storage
             {
@@ -45,19 +63,289 @@ impl Runtime {
         }
         Ok(runtime)
     }
-    fn lock(&self) -> Result<MutexGuard<'_, State>> {
-        self.state
+    fn lock(&self) -> Result<WorkingState<'_>> {
+        let guard = self
+            .state
             .lock()
-            .map_err(|_| Error::new(ErrorCode::Storage, "runtime state lock poisoned"))
+            .map_err(|_| Error::new(ErrorCode::Storage, "runtime state lock poisoned"))?;
+        let value = guard.clone();
+        Ok(WorkingState { guard, value })
     }
-    fn commit(&self, guard: &mut State, mut next: State) -> Result<()> {
+    fn lock_game(&self, game: &str) -> Result<WorkingState<'_>> {
+        let mut state = self.lock()?;
+        state.snapshots = self
+            .repository
+            .game_snapshots(game)?
+            .into_iter()
+            .map(|s| (s.id.clone(), s))
+            .collect();
+        Ok(state)
+    }
+    fn commit(&self, guard: &mut WorkingState<'_>, mut next: State) -> Result<()> {
         next.revision = guard.revision + 1;
-        self.repository.commit(&next)?;
-        *guard = next;
+        let changes = MetadataChanges::between(guard, &next);
+        self.repository.commit_changes(&changes)?;
+        next.history.clear();
+        next.visible_history.clear();
+        next.snapshots.clear();
+        next.clear_history.clear();
+        retain_current_operations(&mut next);
+        *guard.guard = next.clone();
+        guard.value = next;
         Ok(())
+    }
+    pub fn games(&self) -> Result<std::collections::BTreeMap<Id, Game>> {
+        Ok(self.lock()?.games.clone())
+    }
+    /// Watch polls only live availability and a scalar revision. It never reads
+    /// audit rows or constructs the summary when nothing has changed.
+    pub fn revision(&self) -> Result<u64> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Storage, "runtime state lock poisoned"))?;
+        let changes = state
+            .games
+            .values()
+            .filter_map(|game| {
+                let available = self.io.accessible_dir(&game.data_dir).unwrap_or(false);
+                (state
+                    .availability
+                    .get(&game.id)
+                    .is_none_or(|a| a.data_available != available))
+                .then(|| (game.id.clone(), available))
+            })
+            .collect::<Vec<_>>();
+        if !changes.is_empty() {
+            for (game, available) in changes {
+                state.availability.entry(game).or_default().data_available = available;
+            }
+            state.revision += 1;
+        }
+        Ok(state.revision)
+    }
+    fn visit_operations(
+        &self,
+        game: &str,
+        mut visit: impl FnMut(&Operation) -> Result<()>,
+    ) -> Result<()> {
+        let mut after = String::new();
+        loop {
+            let page = self.repository.operation_page(game, &after, 200)?;
+            if page.is_empty() {
+                return Ok(());
+            }
+            for op in page {
+                visit(&op)?;
+                after = op.id;
+            }
+        }
+    }
+    pub fn summary(&self) -> Result<State> {
+        let mut current = self.lock()?;
+        let mut state = current.clone();
+        let mut cache = self
+            .summary_cache
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Storage, "summary lock poisoned"))?;
+        for game in state.games.values() {
+            let status = self.repository.history_status(&game.id)?;
+            if !cache
+                .get(&game.id)
+                .is_some_and(|(revision, _)| *revision == status.revision)
+            {
+                let checkpoint = self
+                    .repository
+                    .game_snapshots(&game.id)?
+                    .into_iter()
+                    .filter(|s| self.checkpoint_eligible(s, game, SnapshotKind::Saved))
+                    .max_by_key(|s| (s.selection_time, s.registration_order));
+                cache.insert(game.id.clone(), (status.revision, checkpoint));
+            }
+            let checkpoint = cache.get(&game.id).and_then(|(_, s)| s.as_ref());
+            state.availability.insert(
+                game.id.clone(),
+                GameAvailability {
+                    data_available: self.io.accessible_dir(&game.data_dir).unwrap_or(false),
+                    default_snapshot_id: checkpoint.map(|s| s.id.clone()),
+                },
+            );
+            if let Some(checkpoint) = checkpoint {
+                state
+                    .snapshots
+                    .insert(checkpoint.id.clone(), checkpoint.clone());
+            }
+            state.history_status.insert(game.id.clone(), status);
+        }
+        if current.availability != state.availability
+            || current.history_status != state.history_status
+        {
+            current.guard.availability = state.availability.clone();
+            current.guard.history_status = state.history_status.clone();
+            current.guard.revision += 1;
+            state.revision = current.guard.revision;
+        }
+        Ok(state)
+    }
+    pub fn history_page(
+        &self,
+        game_id: &str,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<HistoryPage> {
+        self.history_page_at(game_id, cursor, limit, None)
+    }
+    pub fn history_page_at(
+        &self,
+        game_id: &str,
+        cursor: Option<&str>,
+        limit: usize,
+        anchor_id: Option<&str>,
+    ) -> Result<HistoryPage> {
+        if cursor.is_some() && anchor_id.is_some() {
+            return Err(Error::new(
+                ErrorCode::InvalidRequest,
+                "use a cursor or an anchor, not both",
+            ));
+        }
+        if limit == 0 || limit > 200 {
+            return Err(Error::new(
+                ErrorCode::InvalidRequest,
+                "history page size must be between 1 and 200",
+            ));
+        }
+        let state = self.lock()?;
+        let game = state
+            .games
+            .get(game_id)
+            .ok_or_else(|| Error::new(ErrorCode::NotFound, "unknown game"))?;
+        let status = self.repository.history_status(game_id)?;
+        let before = if let Some(cursor) = cursor {
+            let (host, game, revision, before): (String, String, u64, u64) =
+                serde_json::from_str(cursor)
+                    .map_err(|_| Error::new(ErrorCode::InvalidRequest, "invalid history cursor"))?;
+            if host != self.observation_run || game != game_id || revision != status.revision {
+                return Err(Error::new(
+                    ErrorCode::CursorExpired,
+                    "history changed; reload the first page",
+                ));
+            }
+            before
+        } else if let Some(anchor) = anchor_id {
+            let entry = self
+                .repository
+                .history_entry(anchor)?
+                .filter(|h| h.game_id == game_id);
+            if let Some(entry) = entry {
+                let before = entry.sequence.saturating_add(1).min(i64::MAX as u64);
+                if self
+                    .repository
+                    .history_rows(game_id, before, 1)?
+                    .first()
+                    .is_some_and(|h| h.id == anchor)
+                {
+                    before
+                } else {
+                    i64::MAX as u64
+                }
+            } else {
+                i64::MAX as u64
+            }
+        } else {
+            i64::MAX as u64
+        };
+        let entries = self.repository.history_rows(game_id, before, limit + 1)?;
+        let mut rows = Vec::new();
+        let mut size = 0;
+        let mut more = false;
+        for entry in entries {
+            if rows.len() == limit {
+                more = true;
+                break;
+            }
+            let snapshot = action_checkpoint(&entry)
+                .map(|id| self.repository.snapshot(id))
+                .transpose()?
+                .flatten();
+            let action = snapshot.as_ref().map(|s| match entry.kind {
+                HistoryKind::Saved | HistoryKind::ExistingBackup => Action::Load {
+                    target: Some(s.id.clone()),
+                },
+                _ => Action::Revert {
+                    target: s.id.clone(),
+                },
+            });
+            let available = snapshot
+                .as_ref()
+                .is_some_and(|s| self.checkpoint_eligible(s, game, s.kind));
+            let display_time = if entry.kind == HistoryKind::ExistingBackup {
+                snapshot
+                    .as_ref()
+                    .map_or(entry.recorded_at, |s| s.selection_time)
+            } else {
+                entry.recorded_at
+            };
+            let target_time = entry
+                .target_id
+                .as_ref()
+                .map(|id| self.repository.history_entry(id))
+                .transpose()?
+                .flatten()
+                .map(|h| h.recorded_at);
+            let row = HistoryRow {
+                entry,
+                display_time,
+                target_time,
+                action,
+                available,
+            };
+            let bytes = serde_json::to_vec(&row)
+                .map_err(|e| Error::new(ErrorCode::Storage, e.to_string()))?
+                .len();
+            if bytes > 512 * 1024 {
+                return Err(Error::new(
+                    ErrorCode::ResponseTooLarge,
+                    "one history row exceeds the page byte budget",
+                ));
+            }
+            if size + bytes > 512 * 1024 {
+                more = true;
+                break;
+            }
+            size += bytes;
+            rows.push(row);
+        }
+        let next_cursor = if more {
+            rows.last().map(|row| {
+                serde_json::to_string(&(
+                    &self.observation_run,
+                    game_id,
+                    status.revision,
+                    row.entry.sequence,
+                ))
+                .unwrap()
+            })
+        } else {
+            None
+        };
+        Ok(HistoryPage {
+            game_id: game_id.into(),
+            revision: status.revision,
+            rows,
+            next_cursor,
+        })
     }
     pub fn settings(&self) -> Result<Settings> {
         Ok(self.lock()?.settings.clone())
+    }
+    pub fn has_pending_operations(&self) -> Result<bool> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Storage, "runtime state lock poisoned"))?
+            .operations
+            .values()
+            .any(|o| o.status == OperationStatus::Pending))
     }
     pub fn set_play_sounds(&self, enabled: bool) -> Result<()> {
         let mut state = self.lock()?;
@@ -135,8 +423,8 @@ impl Runtime {
                     action: Action::Save,
                 });
             }
-            for snapshot in state.snapshots.values() {
-                if self.checkpoint_eligible(snapshot, game, SnapshotKind::Saved)
+            for snapshot in self.repository.game_snapshots(&game.id)? {
+                if self.checkpoint_eligible(&snapshot, game, SnapshotKind::Saved)
                     && self.policy.same_location(&path, &snapshot.path)
                 {
                     targets.push(ExplorerTarget {
@@ -151,15 +439,17 @@ impl Runtime {
         Ok(targets)
     }
     pub fn operation_for_request(&self, request_id: &str) -> Result<Option<Id>> {
-        Ok(self
-            .lock()?
-            .operations
-            .values()
-            .find(|operation| operation.request_id == request_id)
-            .map(|operation| operation.id.clone()))
+        Ok(self.repository.request_operation(request_id)?.map(|o| o.id))
     }
+    /// Explicit diagnostic/test export. Normal clients use summary and pages.
     pub fn state(&self) -> Result<State> {
-        let mut state = self.lock()?.clone();
+        let current = self.lock()?;
+        let mut state = self.repository.load()?;
+        state.revision = current.revision;
+        state.active_stack = current.active_stack.clone();
+        state.discovery_errors = current.discovery_errors.clone();
+        state.operations.extend(current.operations.clone());
+        drop(current);
         for snapshot in state.snapshots.values_mut() {
             snapshot.available = state
                 .games
@@ -193,9 +483,9 @@ impl Runtime {
         // The projection is transient; the next durable commit carries revision.
         let mut current = self.lock()?;
         if current.revision == state.revision && current.availability != state.availability {
-            current.availability = state.availability.clone();
-            current.revision += 1;
-            state.revision = current.revision;
+            current.guard.availability = state.availability.clone();
+            current.guard.revision += 1;
+            state.revision = current.guard.revision;
         }
         Ok(state)
     }
@@ -212,14 +502,9 @@ impl Runtime {
                 .as_ref()
                 .is_some_and(|path| self.policy.same_location(path, &game.data_dir))
     }
-    fn next_snapshot_order(state: &State) -> u64 {
-        state
-            .snapshots
-            .values()
-            .map(|s| s.registration_order)
-            .max()
-            .unwrap_or(0)
-            + 1
+    fn next_snapshot_order(state: &mut State) -> u64 {
+        state.snapshot_order += 1;
+        state.snapshot_order
     }
     fn check_idle(state: &State, game: &str) -> Result<()> {
         if state
@@ -285,25 +570,16 @@ impl Runtime {
             .map(|g| (g.id.clone(), g.data_dir.clone()))
             .collect::<Vec<_>>();
         let data_dir = self.policy.validate(&path, &others)?;
-        // Reserve all retained snapshot locations, including previous data locations.
-        for snapshot in state.snapshots.values().filter(|s| s.removed_at.is_none()) {
-            if data_dir.starts_with(&snapshot.path) || snapshot.path.starts_with(&data_dir) {
+        // Reservations include uncached checkpoints and old operation journals.
+        self.repository.visit_reserved_paths(&mut |retained| {
+            if data_dir.starts_with(retained) || retained.starts_with(&data_dir) {
                 return Err(Error::new(
                     ErrorCode::InvalidPath,
                     "data directory overlaps retained snapshot data",
                 ));
             }
-        }
-        for operation in state.operations.values() {
-            for retained in operation.retained_paths() {
-                if data_dir.starts_with(&retained) || retained.starts_with(&data_dir) {
-                    return Err(Error::new(
-                        ErrorCode::InvalidPath,
-                        "data directory overlaps retained operation data",
-                    ));
-                }
-            }
-        }
+            Ok(())
+        })?;
         let executables = executables
             .iter()
             .map(|p| self.policy.resolve(p))
@@ -432,8 +708,8 @@ impl Runtime {
     pub fn set_discovery_errors(&self, errors: Vec<String>) -> Result<()> {
         let mut state = self.lock()?;
         if state.discovery_errors != errors {
-            state.discovery_errors = errors;
-            state.revision += 1;
+            state.guard.discovery_errors = errors;
+            state.guard.revision += 1;
         }
         Ok(())
     }
@@ -451,7 +727,7 @@ impl Runtime {
         self.commit(&mut state, next)
     }
     pub fn refresh(&self, game_id: &str) -> Result<()> {
-        let mut state = self.lock()?;
+        let mut state = self.lock_game(game_id)?;
         Self::check_idle(&state, game_id)?;
         let game = state
             .games
@@ -512,6 +788,13 @@ impl Runtime {
         let mut candidates = self.io.saved_candidates(&game.data_dir).unwrap_or_default();
         candidates.sort();
         for path in candidates {
+            if self
+                .repository
+                .snapshot_at_path(&path)?
+                .is_some_and(|s| s.game_id != game_id)
+            {
+                continue;
+            }
             if let Some(existing) = next
                 .snapshots
                 .values_mut()
@@ -540,18 +823,17 @@ impl Runtime {
             let Ok((selection_time, identity, fingerprint)) = inspection else {
                 continue;
             };
-            if state.operations.values().any(|o| {
-                o.status != OperationStatus::Completed
-                    && o.snapshot_path.as_ref() == Some(&path)
-                    && o.staging_identity.as_ref() == Some(&identity)
-            }) {
+            if self
+                .repository
+                .unpublished_snapshot(game_id, &path, &identity)?
+            {
                 continue;
             }
             let snapshot = Snapshot {
                 id: new_id(),
                 game_id: game.id.clone(),
                 original_data_dir: Some(game.data_dir.clone()),
-                registration_order: Self::next_snapshot_order(&next),
+                registration_order: Self::next_snapshot_order(&mut next),
                 path,
                 identity,
                 fingerprint,
@@ -601,12 +883,8 @@ impl Runtime {
         }
         // Idempotency is checked before refreshing or checking the busy state.
         {
-            let state = self.lock()?;
-            if let Some(op) = state
-                .operations
-                .values()
-                .find(|o| o.request_id == request_id)
-            {
+            let _state = self.lock()?;
+            if let Some(op) = self.repository.request_operation(&request_id)? {
                 return if op.game_id == game_id && op.action == action {
                     Ok(op.id.clone())
                 } else {
@@ -621,16 +899,16 @@ impl Runtime {
         // revision, just as restore commands refresh before selecting a source.
         if matches!(
             action,
-            Action::Save | Action::Load { .. } | Action::Revert { .. } | Action::Flush { .. }
+            Action::Save
+                | Action::Load { .. }
+                | Action::Revert { .. }
+                | Action::Delete { .. }
+                | Action::Flush { .. }
         ) {
             self.refresh(game_id)?;
         }
-        let mut state = self.lock()?;
-        if let Some(op) = state
-            .operations
-            .values()
-            .find(|o| o.request_id == request_id)
-        {
+        let mut state = self.lock_game(game_id)?;
+        if let Some(op) = self.repository.request_operation(&request_id)? {
             return if op.game_id == game_id && op.action == action {
                 Ok(op.id.clone())
             } else {
@@ -756,12 +1034,30 @@ impl Runtime {
         let (target, kind) = match action {
             Action::Load { target } => (target.as_ref(), SnapshotKind::Saved),
             Action::Revert { target } => (Some(target), SnapshotKind::Recovery),
+            Action::Delete { target } => {
+                let snapshot = self
+                    .repository
+                    .snapshot(target)?
+                    .ok_or_else(|| Error::new(ErrorCode::InvalidTarget, "unknown checkpoint ID"))?;
+                if snapshot.game_id != game.id
+                    || snapshot.removed_at.is_some()
+                    || !snapshot
+                        .original_data_dir
+                        .as_ref()
+                        .is_some_and(|path| self.policy.same_location(path, &game.data_dir))
+                {
+                    return Err(Error::new(
+                        ErrorCode::InvalidTarget,
+                        "checkpoint belongs to another game or data directory",
+                    ));
+                }
+                return Ok((Some(snapshot), None));
+            }
             _ => return Ok((None, None)),
         };
         let snapshot = if let Some(id) = target {
-            state
-                .snapshots
-                .get(id)
+            self.repository
+                .snapshot(id)?
                 .ok_or_else(|| Error::new(ErrorCode::InvalidTarget, "unknown checkpoint ID"))?
         } else {
             state
@@ -769,41 +1065,37 @@ impl Runtime {
                 .values()
                 .filter(|s| self.checkpoint_eligible(s, game, kind))
                 .max_by_key(|s| (s.selection_time, s.registration_order))
-                .ok_or_else(|| {
-                    Error::new(ErrorCode::Unavailable, "no available saved checkpoint")
-                })?
+                .ok_or_else(|| Error::new(ErrorCode::Unavailable, "no available saved checkpoint"))?
+                .clone()
         };
-        if !self.checkpoint_matches(snapshot, game, kind) {
+        if !self.checkpoint_matches(&snapshot, game, kind) {
             return Err(Error::new(
                 ErrorCode::InvalidTarget,
                 "checkpoint belongs to another game, data directory, or action kind",
             ));
         }
         // History is optional audit context, never the source of eligibility.
-        let history = state.history.iter().find(|h| {
-            h.game_id == game.id
-                && match kind {
-                    SnapshotKind::Saved => {
-                        matches!(h.kind, HistoryKind::Saved | HistoryKind::ExistingBackup)
-                            && h.snapshot_id.as_ref() == Some(&snapshot.id)
-                    }
-                    SnapshotKind::Recovery => {
-                        matches!(h.kind, HistoryKind::Loaded | HistoryKind::Reverted)
-                            && h.recovery_id.as_ref() == Some(&snapshot.id)
-                    }
-                }
-        });
-        Ok((Some(snapshot.clone()), history.map(|h| h.id.clone())))
+        let history = self.repository.checkpoint_history(&snapshot.id)?;
+        Ok((Some(snapshot), history.map(|h| h.id)))
     }
     pub fn operation(&self, id: &str) -> Result<Operation> {
-        self.lock()?
+        let state = self.lock()?;
+        state
             .operations
             .get(id)
             .cloned()
+            .or(self.repository.operation(id)?)
             .ok_or_else(|| Error::new(ErrorCode::NotFound, "unknown operation"))
     }
     fn update(&self, id: &str, change: impl FnOnce(&mut Operation)) -> Result<()> {
         let mut state = self.lock()?;
+        if !state.operations.contains_key(id) {
+            let op = self
+                .repository
+                .operation(id)?
+                .ok_or_else(|| Error::new(ErrorCode::NotFound, "unknown operation"))?;
+            state.operations.insert(id.into(), op);
+        }
         let mut next = state.clone();
         change(
             next.operations
@@ -856,6 +1148,7 @@ impl Runtime {
         let result = validation.and_then(|_| match op.action {
             Action::Save => self.save(id),
             Action::Load { .. } | Action::Revert { .. } => self.restore(id, false),
+            Action::Delete { .. } => self.delete_checkpoint(id),
             Action::Flush { .. } => self.flush(id),
             Action::Recover { .. } => self.resolve_recovery(id),
         });
@@ -885,22 +1178,57 @@ impl Runtime {
                 current.status = OperationStatus::RecoveryNeeded;
                 current.error = Some(storage_error.clone());
                 let mut state = self.lock()?;
-                state.operations.insert(id.into(), current);
-                state.revision += 1;
+                state.guard.operations.insert(id.into(), current);
+                state.guard.revision += 1;
                 return Err(storage_error);
             }
             return Err(error);
         }
         Ok(())
     }
+    fn delete_checkpoint(&self, id: &str) -> Result<()> {
+        let op = self.operation(id)?;
+        let source = op
+            .source
+            .as_ref()
+            .ok_or_else(|| Error::new(ErrorCode::Storage, "missing checkpoint path"))?;
+        let resolved = self.policy.resolve(source)?;
+        let library = self.lock()?.clone();
+        if resolved != *source
+            || library.games.values().any(|game| {
+                game.data_dir.starts_with(&resolved) || resolved.starts_with(&game.data_dir)
+            })
+        {
+            return Err(Error::new(
+                ErrorCode::InvalidPath,
+                "refusing to delete a changed alias or live data",
+            ));
+        }
+        self.io.remove(source)?;
+
+        let mut state = self.lock_game(&op.game_id)?;
+        let mut next = state.clone();
+        let checkpoint = next
+            .snapshots
+            .get_mut(op.source_id.as_deref().unwrap_or_default())
+            .ok_or_else(|| Error::new(ErrorCode::NotFound, "checkpoint record disappeared"))?;
+        checkpoint.available = false;
+        checkpoint.removed_at = Some(self.clock.now_ms());
+        checkpoint.removal_reason = Some(RemovalReason::Deleted);
+        let operation = next.operations.get_mut(id).unwrap();
+        operation.phase = Phase::Finished;
+        operation.status = OperationStatus::Completed;
+        self.commit(&mut state, next)
+    }
     fn save(&self, id: &str) -> Result<()> {
         let op = self.operation(id)?;
         self.copy(id, &op.live, &op.staging)?;
         let identity = self.io.identity(&op.staging)?;
         self.update(id, |o| o.staging_identity = Some(identity))?;
+        let mut competing = Vec::new();
         for _ in 0..100 {
-            let state = self.state()?;
-            let reserved = state
+            let state = self.lock_game(&op.game_id)?.clone();
+            let mut reserved = state
                 .snapshots
                 .values()
                 .filter(|s| s.removed_at.is_none())
@@ -913,7 +1241,13 @@ impl Runtime {
                         .flat_map(|o| o.snapshot_path.iter().cloned()),
                 )
                 .collect::<Vec<_>>();
+            reserved.extend(self.repository.reserved_snapshot_paths(&op.game_id)?);
+            reserved.extend(competing.iter().cloned());
             let destination = self.io.next_saved_path(&op.live, &reserved)?;
+            if self.repository.snapshot_path_reserved(&destination)? {
+                competing.push(destination);
+                continue;
+            }
             self.policy.validate(
                 &destination,
                 &state
@@ -1012,7 +1346,8 @@ impl Runtime {
         recovery: Option<Id>,
         target: Option<Id>,
     ) {
-        let sequence = state.history.last().map_or(1, |h| h.sequence + 1);
+        state.history_sequence += 1;
+        let sequence = state.history_sequence;
         state.history.push(History {
             id: new_id(),
             observation_run: self.observation_run.clone(),
@@ -1040,13 +1375,14 @@ impl Runtime {
         let id = new_id();
         let identity = self.io.identity(&op.recovery)?;
         let fingerprint = self.io.fingerprint(&op.recovery)?;
+        let registration_order = Self::next_snapshot_order(state);
         state.snapshots.insert(
             id.clone(),
             Snapshot {
                 id: id.clone(),
                 game_id: op.game_id.clone(),
                 original_data_dir: Some(op.live.clone()),
-                registration_order: Self::next_snapshot_order(state),
+                registration_order,
                 path: op.recovery.clone(),
                 identity,
                 fingerprint,
@@ -1062,7 +1398,8 @@ impl Runtime {
         Ok(Some(id))
     }
     fn finish_snapshot(&self, id: &str, kind: HistoryKind) -> Result<()> {
-        let mut state = self.lock()?;
+        let game_id = self.operation(id)?.game_id;
+        let mut state = self.lock_game(&game_id)?;
         let mut next = state.clone();
         let op = next.operations[id].clone();
         let game = next.games[&op.game_id].clone();
@@ -1076,13 +1413,14 @@ impl Runtime {
                 .ok_or_else(|| Error::new(ErrorCode::Storage, "missing published snapshot path"))?;
             let identity = self.io.identity(&path)?;
             let fingerprint = self.io.fingerprint(&path)?;
+            let registration_order = Self::next_snapshot_order(&mut next);
             next.snapshots.insert(
                 snapshot_id.clone(),
                 Snapshot {
                     id: snapshot_id.clone(),
                     game_id: game.id.clone(),
                     original_data_dir: Some(op.live.clone()),
-                    registration_order: Self::next_snapshot_order(&next),
+                    registration_order,
                     path,
                     identity,
                     fingerprint,
@@ -1106,7 +1444,7 @@ impl Runtime {
         self.commit(&mut state, next)
     }
     fn rollback_if_safe(&self, op: &Operation) -> Result<bool> {
-        let state = self.state()?;
+        let state = self.lock()?.clone();
         self.validated(&state, &state.games[&op.game_id])?;
         if self.policy.resolve(&op.original)? != op.original {
             return Err(Error::new(
@@ -1128,7 +1466,7 @@ impl Runtime {
     }
     fn recover_startup(&self) -> Result<()> {
         let pending = self
-            .state()?
+            .lock()?
             .operations
             .values()
             .filter(|o| o.status == OperationStatus::Pending)
@@ -1227,7 +1565,8 @@ impl Runtime {
         }
     }
     fn finish_recovery(&self, id: &str, resolution: &str) -> Result<()> {
-        let mut state = self.lock()?;
+        let game_id = self.operation(id)?.game_id;
+        let mut state = self.lock_game(&game_id)?;
         let mut next = state.clone();
         let op = next.operations[id].clone();
         self.register_recovery(&mut next, &op, self.clock.now_ms())?;
@@ -1237,6 +1576,14 @@ impl Runtime {
         // Resolving an interrupted recovery attempt must also resolve its ancestry.
         let mut current = Some(operation.clone());
         while let Some(key) = current {
+            if !next.operations.contains_key(&key) {
+                let old = self
+                    .repository
+                    .operation(&key)?
+                    .ok_or_else(|| Error::new(ErrorCode::Storage, "missing recovery ancestry"))?;
+                state.operations.insert(key.clone(), old.clone());
+                next.operations.insert(key.clone(), old);
+            }
             let old = next
                 .operations
                 .get_mut(&key)
@@ -1257,7 +1604,7 @@ impl Runtime {
     }
     pub fn flush_preview(&self, game_id: &str) -> Result<FlushPreview> {
         self.refresh(game_id)?;
-        let state = self.lock()?;
+        let state = self.lock_game(game_id)?;
         Self::check_idle(&state, game_id)?;
         let mut paths = BTreeSet::new();
         let mut saved = 0;
@@ -1275,7 +1622,7 @@ impl Runtime {
                 }
             }
         }
-        for operation in state.operations.values().filter(|o| o.game_id == game_id) {
+        self.visit_operations(game_id, |operation| {
             for path in operation.retained_paths() {
                 if self.io.exists(&path)? {
                     paths.insert(path);
@@ -1288,8 +1635,10 @@ impl Runtime {
             {
                 paths.insert(path.clone());
             }
-        }
+            Ok(())
+        })?;
         Ok(FlushPreview {
+            next_cursor: None,
             revision: state.revision,
             retained: paths.len().saturating_sub(saved + recovery),
             saved,
@@ -1299,7 +1648,7 @@ impl Runtime {
     }
     fn flush(&self, id: &str) -> Result<()> {
         let op = self.operation(id)?;
-        let state = self.state()?;
+        let state = self.lock_game(&op.game_id)?.clone();
         let mut paths = BTreeSet::new();
         for snapshot in state
             .snapshots
@@ -1308,11 +1657,10 @@ impl Runtime {
         {
             paths.insert(snapshot.path.clone());
         }
-        for operation in state
-            .operations
-            .values()
-            .filter(|o| o.game_id == op.game_id && o.id != id)
-        {
+        self.visit_operations(&op.game_id, |operation| {
+            if operation.id == id {
+                return Ok(());
+            }
             paths.extend(operation.retained_paths());
             if let (Some(path), Some(identity)) =
                 (&operation.snapshot_path, &operation.staging_identity)
@@ -1321,7 +1669,8 @@ impl Runtime {
             {
                 paths.insert(path.clone());
             }
-        }
+            Ok(())
+        })?;
         let mut failure = None;
         for path in &paths {
             // Re-resolve each destination and all live paths before destructive work.
@@ -1341,7 +1690,7 @@ impl Runtime {
                 failure = Some(error);
             }
         }
-        let mut guard = self.lock()?;
+        let mut guard = self.lock_game(&op.game_id)?;
         let mut next = guard.clone();
         for snapshot in next
             .snapshots
@@ -1358,6 +1707,7 @@ impl Runtime {
         if failure.is_none() {
             next.snapshots.retain(|_, s| s.game_id != op.game_id);
             next.history.retain(|h| h.game_id != op.game_id);
+            next.clear_history.push(op.game_id.clone());
             // Keep durable request IDs so retries cannot execute a second flush.
             for old in next
                 .operations

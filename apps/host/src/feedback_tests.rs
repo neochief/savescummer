@@ -22,7 +22,9 @@ impl Repository for TestRepository {
     fn load(&self) -> Result<State> {
         Ok(self.state.lock().unwrap().clone())
     }
-    fn commit(&self, state: &State) -> Result<()> {
+    fn commit_changes(&self, changes: &MetadataChanges) -> Result<()> {
+        let mut state = self.state.lock().unwrap().clone();
+        changes.apply(&mut state);
         if self.fail_startup.load(Ordering::SeqCst) && state.settings.launch_on_startup {
             return Err(Error::new(
                 ErrorCode::Storage,

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "request_id": "sounds-1",
   "command": {
     "type": "set_play_sounds",

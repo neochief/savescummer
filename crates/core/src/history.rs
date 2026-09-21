@@ -1,6 +1,53 @@
 use crate::*;
 use std::collections::{BTreeMap, BTreeSet};
 
+pub fn action_checkpoint(entry: &History) -> Option<&str> {
+    match entry.kind {
+        HistoryKind::Saved | HistoryKind::ExistingBackup => entry.snapshot_id.as_deref(),
+        HistoryKind::Loaded | HistoryKind::Reverted => entry.recovery_id.as_deref(),
+        _ => None,
+    }
+}
+
+/// Session context needed by a marker. Storage supplies indexed neighbours and
+/// anchor existence; the core defines which interval and observation epoch count.
+pub struct MarkerWindow {
+    pub start: (u64, u64),
+    pub end: Option<(u64, u64)>,
+    pub inclusive: bool,
+    pub observation_run: Option<Id>,
+}
+pub fn marker_window(
+    entry: &History,
+    previous: Option<&History>,
+    next: Option<&History>,
+) -> Option<MarkerWindow> {
+    match entry.kind {
+        HistoryKind::GameStarted => {
+            let closed = next.is_some_and(|h| h.kind == HistoryKind::GameClosed);
+            let same_run = next.is_some_and(|h| h.observation_run == entry.observation_run);
+            Some(MarkerWindow {
+                start: (entry.recorded_at, entry.sequence),
+                end: next.map(|h| (h.recorded_at, h.sequence)),
+                inclusive: closed,
+                observation_run: (!(closed && same_run)).then(|| entry.observation_run.clone()),
+            })
+        }
+        HistoryKind::GameClosed => {
+            let start = previous.filter(|h| {
+                h.kind == HistoryKind::GameStarted && h.observation_run == entry.observation_run
+            })?;
+            Some(MarkerWindow {
+                start: (start.recorded_at, start.sequence),
+                end: Some((entry.recorded_at, entry.sequence)),
+                inclusive: true,
+                observation_run: None,
+            })
+        }
+        _ => None,
+    }
+}
+
 /// Session markers provide context for surviving actions; audit history itself
 /// remains intact so retiring a checkpoint never rewrites another action's target.
 pub(crate) fn visible(state: &State) -> Vec<History> {

@@ -6,7 +6,7 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 pub const MAX_FRAME: usize = 8 * 1024 * 1024;
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -50,6 +50,12 @@ pub enum Command {
     },
     History {
         game_id: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        anchor_id: Option<Id>,
+        #[serde(default)]
+        cursor: Option<String>,
+        #[serde(default = "default_page_size")]
+        limit: usize,
     },
     Execute {
         game_id: Id,
@@ -60,6 +66,10 @@ pub enum Command {
     },
     FlushPreview {
         game_id: Id,
+    },
+    FlushDetails {
+        game_id: Id,
+        cursor: String,
     },
     Rescan,
     Shutdown,
@@ -75,7 +85,8 @@ pub struct Response {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Reply {
-    State { state: State },
+    State { state: LibraryState },
+    HistoryPage { page: HistoryPage },
     Accepted { operation_id: Id },
     Operation { operation: Box<Operation> },
     Configured { game: Game },
@@ -84,6 +95,9 @@ pub enum Reply {
     ShuttingDown,
     Error { error: Error },
     Ok,
+}
+fn default_page_size() -> usize {
+    50
 }
 pub async fn read_frame<T: serde::de::DeserializeOwned>(
     stream: &mut (impl AsyncRead + Unpin),
@@ -201,11 +215,14 @@ mod tests {
             include_str!("../../../protocol/fixtures/save-request.json"),
             include_str!("../../../protocol/fixtures/load-request.json"),
             include_str!("../../../protocol/fixtures/revert-request.json"),
+            include_str!("../../../protocol/fixtures/delete-request.json"),
             include_str!("../../../protocol/fixtures/sounds-request.json"),
             include_str!("../../../protocol/fixtures/startup-request.json"),
             include_str!("../../../protocol/fixtures/active-request.json"),
             include_str!("../../../protocol/fixtures/explorer-request.json"),
             include_str!("../../../protocol/fixtures/reset-request.json"),
+            include_str!("../../../protocol/fixtures/history-request.json"),
+            include_str!("../../../protocol/fixtures/flush-details-request.json"),
         ] {
             let request: Request = serde_json::from_str(fixture).unwrap();
             assert_eq!(request.version, VERSION);

@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include <QScrollBar>
 #include "presentation.h"
 #include <QApplication>
 #include <QCheckBox>
@@ -28,6 +29,11 @@
 #endif
 
 namespace {
+constexpr int CompactContentWidth = 500;
+QMargins contentInsets(int width) {
+    return width < CompactContentWidth ? QMargins(14, 10, 14, 10)
+                                       : QMargins(18, 12, 18, 12);
+}
 QLabel *label(const QString &text, QWidget *parent = nullptr) {
     auto *result = new QLabel(text, parent);
     result->setTextFormat(Qt::PlainText);
@@ -205,7 +211,7 @@ GameRow::GameRow(const QString &gameId, QWidget *parent) : QWidget(parent), id(g
     setAttribute(Qt::WA_StyledBackground);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(18, 12, 18, 12);
+    layout->setContentsMargins(contentInsets(width()));
     layout->setSpacing(8);
     auto *heading = new QHBoxLayout;
     heading->setSpacing(8);
@@ -308,8 +314,7 @@ void GameRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
 }
 void GameRow::resizeEvent(QResizeEvent *) {
-    layout()->setContentsMargins(width() < 500 ? 14 : 18, width() < 500 ? 10 : 12,
-                                 width() < 500 ? 14 : 18, width() < 500 ? 10 : 12);
+    layout()->setContentsMargins(contentInsets(width()));
     arrangeControls();
 }
 void GameRow::arrangeControls() {
@@ -364,21 +369,21 @@ void GameRow::updateState(const QJsonObject &state, bool selected, bool connecte
     const bool dataAvailable = availability["data_available"].toBool();
     const auto checkpoint =
         state["snapshots"].toObject()[availability["default_snapshot_id"].toString()].toObject();
-    const auto rows = Presentation::history(state, id);
+    const bool hasHistory = state["history_status"].toObject()[id].toObject()["has_visible_history"].toBool();
     const auto op = Presentation::blockingOperation(state, id);
     const bool busy = submitting || op["status"] == "pending";
     const bool blocked =
         !connected || busy || !op.isEmpty() || game["configuration_error"].isString();
     status_->setText(op["status"] == "recovery_needed"                          ? "Recovery needed"
                      : running                                                  ? "Running"
-                     : !dataAvailable && rows.isEmpty() && checkpoint.isEmpty() ? "Not run yet"
+                     : !dataAvailable && !hasHistory && checkpoint.isEmpty() ? "Not run yet"
                                                                                 : "");
     status_->setProperty("running", running);
     status_->style()->unpolish(status_);
     status_->style()->polish(status_);
     save->setEnabled(!blocked && dataAvailable);
     load->setEnabled(!blocked && dataAvailable && !checkpoint.isEmpty());
-    arrow->setEnabled(connected && !busy && !rows.isEmpty());
+    arrow->setEnabled(connected && !busy && hasHistory);
     more->setEnabled(true);
     QString age, full;
     if (!checkpoint.isEmpty()) {
@@ -454,20 +459,22 @@ void MainWindow::applyTheme(bool dark) {
         QPushButton#otherGames:hover { background:%2; }
         QPushButton#flushDetailsToggle { text-align:left; border:0; border-radius:0; padding:4px 0; background:transparent; color:palette(placeholder-text); }
         QPushButton#flushDetailsToggle:hover { color:palette(text); }
-        QPushButton#flushDetailsToggle:focus { border-bottom:1px solid #9747ff; }
+        QPushButton#flushDetailsToggle:focus { border:0; }
         QPushButton#load { border-top-right-radius:0; border-bottom-right-radius:0; }
         QPushButton#historyArrow { border-top-left-radius:0; border-bottom-left-radius:0; padding:0; }
         QProgressBar { border:0; background:%1; }
         QProgressBar::chunk { background:#9747ff; }
         QScrollArea { border:0; background:transparent; }
+        QLabel#emptyState { color:palette(placeholder-text); }
         QLabel#keycap { background:%4; border-radius:3px; padding:2px 4px; color:palette(placeholder-text); }
-        QLabel#error, QLabel#connection { color:%6; }
-        QLabel#connection { padding:8px 18px; }
+        QLabel#error { color:%6; }
         QMenu, QWidget#historyPopup { background:palette(window); border:1px solid %1; }
+        QWidget[historyRow="true"] { border-radius:4px; }
+        QWidget[historyRow="true"]:hover { background:%4; }
         QMenu::item { padding:7px 16px; }
         QMenu::item:selected { background:%4; }
-        QPushButton#historyAction { color:palette(placeholder-text); padding:3px 8px; }
-        QPushButton#historyAction:disabled { color:palette(disabled,button-text); }
+        QPushButton#historyAction, QPushButton#historyDelete { color:palette(placeholder-text); padding:3px; }
+        QPushButton#historyAction:disabled, QPushButton#historyDelete:disabled { color:palette(disabled,button-text); }
         QLabel#day { color:palette(placeholder-text); font-weight:600; padding-top:6px; }
         QLineEdit { padding:5px; border:1px solid %1; background:palette(base); }
         QCheckBox { spacing:6px; }
@@ -488,10 +495,6 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
-    connection_ = label("Connecting to the background host…");
-    connection_->setObjectName("connection");
-    connection_->setWordWrap(true);
-    layout->addWidget(connection_);
     auto *scroll = new QScrollArea;
     scroll_ = scroll;
     scroll->setWidgetResizable(true);
@@ -501,9 +504,10 @@ MainWindow::MainWindow(Service *service, bool demo, QWidget *parent)
     gamesLayout_->setContentsMargins(0, 0, 0, 0);
     gamesLayout_->setSpacing(0);
     gamesLayout_->setAlignment(Qt::AlignTop);
-    empty_ = label("No known games installed on this computer.", games_);
-    empty_->setContentsMargins(18, 20, 18, 20);
+    empty_ = label("No known games are detected on this computer. Once you install a supported game, it will show up in this window automatically.", games_);
+    empty_->setObjectName("emptyState");
     empty_->setWordWrap(true);
+    empty_->setContentsMargins(contentInsets(width()));
     otherToggle_ = new QPushButton(games_);
     otherToggle_->setObjectName("otherGames");
     otherToggle_->setCheckable(true);
@@ -591,8 +595,11 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
 #endif
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-    if (event->size().width() != event->oldSize().width())
+    if (event->size().width() != event->oldSize().width()) {
+        const auto insets = contentInsets(event->size().width());
+        empty_->setContentsMargins(insets);
         scheduleFitHeight();
+    }
 }
 void MainWindow::scheduleFitHeight() {
     if (fitQueued_ || !state_.contains("games"))
@@ -608,8 +615,7 @@ void MainWindow::scheduleFitHeight() {
         const int rowsHeight = gamesLayout_->hasHeightForWidth()
                                    ? gamesLayout_->totalHeightForWidth(contentWidth)
                                    : gamesLayout_->sizeHint().height();
-        const int noticeHeight = connection_->isHidden() ? 0 : connection_->heightForWidth(width());
-        const int desired = rowsHeight + footer_->sizeHint().height() + qMax(0, noticeHeight);
+        const int desired = rowsHeight + footer_->sizeHint().height();
         // Ordinary state/progress refreshes must not undo a user's height resize.
         if (desired == lastContentHeight_ && width() == lastFitWidth_)
             return;
@@ -624,14 +630,13 @@ void MainWindow::scheduleFitHeight() {
                  qMax(available.top(), available.bottom() - frameGeometry().height() + 1));
     });
 }
-void MainWindow::setConnected(bool connected, const QString &message) {
+void MainWindow::setConnected(bool connected, const QString &) {
+    if (!connected) { ++historyRequest_; historyLoading_ = false; historyRevision_ = -1; }
     if (connected && !connected_)
         resetRevision_ = true;
     connected_ = connected;
     sounds_->setEnabled(connected && !soundSettingPending_);
     startup_->setEnabled(connected && !startupSettingPending_);
-    connection_->setText(message);
-    connection_->setVisible(!connected);
     if (!connected)
         submitting_.clear();
     refresh();
@@ -641,12 +646,6 @@ void MainWindow::applyState(const QJsonObject &state) {
         return;
     resetRevision_ = false;
     state_ = state;
-    if (connected_) {
-        QStringList diagnostics;
-        for (const auto &value : state_["discovery_errors"].toArray()) diagnostics.append(value.toString());
-        connection_->setText(diagnostics.join("\n"));
-        connection_->setVisible(!diagnostics.isEmpty());
-    }
     if (!soundSettingPending_)
         sounds_->setChecked(state_["settings"].toObject()["play_sounds"].toBool(true));
     if (!startupSettingPending_)
@@ -728,8 +727,12 @@ void MainWindow::refresh() {
         row->error->setVisible(!error.isEmpty());
         row->setVisible(!showOther || running.contains(id) || othersOpen_);
     }
-    if (historyBody_)
+    if (historyBody_) {
         populateHistory();
+        if (connected_ && !historyLoading_ && (historyRevision_ < 0 ||
+            state_["history_status"].toObject()[historyGame_].toObject()["revision"].toInteger() > historyRevision_))
+            fetchHistory(false, true);
+    }
     if (auto *menu = qobject_cast<QMenu *>(popup_.data())) {
         const auto game = menu->property("game").toString();
         const bool idle = connected_ && !submitting_.contains(game) &&
@@ -765,6 +768,12 @@ void MainWindow::setOtherGamesOpen(bool open) {
     refresh();
 }
 void MainWindow::closePopup() {
+    ++historyRequest_;
+    historyRows_ = {};
+    historyCursor_.clear();
+    historyRevision_ = -1;
+    historyLoading_ = false;
+    historyScroll_.clear();
     historyBody_.clear();
     historyGame_.clear();
     if (popup_) {
@@ -835,6 +844,7 @@ void MainWindow::history(const QString &game) {
     historyBody_ = new QWidget;
     new QVBoxLayout(historyBody_);
     scroll->setWidget(historyBody_);
+    historyScroll_ = scroll;
     layout->addWidget(scroll);
     const auto below = rows_[game]->arrow->mapToGlobal(QPoint(0, rows_[game]->arrow->height() + 3));
     const int availableHeight =
@@ -843,11 +853,55 @@ void MainWindow::history(const QString &game) {
                          qMin(350, qMax(60, availableHeight)));
     populateHistory();
     placePopup(popup, rows_[game]->load);
-    service_->request({{"type", "history"}, {"game_id", game}}, [this, game](const auto &reply) {
-        if (reply["type"] == "state")
-            applyState(reply["state"].toObject());
-        else if (reply["type"] == "error")
-            showError(game, errorText(reply));
+    connect(scroll->verticalScrollBar(),&QScrollBar::actionTriggered,this,[this,bar=QPointer<QScrollBar>(scroll->verticalScrollBar())](int) {
+        QTimer::singleShot(0,this,[this,bar] {
+            if (bar && bar->maximum()>0 && bar->value()==bar->maximum() && !historyCursor_.isEmpty()) fetchHistory(true);
+        });
+    });
+    fetchHistory();
+}
+void MainWindow::fetchHistory(bool older, bool preserveAnchor) {
+    if (!historyBody_ || historyLoading_ || !connected_) return;
+    const auto game = historyGame_;
+    const auto generation = ++historyRequest_;
+    const QPointer<QWidget> popup = popup_;
+    historyLoading_ = true;
+    QJsonObject command{{"type", "history"}, {"game_id", game}, {"limit", 50}};
+    if (older && !historyCursor_.isEmpty()) command["cursor"] = historyCursor_;
+    QString anchor;
+    if (preserveAnchor && historyScroll_) {
+        for (const auto &value : historyRows_) {
+            const auto id=value.toObject()["id"].toString();
+            auto *widget=historyBody_->findChild<QWidget *>("historyRow-"+id);
+            if (widget && widget->mapTo(historyScroll_->viewport(),QPoint(0,widget->height())).y()>0) { anchor=id; break; }
+        }
+        if (!anchor.isEmpty()) command["anchor_id"]=anchor;
+    }
+    service_->request(command, [this, game, generation, popup, older, anchor](const auto &reply) {
+        if (generation != historyRequest_ || game != historyGame_ || !popup || popup != popup_ || !popup->isVisible()) return;
+        historyLoading_ = false;
+        if (reply["type"] == "error") {
+            if (reply["error"].toObject()["code"] == "cursor_expired") {
+                historyRevision_ = -1;
+                fetchHistory(false, true);
+            } else {
+                historyRevision_ = state_["history_status"].toObject()[game].toObject()["revision"].toInteger();
+                showError(game, errorText(reply));
+            }
+            return;
+        }
+        if (reply["type"] != "history_page") { showError(game, "Unexpected history response."); return; }
+        const auto page = reply["page"].toObject();
+        if (page["game_id"] != game) return;
+        if (!older) historyRows_ = {};
+        for (const auto &row : page["rows"].toArray()) historyRows_.append(row);
+        while (historyRows_.size() > 200) historyRows_.removeFirst();
+        historyRevision_ = page["revision"].toInteger();
+        historyCursor_ = page["next_cursor"].toString();
+        populateHistory();
+        if (!older && historyScroll_ && !anchor.isEmpty())
+            if (auto *widget = historyBody_->findChild<QWidget *>("historyRow-" + anchor))
+                historyScroll_->ensureWidgetVisible(widget);
     });
 }
 void MainWindow::populateHistory() {
@@ -864,8 +918,6 @@ void MainWindow::populateHistory() {
     }
     layout->setContentsMargins(8, 4, 8, 4);
     layout->setSpacing(4);
-    const auto rows = Presentation::history(state_, historyGame_);
-    const auto snapshots = state_["snapshots"].toObject();
     const bool enabled = connected_ && !submitting_.contains(historyGame_) &&
                          Presentation::blockingOperation(state_, historyGame_).isEmpty();
     QString previousDay;
@@ -875,10 +927,10 @@ void MainWindow::populateHistory() {
                                        {"reverted", "Reverted"},
                                        {"game_started", "Game started"},
                                        {"game_closed", "Game closed"}};
-    for (const auto &row : rows) {
+    for (const auto &value : historyRows_) {
+        const auto row = value.toObject();
         const bool existing = row["kind"] == "existing_backup";
-        const auto snapshot = snapshots[row["snapshot_id"].toString()].toObject();
-        const auto timestamp = existing ? snapshot["selection_time"] : row["recorded_at"];
+        const auto timestamp = row["display_time"];
         const auto date = timestamp.isDouble()
                               ? QDateTime::fromMSecsSinceEpoch(timestamp.toInteger()).toLocalTime()
                               : QDateTime();
@@ -891,30 +943,24 @@ void MainWindow::populateHistory() {
             previousDay = group;
         }
         auto *widget = new QWidget;
+        widget->setObjectName("historyRow-" + row["id"].toString());
+        widget->setProperty("historyRow", true);
+        widget->setAttribute(Qt::WA_Hover);
         auto *line = new QHBoxLayout(widget);
-        line->setContentsMargins(0, 3, 0, 3);
+        line->setContentsMargins(6, 3, 6, 3);
         line->setSpacing(8);
-        auto *time = label(date.isValid()
-                               ? date.toString(existing ? "yyyy-MM-dd\nHH:mm:ss" : "HH:mm:ss")
-                               : "—");
+        auto *time = label(date.isValid() ? Presentation::age(timestamp.toInteger(),
+                                                               QDateTime::currentDateTime())
+                                          : "—");
         if (date.isValid())
             time->setToolTip((existing ? QString("Folder modified: ") : QString()) +
                              date.toString("yyyy-MM-dd HH:mm:ss t"));
         line->addWidget(time);
         QString caption = names.value(str(row, "kind"), str(row, "kind"));
-        if (row["target_id"].isString())
-            for (const auto &target : state_["history"].toArray()) {
-                if (target.toObject()["id"] == row["target_id"])
-                    caption +=
-                        " [" +
-                        QDateTime::fromMSecsSinceEpoch(target.toObject()["recorded_at"].toInteger())
-                            .toLocalTime()
-                            .toString("dd MMM, HH:mm:ss") +
-                        "]";
-            }
-        const auto action = Presentation::historyAction(row);
-        const bool available =
-            snapshots[action["target"].toString()].toObject()["available"].toBool();
+        if (row["target_time"].isDouble())
+            caption += " [" + QDateTime::fromMSecsSinceEpoch(row["target_time"].toInteger()).toLocalTime().toString("dd MMM, HH:mm:ss") + "]";
+        const auto action = row["action"].toObject();
+        const bool available = row["available"].toBool();
         if (existing)
             caption += date.isValid() ? "\nFolder modified" : "\nSave time unknown";
         if (!action.isEmpty() && !available)
@@ -923,17 +969,42 @@ void MainWindow::populateHistory() {
         text->setWordWrap(true);
         line->addWidget(text, 1);
         if (!action.isEmpty()) {
-            auto *button = new QPushButton(action["type"] == "load" ? "Restore" : "Revert");
+            const auto actionName = action["type"] == "load" ? QString("Restore") : QString("Revert");
+            auto *button = new QPushButton;
             button->setObjectName("historyAction");
             button->setProperty("checkpoint", action["target"]);
+            button->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+            button->setFixedSize(28, 28);
             button->setEnabled(enabled && available);
-            button->setAccessibleName(button->text() + " " + caption + " " + time->text());
+            button->setToolTip(actionName);
+            button->setAccessibleName(actionName + " " + caption + " " + time->text());
             const auto game = historyGame_;
             connect(button, &QPushButton::clicked, this,
                     [this, game, action] { execute(game, action); });
-            line->insertWidget(0, button);
+            line->addWidget(button);
+
+            auto *remove = new QPushButton;
+            remove->setObjectName("historyDelete");
+            remove->setProperty("checkpoint", action["target"]);
+            remove->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+            remove->setFixedSize(button->size());
+            remove->setEnabled(enabled && available);
+            remove->setToolTip("Delete reset point");
+            remove->setAccessibleName("Delete reset point " + caption + " " + time->text());
+            const auto target = action["target"];
+            connect(remove, &QPushButton::clicked, this, [this, game, target] {
+                execute(game, {{"type", "delete"}, {"target", target}});
+            });
+            line->addWidget(remove);
         }
         layout->addWidget(widget);
+    }
+    if (!historyCursor_.isEmpty()) {
+        auto *older = new QPushButton("Load older");
+        older->setObjectName("historyOlder");
+        older->setEnabled(connected_ && !historyLoading_);
+        connect(older, &QPushButton::clicked, this, [this] { fetchHistory(true); });
+        layout->addWidget(older);
     }
     layout->addStretch();
 }
@@ -944,7 +1015,7 @@ void MainWindow::options(const QString &game) {
     menu->setProperty("game", game);
     const bool idle = connected_ && !submitting_.contains(game) &&
                       Presentation::blockingOperation(state_, game).isEmpty();
-    menu->addAction("Explore", this, [this, game] {
+    menu->addAction("Open in File Explorer", this, [this, game] {
         service_->request({{"type", "explore"}, {"game_id", game}}, [this, game](const auto &reply) {
             if (reply["type"] == "error") showError(game, errorText(reply));
         });
@@ -953,10 +1024,7 @@ void MainWindow::options(const QString &game) {
     configureAction->setEnabled(idle);
     configureAction->setProperty("requiresIdle", true);
     configureAction->setProperty("available", true);
-    bool any = !Presentation::history(state_, game).isEmpty();
-    for (const auto &value : state_["snapshots"].toObject())
-        if (value.toObject()["game_id"] == game && value.toObject()["removed_at"].isNull())
-            any = true;
+    const bool any = state_["history_status"].toObject()[game].toObject()["can_flush"].toBool();
     auto *flushAction = menu->addAction("Flush history…", this, [this, game] { flush(game); });
     flushAction->setEnabled(idle && any);
     flushAction->setProperty("requiresIdle", true);
@@ -1091,6 +1159,7 @@ void MainWindow::flush(const QString &game) {
         layout->addWidget(reassurance, 1, 1);
         auto *toggle = new QPushButton(QIcon(":/chevron-right.svg"), "Show details");
         toggle->setObjectName("flushDetailsToggle");
+        toggle->setIconSize(QSize(20, 20));
         toggle->setCheckable(true);
         toggle->setAutoDefault(false);
         toggle->setCursor(Qt::PointingHandCursor);
@@ -1114,11 +1183,38 @@ void MainWindow::flush(const QString &game) {
         buttons->button(QDialogButtonBox::Yes)->setText("Delete backups");
         buttons->button(QDialogButtonBox::Yes)->setAutoDefault(false);
         buttons->button(QDialogButtonBox::Cancel)->setDefault(true);
-        layout->addWidget(buttons, 4, 0, 1, 2);
-        connect(toggle, &QPushButton::toggled, dialog, [dialog, toggle, detailsView](bool expanded) {
+        auto *nextPaths = new QPushButton("Next paths");
+        nextPaths->setAutoDefault(false);
+        nextPaths->setObjectName("flushNextPaths");
+        nextPaths->setProperty("cursor",preview["next_cursor"].toString());
+        nextPaths->hide();
+        layout->addWidget(nextPaths,4,1);
+        connect(nextPaths,&QPushButton::clicked,dialog,[this,game,dialog=QPointer<QDialog>(dialog),detailsView,nextPaths,buttons,preview] {
+            nextPaths->setEnabled(false);
+            service_->request({{"type","flush_details"},{"game_id",game},{"cursor",nextPaths->property("cursor").toString()}},
+                [dialog,detailsView,nextPaths,buttons,preview](const auto &reply) {
+                    if (!dialog) return;
+                    if (reply["type"] != "flush_preview" || reply["preview"].toObject()["revision"] != preview["revision"]) {
+                        detailsView->setPlainText("Backups changed or details could not be loaded. Close this dialog and open Flush again.");
+                        buttons->button(QDialogButtonBox::Yes)->setEnabled(false);
+                        return;
+                    }
+                    const auto page = reply["preview"].toObject();
+                    QStringList paths;
+                    for (const auto &path : page["paths"].toArray()) paths.append(path.toString());
+                    detailsView->setPlainText(QString("Saved backups: %1\nRecovery points: %2\nIncomplete copies: %3\n\n")
+                        .arg(page["saved"].toInteger()).arg(page["recovery"].toInteger()).arg(page["retained"].toInteger())+paths.join('\n'));
+                    nextPaths->setProperty("cursor",page["next_cursor"].toString());
+                    nextPaths->setVisible(!page["next_cursor"].toString().isEmpty());
+                    nextPaths->setEnabled(true);
+                });
+        });
+        layout->addWidget(buttons, 5, 0, 1, 2);
+        connect(toggle, &QPushButton::toggled, dialog, [dialog, toggle, detailsView,nextPaths](bool expanded) {
             toggle->setIcon(QIcon(expanded ? ":/chevron.svg" : ":/chevron-right.svg"));
             toggle->setText(expanded ? "Hide details" : "Show details");
             detailsView->setVisible(expanded);
+            nextPaths->setVisible(expanded && !nextPaths->property("cursor").toString().isEmpty());
             dialog->adjustSize();
         });
         connect(buttons->button(QDialogButtonBox::Yes), &QPushButton::clicked, dialog, &QDialog::accept);

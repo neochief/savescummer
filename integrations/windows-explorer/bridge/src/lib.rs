@@ -44,7 +44,12 @@ pub unsafe extern "C" fn sc_menu(path: *const u16, length: usize, output: *mut *
     std::panic::catch_unwind(|| {
         let path = String::from_utf16(unsafe { std::slice::from_raw_parts(path, length) }).ok()?;
         let folders = savescummer_platform::known_folders();
-        let directory = folders.get("LOCALAPPDATA")?.join("SaveScummer");
+        // Baked into the dedicated development DLL; Explorer does not inherit
+        // the invoking terminal's environment. Ordinary builds leave this empty.
+        let directory = match option_env!("SAVESCUMMER_EXPLORER_DEV_DATA_DIR") {
+            Some(path) if !path.is_empty() => PathBuf::from(path),
+            _ => folders.get("LOCALAPPDATA")?.join("SaveScummer"),
+        };
         let endpoint = endpoint(&directory).ok()?;
         let Reply::ExplorerTargets { targets } = query(
             &endpoint,

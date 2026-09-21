@@ -5,6 +5,44 @@
 #include <QJsonArray>
 #include <QUuid>
 
+QJsonObject demoSummary(const QJsonObject &state) {
+    auto summary = state;
+    QJsonObject statuses;
+    const auto games = state["games"].toObject();
+    for (auto it = games.begin(); it != games.end(); ++it) {
+        bool any = false;
+        for (const auto &snapshot : state["snapshots"].toObject())
+            any |= snapshot.toObject()["game_id"] == it.key();
+        const bool history = !Presentation::history(state,it.key()).isEmpty();
+        statuses[it.key()] = QJsonObject{{"revision",state["revision"]}, {"has_visible_history",history}, {"can_flush",any || history}};
+    }
+    summary["history_status"] = statuses;
+    summary.remove("history"); summary.remove("visible_history");
+    return summary;
+}
+QJsonObject demoHistory(const QJsonObject &state, const QJsonObject &command) {
+    const auto game = command["game_id"].toString();
+    const auto all = Presentation::history(state,game);
+    int offset = command["cursor"].toString().toInt();
+    if (command["anchor_id"].isString())
+        for (int i=0;i<all.size();++i) if (all[i]["id"]==command["anchor_id"]) { offset=i; break; }
+    const int limit = qBound(1,command["limit"].toInt(50),200);
+    const auto snapshots = state["snapshots"].toObject();
+    QJsonArray rows;
+    for (int i = offset; i < qMin(offset+limit,all.size()); ++i) {
+        auto row = all[i];
+        const auto action = Presentation::historyAction(row);
+        row["action"] = action;
+        row["available"] = snapshots[action["target"].toString()].toObject()["available"].toBool();
+        row["display_time"] = row["kind"] == "existing_backup" ? snapshots[row["snapshot_id"].toString()].toObject()["selection_time"] : row["recorded_at"];
+        for (const auto &target : state["history"].toArray())
+            if (target.toObject()["id"] == row["target_id"]) row["target_time"] = target.toObject()["recorded_at"];
+        rows.append(row);
+    }
+    return {{"type","history_page"},{"page",QJsonObject{{"game_id",game},{"revision",state["revision"]},{"rows",rows},
+        {"next_cursor",offset+rows.size()<all.size() ? QJsonValue(QString::number(offset+rows.size())) : QJsonValue(QJsonValue::Null)}}}};
+}
+
 QJsonObject demoState() {
     QFile catalog(":/void-war.yaml");
     catalog.open(QIODevice::ReadOnly);
@@ -77,14 +115,15 @@ void DemoService::start() {
 }
 void DemoService::publish() {
     state_["revision"] = state_["revision"].toInteger() + 1;
-    emit stateChanged(state_);
+    emit stateChanged(demoSummary(state_));
 }
 void DemoService::request(const QJsonObject &command, Callback callback) {
     auto reply = QJsonObject{{"type", "ok"}};
     const auto type = command["type"].toString();
     const auto game = command["game_id"].toString();
-    if (type == "state" || type == "history")
-        reply = {{"type", "state"}, {"state", state_}};
+    if (type == "history") reply = demoHistory(state_,command);
+    else if (type == "state")
+        reply = {{"type", "state"}, {"state", demoSummary(state_)}};
     else if (type == "set_play_sounds" || type == "set_launch_on_startup") {
         auto settings = state_["settings"].toObject();
         settings[type == "set_play_sounds" ? "play_sounds" : "launch_on_startup"] = command["enabled"].toBool();
@@ -151,6 +190,20 @@ void DemoService::request(const QJsonObject &command, Callback callback) {
                 rows = kept;
                 auto a = availability[game].toObject();
                 a["default_snapshot_id"] = QJsonValue::Null;
+                availability[game] = a;
+            } else if (type == "delete") {
+                const auto target = action["target"].toString();
+                snapshots.remove(target);
+                QJsonArray kept;
+                for (const auto &row : rows) {
+                    const auto item = row.toObject();
+                    if (item["snapshot_id"] != target && item["recovery_id"] != target)
+                        kept.append(row);
+                }
+                rows = kept;
+                auto a = availability[game].toObject();
+                if (a["default_snapshot_id"] == target)
+                    a["default_snapshot_id"] = QJsonValue::Null;
                 availability[game] = a;
             } else {
                 const bool save = type == "save";

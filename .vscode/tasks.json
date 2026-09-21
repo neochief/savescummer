@@ -11,6 +11,15 @@
             "problemMatcher": ["$msCompile"]
         },
         {
+            "label": "Save Scummer: test Rust and Qt",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/build.ps1", "dev", "-Test"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "test", "isDefault": true },
+            "problemMatcher": ["$msCompile"]
+        },
+        {
             "label": "Save Scummer: prepare app",
             "type": "process",
             "command": "pwsh",

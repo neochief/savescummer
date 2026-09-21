@@ -22,7 +22,7 @@ class Service : public QObject {
 };
 
 namespace Wire {
-constexpr int Version = 2;
+constexpr int Version = 3;
 constexpr quint32 MaxFrame = 8 * 1024 * 1024;
 QByteArray frame(const QJsonObject &object);
 // Consumes complete frames, retaining a partial tail. Throws on invalid framing/JSON.

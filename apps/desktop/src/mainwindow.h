@@ -2,6 +2,7 @@
 #include "service.h"
 #include <QCheckBox>
 #include <QLabel>
+#include <QJsonArray>
 #include <QMainWindow>
 #include <QProgressBar>
 #include <QPushButton>
@@ -78,6 +79,7 @@ class MainWindow : public QMainWindow {
     void execute(const QString &game, const QJsonObject &action);
     void history(const QString &game);
     void populateHistory();
+    void fetchHistory(bool older = false, bool preserveAnchor = false);
     void options(const QString &game);
     void configure(const QString &game);
     void flush(const QString &game);
@@ -96,7 +98,7 @@ class MainWindow : public QMainWindow {
     QCheckBox *sounds_;
     QCheckBox *startup_;
     bool startupSettingPending_ = false;
-    QLabel *connection_, *empty_;
+    QLabel *empty_;
     QPushButton *otherToggle_;
     QVBoxLayout *gamesLayout_;
     QWidget *games_;
@@ -107,4 +109,10 @@ class MainWindow : public QMainWindow {
     int lastFitWidth_ = -1;
     QPointer<QWidget> popup_;
     QPointer<QWidget> historyBody_;
+    QJsonArray historyRows_;
+    QString historyCursor_;
+    qint64 historyRevision_ = -1;
+    quint64 historyRequest_ = 0;
+    bool historyLoading_ = false;
+    QPointer<QScrollArea> historyScroll_;
 };

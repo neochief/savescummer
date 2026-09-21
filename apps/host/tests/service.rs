@@ -75,10 +75,26 @@ impl Host {
         .unwrap()
         .result
     }
-    async fn state(&self) -> State {
+    async fn state(&self) -> LibraryState {
         match self.send(savescummer_ipc::Command::State).await {
             Reply::State { state } => state,
             reply => panic!("{reply:?}"),
+        }
+    }
+    async fn history(&self) -> Vec<History> {
+        match self
+            .send(savescummer_ipc::Command::History {
+                anchor_id: None,
+                game_id: "game".into(),
+                cursor: None,
+                limit: 200,
+            })
+            .await
+        {
+            Reply::HistoryPage { page } => {
+                page.rows.into_iter().rev().map(|row| row.entry).collect()
+            }
+            reply => panic!("unexpected history reply: {reply:?}"),
         }
     }
     async fn wait(&self, id: &str) -> Operation {
@@ -217,7 +233,7 @@ async fn real_host_named_pipe_reconnect_idempotency_watch_and_shutdown() {
     assert_eq!(operation.status, OperationStatus::Completed);
     let duplicate = request(&host.address, &command).await.unwrap();
     assert!(matches!(duplicate.result, Reply::Accepted { operation_id: id } if id == operation_id));
-    assert_eq!(host.state().await.history.len(), 1);
+    assert_eq!(host.history().await.len(), 1);
     let changed: Response = tokio::time::timeout(Duration::from_secs(3), read_frame(&mut watch))
         .await
         .unwrap()
@@ -258,7 +274,7 @@ async fn real_host_named_pipe_reconnect_idempotency_watch_and_shutdown() {
     let response = request(&restarted.address, &command).await.unwrap();
     assert_ne!(response.host_id, old_host_id);
     assert!(matches!(response.result, Reply::Accepted { operation_id: id } if id == operation_id));
-    assert_eq!(restarted.state().await.history.len(), 1);
+    assert_eq!(restarted.history().await.len(), 1);
     assert_eq!(fs::read(live.join("save")).unwrap(), b"A");
 }
 
@@ -293,7 +309,8 @@ async fn service_restores_explicit_checkpoint_ids_and_rejects_history_ids() {
         OperationStatus::Completed
     );
     let state = host.state().await;
-    let saved = state.history.last().unwrap();
+    let history = host.history().await;
+    let saved = history.last().unwrap();
     let checkpoint = saved.snapshot_id.clone().unwrap();
     assert_eq!(
         state.snapshots[&checkpoint].original_data_dir.as_ref(),
@@ -320,9 +337,8 @@ async fn service_restores_explicit_checkpoint_ids_and_rejects_history_ids() {
     assert_eq!(load.target_id.as_ref(), Some(&saved.id));
     assert_eq!(fs::read(live.join("save")).unwrap(), b"A");
     let recovery = host
-        .state()
+        .history()
         .await
-        .history
         .last()
         .unwrap()
         .recovery_id
@@ -368,6 +384,90 @@ async fn second_host_cannot_open_same_database() {
 }
 
 #[tokio::test]
+async fn history_and_flush_details_are_paged_over_real_ipc() {
+    let temp = tempfile::tempdir().unwrap();
+    let live = temp.path().join("Game");
+    fs::create_dir(&live).unwrap();
+    fs::write(live.join("save"), b"live").unwrap();
+    for number in 1..=55 {
+        let name = if number == 1 {
+            "Game - Copy".to_string()
+        } else {
+            format!("Game - Copy ({number})")
+        };
+        let path = temp.path().join(name);
+        fs::create_dir(&path).unwrap();
+        fs::write(path.join("save"), b"backup").unwrap();
+    }
+    let host = Host::start(&temp.path().join("state"));
+    assert!(matches!(
+        host.send(savescummer_ipc::Command::Configure {
+            id: "game".into(),
+            name: "Game".into(),
+            data_dir: live,
+            executables: vec![]
+        })
+        .await,
+        Reply::Configured { .. }
+    ));
+    let Reply::HistoryPage { page: first } = host
+        .send(savescummer_ipc::Command::History {
+            anchor_id: None,
+            game_id: "game".into(),
+            cursor: None,
+            limit: 50,
+        })
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(first.rows.len(), 50);
+    let Reply::HistoryPage { page: last } = host
+        .send(savescummer_ipc::Command::History {
+            anchor_id: None,
+            game_id: "game".into(),
+            cursor: first.next_cursor,
+            limit: 50,
+        })
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(last.rows.len(), 5);
+    assert!(last.next_cursor.is_none());
+    let summary = host.state().await;
+    let json = serde_json::to_value(&summary).unwrap();
+    assert!(json.get("history").is_none() && json.get("visible_history").is_none());
+    assert_eq!(summary.snapshots.len(), 1);
+    let Reply::FlushPreview { preview: first } = host
+        .send(savescummer_ipc::Command::FlushPreview {
+            game_id: "game".into(),
+        })
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(first.saved, 55);
+    assert_eq!(first.paths.len(), 50);
+    let cursor = first.next_cursor.unwrap();
+    let Reply::FlushPreview { preview: last } = host
+        .send(savescummer_ipc::Command::FlushDetails {
+            game_id: "game".into(),
+            cursor: cursor.clone(),
+        })
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(last.paths.len(), 5);
+    assert_eq!(last.revision, first.revision);
+    fs::write(temp.path().join("Game - Copy/save"), b"replacement data").unwrap();
+    assert!(
+        matches!(host.send(savescummer_ipc::Command::FlushDetails {game_id:"game".into(),cursor}).await,Reply::Error {error} if error.code==ErrorCode::CursorExpired)
+    );
+}
+
+#[tokio::test]
 async fn history_query_exposes_fresh_generation_and_omits_retired_row() {
     let temp = tempfile::tempdir().unwrap();
     let live = temp.path().join("Game");
@@ -395,32 +495,38 @@ async fn history_query_exposes_fresh_generation_and_omits_retired_row() {
         OperationStatus::Completed
     );
     let state = host.state().await;
-    let old = &state.visible_history[0];
+    let history = host.history().await;
+    let old = &history[0];
     let snapshot = &state.snapshots[old.snapshot_id.as_ref().unwrap()];
     fs::remove_dir_all(&snapshot.path).unwrap();
-    let Reply::State { state } = host
+    let Reply::HistoryPage { page } = host
         .send(savescummer_ipc::Command::History {
+            anchor_id: None,
             game_id: "game".into(),
+            cursor: None,
+            limit: 50,
         })
         .await
     else {
         panic!()
     };
-    assert!(state.visible_history.is_empty());
-    assert_eq!(state.history.len(), 1);
+    assert!(page.rows.is_empty());
     fs::create_dir(&snapshot.path).unwrap();
     fs::write(snapshot.path.join("save"), b"fresh").unwrap();
-    let Reply::State { state } = host
+    let Reply::HistoryPage { page } = host
         .send(savescummer_ipc::Command::History {
+            anchor_id: None,
             game_id: "game".into(),
+            cursor: None,
+            limit: 50,
         })
         .await
     else {
         panic!()
     };
-    assert_eq!(state.visible_history.len(), 1);
-    assert_ne!(state.visible_history[0].id, old.id);
-    assert_eq!(state.visible_history[0].kind, HistoryKind::ExistingBackup);
+    assert_eq!(page.rows.len(), 1);
+    assert_ne!(page.rows[0].entry.id, old.id);
+    assert_eq!(page.rows[0].entry.kind, HistoryKind::ExistingBackup);
 }
 
 #[tokio::test]

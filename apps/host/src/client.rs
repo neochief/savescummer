@@ -65,6 +65,12 @@ enum CliCommand {
     },
     History {
         game: String,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long, conflicts_with = "all")]
+        cursor: Option<String>,
+        #[arg(long)]
+        all: bool,
     },
     Save {
         game: String,
@@ -92,6 +98,11 @@ enum CliCommand {
     },
     FlushPreview {
         game: String,
+    },
+    FlushDetails {
+        game: String,
+        #[arg(long)]
+        cursor: String,
     },
     Flush {
         game: String,
@@ -163,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
             let _ = child.wait();
         });
     }
+    let all_history = matches!(&cli.command, CliCommand::History { all: true, .. });
     let command = match cli.command {
         CliCommand::State => Command::State,
         CliCommand::Watch => Command::Watch,
@@ -198,7 +210,17 @@ async fn main() -> anyhow::Result<()> {
             data_dir: dir,
             executables: exe,
         },
-        CliCommand::History { game } => Command::History { game_id: game },
+        CliCommand::History {
+            game,
+            cursor,
+            limit,
+            ..
+        } => Command::History {
+            game_id: game,
+            anchor_id: None,
+            cursor,
+            limit,
+        },
         CliCommand::Save { game } => Command::Execute {
             game_id: game,
             action: Action::Save,
@@ -228,6 +250,10 @@ async fn main() -> anyhow::Result<()> {
         },
         CliCommand::Operation { id } => Command::Operation { operation_id: id },
         CliCommand::FlushPreview { game } => Command::FlushPreview { game_id: game },
+        CliCommand::FlushDetails { game, cursor } => Command::FlushDetails {
+            game_id: game,
+            cursor,
+        },
         CliCommand::Flush {
             game,
             confirmed_revision,
@@ -245,6 +271,28 @@ async fn main() -> anyhow::Result<()> {
     };
     // Print before transmission so an uncertain reply can be queried/retried safely.
     eprintln!("request_id={}", request.request_id);
+    if all_history {
+        let mut request = request;
+        loop {
+            let response = savescummer_ipc::request(&address, &request).await?;
+            match response.result {
+                Reply::HistoryPage { page } => {
+                    for row in page.rows {
+                        println!("{}", serde_json::to_string(&row)?);
+                    }
+                    let Some(next) = page.next_cursor else {
+                        return Ok(());
+                    };
+                    if let Command::History { cursor, .. } = &mut request.command {
+                        *cursor = Some(next);
+                    }
+                    request.request_id = new_id();
+                }
+                Reply::Error { error } => bail!(error),
+                _ => bail!("unexpected history response"),
+            }
+        }
+    }
     if matches!(request.command, Command::Watch) {
         let mut stream = connect(&address).await?;
         write_frame(&mut stream, &request).await?;

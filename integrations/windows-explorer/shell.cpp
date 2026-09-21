@@ -6,13 +6,12 @@
 #include <atomic>
 #include <string>
 #include <new>
+#include "identity.h"
 
 extern "C" unsigned sc_menu(const wchar_t *, size_t, void **);
 extern "C" bool sc_invoke(const void *);
 extern "C" void sc_menu_free(void *);
 
-// {3F8F42CE-463F-41B6-98D1-8C8D16B88931}
-static const CLSID ClassId = {0x3f8f42ce,0x463f,0x41b6,{0x98,0xd1,0x8c,0x8d,0x16,0xb8,0x89,0x31}};
 static std::atomic<long> objects{0};
 
 class Menu final : public IShellExtInit, public IContextMenu {
@@ -56,7 +55,7 @@ public:
         if ((flags & CMF_DEFAULTONLY) || path_.empty() || first > last) return MAKE_HRESULT(SEVERITY_SUCCESS,0,0);
         kind_ = sc_menu(path_.data(), path_.size(), &menu_);
         if (!kind_) return MAKE_HRESULT(SEVERITY_SUCCESS,0,0);
-        if (!InsertMenuW(menu, position, MF_BYPOSITION | MF_STRING, first, kind_ == 1 ? L"Save" : L"Load")) {
+        if (!InsertMenuW(menu, position, MF_BYPOSITION | MF_STRING, first, kind_ == 1 ? SaveCaption : LoadCaption)) {
             sc_menu_free(menu_); menu_ = nullptr; kind_ = 0; return E_FAIL;
         }
         return MAKE_HRESULT(SEVERITY_SUCCESS,0,1);
@@ -64,7 +63,9 @@ public:
     HRESULT STDMETHODCALLTYPE InvokeCommand(CMINVOKECOMMANDINFO *info) override {
         if (!info || !menu_ || HIWORD(info->lpVerb) || LOWORD(info->lpVerb) != 0) return E_INVALIDARG;
         if (sc_invoke(menu_)) return S_OK;
-        MessageBoxW(info->hwnd, L"The host could not confirm acceptance. Check Save Scummer for the operation result before trying again.", L"Save Scummer", MB_OK | MB_ICONERROR);
+        if (!(info->fMask & CMIC_MASK_FLAG_NO_UI)) {
+            MessageBoxW(info->hwnd, L"The host could not confirm acceptance. Check Save Scummer for the operation result before trying again.", L"Save Scummer", MB_OK | MB_ICONERROR);
+        }
         return E_FAIL;
     }
     HRESULT STDMETHODCALLTYPE GetCommandString(UINT_PTR id, UINT flags, UINT *, LPSTR name, UINT size) override {

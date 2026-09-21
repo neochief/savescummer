@@ -182,6 +182,9 @@ impl Artwork {
             })
             .collect();
     }
+    pub fn revision(&self) -> u64 {
+        self.queue.0.lock().unwrap().revision
+    }
 }
 impl Drop for Artwork {
     fn drop(&mut self) {

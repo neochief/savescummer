@@ -105,6 +105,38 @@ fn save_load_revert_revert_persist_exact_relationships_and_empty_directories() {
     assert_eq!(reopened.snapshots.len(), 4);
 }
 #[test]
+fn delete_removes_saved_and_recovery_reset_points() {
+    let f = Fixture::new();
+    f.run(Action::Save);
+    let saved = f.last().snapshot_id.unwrap();
+    let saved_path = f.runtime.state().unwrap().snapshots[&saved].path.clone();
+    f.write(b"B");
+    f.run(Action::Load {
+        target: Some(saved.clone()),
+    });
+    let recovery = f.last().recovery_id.unwrap();
+    let recovery_path = f.runtime.state().unwrap().snapshots[&recovery].path.clone();
+
+    f.run(Action::Delete {
+        target: recovery.clone(),
+    });
+    assert!(!recovery_path.exists());
+    assert_eq!(
+        f.runtime.state().unwrap().snapshots[&recovery].removal_reason,
+        Some(RemovalReason::Deleted)
+    );
+    f.run(Action::Delete {
+        target: saved.clone(),
+    });
+    assert!(!saved_path.exists());
+    let state = f.runtime.state().unwrap();
+    assert_eq!(
+        state.snapshots[&saved].removal_reason,
+        Some(RemovalReason::Deleted)
+    );
+    assert!(state.visible_history.is_empty());
+}
+#[test]
 fn unknown_manual_save_time_uses_folder_modification_estimate_for_default_load() {
     let f = Fixture::new();
     f.run(Action::Save);
@@ -312,7 +344,9 @@ impl Repository for FailCompletion {
     fn load(&self) -> Result<State> {
         self.repository.load()
     }
-    fn commit(&self, state: &State) -> Result<()> {
+    fn commit_changes(&self, changes: &MetadataChanges) -> Result<()> {
+        let mut state = self.repository.load()?;
+        changes.apply(&mut state);
         if state.operations.values().any(|op| {
             op.status == OperationStatus::Completed && matches!(op.action, Action::Load { .. })
         }) && self.armed.swap(false, Ordering::SeqCst)
@@ -322,7 +356,7 @@ impl Repository for FailCompletion {
                 "injected completion transaction failure",
             ));
         }
-        self.repository.commit(state)
+        self.repository.commit_changes(changes)
     }
 }
 #[test]
@@ -344,7 +378,9 @@ fn filesystem_success_with_failed_database_commit_requires_explicit_recovery() {
     let id = rt
         .accept("game", Action::Load { target: None }, new_id())
         .unwrap();
-    assert!(rt.execute(&id).is_err());
+    let error = rt.execute(&id).unwrap_err();
+    assert_eq!(error.code, ErrorCode::Storage, "{error:?}");
+    assert_eq!(error.message, "injected completion transaction failure");
     assert_eq!(f.data(), b"A");
     assert_eq!(
         rt.operation(&id).unwrap().status,
@@ -388,8 +424,10 @@ impl Repository for PauseAfterPhase {
     fn load(&self) -> Result<State> {
         self.repository.load()
     }
-    fn commit(&self, state: &State) -> Result<()> {
-        self.repository.commit(state)?;
+    fn commit_changes(&self, changes: &MetadataChanges) -> Result<()> {
+        let mut state = self.repository.load()?;
+        changes.apply(&mut state);
+        self.repository.commit_changes(changes)?;
         if state
             .operations
             .values()

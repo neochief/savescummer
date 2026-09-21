@@ -26,6 +26,29 @@ struct Fixture {
     rt: Runtime,
 }
 impl Fixture {
+    fn state(&self) -> State {
+        let state = self.rt.state().unwrap();
+        let mut actual = vec![];
+        for game in state.games.keys() {
+            let mut cursor = None;
+            loop {
+                let page = self.rt.history_page(game, cursor.as_deref(), 3).unwrap();
+                actual.extend(page.rows.into_iter().map(|row| row.entry));
+                cursor = page.next_cursor;
+                if cursor.is_none() {
+                    break;
+                }
+            }
+        }
+        actual.sort_by_key(|h| std::cmp::Reverse(h.sequence));
+        let mut expected = state.visible_history.clone();
+        expected.sort_by_key(|h| std::cmp::Reverse(h.sequence));
+        assert_eq!(
+            actual, expected,
+            "indexed pages must preserve the full core visibility policy"
+        );
+        state
+    }
     fn new() -> Self {
         let root = tempfile::tempdir().unwrap();
         let live = root.path().join("Game");
@@ -59,10 +82,10 @@ impl Fixture {
         self.rt.execute(&id).unwrap();
     }
     fn last(&self) -> History {
-        self.rt.state().unwrap().history.last().unwrap().clone()
+        self.state().history.last().unwrap().clone()
     }
     fn snapshot(&self, entry: &History) -> Snapshot {
-        self.rt.state().unwrap().snapshots[entry.snapshot_id.as_ref().unwrap()].clone()
+        self.state().snapshots[entry.snapshot_id.as_ref().unwrap()].clone()
     }
     fn start(&self, time: u64) -> Id {
         self.time(time);
@@ -153,7 +176,7 @@ fn flush_refreshes_external_changes_before_accepting_confirmation() {
             assert!(old.path.is_dir());
         }
         if change == "replace" || change == "modify" {
-            let state = f.rt.state().unwrap();
+            let state = f.state();
             assert!(state.snapshots[&old.id].removed_at.is_some());
             assert!(
                 state
@@ -186,11 +209,11 @@ fn deleting_all_backups_then_recreating_same_names_gives_new_ids_and_hides_old_r
     let old_b = f.last();
     let b = f.snapshot(&old_b);
     let close = f.close(4000);
-    assert_eq!(f.rt.state().unwrap().visible_history.len(), 4);
+    assert_eq!(f.state().visible_history.len(), 4);
     fs::remove_dir_all(&a.path).unwrap();
     fs::remove_dir_all(&b.path).unwrap();
     f.rt.refresh("game").unwrap();
-    let removed = f.rt.state().unwrap();
+    let removed = f.state();
     assert!(removed.visible_history.is_empty());
     assert!(
         removed
@@ -203,7 +226,7 @@ fn deleting_all_backups_then_recreating_same_names_gives_new_ids_and_hides_old_r
     f.manual(&b.path, b"fresh B", 8500);
     f.rt.refresh("game").unwrap();
     f.rt.refresh("game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert_eq!(state.visible_history.len(), 2);
     assert_eq!(state.snapshots.len(), 4);
     assert!(
@@ -320,7 +343,7 @@ fn root_timestamp_nested_edit_added_and_removed_files_each_create_a_new_generati
         }
         f.rt.refresh("game").unwrap();
         f.rt.refresh("game").unwrap();
-        let state = f.rt.state().unwrap();
+        let state = f.state();
         assert_eq!(state.visible_history.len(), 1);
         assert_ne!(state.visible_history[0].id, previous.id);
         assert_eq!(state.snapshots.len(), (edit + 2) as usize);
@@ -353,10 +376,10 @@ fn retained_recovery_keeps_load_visible_but_changed_recovery_invalidates_revert(
     fs::write(f.live.join("nested/save"), b"before load").unwrap();
     f.run(Action::Load { target: None });
     let load = f.last();
-    let recovery = f.rt.state().unwrap().snapshots[load.recovery_id.as_ref().unwrap()].clone();
+    let recovery = f.state().snapshots[load.recovery_id.as_ref().unwrap()].clone();
     fs::remove_dir_all(snapshot.path).unwrap();
     f.rt.refresh("game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert_eq!(state.visible_history.len(), 1);
     assert_eq!(state.visible_history[0].id, load.id);
     assert_eq!(state.visible_history[0].target_id, Some(saved.id));
@@ -380,7 +403,7 @@ fn retained_recovery_keeps_load_visible_but_changed_recovery_invalidates_revert(
         .code,
         ErrorCode::Unavailable
     );
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert!(!state.visible_history.iter().any(|h| h.id == load.id));
     assert!(
         !state
@@ -403,10 +426,10 @@ fn session_markers_disappear_for_empty_middle_sessions_and_when_no_points_remain
         let close = f.close(base + 2000);
         sessions.push((start, close));
     }
-    assert_eq!(f.rt.state().unwrap().visible_history.len(), 9);
+    assert_eq!(f.state().visible_history.len(), 9);
     fs::remove_dir_all(&saved[1].path).unwrap();
     f.rt.refresh("game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert_eq!(state.visible_history.len(), 6);
     assert!(
         !state
@@ -418,7 +441,7 @@ fn session_markers_disappear_for_empty_middle_sessions_and_when_no_points_remain
         fs::remove_dir_all(&saved[index].path).unwrap();
     }
     f.rt.refresh("game").unwrap();
-    assert!(f.rt.state().unwrap().visible_history.is_empty());
+    assert!(f.state().visible_history.is_empty());
     let restarted = Fixture::open(f.root.path(), f.clock.clone());
     assert!(restarted.state().unwrap().visible_history.is_empty());
     assert_eq!(restarted.state().unwrap().history.len(), 9);
@@ -437,15 +460,15 @@ fn unreadable_backup_is_unavailable_not_retired_and_does_not_import_partial_gene
         .open(snapshot.path.join("nested/save"))
         .unwrap();
     f.rt.refresh("game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert!(!state.snapshots[&snapshot.id].available);
     assert!(state.snapshots[&snapshot.id].removed_at.is_none());
     assert_eq!(state.visible_history[0].id, old.id);
     assert_eq!(state.snapshots.len(), 1);
     drop(locked);
     f.rt.refresh("game").unwrap();
-    assert!(f.rt.state().unwrap().snapshots[&snapshot.id].available);
-    assert_eq!(f.rt.state().unwrap().snapshots.len(), 1);
+    assert!(f.state().snapshots[&snapshot.id].available);
+    assert_eq!(f.state().snapshots.len(), 1);
 }
 #[test]
 fn unavailable_parent_does_not_confirm_deletion_and_access_return_preserves_generation() {
@@ -459,7 +482,7 @@ fn unavailable_parent_does_not_confirm_deletion_and_access_return_preserves_gene
         .unwrap();
     let id = f.rt.accept("drive-game", Action::Save, new_id()).unwrap();
     f.rt.execute(&id).unwrap();
-    let before = f.rt.state().unwrap();
+    let before = f.state();
     let snapshot = before
         .snapshots
         .values()
@@ -468,12 +491,12 @@ fn unavailable_parent_does_not_confirm_deletion_and_access_return_preserves_gene
     let offline = f.root.path().join("offline");
     fs::rename(&container, &offline).unwrap();
     f.rt.refresh("drive-game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert!(state.snapshots[&snapshot.id].removed_at.is_none());
     assert!(!state.snapshots[&snapshot.id].available);
     fs::rename(&offline, &container).unwrap();
     f.rt.refresh("drive-game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert!(state.snapshots[&snapshot.id].available);
     assert_eq!(state.snapshots.len(), 1);
 }
@@ -490,7 +513,7 @@ fn save_can_reuse_a_removed_name_without_retargeting_the_retired_history_entry()
     let fresh = f.last();
     assert_ne!(fresh.id, old.id);
     assert_eq!(f.snapshot(&fresh).path, snapshot.path);
-    assert_eq!(f.rt.state().unwrap().visible_history.len(), 1);
+    assert_eq!(f.state().visible_history.len(), 1);
     assert_eq!(
         f.rt.accept(
             "game",
@@ -529,11 +552,11 @@ fn manual_modification_estimate_associates_only_with_its_observed_session() {
     let unrelated_close = f.close(2000);
     let relevant_start = f.start(3000);
     let relevant_close = f.close(5000);
-    assert!(f.rt.state().unwrap().visible_history.is_empty());
+    assert!(f.state().visible_history.is_empty());
     f.time(20_000);
     f.manual(&f.live.with_file_name("Game - Copy"), b"manual", 4000);
     f.rt.refresh("game").unwrap();
-    let state = f.rt.state().unwrap();
+    let state = f.state();
     assert_eq!(state.visible_history.len(), 3);
     assert!(state.visible_history.iter().any(|h| h.id == relevant_start));
     assert!(state.visible_history.iter().any(|h| h.id == relevant_close));

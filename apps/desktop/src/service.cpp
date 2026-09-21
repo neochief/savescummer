@@ -77,7 +77,7 @@ QString Wire::endpoint(const QString &directory) {
         return {};
     const QString user = QString::fromWCharArray(sid);
     LocalFree(sid);
-    return QStringLiteral("savescummer-v2-%1-%2").arg(user, QString::number(hash, 16));
+    return QStringLiteral("savescummer-v3-%1-%2").arg(user, QString::number(hash, 16));
 #else
     return QDir(directory).absoluteFilePath("host.sock");
 #endif

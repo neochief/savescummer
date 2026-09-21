@@ -1,3 +1,4 @@
+use crate::HistoryStatus;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -6,7 +7,9 @@ pub fn new_id() -> Id {
     uuid::Uuid::new_v4().to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, thiserror::Error)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, PartialEq, Eq, thiserror::Error,
+)]
 #[error("{code:?}: {message}")]
 pub struct Error {
     pub code: ErrorCode,
@@ -26,6 +29,8 @@ pub enum ErrorCode {
     ConfirmationRequired,
     ShuttingDown,
     InvalidRequest,
+    CursorExpired,
+    ResponseTooLarge,
 }
 pub type Result<T> = std::result::Result<T, Error>;
 impl Error {
@@ -37,7 +42,7 @@ impl Error {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Game {
     pub id: Id,
     pub name: String,
@@ -73,7 +78,7 @@ pub enum RemovalReason {
     Deleted,
     Changed,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Snapshot {
     pub id: Id,
     pub game_id: Id,
@@ -104,7 +109,7 @@ pub enum HistoryKind {
     GameStarted,
     GameClosed,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct History {
     pub id: Id,
     /// Observation epoch prevents joining sessions across unobserved downtime.
@@ -127,6 +132,10 @@ pub enum Action {
     },
     Revert {
         /// Recovery checkpoint ID from a Loaded/Reverted row's recovery_id.
+        target: Id,
+    },
+    Delete {
+        /// Exact saved or recovery checkpoint to remove.
         target: Id,
     },
     Flush {
@@ -166,7 +175,7 @@ pub enum OperationStatus {
     RecoveryNeeded,
     Resolved,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Operation {
     pub id: Id,
     pub request_id: Id,
@@ -216,7 +225,7 @@ pub struct GameAvailability {
     pub data_available: bool,
     pub default_snapshot_id: Option<Id>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Settings {
     pub play_sounds: bool,
@@ -239,6 +248,14 @@ pub struct GameArtwork {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct State {
+    #[serde(default)]
+    pub history_sequence: u64,
+    #[serde(default)]
+    pub snapshot_order: u64,
+    #[serde(skip)]
+    pub clear_history: Vec<Id>,
+    #[serde(default)]
+    pub history_status: BTreeMap<Id, HistoryStatus>,
     /// Host artwork projection; not persisted or used for operation revisions.
     #[serde(default)]
     pub artwork: BTreeMap<Id, GameArtwork>,
@@ -262,8 +279,10 @@ pub struct State {
     #[serde(default)]
     pub discovery_errors: Vec<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct FlushPreview {
+    #[serde(default)]
+    pub next_cursor: Option<String>,
     pub revision: u64,
     pub saved: usize,
     pub recovery: usize,
@@ -288,7 +307,7 @@ impl ShortcutAction {
 }
 
 /// A file-manager menu resolves paths to opaque checkpoint IDs before execution.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ExplorerTarget {
     pub game_id: Id,
     pub action: Action,

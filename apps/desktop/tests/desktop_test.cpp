@@ -12,6 +12,7 @@
 #include <QMenu>
 #include <QPlainTextEdit>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -29,14 +30,21 @@ class FakeService : public Service {
     using Service::Service;
     QJsonObject state = demoState();
     QList<QJsonObject> requests;
+    bool delayHistory = false;
+    QList<Callback> historyCallbacks;
     QJsonObject executeReply{
         {"type", "error"}, {"error", QJsonObject{{"code", "busy"}, {"message", "Game is busy."}}}};
     void start() override {
         emit connectionChanged(true, {});
-        emit stateChanged(state);
+        emit stateChanged(demoSummary(state));
     }
     void request(const QJsonObject &command, Callback callback = {}) override {
         requests.append(command);
+        if (command["type"] == "history") {
+            if (delayHistory) historyCallbacks.append(callback);
+            else if (callback) callback(demoHistory(state,command));
+            return;
+        }
         if (command["type"] == "set_play_sounds") {
             state["settings"] = QJsonObject{{"play_sounds", command["enabled"]}};
             publish();
@@ -47,9 +55,9 @@ class FakeService : public Service {
         if (callback)
             callback(command["type"] == "execute"
                          ? executeReply
-                         : QJsonObject{{"type", "state"}, {"state", state}});
+                         : QJsonObject{{"type", "state"}, {"state", demoSummary(state)}});
     }
-    void publish() { emit stateChanged(state); }
+    void publish() { state["revision"] = state["revision"].toInteger()+1; emit stateChanged(demoSummary(state)); }
 };
 class DesktopTest : public QObject {
     Q_OBJECT
@@ -64,7 +72,7 @@ class DesktopTest : public QObject {
         MainWindow::applyTheme(true);
     }
     void wireFixtures() {
-        for (const auto &name : {"state", "save", "load", "revert", "sounds", "startup", "active", "explorer", "reset", "artwork"}) {
+        for (const auto &name : {"state", "save", "load", "revert", "delete", "sounds", "startup", "active", "explorer", "reset", "artwork", "history", "flush-details"}) {
             QFile file(QString(FIXTURE_DIR) + "/" + name + "-request.json");
             QVERIFY(file.open(QIODevice::ReadOnly));
             const auto fixture = QJsonDocument::fromJson(file.readAll()).object();
@@ -255,6 +263,25 @@ class DesktopTest : public QObject {
         QTest::newRow("wide-light") << 650 << 9 << false;
         QTest::newRow("narrow-large-text") << 340 << 14 << true;
     }
+    void gameAndEmptyStateUseConsistentInsets() {
+        FakeService service;
+        MainWindow window(&service, true);
+        window.show();
+        auto *empty = window.findChild<QLabel *>("emptyState");
+        QVERIFY(empty);
+        service.start();
+        auto *row = window.findChild<GameRow *>("gameRow");
+        QVERIFY(row);
+
+        for (const int width : {620, 350}) {
+            window.resize(width, 500);
+            QCoreApplication::processEvents();
+            const auto expected = width < 500 ? QMargins(14, 10, 14, 10)
+                                              : QMargins(18, 12, 18, 12);
+            QCOMPARE(empty->contentsMargins(), expected);
+            QCOMPARE(row->layout()->contentsMargins(), expected);
+        }
+    }
     void actionButtonsKeepTheirWidth() {
         QFETCH(int, windowWidth);
         QFETCH(int, pointSize);
@@ -368,6 +395,7 @@ class DesktopTest : public QObject {
         QVERIFY(toggle && details && buttons);
         QTRY_VERIFY(dialog->isVisible());
         QVERIFY(!details->isVisible());
+        QCOMPARE(toggle->iconSize(), QSize(20, 20));
         QVERIFY(buttons->button(QDialogButtonBox::Cancel)->isDefault());
         const auto requestCount = service.requests.size();
         const auto collapsedHeight = dialog->height();
@@ -512,17 +540,63 @@ class DesktopTest : public QObject {
         QVERIFY(row->arrow->isEnabled());
         QTest::mouseClick(row->arrow, Qt::LeftButton);
         auto *action = window.findChild<QPushButton *>("historyAction");
+        auto *remove = window.findChild<QPushButton *>("historyDelete");
         QVERIFY(action);
+        QVERIFY(remove);
         QVERIFY(!action->isEnabled());
+        QVERIFY(!remove->isEnabled());
         snapshot["available"] = true;
         snapshots["void-war-saved"] = snapshot;
         service.state["snapshots"] = snapshots;
         service.publish();
         action = window.findChild<QPushButton *>("historyAction");
+        remove = window.findChild<QPushButton *>("historyDelete");
         QVERIFY(action->isEnabled());
+        QVERIFY(remove->isEnabled());
+        QCOMPARE(action->size(), remove->size());
         QTest::mouseClick(action, Qt::LeftButton);
         QCOMPARE(service.requests.last()["action"].toObject()["target"].toString(),
                  QString("void-war-saved"));
+    }
+    void pagedHistoryBoundsWidgetsAndDiscardsStaleReplies() {
+        FakeService service;
+        QJsonArray history;
+        for (int i=0;i<350;++i)
+            history.append(QJsonObject{{"id",QString("row-%1").arg(i)},{"game_id","void-war"},
+                {"kind","saved"},{"sequence",i+1},{"recorded_at",1000},{"snapshot_id","void-war-saved"}});
+        service.state["history"]=history;
+        service.state["visible_history"]=history;
+        MainWindow window(&service,true);
+        window.show(); service.start();
+        GameRow *row=nullptr;
+        for (auto *candidate:window.findChildren<GameRow *>()) if (candidate->id=="void-war") row=candidate;
+        QVERIFY(row);
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        QCOMPARE(window.findChildren<QPushButton *>("historyAction").size(),50);
+        for (int i=0;i<6;++i) {
+            auto *older=window.findChild<QPushButton *>("historyOlder"); QVERIFY(older); older->click();
+            QVERIFY(window.findChildren<QPushButton *>("historyAction").size()<=200);
+            QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+        }
+        QVERIFY(!window.findChild<QPushButton *>("historyOlder"));
+        QVERIFY(!window.findChild<QPushButton *>("historyLatest"));
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        QCOMPARE(window.findChildren<QPushButton *>("historyAction").size(),50);
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        service.delayHistory=true;
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        QCOMPARE(service.historyCallbacks.size(),1);
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        service.historyCallbacks.takeFirst()(demoHistory(service.state,{{"game_id","void-war"}}));
+        QVERIFY(!window.findChild<QWidget *>("historyPopup") || !window.findChild<QWidget *>("historyPopup")->isVisible());
+        QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+        QTest::mouseClick(row->arrow,Qt::LeftButton);
+        QCOMPARE(service.historyCallbacks.size(),1);
+        window.setConnected(false);
+        service.historyCallbacks.takeFirst()(demoHistory(service.state,{{"game_id","void-war"}}));
+        QVERIFY(window.findChildren<QPushButton *>("historyAction").isEmpty());
     }
     void existingBackupsShowFolderTimes() {
         FakeService service;
@@ -563,11 +637,21 @@ class DesktopTest : public QObject {
         QTest::mouseClick(row->arrow, Qt::LeftButton);
         auto *popup = window.findChild<QWidget *>("historyPopup");
         QVERIFY(popup);
+        QTest::qWait(50);
+        const auto historyRows = popup->findChildren<QWidget *>(QRegularExpression("historyRow-.*"));
+        QVERIFY(!historyRows.isEmpty());
+        QTest::mouseMove(historyRows.first(), historyRows.first()->rect().center());
+        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(screenshotRoot);
+        auto *historyBody = popup->findChild<QScrollArea *>()->widget();
+        QVERIFY(historyBody->grab().save(screenshotRoot + "history-popup.png"));
         QStringList labels;
         for (auto *label : popup->findChildren<QLabel *>())
             labels.append(label->text());
-        QVERIFY(labels.contains("2026-09-18\n12:34:56"));
-        QVERIFY(labels.contains("2026-09-19\n12:34:56"));
+        QVERIFY(labels.contains(Presentation::age(modified.toMSecsSinceEpoch(),
+                                                  QDateTime::currentDateTime())));
+        QVERIFY(labels.contains(Presentation::age(modified.addDays(1).toMSecsSinceEpoch(),
+                                                  QDateTime::currentDateTime())));
         QVERIFY(labels.contains("Existing backup\nFolder modified"));
         QVERIFY(!labels.contains("Existing backup\nSave time unknown"));
         const auto actions = popup->findChildren<QPushButton *>("historyAction");
@@ -577,6 +661,12 @@ class DesktopTest : public QObject {
         QTest::mouseClick(actions.first(), Qt::LeftButton);
         QCOMPARE(service.requests.last()["action"].toObject()["target"].toString(),
                  QString("copy-1"));
+        const auto deletes = popup->findChildren<QPushButton *>("historyDelete");
+        QCOMPARE(deletes.size(), 2);
+        QCOMPARE(deletes.first()->size(), actions.first()->size());
+        QTest::mouseClick(deletes.first(), Qt::LeftButton);
+        QCOMPARE(service.requests.last()["action"].toObject(),
+                 (QJsonObject{{"type", "delete"}, {"target", "copy-1"}}));
     }
     void cachedSteamIconUpdatesWithoutChangingGameRevision() {
         QTemporaryDir temp;
@@ -623,7 +713,7 @@ class DesktopTest : public QObject {
                     const auto command = request["command"].toObject();
                     if (command["type"] == "check_artwork") {
                         ++artworkChecks;
-                        socket->write(Wire::frame({{"version", 2}, {"request_id", request["request_id"]},
+                        socket->write(Wire::frame({{"version", Wire::Version}, {"request_id", request["request_id"]},
                             {"host_id", "first"}, {"result", QJsonObject{{"type", "ok"}}}}));
                         continue;
                     }
@@ -637,7 +727,7 @@ class DesktopTest : public QObject {
                     auto state = demoState();
                     state["revision"] = watchCount == 1 ? 99 : 1;
                     const auto frame =
-                        Wire::frame({{"version", 2},
+                        Wire::frame({{"version", Wire::Version},
                                      {"request_id", request["request_id"]},
                                      {"host_id", watchCount == 1 ? "first" : "restarted"},
                                      {"result", QJsonObject{{"type", "state"}, {"state", state}}}});
@@ -655,7 +745,7 @@ class DesktopTest : public QObject {
         auto artworkState = demoState();
         artworkState["revision"] = 99;
         artworkState["artwork_revision"] = 1;
-        sockets.first()->write(Wire::frame({{"version", 2}, {"request_id", watchRequestId},
+        sockets.first()->write(Wire::frame({{"version", Wire::Version}, {"request_id", watchRequestId},
             {"host_id", "first"}, {"result", QJsonObject{{"type", "state"}, {"state", artworkState}}}}));
         QTRY_COMPARE(states.count(), 2);
         QCOMPARE(states.last()[0].toJsonObject()["artwork_revision"].toInteger(), qint64(1));
@@ -820,9 +910,10 @@ class DesktopTest : public QObject {
         QTRY_VERIFY(!reopenedStates.isEmpty());
         reply = send(reopened, {{"type", "operation"}, {"operation_id", loadId}});
         QCOMPARE(reply["operation"].toObject()["status"].toString(), QString("completed"));
-        const QJsonValue recovery =
-            Presentation::history(reopenedStates.last()[0].toJsonObject(), "test")
-                .first()["recovery_id"];
+        reply = send(reopened, {{"type","history"},{"game_id","test"},{"limit",50}});
+        QCOMPARE(reply["type"].toString(),QString("history_page"));
+        QVERIFY(!reopenedStates.last()[0].toJsonObject().contains("history"));
+        const QJsonValue recovery = reply["page"].toObject()["rows"].toArray().first().toObject()["recovery_id"];
         reply = send(reopened, {{"type", "execute"},
                                 {"game_id", "test"},
                                 {"action", QJsonObject{{"type", "revert"}, {"target", recovery}}}});

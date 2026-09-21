@@ -66,6 +66,7 @@ Use real temporary directories and a real SQLite database. Compare file contents
 - Before LOAD or REVERT changes DIR, preserve its current contents in a new recovery snapshot. The source snapshot remains unchanged after restoration.
 - Exercise a sequence such as Save A, modify, Load A, modify, Revert that load, and Revert that revert. Verify every resulting DIR, recovery snapshot, history reference, and action target.
 - Restore an older checkpoint without deleting later history. Use equal timestamps to verify that IDs and ordering still distinguish separate actions.
+- Delete saved and recovery reset points individually through their exact checkpoint IDs. Verify the directories are removed, their rows disappear, unrelated points remain, and stale/wrong-game targets cannot delete anything.
 - Keep launch/close markers only for observed sessions containing surviving saved or recovery-backed actions. Remove an old checkpoint and verify its now-empty session disappears, including a session between two still-relevant sessions. With no surviving points, visible history is empty. Recreated backups use their own time estimate and do not resurrect old action references or unrelated sessions.
 - Retain a Loaded/Reverted row whose recovery point still exists after its original saved source is removed. Keep the internal source reference unchanged and allow only the exact surviving recovery generation as the Revert target.
 - Reject an unavailable explicit target without substituting a different snapshot or creating unnecessary recovery data. If the current DIR is missing, ordinary LOAD or REVERT must stop safely; dedicated interrupted-operation recovery can recreate it as described below.
@@ -127,11 +128,28 @@ Keep a few full-app checks for behavior that component tests cannot establish. U
 - Keep progress active through copying and rollback. Do not show completion before files and history commit. Check recovery-needed blocking, error visibility, and accessibility state.
 - Verify history action availability, exact targets, unavailable snapshots, and the separate availability of the Load button and history arrow. Explore opens the correct parent directory.
 
+## 8. Incremental persistence and paginated history
+
+Use real temporary SQLite databases and the ordinary core/service entry points. Generate large metadata fixtures separately from realistic filesystem-copy fixtures so database scaling and file-copy costs can be measured independently.
+
+- Inspect actual SQL effects using test-only tracing or audit triggers. Saving for game A must not write game B's records or unchanged old records for A. A settings change writes settings/revision metadata only; an operation-phase change updates the affected operation and required revision metadata.
+- Fail midway through a multi-record transaction and verify that no partial changes are visible in memory or after reopening the database. Cover admission, checkpoint/history completion, external generation replacement, Flush and recovery resolution. Preserve the existing crash/restart scenarios at each durable file-replacement boundary.
+- Verify schema migrations and durable ordering counters preserve IDs, ordering, request idempotency, original-directory ownership and exact source/recovery relationships. Lazy reads must still find old request IDs, unresolved operations, uncached checkpoints and retained path reservations.
+- Grow unrelated games' histories and verify that ordinary game-operation updates and unchanged watch ticks do not scan, clone or serialize those histories. Artwork/progress-only changes must not rebuild the visible-history projection. Check live-directory availability updates independently of metadata events.
+- Page a game's timeline with equal timestamps, manual-copy time estimates, and sessions crossing page boundaries. At a stable revision, every visible row appears exactly once in the defined order, with the same action targets and session-marker visibility as the complete core projection.
+- Invalidate cursors after relevant same-game changes, including backup deletion/replacement, availability changes, Configure A→B→A and Flush. Unrelated-game, artwork and progress-only changes preserve the cursor. Reject cursors for another game or an earlier host instance. Exercise changes during page reads and projection rebuilds without mixing revisions.
+- Verify removed snapshots disappear, surviving recovery-backed rows remain, empty sessions stay hidden, and pagination never changes default LOAD selection. Execute an action from an old page after its checkpoint changes and confirm normal core validation rejects it.
+- Use data whose full audit state exceeds 8 MiB. Connect, watch, page history, query an exact old operation and inspect paginated Flush details successfully. Assert row/byte caps, explicit oversized-item errors and revision-bound Flush confirmation. Routine summary size must not grow with retained historical records.
+- Exercise desktop paging, day grouping, bounded page/widget caches, stale responses after game changes or popup closure, cursor reload with a surviving scroll anchor, busy/recovery updates, and reconnect without command replay. History-arrow availability must work before any history page is fetched.
+- Verify CLI page cursors and bounded-memory streaming, including explicit failure on invalidation. Check shared Rust/Qt fixtures and clear version-mismatch handling for the desktop, CLI and Explorer bridge.
+
 ## Speed, repeatability, and compatibility
 
 Record timings alongside these scenarios: launch/exit/focus detection, discovery, and file operations for representative small and large save directories. For repeat runs, report typical and tail latency, missed/duplicate events, and resource growth. Include an idle-monitor CPU check. Use independent test/fixture observations where possible and state what each timing actually measures; a launch request timestamp is not the process's exact start time.
 
 Agree on useful latency and resource budgets after an initial baseline on a recorded machine and OS. Correctness tests need bounded timeouts, but tight performance thresholds should run separately so a temporarily busy machine does not obscure functional failures. Repetition should be an option of the normal test runner or a simple loop.
+
+Include histories of 100, 10,000 and 100,000 rows, both concentrated in one game and spread across many games, with proportional terminal journals and retired checkpoints. Measure startup time and peak memory, rows/bytes written per transaction, commit latency, idle watch CPU and payload size, and first/subsequent history-page latency. Measure per-game discovery and projection rebuilds separately from cached page reads. Use deterministic structural assertions for unchanged-row writes, bounded responses and complete pagination in normal tests; report timing distributions separately and establish a supported capacity from recorded measurements.
 
 Run file/database cases without requiring desktop interaction. Run focus, shortcuts, tray, and Explorer cases in an interactive desktop session. Explicitly report cases that cannot run in the current environment. Keep sleep/resume, elevation, actual fullscreen games, and localized Explorer behavior in a short compatibility checklist until automating them is worthwhile.
 
@@ -148,8 +166,8 @@ Where PLAN.md leaves behavior open, agree on the expected result before turning 
 ## Starting order
 
 1. Add the basic fake game and launch/exit/activation integration tests alongside the real monitor.
-2. Add directory and SQLite tests alongside SAVE, LOAD, REVERT, and discovery; cover failure and restart recovery before trusting real saves.
-3. Add entry-point and desktop checks as shortcuts, Explorer integration, and the UI become available.
+2. Add directory and SQLite tests alongside SAVE, LOAD, REVERT, and discovery, including incremental writes and indexed per-game access; cover failure and restart recovery before trusting real saves.
+3. Add bounded service-query, history-pagination, entry-point and desktop checks as the protocol, shortcuts, Explorer integration, and UI become available. Measure growing-history fixtures alongside their storage and read-model implementations.
 
 The scenario list is the direction of travel. Each implementation step should add the small set of tests and fixture options it needs, using the same ordinary test runner throughout.
 

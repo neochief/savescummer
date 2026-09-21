@@ -96,7 +96,7 @@ The host composes modules and manages their lifecycle. Business rules live in th
 | Artwork service | Steam artwork resolution, download queue, cache validation and persistence | Runs asynchronously in the existing background host process, independently of scanning and Save/Load. Publishes cached asset availability to the UI through the service contract. |
 | Core application | SAVE, LOAD, REVERT, Flush and interrupted-operation recovery workflows; validation, busy/recovery states, operation locking and coordination | Sole entry point for actions from UI, shortcuts and Explorer. Coordinates the other modules through interfaces. |
 | Snapshot engine | Snapshot discovery, native copy naming, file copying, staging, replacement and rollback | Accepts resolved paths and operation context; reports results and progress. Does not select the active game, render UI or decide history policy. |
-| History and settings store | Games, overrides, snapshot metadata, history entries and durable operation records | Repository interface with an initial SQLite implementation. Does not manipulate game files or decide when an operation is permitted. |
+| History and settings store | Games, overrides, snapshot metadata, history entries and durable operation records | Repository interface for atomic batches of changed records, indexed lookups and paginated per-game reads, with a SQLite implementation. Does not manipulate game files or decide when an operation is permitted. |
 | Game catalog and scanner | Catalog parsing/validation, installation discovery, path resolution and Proton translation | Returns resolved candidates and availability using discovery providers. Does not start backup/restore operations or overwrite user choices. |
 | Game monitor | Process-to-game association, launch/close observations and ACTIVE STACK ordering | Consumes process/focus observations and resolved games. Publishes changes independently of the main window. |
 | Platform integrations | OS discovery providers, known-folder resolution, process/focus observations, shortcuts, file-manager commands, tray, autostart, sounds and notifications | Separate adapters behind narrow interfaces. Translate OS events into core commands/observations and core results into platform feedback. |
@@ -104,12 +104,26 @@ The host composes modules and manages their lifecycle. Business rules live in th
 
 Platform integrations are a family of small adapters, not one interface that every module must depend on. For example, the scanner needs discovery/path providers, the monitor needs process/focus observations, and feedback needs sound/notification delivery. Each can be replaced independently.
 
+### Persistence and per-game data access
+
+Use one SQLite database for the application. Scope ordinary game operations to that game's affected records. The core prepares explicit insert, update and delete batches through the repository interface; the store applies each batch in one transaction. A Save or operation-phase update must not rewrite unchanged records for that game or any other game. Settings changes update settings only, plus required revision metadata. Monitor and discovery changes may affect several games in one batch without rewriting their histories.
+
+Publish in-memory changes only after the transaction commits. On failure, retain the previous committed state in both memory and the database. Persist operation admission before acknowledging acceptance, and commit successful completion, checkpoint metadata and the corresponding history entry together. Keep durable replacement and recovery boundaries explicit; reducing database writes must not weaken crash recovery or SQLite durability settings.
+
+Use indexed lookups for game ownership, checkpoint IDs, operation IDs and request IDs, and an index supporting per-game history ordering. Allocate durable history sequence and checkpoint registration order without scanning all historical records; preserve their ordering across restart and migration. Do not clone, compare or serialize the whole library to commit a game operation. Keep per-game operation exclusion and serialize database commits as needed; separate databases or parallel writers are not required.
+
+Keep active configuration, current operation/recovery state and bounded read caches in memory. Read historical rows, terminal operation journals and retired checkpoint records through repository queries when needed, rather than loading the entire audit history at startup. Startup recovery must find every unresolved operation directly. Lazy loading must preserve global path-overlap checks, retained recovery-path reservations, exact checkpoint lookup and request idempotency; data absent from a cache is not evidence that it does not exist.
+
+The core owns visible-history and checkpoint-eligibility rules. Maintain per-game summaries and an indexed visible-history projection that supports bounded page reads, with session context calculated independently of page boundaries. Storage may persist derived indexes supplied by the core but must not implement a second version of the policy. Invalidate or update the affected game's projection after checkpoint, history, configuration or session changes; artwork changes and unrelated game activity do not rebuild it. Make any rebuild coherent with its source revision, and process large rebuilds in bounded batches.
+
+Retain durable records until the existing Flush rules permit their removal. Pagination and cache eviction do not delete history, checkpoints or recovery data. Schema migrations preserve IDs, ordering, original-directory ownership, exact action references and operation journals atomically.
+
 ### Shared service contract
 
 Expose a small, versioned local API with plain data types and stable IDs:
 
 - Commands: Save, Load (default or an explicit saved checkpoint ID), Revert (the exact recovery checkpoint ID referenced by a selected Loaded/Reverted history entry), retry interrupted-operation recovery, resolve recovery (an explicit interrupted operation and choice), confirmed Flush history, configuration updates, rescan and request an asynchronous artwork cache check for known games.
-- Queries: current games, active stack, configuration, checkpoints and their restore eligibility, history, operation status and recovery status.
+- Queries: current library summaries, active stack, configuration, exact checkpoints and their restore eligibility, paginated per-game history, operation status by ID and recovery status.
 - Events: game availability/activity changes, artwork availability changes, history changes, operation start/progress/completion/failure, recovery status changes and configuration changes.
 
 The game read model and IPC state expose the catalog's optional Steam app ID (`stores.steam`) and the artwork service's current asset availability and validated local cache paths. Include artwork state in the initial snapshot and publish changes so a newly attached UI can display cached icons and update as downloads finish. Steam metadata resolution and download state belong to the host's artwork service; artwork URLs, image hashes and cache paths are not catalog fields or durable game records. Keep the Rust read model, request/response schemas, fixtures and desktop parser aligned with the artwork check command, state and events.
@@ -120,6 +134,16 @@ History responses expose the exact saved or recovery checkpoint reference for ea
 
 The connection must provide a consistent current-state snapshot and subsequent events, with revisions or equivalent resynchronization so clients cannot miss a change while attaching. Progress and errors use structured fields; user-facing wording is supplied by the UI or feedback adapter. A transport failure or disconnect must not be reported as success.
 
+Routine state snapshots contain library summaries: settings, game configuration, active stack, artwork, diagnostics, per-game availability, the default checkpoint's display metadata, whether visible history and Flush are available, and current operation/recovery and failure information. Do not include accumulated history, all checkpoints or terminal operation journals. Historical details are queried separately. Watch checks lightweight revisions before constructing a response; unchanged polling must not clone the library or rebuild history. Live-directory availability checks still run when needed even without a metadata event.
+
+History queries require a game ID and accept an opaque cursor and a bounded page size. Default to 50 rows and cap requests at 200, with a serialized byte budget below the 8 MiB frame limit. Each row includes its display timestamps, exact checkpoint action target and current action availability, so the client does not need a global checkpoint map. Order the visible timeline newest first by durable history sequence, using stable IDs as an additional cursor key; equal timestamps never cause omissions or duplicates. Manual-copy modification estimates continue to govern default LOAD selection and session association as specified separately.
+
+Bind each history cursor to its game, host instance and history-projection revision. Read each page from one coherent revision. A relevant same-game change invalidates existing cursors with an explicit reload response; unrelated games, progress-only updates and artwork changes do not. Host restart invalidates old cursors. Compute session-marker visibility using the full relevant session context, never just the raw records inside a page.
+
+All potentially large collections have bounded responses. Flush returns counts and a confirmation revision, with optional Details paths fetched in pages bound to that revision. Preserve the confirmation's existing revalidation rules. Other oversized replies require pagination or an explicit size error, never silent truncation; report a specific error if one item exceeds the response budget. Keep historical record growth out of routine state payloads rather than increasing the frame limit.
+
+Define wire read models independently of internal mutable state. Version incompatible service changes explicitly and update the host, CLI, desktop, Explorer bridge, schemas and shared fixtures together. Reject mismatched versions clearly and document the required host/integration upgrade steps; do not fall back to unbounded state transfer. CLI history supports explicit paging and a streaming all-pages mode with bounded memory; if its cursor becomes invalid, report that history changed instead of silently duplicating or omitting entries.
+
 Keep IPC local to the signed-in user. The core application must not depend on the selected IPC transport. Module interfaces and service messages must not expose UI controls, framework-specific objects, SQL rows or mutable internal state.
 
 ### Independent development and testing
@@ -129,7 +153,7 @@ Keep IPC local to the signed-in user. The core application must not depend on th
 - Test the snapshot engine against isolated temporary directories, including locked/unavailable files where supported, partial copies, collisions, failed replacement and rollback.
 - Test scanner providers with fixture catalogs, registry/launcher metadata and directory layouts. No installed Steam client or actual game library should be required for these tests.
 - Test the monitor with recorded or synthetic launch/focus/close sequences, including multiple processes per game.
-- Test the store's persistence, transaction boundaries and restart recovery separately. Replacement store implementations must satisfy the same repository contract.
+- Test the store's persistence, incremental row writes, indexed per-game queries, transaction boundaries and restart recovery separately. Verify actual writes, including the absence of writes to unchanged records. Replacement store implementations must satisfy the same repository contract.
 - Test the UI against a fake service that can produce busy, progress, failure, unavailable-snapshot and disconnected states.
 - Test the host's artwork service with a fake downloader and temporary cache: cache reuse after restart, missing/deleted/corrupt icon downloads, post-scan discovery, UI attachment, duplicate queue suppression, offline failures and interrupted writes. Verify that slow downloads do not block scanning, service requests or Save/Load. These tests must not require live Steam access.
 - Keep platform-specific integration checks separate from portable module tests. Verify the service contract end to end with the UI absent, including shortcut/Explorer command handling and UI reattachment during an operation.
@@ -506,7 +530,7 @@ Keep the UI slick, minimal and compact. Use spacing, restrained emphasis and con
 
 ### Main window
 
-It should show a scrollable list of widgets, one per game, for games that are in our library and that are detected on this computer. If there are no installed games, the list is empty and shows the text "No known games installed on this computer."
+It should show a scrollable list of widgets, one per game, for games that are in our library and that are detected on this computer. If there are no installed games, the list is empty and shows the text "No known games are detected on this computer. Once you install a supported game, it will show up in this window automatically."
 
 When at least one game is running, show launched games in ACTIVE STACK order and group all nonrunning installed games under an expandable "Other games" row with a count. Collapse that group by default when entering this running-games view, unless it contains the currently selected game. Expanding the group exposes its rows; selecting a row reveals that game's controls and instructions. Preserve the user's expansion choice during ordinary refreshes while games remain running. When no games are running, show all installed known games directly without requiring expansion. If a game closes, it leaves ACTIVE STACK and moves into the nonrunning group, or into the full list if it was the last running game; preserve its selection and expand the group if needed to keep it visible. If a scan confirms that a game is no longer installed, its entry disappears.
 
@@ -599,6 +623,10 @@ The core-selected eligible saved checkpoint's time appears below the main Load c
 - 2012-12-12, 12:12:21
 
 History rows use explicit times within their day groups so that operations and their targets can be distinguished. The history list scrolls when it exceeds the dropdown's available height.
+
+Opening history requests the first page for that game. Load older pages as the user scrolls, preserving day grouping, stable row IDs and exact Restore/Revert targets. Bound cached pages and rendered widgets so a long browsing session does not retain the entire timeline. The history arrow's availability comes from the host summary, not from whether the client has fetched any rows.
+
+Discard replies for a closed popup, a different game or an earlier host instance. If the history revision invalidates a cursor, reload and preserve the visible row as an anchor when it still exists. Reconnecting retrieves the current summary and any open history page without replaying commands. Busy and recovery restrictions apply immediately to loaded rows as well as newly fetched pages; the core revalidates every action at execution.
 
 When the game is idle, disable the main Load button if no saved snapshot is available. Keep the history arrow available whenever visible history exists, including when only recovery-backed operations remain. Internal removed-checkpoint records and unrelated session markers alone do not enable it. During an operation, the busy-state rules disable both parts of the control. Revert actions live in history; there is no separate single-undo button.
 
