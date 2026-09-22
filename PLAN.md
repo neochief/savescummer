@@ -44,9 +44,10 @@ Use one repository, one Cargo workspace for Rust packages, and a CMake build for
 
 ```text
 savescummer/
-├── Cargo.toml
+├── Cargo.toml                    # Workspace manifest; [workspace.package] version is the single source
 ├── Cargo.lock
-├── CMakeLists.txt
+├── CMakeLists.txt                # C++ desktop; reads the app version from Cargo.toml
+├── build.ps1                     # Single Windows entry point: dev, release, clean
 │
 ├── apps/
 │   ├── host/                   # Rust background-host executable
@@ -80,9 +81,22 @@ savescummer/
 │   ├── fake-game/              # Small controllable test executable
 │   └── fixtures/
 ├── assets/                     # Icons and sounds
-├── packaging/                  # Platform-specific distribution files
-├── scripts/                    # Build, test and packaging commands
+│
+├── packaging/                  # Per-platform distribution and installer files
+│   └── windows/
+│       ├── licenses/           # LGPL/GPL notices bundled into every package
+│       └── installer/          # Inno Setup definition for the 1.0 installer
+│   # (macos/ and linux/ are added as those platforms qualify)
+│
+├── scripts/                    # Build, test, packaging, release commands
+│   ├── package-common.ps1      # Platform-neutral packaging core (shared by all OS scripts)
+│   ├── package-windows.ps1     # Windows packaging: Qt deploy, VC runtime, portable ZIP
+│   ├── release-github.ps1      # Local draft-first GitHub Release publisher
+│   └── build-desktop, check, explorer helpers, ...
+│
+├── .github/workflows/          # CI and tag-triggered release workflows
 ├── PLAN.md
+├── PLAN-INFRA.md               # Build, distribution and release plan (implementation steps)
 └── PLAN-INTEGRATION-TESTS.md
 ```
 
@@ -97,6 +111,56 @@ Repository and dependency rules:
 - Keep game definitions in `catalog/games`, independently of scanner implementation. Keep the Explorer extension in its own native build target; it forwards requests to the host rather than implementing save/load rules.
 - Build scripts wrap standard Cargo and CMake commands. Use Cargo's test runner and Qt Test; do not introduce a custom test framework. Packaging produces one application distribution containing `SaveScummer`, `SaveScummer.Host`, `SaveScummer.CLI`, their runtime dependencies and required integrations.
 - Keep build outputs, downloaded SDKs and local runtime data out of version control. Commit source, game definitions, protocol fixtures, migrations, build configuration and the application Cargo lockfile.
+
+### Build, distribution and releases
+
+Keep build, packaging and release tooling a separate, well-defined layer so a
+complete reimplementation reproduces the same output layout. Treat the
+application version as a single source of truth: the Cargo workspace manifest
+(`[workspace.package] version`). The CMake project and every packaging/release
+script read that version, and the release tag must equal `v<version>`.
+
+Generated output lives outside the committed source tree, separated by purpose
+(all gitignored):
+
+- `target/` — Cargo cache only. Scripts never place anything else here; removed
+  only by a deep clean.
+- `build/` — regenerable intermediates: `dev/` and `release/` CMake trees, logs,
+  build reports and the dev package; `tmp/` holds disposable scratch (including
+  the test temp directory). Wiped by a normal `clean`.
+- `dist/` — release distributables, flat and OS/arch-tagged:
+  `SaveScummer-<os>-<arch>-<version>.<ext>` (for example
+  `SaveScummer-windows-x64-0.1.0.zip`, later
+  `SaveScummer-macos-arm64-0.1.0.tar.gz` and
+  `SaveScummer-linux-x86_64-0.1.0.tar.gz`). Every archive contains one
+  top-level per-platform folder holding the canonical executables.
+- `.runtime/` — machine-local state that must survive a clean: vendored SDKs
+  (Qt, CMake tools) and development app data. `clean` never touches it.
+
+One entry point, `build.ps1`, orchestrates the Windows dev, release and clean
+flows: compile Rust and the Qt desktop, run optional tests, package, and write
+a build report. `clean` removes `build/` and `dist/`; `clean -Deep` also removes
+`target/`; it gracefully stops a recorded development host first and never
+removes `.runtime/`.
+
+Packaging is per platform but shares a platform-neutral core.
+`package-common.ps1` owns version reading, staging layout, the package
+manifest, checksum generation and identity templates; each `package-<os>.ps1`
+adds only OS-specific steps (Windows: Qt deployment, Visual C++ runtime, ZIP,
+PDBs; later macOS: app bundle and dmg; Linux: tarball or AppImage). The Windows
+1.0 distribution is an Inno Setup per-user installer (primary) that registers
+the Explorer extension by default and ships an uninstaller that preserves the
+user's backup data, plus a portable ZIP (secondary) carrying the same binaries
+and an opt-in Explorer registration. No packaging script may reproduce policy
+already owned by the shared core.
+
+Releases are published to GitHub Releases from a `v<version>` tag. Creating a
+release always produces a draft for human review (auto-generated notes, attached
+per-platform artifacts, checksums) before it is published.
+`scripts/release-github.ps1` does this locally with the GitHub CLI; a CI
+workflow later builds the same artifacts on a per-OS matrix and publishes the
+same draft-first release, so the local and CI paths never diverge. See
+`PLAN-INFRA.md` for the concrete implementation steps.
 
 ### Application processes
 
@@ -824,3 +888,14 @@ Recognized native copies are accepted without proof of app ownership. Keep their
 - Windows: possible to extend the Explorer context menus
 - macOS: unknown
 - Linux: unknown
+
+
+
+
+---
+
+Next tasks:
+
+# Update geme library
+
+TODO\game_library.csv contains stub of interesting games that shoul dbe supported by the app out of the box. We may need to cross match this list with the
