@@ -5,14 +5,14 @@ param(
     [switch]$Package,
     [switch]$Test,
     [switch]$Deep,
-    [switch]$KeepProduction,
+    [switch]$KeepOtherHosts,
     [string]$QtPrefix = "$PSScriptRoot/.runtime/Qt/6.5.3/msvc2019_64",
     [string]$Generator = 'Visual Studio 16 2019'
 )
 $ErrorActionPreference = 'Stop'
 if ($Run -and $Mode -ne 'dev') { throw '-Run is for development. Open the packaged executable for a release.' }
 if ($Demo -and -not $Run) { throw '-Demo requires -Run.' }
-if ($KeepProduction -and -not $Run) { throw '-KeepProduction requires -Run.' }
+if ($KeepOtherHosts -and -not $Run) { throw '-KeepOtherHosts requires -Run.' }
 $root = $PSScriptRoot
 
 # Stops the recorded development host gracefully so accepted save/restore work
@@ -112,37 +112,44 @@ function Stop-OutputProcesses {
     }
 }
 
-# Stops any SaveScummer host that is not this development instance — typically a
-# packaged or installed production host. Development enables OS integrations, so
-# a running production host would otherwise own the tray icon and the global
-# shortcuts (and pressing Ctrl+F5 would act on the production instance).
+# Stops every other SaveScummer host so this development instance can own the tray
+# icon and the global shortcuts. Only the current user's hosts are considered.
 # Hosts are asked to shut down gracefully first so accepted save/restore work can
-# finish; only a host that refuses is terminated. Pass -KeepProduction to skip.
+# finish; only a host that refuses is terminated. Pass -KeepOtherHosts to skip.
 function Stop-OtherHosts {
     param(
-        [string]$DevDataDirectory,
         [string]$FallbackCli,
         [int]$TimeoutSeconds = 30
     )
-    $devDataFull = [IO.Path]::GetFullPath($DevDataDirectory)
-    $hosts = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $hosts = @(Get-Process -IncludeUserName -ErrorAction SilentlyContinue | Where-Object {
         $_.Path -and ([IO.Path]::GetFileName($_.Path) -in @('SaveScummer.Host.exe', 'savescummer-host.exe'))
     })
     if ($hosts.Count -eq 0) { return }
-    # Close other desktops first so they do not reconnect while their host exits.
-    foreach ($desktop in @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.Path -and [IO.Path]::GetFileName($_.Path) -eq 'SaveScummer.exe' -and
-        -not $_.Path.StartsWith((Join-Path $PSScriptRoot 'build'), [StringComparison]::OrdinalIgnoreCase)
-    })) {
-        Write-Host "Closing the other SaveScummer desktop (PID $($desktop.Id))."
-        try {
-            if ($desktop.CloseMainWindow()) { $null = $desktop.WaitForExit(5000) }
-            if (-not $desktop.HasExited) {
-                Stop-Process -InputObject $desktop -Force -ErrorAction SilentlyContinue
-            }
-        } catch { }
+    # Close the desktop beside each host we are about to stop so it does not
+    # reconnect while its host exits.
+    foreach ($hostProcess in $hosts) {
+        if ($hostProcess.UserName -and $hostProcess.UserName -ne $currentUser) { continue }
+        $directory = Split-Path -Parent $hostProcess.Path
+        foreach ($desktop in @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.Path -and (Split-Path -Parent $_.Path) -eq $directory -and
+            [IO.Path]::GetFileName($_.Path) -eq 'SaveScummer.exe'
+        })) {
+            Write-Host "Closing desktop (PID $($desktop.Id))."
+            try {
+                if ($desktop.CloseMainWindow()) { $null = $desktop.WaitForExit(5000) }
+                if (-not $desktop.HasExited) {
+                    Stop-Process -InputObject $desktop -Force -ErrorAction SilentlyContinue
+                }
+            } catch { }
+        }
     }
     foreach ($hostProcess in $hosts) {
+        if ($hostProcess.UserName -and $hostProcess.UserName -ne $currentUser) {
+            Write-Warning "Skipping a SaveScummer host owned by another user (PID $($hostProcess.Id))."
+            continue
+        }
+        # The data directory is read only to address this host's endpoint.
         $dataDirectory = $null
         try {
             $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($hostProcess.Id)" `
@@ -151,18 +158,12 @@ function Stop-OtherHosts {
                 $dataDirectory = if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
             }
         } catch { }
-        # Skip this instance and any other development instance (its data lives
-        # under a .runtime directory); everything else is treated as production.
-        if ($dataDirectory) {
-            $dataFull = [IO.Path]::GetFullPath($dataDirectory)
-            if ($dataFull -eq $devDataFull -or $dataFull -match '[\\/]\.runtime[\\/]') { continue }
-        }
         $directory = Split-Path -Parent $hostProcess.Path
         $cli = @('SaveScummer.CLI.exe', 'savescummer-cli.exe') |
             ForEach-Object { Join-Path $directory $_ } |
             Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         if (-not $cli) { $cli = $FallbackCli }
-        Write-Host "Stopping the other SaveScummer host (PID $($hostProcess.Id))."
+        Write-Host "Stopping SaveScummer host (PID $($hostProcess.Id))."
         $arguments = @('--no-start')
         if ($dataDirectory) { $arguments = @('--data-dir', $dataDirectory) + $arguments }
         $arguments += 'shutdown'
@@ -172,11 +173,33 @@ function Stop-OtherHosts {
             $stopped = $hostProcess.WaitForExit($TimeoutSeconds * 1000)
         }
         if (-not $stopped) {
-            Write-Warning 'The other SaveScummer host did not exit; terminating it. An in-flight operation may need recovery.'
+            Write-Warning 'The SaveScummer host did not exit; terminating it. An in-flight operation may need recovery.'
             Stop-Process -InputObject $hostProcess -Force -ErrorAction SilentlyContinue
             $null = $hostProcess.WaitForExit(10000)
         }
     }
+}
+
+# Removes a SaveScummer autostart entry that points at a development build, so a
+# development build cannot leave sign-in starting a stale debug host. An entry
+# that points at a packaged or installed host is never touched.
+function Remove-DevelopmentAutostart {
+    param([string]$Root)
+    $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $value = (Get-ItemProperty -LiteralPath $key -Name 'SaveScummer' -ErrorAction SilentlyContinue).SaveScummer
+    if (-not $value) { return }
+    if ($value -notmatch '^\s*"([^"]+)"') { return }
+    $hostPath = $Matches[1]
+    # Build each root separately: a trailing "+ char," inside @(...) collapses the
+    # array into a single space-joined string.
+    $targetRoot = [IO.Path]::GetFullPath((Join-Path $Root 'target')) + [IO.Path]::DirectorySeparatorChar
+    $buildRoot = [IO.Path]::GetFullPath((Join-Path $Root 'build')) + [IO.Path]::DirectorySeparatorChar
+    $development = @($targetRoot, $buildRoot) | Where-Object {
+        $hostPath.StartsWith($_, [StringComparison]::OrdinalIgnoreCase)
+    }
+    if (-not $development) { return }
+    Remove-ItemProperty -LiteralPath $key -Name 'SaveScummer' -ErrorAction Stop
+    Write-Host 'Removed a development SaveScummer autostart entry.'
 }
 
 $modeDirectory = Join-Path $root "build/$Mode"
@@ -265,6 +288,7 @@ if ($Mode -eq 'dev') {
 # that may be finishing a save/restore operation.
 if ($Mode -eq 'dev') {
     Stop-RecordedDevHost -CliBinary $cliBinary -DataDirectory $devData -SessionFile $sessionFile
+    Remove-DevelopmentAutostart -Root $root
 }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     $env:PATH = "$(Join-Path $env:USERPROFILE '.cargo/bin');$env:PATH"
@@ -329,12 +353,12 @@ try {
         if (-not $Demo) {
             # Dedicated settings/history; OS integrations (tray, global shortcuts,
             # notifications) stay enabled so the development app behaves like the
-            # real one. Any already-running production host is stopped first so it
-            # cannot own the tray or the global shortcuts; use -KeepProduction to
-            # leave it alone. Configured game directories are real: use -Demo for
-            # simulated operations.
-            if (-not $KeepProduction) {
-                Stop-OtherHosts -DevDataDirectory $devData -FallbackCli $cliBinary
+            # real one. Every other host is stopped first so it cannot own the tray
+            # or the global shortcuts; use -KeepOtherHosts to leave them alone.
+            # Configured game directories are real: use -Demo for simulated
+            # operations.
+            if (-not $KeepOtherHosts) {
+                Stop-OtherHosts -FallbackCli $cliBinary
             }
             $hostLog = Join-Path $modeDirectory 'host.stdout.log'
             $hostErrorLog = Join-Path $modeDirectory 'host.stderr.log'

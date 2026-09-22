@@ -175,15 +175,14 @@ by default, including a dev package launched directly.
 Unlike automated tests, the interactive dev runner keeps OS integrations enabled so
 the app behaves like the real one: the host owns the tray icon, the global
 Ctrl+F5/Ctrl+F9 shortcuts and failure notifications. Because only one host can own
-those, `dev -Run` first stops any already-running SaveScummer host that is not this
-development instance (typically a packaged or installed production host). That host
-is asked to shut down gracefully so accepted save/restore work can finish; it is
-terminated only if it refuses, which may leave an operation needing recovery. Pass
-`-KeepProduction` to leave other hosts running (the tray and global shortcuts will
-then belong to whichever host registered first). Enabling OS integrations also means
-the dev UI's **Launch on startup** setting writes the real current-user Run entry;
-prefer toggling it only when you intend that, and remember `clean -Deep` removes the
-development host binary it would point at.
+those, `dev -Run` first stops every other SaveScummer host owned by the current user.
+Each host is asked to shut down gracefully so accepted save/restore work can finish;
+it is terminated only if it refuses, which may leave an operation needing recovery.
+Pass `-KeepOtherHosts` to leave them running (the tray and global shortcuts then
+belong to whichever host registered first). The dev build also removes a SaveScummer
+autostart entry that points at a development build, so toggling **Launch on startup**
+in a dev session is cleaned up on the next dev build; an entry pointing at a packaged
+or installed host is never touched.
 
 ## VS Code
 
