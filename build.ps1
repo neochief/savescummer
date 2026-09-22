@@ -327,12 +327,42 @@ try {
             -Generator $Generator -Configuration $configuration -SkipTests:(-not $Test) -TestHost $hostBinary
     }
     if ($Package -or $Mode -eq 'release') {
+        $explorerDll = $null
+        if ($Mode -eq 'release') {
+            Invoke-BuildStep 'Explorer extension' {
+                & "$root/scripts/build-explorer.ps1" -BuildDirectory (Join-Path $root 'build/release/explorer') `
+                    -Generator $Generator
+                if ($LASTEXITCODE -ne 0) { throw 'Explorer extension build or COM tests failed.' }
+            }
+            $explorerDll = Join-Path $root 'build/release/explorer/Release/savescummer-explorer.dll'
+        }
         Invoke-BuildStep 'Portable folder and ZIP' {
             # Output paths default to dist/SaveScummer-windows-x64 (release) or
             # build/dev/SaveScummer-windows-x64 (dev); see package-windows.ps1.
-            & "$root/scripts/package-windows.ps1" -Mode $Mode -Configuration $configuration `
-                -DesktopBuildDirectory $desktopBuild -HostBinary $hostBinary -CliBinary $cliBinary `
-                -QtPrefix $QtPrefix
+            $packageArgs = @{
+                Mode = $Mode; Configuration = $configuration
+                DesktopBuildDirectory = $desktopBuild; HostBinary = $hostBinary; CliBinary = $cliBinary
+                QtPrefix = $QtPrefix
+            }
+            if ($explorerDll) { $packageArgs.ExplorerDll = $explorerDll }
+            & "$root/scripts/package-windows.ps1" @packageArgs
+        }
+        if ($Mode -eq 'release') {
+            Invoke-BuildStep 'Windows installer' {
+                $isccCandidates = @()
+                if ($env:ProgramFiles) { $isccCandidates += Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+                if (${env:ProgramFiles(x86)}) { $isccCandidates += Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe' }
+                if ($env:LOCALAPPDATA) { $isccCandidates += Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 6/ISCC.exe' }
+                $hasIscc = [bool](Get-Command iscc -ErrorAction SilentlyContinue)
+                if (-not $hasIscc) {
+                    $hasIscc = [bool]($isccCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1)
+                }
+                if ($hasIscc) {
+                    & "$root/scripts/build-installer.ps1"
+                } else {
+                    Write-Warning 'Inno Setup (ISCC.exe) was not found; the installer was skipped. Run ./scripts/setup-innosetup.ps1 and retry, or publish the portable-only package with ./scripts/release-github.ps1 -AllowMissingInstaller.'
+                }
+            }
         }
     }
     $total.Stop()

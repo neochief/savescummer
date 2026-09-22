@@ -26,6 +26,10 @@ pub enum DesktopEvent {
 
 pub trait StartupRegistration: Send + Sync {
     fn set_enabled(&self, enabled: bool) -> io::Result<()>;
+    /// Reports whether this host is currently registered to launch at sign-in.
+    /// Used to adopt an entry created outside the app (for example by the
+    /// per-user installer) instead of showing an inconsistent preference.
+    fn is_enabled(&self) -> io::Result<bool>;
 }
 
 pub struct NativeStartup {
@@ -47,6 +51,19 @@ impl StartupRegistration for NativeStartup {
         #[cfg(not(windows))]
         {
             let _ = enabled;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "startup registration is Windows-only",
+            ))
+        }
+    }
+    fn is_enabled(&self) -> io::Result<bool> {
+        #[cfg(windows)]
+        {
+            super::windows::startup_enabled(&self.host, &self.data_dir)
+        }
+        #[cfg(not(windows))]
+        {
             Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "startup registration is Windows-only",

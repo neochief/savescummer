@@ -359,6 +359,7 @@ async fn active_shortcuts_share_admission_and_retries_keep_the_original_game() {
 struct RecordingStartup {
     enabled: AtomicBool,
     fail: AtomicBool,
+    fail_read: AtomicBool,
 }
 impl StartupRegistration for RecordingStartup {
     fn set_enabled(&self, enabled: bool) -> io::Result<()> {
@@ -368,6 +369,60 @@ impl StartupRegistration for RecordingStartup {
         self.enabled.store(enabled, Ordering::SeqCst);
         Ok(())
     }
+    fn is_enabled(&self) -> io::Result<bool> {
+        if self.fail_read.load(Ordering::SeqCst) {
+            return Err(io::Error::other("injected registration read failure"));
+        }
+        Ok(self.enabled.load(Ordering::SeqCst))
+    }
+}
+#[test]
+fn adopts_an_externally_created_signin_entry_once() {
+    let (_temp, mut service, repository, _audio) = fixture();
+    let startup = Arc::new(RecordingStartup {
+        enabled: AtomicBool::new(false),
+        fail: AtomicBool::new(false),
+        fail_read: AtomicBool::new(false),
+    });
+    Arc::get_mut(&mut service).unwrap().startup = Some(startup.clone());
+
+    // A read failure is reported as an integration error, not as a host failure.
+    startup.fail_read.store(true, Ordering::SeqCst);
+    let message = adopt_launch_on_startup(startup.as_ref(), &service.runtime).unwrap();
+    assert!(message.is_some_and(|message| message.contains("launch-on-startup state")));
+    startup.fail_read.store(false, Ordering::SeqCst);
+
+    // No entry: the preference is left untouched.
+    assert!(
+        adopt_launch_on_startup(startup.as_ref(), &service.runtime)
+            .unwrap()
+            .is_none()
+    );
+    assert!(!service.runtime.settings().unwrap().launch_on_startup);
+
+    // An installer-created entry is adopted into the preference.
+    startup.enabled.store(true, Ordering::SeqCst);
+    assert!(
+        adopt_launch_on_startup(startup.as_ref(), &service.runtime)
+            .unwrap()
+            .is_none()
+    );
+    assert!(service.runtime.settings().unwrap().launch_on_startup);
+
+    // Already adopted: nothing changes and no failure is reported.
+    assert!(
+        adopt_launch_on_startup(startup.as_ref(), &service.runtime)
+            .unwrap()
+            .is_none()
+    );
+    assert!(service.runtime.settings().unwrap().launch_on_startup);
+
+    // A rejected preference commit is reported and leaves the preference off.
+    service.runtime.set_launch_on_startup(false).unwrap();
+    repository.fail_startup.store(true, Ordering::SeqCst);
+    let message = adopt_launch_on_startup(startup.as_ref(), &service.runtime).unwrap();
+    assert!(message.is_some_and(|message| message.contains("launch-on-startup preference")));
+    assert!(!service.runtime.settings().unwrap().launch_on_startup);
 }
 #[tokio::test]
 async fn startup_registration_and_persistence_failures_preserve_previous_setting() {
@@ -375,6 +430,7 @@ async fn startup_registration_and_persistence_failures_preserve_previous_setting
     let startup = Arc::new(RecordingStartup {
         enabled: AtomicBool::new(false),
         fail: AtomicBool::new(true),
+        fail_read: AtomicBool::new(false),
     });
     Arc::get_mut(&mut service).unwrap().startup = Some(startup.clone());
     let enable = request(Command::SetLaunchOnStartup { enabled: true });

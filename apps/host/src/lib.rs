@@ -584,6 +584,27 @@ async fn connection<T: AsyncRead + AsyncWrite + Unpin>(
     }
     Ok(())
 }
+/// Adopts an externally created sign-in entry (for example from the per-user
+/// installer) into the persisted preference, so the app's displayed setting and
+/// the OS registration cannot disagree. A missing entry is left alone so a
+/// development build can remove its own autostart without the host recreating
+/// it. Returns an integration error message instead of failing the host.
+fn adopt_launch_on_startup(
+    startup: &dyn StartupRegistration,
+    runtime: &Runtime,
+) -> Result<Option<String>> {
+    if runtime.settings()?.launch_on_startup {
+        return Ok(None);
+    }
+    match startup.is_enabled() {
+        Ok(true) => match runtime.set_launch_on_startup(true) {
+            Ok(()) => Ok(None),
+            Err(error) => Ok(Some(format!("launch-on-startup preference: {error}"))),
+        },
+        Ok(false) => Ok(None),
+        Err(error) => Ok(Some(format!("launch-on-startup state: {error}"))),
+    }
+}
 pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
     let data_dir = options
         .data_dir
@@ -661,8 +682,16 @@ pub async fn serve(options: HostOptions) -> anyhow::Result<()> {
     } else {
         None
     };
-    // Only explicit SetLaunchOnStartup requests may change registration. Starting
-    // another build with the same saved preference must not take over autostart.
+    // Adopt an externally created sign-in entry (for example from the per-user
+    // installer) so the persisted preference and the OS registration cannot
+    // disagree.
+    if let Some(startup) = &startup
+        && let Some(message) = adopt_launch_on_startup(startup.as_ref(), &runtime)?
+    {
+        integration_errors.push(message);
+    }
+    // Explicit SetLaunchOnStartup requests remain the only way to change an
+    // existing registration; the reconciliation above only adopts one.
     runtime.set_discovery_errors(integration_errors.clone())?;
     let artwork = if options.no_artwork {
         None

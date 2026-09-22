@@ -1,4 +1,8 @@
 fn main() {
+    // The version resource reads [package.metadata.winresource] from this
+    // manifest; without an explicit rerun path a metadata edit would not
+    // regenerate it (winresource does not emit one itself).
+    println!("cargo:rerun-if-changed=Cargo.toml");
     let root = std::path::Path::new("../../catalog/games");
     println!("cargo:rerun-if-changed={}", root.display());
     let icon = std::path::Path::new("../../assets/icon.ico");

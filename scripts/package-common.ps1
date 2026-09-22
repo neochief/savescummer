@@ -32,6 +32,18 @@ function Get-PortableArtifactName {
     return "$stem.$Extension"
 }
 
+# Returns the OS/arch-tagged installer name:
+# SaveScummer-<os>-<arch>-<version>-setup.<extension>
+function Get-InstallerArtifactName {
+    param(
+        [string]$Os,
+        [string]$Arch,
+        [string]$Version,
+        [string]$Extension = 'exe'
+    )
+    return "SaveScummer-$Os-$Arch-$Version-setup.$Extension"
+}
+
 # Creates a fresh sibling staging directory for an atomic package replace and
 # returns its path. A failed packaging run therefore never disturbs the
 # existing package or archive.

@@ -22,7 +22,9 @@ next dev build.
 
 `release` corresponds to `vite build`: produce optimized native executables and a
 portable distribution containing the runtime dependencies. Recipients need neither
-Rust nor Qt nor the compiler. This is a folder/ZIP distribution, not an installer.
+Rust nor Qt nor the compiler. On Windows this produces both a portable folder/ZIP
+and a per-user Inno Setup installer (the primary channel); see
+[Building the installer](#building-the-installer).
 
 ## Prerequisites
 
@@ -30,6 +32,7 @@ Rust nor Qt nor the compiler. This is a folder/ZIP distribution, not an installe
 - Visual Studio C++ build tools and a Windows SDK. Default generator: VS 2019 x64.
 - Qt 6.5 or newer, MSVC x64 kit, including Widgets, Network, SVG and Test.
 - CMake 3.21 or newer on PATH.
+- Inno Setup 6.3 or newer for the installer (optional for a portable-only build).
 
 This machine already has these. Scripts also find the local SDK at
 `.runtime/Qt/6.5.3/msvc2019_64` and local CMake under `.runtime/qt-tools/cmake/data/bin`.
@@ -53,6 +56,7 @@ a fresh CMake build directory. Normal source edits do not require cleaning.
 | Main purpose | Fast Rust rebuilds and debugging | Distribution |
 | Build trees | `target/debug`, `build/dev/desktop` | `target/release`, `build/release/desktop` |
 | Portable package | Optional: add `-Package` | Always produced |
+| Installer | — | `release` produces it when Inno Setup is available |
 
 The C++ dev profile deliberately uses release Qt DLLs plus application symbols,
 avoiding a dependency on debug-only Qt/Visual C++ runtimes. Symbols are separate
@@ -129,6 +133,8 @@ Release distributables live in `dist/`:
 - `dist/SaveScummer-windows-x64/bin/SaveScummer.exe`: portable entry point.
 - `dist/SaveScummer-windows-x64-<version>.zip`: complete portable archive whose
   root is a single `SaveScummer-windows-x64/` folder.
+- `dist/SaveScummer-windows-x64-<version>-setup.exe`: per-user installer (present
+  when Inno Setup is available).
 
 The version is read from the Cargo workspace manifest (`Cargo.toml`); the
 release tag must equal `v<version>`.
@@ -141,6 +147,52 @@ hidden, unresponsive, or custom-data-directory processes still running from that
 folder are then terminated. Apps running elsewhere are left alone. A compile
 failure stops the build before deployment, so an old successful package can remain
 on disk; check the command's exit status and report timestamp. Packages are unsigned.
+
+## Building the installer
+
+`./build.ps1 release` builds the Explorer extension, the portable package and,
+when Inno Setup is available, the per-user installer. The installer is the
+primary Windows channel; the portable ZIP stays as the secondary channel with the
+same binaries.
+
+```powershell
+./scripts/setup-innosetup.ps1   # once: install Inno Setup 6 with winget
+./build.ps1 release             # payload + ZIP + dist/SaveScummer-windows-x64-<version>-setup.exe
+```
+
+If `ISCC.exe` is missing, `release` prints a warning and still produces the
+portable package. To build only the installer from an existing payload:
+
+```powershell
+./scripts/build-installer.ps1
+./scripts/build-installer.ps1 -PayloadDirectory dist/SaveScummer-windows-x64
+```
+
+The installer is strictly per-user and needs no administrator rights. It installs
+to `%LOCALAPPDATA%\Programs\SaveScummer`, registers the Explorer context menu
+under `HKCU` (default on, uncheckable) and can add a sign-in entry (off by
+default, written in the same form the app uses). Before replacing files it asks a
+running installed host to shut down gracefully, so an accepted save/restore
+operation can finish. Silent install and uninstall:
+
+```powershell
+.\SaveScummer-windows-x64-0.1.0-setup.exe /SILENT /SUPPRESSMSGBOXES
+"%LOCALAPPDATA%\Programs\SaveScummer\unins000.exe" /SILENT
+```
+
+Uninstalling removes only the installed application folder and the per-user
+registrations. It deliberately leaves `%LOCALAPPDATA%\SaveScummer` (the entire
+backup history) in place and never deletes your backups. Release installers are
+unsigned; Windows SmartScreen may warn on first run. Code signing is left as a
+slot in `packaging/windows/installer/savescummer.iss` (define `SignedBuild` and a
+`SignTool`).
+
+Windows cannot overwrite the Explorer extension DLL while a running
+`explorer.exe` has it loaded. Updating or uninstalling an installation whose
+extension is registered therefore completes the DLL replacement on the next
+restart and Inno Setup asks for one; the new or removed context-menu entries
+appear only after Explorer restarts. Installing with the extension task disabled
+avoids the restart.
 
 ## Publishing a GitHub release
 
@@ -156,9 +208,11 @@ git push origin v0.1.0
 
 The release script requires the GitHub CLI (`gh`); run `gh auth login` once.
 It verifies that the tag matches the `Cargo.toml` version and points at HEAD,
-uploads the archive plus a `.sha256` sidecar, and creates a draft with
-auto-generated notes. Review the release page and click **Publish** to make it
-public. Rebuilding and rerunning the script updates the existing draft with
+uploads the portable archive and the installer plus their `.sha256` sidecars, and
+creates a draft with auto-generated notes. The installer is required by default;
+pass `-AllowMissingInstaller` to publish a portable-only release when Inno Setup
+was unavailable (a warning is printed). Review the release page and click
+**Publish** to make it public. Rebuilding and rerunning the script updates the existing draft with
 `--clobber`; an already-published release is never modified. A CI workflow later
 performs the same steps on a per-OS matrix, so the local and CI paths stay
 identical.
@@ -211,6 +265,8 @@ The **SaveScummer: package release** task runs the standard release command.
 `scripts/build-desktop.ps1` builds/tests Qt only; it accepts `-Mode dev|release`
 (default `dev`) and selects `build/<mode>/desktop` with the matching
 configuration unless overridden. `scripts/package-windows.ps1` deploys
-already-built files; it does not compile them. Prefer root `build.ps1` to avoid
-mixing profiles or accidentally using an older host during active Rust
-development.
+already-built files; it does not compile them. `scripts/build-installer.ps1`
+compiles the Inno Setup definition from a staged release payload.
+`scripts/build-explorer.ps1` builds and COM-tests the Explorer extension.
+Prefer root `build.ps1` to avoid mixing profiles or accidentally using an older
+host during active Rust development.

@@ -1,6 +1,6 @@
 # PLAN-INFRA.md — Build, Distribution, and Release Infrastructure
 
-Status: **Phase A in progress** (local-first release process + artifact cleanup)
+Status: **Phase A complete; Phase B implemented** (Windows 1.0 per-user installer + distribution)
 Last reviewed: 2026-09-22
 
 This document is the handoff plan for reorganizing the **dev/build/release
@@ -326,32 +326,94 @@ Run through `scripts/check.ps1` (fmt/clippy/tests/build) **and** the following:
 
 ---
 
-## 6. Phase B — 1.0 proper Windows distribution (not this task)
+## 6. Phase B — 1.0 proper Windows distribution (implemented)
 
-Target: a real installer + coherent signed-able identity. Outline only; detail
-when Phase A lands.
+Status: implemented 2026-09-22. The 1.0 Windows distribution is an Inno Setup
+per-user installer (primary) plus the portable ZIP (secondary); both carry the
+Explorer extension. Decisions taken while implementing:
 
-- **Inno Setup per-user installer** (chosen) at
-  `packaging/windows/installer/savescummer.iss`; installs to
-  `%LOCALAPPDATA%\Programs\SaveScummer` (no admin), options: register Explorer
-  extension (**default on**), Launch on startup.
-- Installer + uninstaller tasks: register/unregister the Explorer COM DLL;
-  remove startup entry; **by default keep `%LOCALAPPDATA%\SaveScummer`** (the
-  user's entire backup history) — at most an explicit "delete my backups"
-  checkbox.
-- Stamped **Windows version resources** on all three executables (product name,
-  version, icon) — already required by `PLAN.md`; use the Cargo-sourced version.
-  Requires an `.ico` (generate from `assets/icon.svg`).
-- Wire `scripts/build-explorer.ps1` output into the release package (Phase B),
-  so both the installer and the portable ZIP carry the DLL + register scripts.
-- Portable ZIP becomes the secondary channel (same binaries, same packaging
-  script).
-- Leave a slot for **code signing** (SmartScreen): unsigned releases are
-  acceptable for now but should be documented; look at SignPath's OSS program
-  or Azure Trusted Signing later.
-- Update `PLAN.md`'s "folder/ZIP distribution, not an installer" statement when
-  the installer ships (with user approval; `PLAN.md` currently has uncommitted
-  user edits).
+- **Installer artifact**: `dist/SaveScummer-windows-x64-<ver>-setup.exe`
+  (`Get-InstallerArtifactName` in `scripts/package-common.ps1`).
+- **Build trigger**: `./build.ps1 release` always builds the Explorer extension,
+  packages the portable ZIP, and then compiles the installer. If Inno Setup is
+  absent it prints a warning and still produces the portable package.
+- **Explorer registration**: the installer writes the `HKCU\Software\Classes`
+  CLSID and `Directory\shellex\ContextMenuHandlers\SaveScummer` keys directly
+  (no `pwsh` dependency on the target). The portable package opts in through
+  `Enable/Disable Explorer integration.cmd` + `bin\register-explorer.ps1`.
+  The DLL uses `restartreplace`, because `explorer.exe` keeps it mapped and
+  Windows cannot overwrite a loaded DLL in place.
+- **Sign-in entry**: the installer writes the `HKCU\...\Run\SaveScummer` value in
+  the exact form the host uses (`--minimized --data-dir ... --desktop ...`).
+  Because the app treats its persisted preference as the displayed state, the
+  host now adopts an installer-created entry into the preference on startup
+  (`StartupRegistration::is_enabled`), without taking over an entry that points
+  at another build or recreating a removed one. Matching parses the command line
+  and compares the resolved host and data-directory paths (case and 8.3-safe),
+  so a longer path that merely contains the host name cannot match.
+- **Data safety**: the uninstaller removes only the application folder and the
+  per-user registrations; `%LOCALAPPDATA%\SaveScummer` is never touched.
+- **Graceful upgrade**: `[Code] PrepareToInstall` runs the installed
+  `SaveScummer.CLI.exe --no-start shutdown` before files are replaced, so an
+  accepted operation can finish.
+- **Identity**: all three executables already carry version resources; the
+  Explorer DLL now has one too (`integrations/windows-explorer/savescummer-explorer.rc.in`).
+  The host/CLI build scripts now declare `rerun-if-changed=Cargo.toml`, because
+  winresource emits none and a stale resource had shipped
+  `SaveScummer_Host.exe` instead of the canonical `SaveScummer.Host.exe`.
+- **Signing**: `.iss` has a `SignedBuild`/`SignTool` slot; releases are unsigned
+  and documented as such.
+- **Publishing policy**: `release-github.ps1` requires the installer by default
+  and accepts `-AllowMissingInstaller` for a deliberate portable-only release,
+  matching `build.ps1 release`'s warn-and-continue behavior when Inno Setup is
+  absent.
+
+New/changed files: `packaging/windows/installer/savescummer.iss`,
+`packaging/windows/portable/*.cmd`, `scripts/build-installer.ps1`,
+`scripts/setup-innosetup.ps1`, `scripts/package-common.ps1`,
+`scripts/package-windows.ps1`, `scripts/release-github.ps1`, `build.ps1`,
+`integrations/windows-explorer/{CMakeLists.txt,savescummer-explorer.rc.in}`,
+`apps/host/build.rs`, `apps/cli/build.rs`,
+`crates/platform/src/{desktop.rs,windows.rs}`, `apps/host/src/lib.rs`,
+`apps/host/src/feedback_tests.rs` (adoption tests).
+
+### Phase B acceptance checklist
+
+1. `./scripts/setup-innosetup.ps1` makes `ISCC.exe` available.
+2. `./build.ps1 release` builds the Explorer extension, then produces
+   `dist/SaveScummer-windows-x64-<ver>.zip` and
+   `dist/SaveScummer-windows-x64-<ver>-setup.exe`.
+3. Installing the setup to the default location needs no administrator rights and
+   places `bin\{SaveScummer,SaveScummer.Host,SaveScummer.CLI}.exe` and
+   `bin\savescummer-explorer.dll` under `%LOCALAPPDATA%\Programs\SaveScummer`.
+4. With the Explorer task on, right-clicking a configured DIR / eligible copy
+   shows Save / Load from the installed extension (under Windows 11 **Show more
+   options**); a fresh Explorer process is needed to load the DLL.
+5. The sign-in task writes the same value the app's **Launch on startup** toggle
+   would; after a host start the app checkbox agrees with the OS entry, and
+   unchecking removes the installer's entry.
+6. Installing over a running installed host asks it to shut down gracefully and
+   succeeds; the previous version is replaced in place (same `AppId`).
+7. Uninstalling removes the application folder, the Explorer keys and the
+   sign-in value, and leaves `%LOCALAPPDATA%\SaveScummer` intact.
+8. The portable ZIP still runs standalone and registers the extension only via
+   its helper scripts.
+9. `./scripts/release-github.ps1` attaches the installer, the portable archive
+   and both `.sha256` sidecars to a single draft release; it refuses to publish
+   without the installer unless `-AllowMissingInstaller` is passed.
+10. Installing over an installation whose Explorer extension is registered
+    completes the DLL replacement on the requested restart (or with the
+    extension task disabled, without one).
+
+### Known limitations
+
+- The classic `IContextMenu` handler appears under Windows 11 **Show more
+  options**; the modern `IExplorerCommand` menu is not implemented.
+- Explorer holds a loaded DLL, so an extension update or removal completes after
+  an Explorer restart or sign-out (`restartreplace` requests one).
+- The Explorer bridge resolves the host at `%LOCALAPPDATA%\SaveScummer`, so the
+  installed host must keep the default data directory.
+- Releases are unsigned; SmartScreen may warn.
 
 ## 7. Phase C — CI + cross-platform (not this task)
 

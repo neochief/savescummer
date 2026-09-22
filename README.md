@@ -36,11 +36,13 @@ The main Windows entry point builds **both Rust and Qt** from current source:
 
 Release output: `dist/SaveScummer-windows-x64/bin/SaveScummer.exe` and
 `dist/SaveScummer-windows-x64-<version>.zip` (the version comes from
-`Cargo.toml`). Keep the extracted folder
+`Cargo.toml`). `./build.ps1 release` also produces the per-user installer
+`dist/SaveScummer-windows-x64-<version>-setup.exe` when Inno Setup 6.3+ is
+available (`./scripts/setup-innosetup.ps1`). Keep the extracted folder
 together. Its application executables are `SaveScummer.exe`,
 `SaveScummer.Host.exe`, and `SaveScummer.CLI.exe`. See
 [the build guide](docs/building.md) for prerequisites, profiles, development data,
-timings, and lower-level commands.
+timings, lower-level commands and installer details.
 
 Install Rust with rustup and the Visual Studio C++ build tools. The repository pins
 the toolchain in `rust-toolchain.toml`; SQLite is built from its bundled source.
@@ -120,11 +122,14 @@ To rebuild and package the desktop and Rust binaries with their runtime DLLs:
 ```
 
 The output is `dist/SaveScummer-windows-x64/bin/SaveScummer.exe` and the portable
-`dist/SaveScummer-windows-x64-<version>.zip`. Keep the entire extracted folder together.
+`dist/SaveScummer-windows-x64-<version>.zip`, plus the per-user installer
+`dist/SaveScummer-windows-x64-<version>-setup.exe` when Inno Setup is available.
+Keep the entire extracted folder together.
 No Qt installation or PowerShell launcher is needed to run that executable.
 Both components must build successfully before packaging; the command does not
 fall back to an older host. `scripts/package-windows.ps1` is a lower-level deployment
-helper for binaries you have already built.
+helper for binaries you have already built, and `scripts/build-installer.ps1`
+compiles the installer from a staged payload.
 See [docs/building.md](docs/building.md) for the release-publishing process
 (draft-first GitHub Releases).
 
@@ -201,8 +206,11 @@ Other commands:
 - `startup on|off` updates the current-user Windows sign-in registration and persisted
   preference. Registration failure preserves the previous preference; persistence
   failure attempts to restore the previous registration.
-  Registration changes only through this command or the Launch on startup checkbox;
-  starting the host never rewrites it, including in debug builds. All builds share
+  Registration changes only through this command, the Launch on startup checkbox,
+  or the installer. On startup the host adopts an installer-created entry into
+  the preference; it never takes over an entry that points at another build and
+  never recreates an entry the user or a development build removed.
+  All builds share
   one `SaveScummer` entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
   pointing to the host executable and data directory that enabled it. Keep that
   executable at a stable path. After moving it, run `startup on` from the desired
@@ -265,6 +273,16 @@ closed, with a 750 ms timeout. Windows 11 exposes this classic extension under
 
 Build/test does not install the extension or enable startup. Keep the registered
 DLL in a stable location. New Explorer processes load registration changes.
+
+Released builds carry the same extension. The per-user installer registers it by
+default (with a checkbox to opt out) and removes the registration on uninstall.
+The portable package ships `bin\savescummer-explorer.dll` and two helper scripts
+beside `SaveScummer.exe`, **Enable Explorer integration.cmd** and **Disable
+Explorer integration.cmd**, so the ZIP copy can opt in without the installer.
+Explorer must be restarted (or Windows signed out and back in) before it loads a
+new or removed extension DLL. Updating or uninstalling a copy whose extension is
+registered requests a restart for the same reason: Windows cannot overwrite a
+DLL that a running Explorer has loaded.
 
 ## Windows discovery
 
@@ -364,7 +382,8 @@ naming currently recognizes the documented English/French conventions; other
 locales require explicit `--copy-label` configuration. Tray/notification delivery,
 shortcut conflicts and focus behavior still need interactive Windows qualification,
 including fullscreen games. The Explorer DLL is built and COM-tested separately;
-registration is an explicit installation step.
+the installer registers it by default and the portable package provides an opt-in
+helper.
 
 The Windows host embeds the approved WAV cues and plays Save/Load start and
 completion sounds, failure knocks and rate-limited busy ticks independently of

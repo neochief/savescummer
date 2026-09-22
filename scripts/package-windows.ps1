@@ -4,6 +4,7 @@ param(
     [string]$DesktopBuildDirectory,
     [string]$HostBinary,
     [string]$CliBinary,
+    [string]$ExplorerDll,
     [string]$OutputDirectory,
     [string]$QtPrefix = "$PSScriptRoot/../.runtime/Qt/6.5.3/msvc2019_64"
 )
@@ -191,7 +192,30 @@ try {
         Where-Object Name -Like 'Microsoft.VC*.CRT' | Select-Object -First 1
     if (-not $crt) { throw 'Cannot locate x64 CRT DLLs.' }
     Get-ChildItem -LiteralPath $crt.FullName -Filter '*.dll' | Copy-Item -Destination $bin
+    # The Explorer extension ships in release packages and is registered on
+    # demand (the installer enables it by default; the portable package opts in
+    # through the helper scripts beside SaveScummer.exe).
+    if ($ExplorerDll) {
+        $explorerFile = (Resolve-Path -LiteralPath $ExplorerDll).Path
+        if ([IO.Path]::GetExtension($explorerFile) -ne '.dll') { throw 'ExplorerDll must be a .dll file.' }
+        Copy-Item -LiteralPath $explorerFile -Destination (Join-Path $bin 'savescummer-explorer.dll')
+        Copy-Item -LiteralPath (Join-Path $root 'scripts/register-explorer.ps1') -Destination (Join-Path $bin 'register-explorer.ps1')
+        foreach ($helper in @(
+            'Enable Explorer integration.cmd',
+            'Disable Explorer integration.cmd'
+        )) {
+            Copy-Item -LiteralPath (Join-Path $root "packaging/windows/portable/$helper") -Destination (Join-Path $installPrefix $helper)
+        }
+    }
     Copy-Item -LiteralPath (Join-Path $root 'packaging/windows/licenses') -Destination $installPrefix -Recurse
+    $explorerNote = if ($ExplorerDll) {
+        @"
+
+The Explorer context-menu integration (bin\savescummer-explorer.dll) is included.
+Enable it for the current user with "Enable Explorer integration.cmd"; disable it
+with "Disable Explorer integration.cmd". No administrator rights are required.
+"@
+    } else { '' }
     @"
 SaveScummer — Windows x64 ($Mode), version $version
 
@@ -203,7 +227,7 @@ For a simulation that changes no game files, run the desktop with --demo.
 Rust profile: $profile. Qt configuration: $Configuration.
 Rebuild both components and the package from source with: ./build.ps1 $Mode -Package
 Developer symbols are included in dev packages and omitted from release packages.
-
+$explorerNote
 Qt $qtVersion is dynamically linked. Copyright The Qt Company Ltd. and contributors.
 Qt is used under LGPL version 3; see licenses\LGPL-3.0-only.txt and GPL-3.0-only.txt.
 Qt source: https://github.com/qt/qtbase/tree/v$qtVersion
@@ -213,6 +237,7 @@ The Qt DLLs can be replaced with interface-compatible builds.
     Write-PackageManifest -PackageDirectory $installPrefix -Fields @{
         mode = $Mode; version = $version; platform = 'windows-x64';
         qtVersion = $qtVersion; qtConfiguration = $Configuration;
+        explorer = [bool]$ExplorerDll;
         rustProfile = $profile; createdAt = [DateTime]::UtcNow.ToString('o')
     }
     Write-Sha256Sums -PackageDirectory $installPrefix
