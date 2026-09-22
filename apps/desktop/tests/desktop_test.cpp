@@ -33,6 +33,17 @@
 #include <windows.h>
 #endif
 
+// Visual-verification captures are written under the active CMake build tree
+// (SAVESCUMMER_SCREENSHOT_DIR is set by CMake); the environment variable
+// overrides the default for manual runs. The returned path ends with '/'.
+static QString desktopTestScreenshotDir() {
+    const QByteArray env = qgetenv("SAVESCUMMER_SCREENSHOT_DIR");
+    if (!env.isEmpty()) {
+        return QString::fromLocal8Bit(env) + QLatin1Char('/');
+    }
+    return QString::fromUtf8(SAVESCUMMER_SCREENSHOT_DIR) + QLatin1Char('/');
+}
+
 class FakeService : public Service {
   public:
     using Service::Service;
@@ -353,7 +364,7 @@ class DesktopTest : public QObject {
         QCOMPARE(row.load->cursor().shape(), Qt::ForbiddenCursor);
         QCOMPARE(row.load->parentWidget()->cursor().shape(), Qt::ForbiddenCursor);
         QCOMPARE(row.more->width(), row.arrow->width());
-        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        const auto screenshotRoot = desktopTestScreenshotDir();
         QDir().mkpath(screenshotRoot);
         QVERIFY(row.grab().save(screenshotRoot + QString("controls-%1-empty.png")
             .arg(QTest::currentDataTag())));
@@ -480,7 +491,7 @@ class DesktopTest : public QObject {
         const auto requestCount = service.requests.size();
         const auto collapsedHeight = dialog->height();
         const auto toggleLeft = toggle->x();
-        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        const auto screenshotRoot = desktopTestScreenshotDir();
         QDir().mkpath(screenshotRoot);
         QVERIFY(dialog->grab().save(screenshotRoot + "flush-collapsed.png"));
         QTest::mouseClick(toggle, Qt::LeftButton);
@@ -610,7 +621,7 @@ class DesktopTest : public QObject {
         QCOMPARE(cancel->geometry(), cancelGeometry);
         QCOMPARE(save->sizeHint(), saveSizeHint);
         QCOMPARE(cancel->sizeHint(), cancelSizeHint);
-        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        const auto screenshotRoot = desktopTestScreenshotDir();
         QDir().mkpath(screenshotRoot);
         QVERIFY(dialog->grab().save(screenshotRoot + "configure-known.png"));
         dialog->reject();
@@ -672,7 +683,7 @@ class DesktopTest : public QObject {
         QTest::mouseClick(more, Qt::LeftButton);
         auto *libraryMenu = window.findChild<QMenu *>();
         QVERIFY(libraryMenu);
-        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        const auto screenshotRoot = desktopTestScreenshotDir();
         QDir().mkpath(screenshotRoot);
         QVERIFY(libraryMenu->grab().save(screenshotRoot + "installed-games-menu.png"));
         QCOMPARE(libraryMenu->objectName(), QString("iconMenu"));
@@ -1113,7 +1124,7 @@ class DesktopTest : public QObject {
         QCOMPARE(historyRows.first()->mapTo(historyScroll->viewport(), QPoint()).x(), 0);
         QCOMPARE(historyRows.first()->width(), historyScroll->viewport()->width());
         QTest::mouseMove(historyRows.first(), historyRows.first()->rect().center());
-        const auto screenshotRoot = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        const auto screenshotRoot = desktopTestScreenshotDir();
         QDir().mkpath(screenshotRoot);
         auto *historyBody = popup->findChild<QScrollArea *>()->widget();
         QVERIFY(historyBody->grab().save(screenshotRoot + "history-popup.png"));
@@ -1271,8 +1282,8 @@ class DesktopTest : public QObject {
         window.show();
         service.start();
         QTest::qWait(50);
-        QDir().mkpath(QString(SOURCE_DIR) + "/build/desktop/screenshots");
-        const auto root = QString(SOURCE_DIR) + "/build/desktop/screenshots/";
+        QDir().mkpath(desktopTestScreenshotDir());
+        const auto root = desktopTestScreenshotDir();
         QVERIFY(window.grab().save(root + "main.png"));
 #ifdef Q_OS_WIN
         if (QGuiApplication::platformName() == "windows") {

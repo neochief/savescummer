@@ -12,23 +12,37 @@ if ($Mode -eq 'dev' -and -not $PSBoundParameters.ContainsKey('Configuration')) {
     $Configuration = 'RelWithDebInfo'
 }
 $root = (Resolve-Path "$PSScriptRoot/..").Path
+. (Join-Path $PSScriptRoot 'package-common.ps1')
 $profile = if ($Mode -eq 'dev') { 'debug' } else { 'release' }
+$version = Get-AppVersion -CargoManifest (Join-Path $root 'Cargo.toml')
 if (-not $DesktopBuildDirectory) { $DesktopBuildDirectory = Join-Path $root "build/$Mode/desktop" }
 if (-not $HostBinary) { $HostBinary = Join-Path $root "target/$profile/savescummer-host.exe" }
 if (-not $CliBinary) { $CliBinary = Join-Path $root "target/$profile/savescummer-cli.exe" }
-if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root "build/$Mode/SaveScummer" }
+if (-not $OutputDirectory) {
+    $OutputDirectory = if ($Mode -eq 'release') {
+        Join-Path $root 'dist/SaveScummer-windows-x64'
+    } else {
+        Join-Path $root 'build/dev/SaveScummer-windows-x64'
+    }
+}
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 if (-not $cmake) { $cmake = Join-Path $root '.runtime/qt-tools/cmake/data/bin/cmake.exe' }
 $package = [IO.Path]::GetFullPath($OutputDirectory)
-$buildRoot = [IO.Path]::GetFullPath((Join-Path $root 'build')) + [IO.Path]::DirectorySeparatorChar
-if (-not $package.StartsWith($buildRoot, [StringComparison]::OrdinalIgnoreCase) -or
-    (Split-Path $package -Leaf) -ne 'SaveScummer') {
-    throw 'Package output must be a SaveScummer folder inside this repository/build.'
+$portableName = 'SaveScummer-windows-x64'
+
+# Distributables live only in dist/ (release) or build/dev (dev packages).
+$allowedParents = @(
+    [IO.Path]::GetFullPath((Join-Path $root 'dist')),
+    [IO.Path]::GetFullPath((Join-Path $root 'build/dev'))
+)
+if ((Split-Path -Parent $package) -notin $allowedParents -or (Split-Path -Leaf $package) -ne $portableName) {
+    throw 'Package output must be dist/SaveScummer-windows-x64 (release) or build/dev/SaveScummer-windows-x64 (dev).'
 }
-if ((Test-Path -LiteralPath $package) -and
-    -not (Test-Path -LiteralPath (Join-Path $package '.savescummer-package.json'))) {
-    throw "Refusing to replace an unmanaged directory: $package"
-}
+$archiveName = Get-PortableArtifactName -Os 'windows' -Arch 'x64' -Version $version `
+    -Suffix $(if ($Mode -eq 'dev') { 'dev' } else { $null })
+$archive = Join-Path (Split-Path -Parent $package) $archiveName
+$stage = New-PackageStage -PackageDirectory $package
+
 $packagePrefix = $package + [IO.Path]::DirectorySeparatorChar
 function Get-PackageProcess {
     @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
@@ -145,17 +159,16 @@ function Stop-PackageProcess {
         throw "Could not stop packaged process PID(s): $($remaining.Id -join ', ')."
     }
 }
+
 $hostFile = (Resolve-Path -LiteralPath $HostBinary).Path
 $cliFile = (Resolve-Path -LiteralPath $CliBinary).Path
 $qtVersion = & (Join-Path $QtPrefix 'bin/qmake.exe') -query QT_VERSION
 if ($LASTEXITCODE -ne 0) { throw 'Cannot determine the Qt version.' }
-$stage = $package + '.staging-' + [guid]::NewGuid().ToString('N')
-$archive = Join-Path (Split-Path $package) "SaveScummer-windows-x64-$Mode.zip"
-$temporaryZip = $archive + '.' + [guid]::NewGuid().ToString('N') + '.zip'
+$installPrefix = Join-Path $stage $portableName
 try {
-    & $cmake --install $DesktopBuildDirectory --config $Configuration --prefix $stage
+    & $cmake --install $DesktopBuildDirectory --config $Configuration --prefix $installPrefix
     if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed.' }
-    $bin = Join-Path $stage 'bin'
+    $bin = Join-Path $installPrefix 'bin'
     Copy-Item -LiteralPath $hostFile -Destination (Join-Path $bin 'SaveScummer.Host.exe')
     Copy-Item -LiteralPath $cliFile -Destination (Join-Path $bin 'SaveScummer.CLI.exe')
     if ($Mode -eq 'dev') {
@@ -178,9 +191,9 @@ try {
         Where-Object Name -Like 'Microsoft.VC*.CRT' | Select-Object -First 1
     if (-not $crt) { throw 'Cannot locate x64 CRT DLLs.' }
     Get-ChildItem -LiteralPath $crt.FullName -Filter '*.dll' | Copy-Item -Destination $bin
-    Copy-Item -LiteralPath (Join-Path $root 'packaging/licenses') -Destination $stage -Recurse
+    Copy-Item -LiteralPath (Join-Path $root 'packaging/windows/licenses') -Destination $installPrefix -Recurse
     @"
-SaveScummer — Windows x64 ($Mode)
+SaveScummer — Windows x64 ($Mode), version $version
 
 Open bin\SaveScummer.exe. Keep this entire folder together.
 Qt and the Visual C++ runtime are included; no SDK or PowerShell launcher is needed.
@@ -196,26 +209,19 @@ Qt is used under LGPL version 3; see licenses\LGPL-3.0-only.txt and GPL-3.0-only
 Qt source: https://github.com/qt/qtbase/tree/v$qtVersion
 Qt SVG source: https://github.com/qt/qtsvg/tree/v$qtVersion
 The Qt DLLs can be replaced with interface-compatible builds.
-"@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding utf8
-    @{ mode = $Mode; qtVersion = $qtVersion; qtConfiguration = $Configuration;
-        rustProfile = $profile; createdAt = [DateTime]::UtcNow.ToString('o') } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage '.savescummer-package.json')
-    Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object {
-        '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),
-            $_.FullName.Substring($stage.Length + 1)
-    } | Set-Content -LiteralPath (Join-Path $stage 'SHA256SUMS.txt') -Encoding ascii
-    Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $temporaryZip
-    # Only replace marked generated output after every build/deployment step succeeds.
-    # Both absolute paths were validated as descendants of repository/build above.
-    Stop-PackageProcess
-    if (Test-Path -LiteralPath $package) { Remove-Item -LiteralPath $package -Recurse -Force }
-    Move-Item -LiteralPath $stage -Destination $package
-    Move-Item -LiteralPath $temporaryZip -Destination $archive -Force
+"@ | Set-Content -LiteralPath (Join-Path $installPrefix 'README.txt') -Encoding utf8
+    Write-PackageManifest -PackageDirectory $installPrefix -Fields @{
+        mode = $Mode; version = $version; platform = 'windows-x64';
+        qtVersion = $qtVersion; qtConfiguration = $Configuration;
+        rustProfile = $profile; createdAt = [DateTime]::UtcNow.ToString('o')
+    }
+    Write-Sha256Sums -PackageDirectory $installPrefix
+    Set-PortablePackage -Package $package -Stage $stage -PortableFolder $portableName `
+        -Archive $archive -PreReplace { Stop-PackageProcess }
     $folderBytes = (Get-ChildItem -LiteralPath $package -Recurse -File | Measure-Object Length -Sum).Sum
     Write-Output "Executable: $(Join-Path $package 'bin/SaveScummer.exe')"
     Write-Output "Archive: $archive"
     Write-Output ('Package: {0:N1} MiB unpacked; {1:N1} MiB ZIP' -f ($folderBytes / 1MB), ((Get-Item $archive).Length / 1MB))
 } finally {
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-    if (Test-Path -LiteralPath $temporaryZip) { Remove-Item -LiteralPath $temporaryZip }
 }

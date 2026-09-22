@@ -1,5 +1,6 @@
 /target/
 /build/
+/dist/
 /.runtime/
 *.db
 *.db-shm

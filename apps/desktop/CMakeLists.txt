@@ -32,7 +32,8 @@ if(BUILD_TESTING)
     target_link_libraries(desktop-tests PRIVATE desktop-ui Qt6::Test)
     target_compile_definitions(desktop-tests PRIVATE
         FIXTURE_DIR="${PROJECT_SOURCE_DIR}/protocol/fixtures"
-        SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+        SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+        SAVESCUMMER_SCREENSHOT_DIR="${CMAKE_BINARY_DIR}/screenshots")
     add_test(NAME desktop COMMAND desktop-tests -platform offscreen
         -o -,txt -o ${CMAKE_CURRENT_BINARY_DIR}/desktop-results.xml,junitxml)
     set_tests_properties(desktop PROPERTIES TIMEOUT 60)

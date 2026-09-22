@@ -1,13 +1,16 @@
 param(
+    [ValidateSet('dev', 'release')][string]$Mode = 'dev',
     [string]$QtPrefix = "$PSScriptRoot/../.runtime/Qt/6.5.3/msvc2019_64",
-    [string]$BuildDirectory = "$PSScriptRoot/../build/desktop",
+    [string]$BuildDirectory,
     [string]$Generator = 'Visual Studio 16 2019',
-    [ValidateSet('Debug', 'RelWithDebInfo', 'Release')][string]$Configuration = 'Release',
+    [ValidateSet('Debug', 'RelWithDebInfo', 'Release')][string]$Configuration,
     [string]$TestHost,
     [switch]$SkipTests
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot/..").Path
+if (-not $BuildDirectory) { $BuildDirectory = Join-Path $root "build/$Mode/desktop" }
+if (-not $Configuration) { $Configuration = if ($Mode -eq 'dev') { 'RelWithDebInfo' } else { 'Release' } }
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 if (-not $cmake) {
     $cmake = Join-Path $root '.runtime/qt-tools/cmake/data/bin/cmake.exe'

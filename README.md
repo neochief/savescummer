@@ -13,10 +13,13 @@ The main Windows entry point builds **both Rust and Qt** from current source:
 ./build.ps1 dev -Run -Demo # Simulated data, no game operations
 ./build.ps1 release        # Compile optimized binaries and create a portable ZIP
 ./build.ps1 release -Test  # Also run Rust and Qt/host integration tests
+./build.ps1 clean          # Remove regenerable outputs (build/ and dist/)
+./build.ps1 clean -Deep    # Also remove the Cargo cache (target/)
 ```
 
-Release output: `build/release/SaveScummer/bin/SaveScummer.exe` and
-`build/release/SaveScummer-windows-x64-release.zip`. Keep the extracted folder
+Release output: `dist/SaveScummer-windows-x64/bin/SaveScummer.exe` and
+`dist/SaveScummer-windows-x64-<version>.zip` (the version comes from
+`Cargo.toml`). Keep the extracted folder
 together. Its application executables are `SaveScummer.exe`,
 `SaveScummer.Host.exe`, and `SaveScummer.CLI.exe`. See
 [the build guide](docs/building.md) for prerequisites, profiles, development data,
@@ -60,16 +63,16 @@ leaves the host and accepted operations running. The client also accepts `--host
 Standard CMake commands work on other platforms (not yet qualified):
 
 ```text
-cmake -S . -B build/desktop -DCMAKE_PREFIX_PATH=<Qt kit>
-cmake --build build/desktop --config Release
-ctest --test-dir build/desktop -C Release --output-on-failure
+cmake -S . -B build/local-desktop -DCMAKE_PREFIX_PATH=<Qt kit>
+cmake --build build/local-desktop --config Release
+ctest --test-dir build/local-desktop -C Release --output-on-failure
 ```
 
 Qt tests cover framed protocol fixtures, escaped instruction text, row selection,
 regrouping, unavailable history, busy/recovery/disconnected states, and reconnecting
 without replaying commands. If the debug Rust host has been built, they also run
 Save/Load/Revert and reconnect over real IPC against temporary data with audio off.
-Visual test captures are written to `build/desktop/screenshots` in both themes.
+Visual test captures are written to `build/<mode>/desktop/screenshots` in both themes.
 The desktop reads host state only; it never copies saves or opens the database.
 
 The main window uses the standard system title bar and window frame. It includes
@@ -80,8 +83,10 @@ Reset uses the selected catalog location (or the sole detected default). The hos
 registers Ctrl+F5/Ctrl+F9, owns the tray and notifications, and runs without Qt.
 While the desktop is focused, Ctrl+F5/Ctrl+F9 invoke the selected game's Save/Load
 buttons, including their progress and disabled states, even if no game is running.
-Otherwise the host targets the top running game. The desktop uses local shortcuts
-in dev/demo mode and receives forwarded hotkeys from the host in normal mode;
+Otherwise the host targets the top running game. The host owns the global hotkeys
+whenever OS integrations are enabled, including the default development runner, and
+forwards them to the focused desktop; the desktop's local shortcuts are only a
+fallback when integrations are disabled (as in a demo session);
 it does not register competing global shortcuts. `--minimized` attaches without
 showing a window; subsequent launches focus the existing desktop for that host.
 
@@ -97,12 +102,14 @@ To rebuild and package the desktop and Rust binaries with their runtime DLLs:
 ./build.ps1 release
 ```
 
-The output is `build/release/SaveScummer/bin/SaveScummer.exe` and the portable
-`build/release/SaveScummer-windows-x64-release.zip`. Keep the entire extracted folder together.
+The output is `dist/SaveScummer-windows-x64/bin/SaveScummer.exe` and the portable
+`dist/SaveScummer-windows-x64-<version>.zip`. Keep the entire extracted folder together.
 No Qt installation or PowerShell launcher is needed to run that executable.
 Both components must build successfully before packaging; the command does not
 fall back to an older host. `scripts/package-windows.ps1` is a lower-level deployment
 helper for binaries you have already built.
+See [docs/building.md](docs/building.md) for the release-publishing process
+(draft-first GitHub Releases).
 
 ## Run without the UI
 

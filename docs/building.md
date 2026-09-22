@@ -102,6 +102,8 @@ Use the generated reports to measure the current version.
 ./build.ps1 dev -Test     # Also run Rust workspace and Qt integration tests
 ./build.ps1 dev -Package  # Portable dev package, including symbols
 ./build.ps1 release -Test # Optimized package, plus verification
+./build.ps1 clean         # Remove regenerable outputs (build/ and dist/)
+./build.ps1 clean -Deep   # Also remove the Cargo cache (target/)
 ```
 
 `-Test` runs Rust workspace tests using Cargo's test profile and Qt tests using the
@@ -110,12 +112,26 @@ real host with temporary game data and OS integrations/audio disabled. No test i
 required for each edit/run; use `-Test` before distributing a change. The additional
 formatting and lint checks are available through `scripts/check.ps1`.
 
-For each mode, output lives under `build/<mode>`:
+`clean` removes `build/` and `dist/` — everything regenerable — and never touches
+`.runtime/` (vendored SDKs and development app data survive). `-Deep` also removes
+the Cargo cache under `target/`. A recorded development host is stopped
+gracefully before its build folder is deleted.
 
-- `SaveScummer/bin/SaveScummer.exe`: portable entry point after packaging.
-- `SaveScummer-windows-x64-<mode>.zip`: complete portable folder contents.
-- `build-report.json`: last successful command's timings and executable sizes.
+For each mode, intermediates live under `build/<mode>`:
+
 - `desktop`: CMake build tree (not the distribution).
+- `build-report.json`: last successful command's timings and executable sizes.
+- `build/dev/SaveScummer-windows-x64-<version>-dev.zip`: dev package, including
+  PDB symbols.
+
+Release distributables live in `dist/`:
+
+- `dist/SaveScummer-windows-x64/bin/SaveScummer.exe`: portable entry point.
+- `dist/SaveScummer-windows-x64-<version>.zip`: complete portable archive whose
+  root is a single `SaveScummer-windows-x64/` folder.
+
+The version is read from the Cargo workspace manifest (`Cargo.toml`); the
+release tag must equal `v<version>`.
 
 The folder includes Qt plugins, Qt/Visual C++ DLLs, license notices, and SHA-256
 checksums. Keep it together. When replacing a package, the packaging step closes
@@ -126,15 +142,48 @@ folder are then terminated. Apps running elsewhere are left alone. A compile
 failure stops the build before deployment, so an old successful package can remain
 on disk; check the command's exit status and report timestamp. Packages are unsigned.
 
+## Publishing a GitHub release
+
+Releases are published to GitHub Releases from a `v<version>` tag, always as a
+draft for review before it becomes public:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+./build.ps1 release            # produces dist/SaveScummer-windows-x64-<version>.zip
+./scripts/release-github.ps1   # creates a DRAFT release with the archive and checksum
+```
+
+The release script requires the GitHub CLI (`gh`); run `gh auth login` once.
+It verifies that the tag matches the `Cargo.toml` version and points at HEAD,
+uploads the archive plus a `.sha256` sidecar, and creates a draft with
+auto-generated notes. Review the release page and click **Publish** to make it
+public. Rebuilding and rerunning the script updates the existing draft with
+`--clobber`; an already-published release is never modified. A CI workflow later
+performs the same steps on a per-OS matrix, so the local and CI paths stay
+identical.
+
 ## Development data
 
-The dev runner uses `.runtime/dev` for its database/settings/history and disables
-global shortcuts, tray, notifications and startup integration. It connects the UI
-to the explicitly started host. Host logs are in `build/dev/host.*.log`.
+The dev runner uses `.runtime/dev` for its database/settings/history and connects
+the UI to the explicitly started host. Host logs are in `build/dev/host.*.log`.
 This separates app state from the normal `%LOCALAPPDATA%/SaveScummer` instance,
 but configured game paths still refer to real files. Use `-Run -Demo` for simulated
 Save/Load operations without touching games. Portable packages use normal app data
 by default, including a dev package launched directly.
+
+Unlike automated tests, the interactive dev runner keeps OS integrations enabled so
+the app behaves like the real one: the host owns the tray icon, the global
+Ctrl+F5/Ctrl+F9 shortcuts and failure notifications. Because only one host can own
+those, `dev -Run` first stops any already-running SaveScummer host that is not this
+development instance (typically a packaged or installed production host). That host
+is asked to shut down gracefully so accepted save/restore work can finish; it is
+terminated only if it refuses, which may leave an operation needing recovery. Pass
+`-KeepProduction` to leave other hosts running (the tray and global shortcuts will
+then belong to whichever host registered first). Enabling OS integrations also means
+the dev UI's **Launch on startup** setting writes the real current-user Run entry;
+prefer toggling it only when you intend that, and remember `clean -Deep` removes the
+development host binary it would point at.
 
 ## VS Code
 
@@ -160,8 +209,9 @@ The **SaveScummer: package release** task runs the standard release command.
 
 ## Lower-level entry points
 
-`scripts/build-desktop.ps1` builds/tests Qt only. Its legacy default directory is
-`build/desktop`, configuration Release. `scripts/run-desktop.ps1` runs that legacy
-layout without rebuilding. `scripts/package-windows.ps1` deploys already-built
-files; it does not compile them. Prefer root `build.ps1` to avoid mixing profiles
-or accidentally using an older host during active Rust development.
+`scripts/build-desktop.ps1` builds/tests Qt only; it accepts `-Mode dev|release`
+(default `dev`) and selects `build/<mode>/desktop` with the matching
+configuration unless overridden. `scripts/package-windows.ps1` deploys
+already-built files; it does not compile them. Prefer root `build.ps1` to avoid
+mixing profiles or accidentally using an older host during active Rust
+development.
