@@ -1,5 +1,22 @@
 # SaveScummer
 
+SaveScummer helps you save and restore progress in games where that isn't possible by design. It helps you learn difficult games faster and spend less time replaying what you already know. Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments, experiment, fail, learn, and keep going.
+
+If your time is limited, it helps you reach interesting stories, builds, and decisions without losing hours of progress before you got gud.
+
+If you or your child is an anxious player, it lets you keep playing, experimenting, learning, and having fun without being punished for every mistake.
+
+## How it works
+
+Most games persist progress on disk in one way or another. SaveScummer gives you keyboard shortcuts you can use in-game to checkpoint that progress and restore it later. It can also create checkpoints automatically at regular intervals, so even if you forget to save manually, you can still avoid losing a considerable amount of time after an unexpected death.
+
+Depending on the game, restoring progress may require returning to the main menu or even relaunching the game. It may not be perfectly convenient, but it's still much faster than repeating an evening-long run after one stupid mistake or non-optimal choice.
+
+
+---
+
+## Tech info
+
 The first Windows runtime is implemented in Rust. The background host owns SQLite,
 game monitoring and file operations. The C++ / Qt 6 Widgets desktop and command-line
 clients share the same local service contract.
