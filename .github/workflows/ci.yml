@@ -11,6 +11,10 @@ name: CI
 
 on:
   push:
+    # Branch pushes only. A release tag is exercised by release.yml, which
+    # rebuilds and tests the tagged commit; running CI on tags as well would
+    # repeat that work in the debug configuration.
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
