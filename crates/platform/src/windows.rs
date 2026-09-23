@@ -119,49 +119,21 @@ const ERROR_UNSUPPORTED_TYPE: u32 = 1630;
 /// per-user installer) so the persisted preference and the OS registration
 /// cannot disagree.
 pub fn startup_enabled(host: &Path, data_dir: &Path) -> std::io::Result<bool> {
-    let key = wide(r"Software\Microsoft\Windows\CurrentVersion\Run");
-    let name = wide("SaveScummer");
-    let mut kind = 0u32;
-    let mut size = 0u32;
-    let probe = unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            key.as_ptr(),
-            name.as_ptr(),
-            RRF_RT_REG_SZ,
-            &mut kind,
-            std::ptr::null_mut(),
-            &mut size,
-        )
+    let value = match registry_value(
+        HKEY_CURRENT_USER,
+        r"Software\Microsoft\Windows\CurrentVersion\Run",
+        "SaveScummer",
+        RRF_RT_REG_SZ,
+    ) {
+        Ok(Some(value)) => value,
+        Ok(None) => return Ok(false),
+        // Stored with an unexpected type (for example REG_EXPAND_SZ written by
+        // another tool): not an entry this app owns.
+        Err(error) if error.raw_os_error() == Some(ERROR_UNSUPPORTED_TYPE as i32) => {
+            return Ok(false);
+        }
+        Err(error) => return Err(error),
     };
-    if probe == ERROR_FILE_NOT_FOUND || probe == ERROR_UNSUPPORTED_TYPE {
-        // Absent, or stored with an unexpected type (for example REG_EXPAND_SZ
-        // written by another tool): not an entry this app owns.
-        return Ok(false);
-    }
-    if probe != ERROR_SUCCESS {
-        return Err(std::io::Error::from_raw_os_error(probe as i32));
-    }
-    if size == 0 {
-        return Ok(false);
-    }
-    let mut buffer = vec![0u16; (size as usize).div_ceil(2)];
-    let read = unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            key.as_ptr(),
-            name.as_ptr(),
-            RRF_RT_REG_SZ,
-            &mut kind,
-            buffer.as_mut_ptr().cast(),
-            &mut size,
-        )
-    };
-    if read != ERROR_SUCCESS {
-        return Err(std::io::Error::from_raw_os_error(read as i32));
-    }
-    let len = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
-    let value = String::from_utf16_lossy(&buffer[..len]);
     Ok(startup_entry_matches(&value, host, data_dir))
 }
 /// Splits a Windows command line into arguments, honoring the standard
@@ -259,12 +231,18 @@ pub fn explore(path: &Path) -> std::io::Result<()> {
         Ok(())
     }
 }
-fn registry_string(root: HKEY, key: &str, name: &str, view: u32) -> Option<PathBuf> {
-    let mut bytes = 0;
+/// Reads a string registry value through `RegGetValueW`. `None` means the value
+/// is absent; an unexpected value type is reported as `ERROR_UNSUPPORTED_TYPE`.
+fn registry_value(
+    root: HKEY,
+    key: &str,
+    name: &str,
+    flags: u32,
+) -> std::io::Result<Option<String>> {
     let key = wide(key);
     let name = wide(name);
-    let flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | view;
-    if unsafe {
+    let mut bytes = 0u32;
+    let probe = unsafe {
         RegGetValueW(
             root,
             key.as_ptr(),
@@ -274,12 +252,18 @@ fn registry_string(root: HKEY, key: &str, name: &str, view: u32) -> Option<PathB
             std::ptr::null_mut(),
             &mut bytes,
         )
-    } != 0
-    {
-        return None;
+    };
+    if probe == ERROR_FILE_NOT_FOUND {
+        return Ok(None);
     }
-    let mut buffer = vec![0u16; bytes as usize / 2];
-    if unsafe {
+    if probe != ERROR_SUCCESS {
+        return Err(std::io::Error::from_raw_os_error(probe as i32));
+    }
+    if bytes == 0 {
+        return Ok(None);
+    }
+    let mut buffer = vec![0u16; (bytes as usize).div_ceil(2)];
+    let read = unsafe {
         RegGetValueW(
             root,
             key.as_ptr(),
@@ -289,12 +273,18 @@ fn registry_string(root: HKEY, key: &str, name: &str, view: u32) -> Option<PathB
             buffer.as_mut_ptr().cast(),
             &mut bytes,
         )
-    } != 0
-    {
-        return None;
+    };
+    if read != ERROR_SUCCESS {
+        return Err(std::io::Error::from_raw_os_error(read as i32));
     }
     let len = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
-    Some(PathBuf::from(OsString::from_wide(&buffer[..len])))
+    Ok(Some(String::from_utf16_lossy(&buffer[..len])))
+}
+fn registry_string(root: HKEY, key: &str, name: &str, view: u32) -> Option<PathBuf> {
+    registry_value(root, key, name, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | view)
+        .ok()
+        .flatten()
+        .map(PathBuf::from)
 }
 pub fn steam_roots() -> Vec<PathBuf> {
     let mut roots = vec![];

@@ -170,8 +170,13 @@ portable package. To build only the installer from an existing payload:
 
 The installer is strictly per-user and needs no administrator rights. It installs
 to `%LOCALAPPDATA%\Programs\SaveScummer`, registers the Explorer context menu
-under `HKCU` (default on, uncheckable) and can add a sign-in entry (off by
-default, written in the same form the app uses). Before replacing files it asks a
+under `HKCU` (default on, uncheckable) and offers a sign-in entry (task off by
+default; when selected, setup writes the same `HKCU\...\Run\SaveScummer` value
+the app writes, so autostart works immediately). The app itself keeps its
+preference off by default: on its first start it reads that registry value and
+adopts its current state, after which the in-app **Launch on startup** checkbox
+can change it. Uninstalling removes the entry only when it still references the
+installed copy. Before replacing files the installer asks a
 running installed host to shut down gracefully, so an accepted save/restore
 operation can finish. Silent install and uninstall:
 
@@ -191,8 +196,8 @@ Windows cannot overwrite the Explorer extension DLL while a running
 `explorer.exe` has it loaded. Updating or uninstalling an installation whose
 extension is registered therefore completes the DLL replacement on the next
 restart and Inno Setup asks for one; the new or removed context-menu entries
-appear only after Explorer restarts. Installing with the extension task disabled
-avoids the restart.
+appear only after Explorer restarts. A first install with the extension task
+disabled never registers the DLL, so it needs no restart.
 
 ## Publishing a GitHub release
 

@@ -343,14 +343,17 @@ Explorer extension. Decisions taken while implementing:
   `Enable/Disable Explorer integration.cmd` + `bin\register-explorer.ps1`.
   The DLL uses `restartreplace`, because `explorer.exe` keeps it mapped and
   Windows cannot overwrite a loaded DLL in place.
-- **Sign-in entry**: the installer writes the `HKCU\...\Run\SaveScummer` value in
-  the exact form the host uses (`--minimized --data-dir ... --desktop ...`).
-  Because the app treats its persisted preference as the displayed state, the
-  host now adopts an installer-created entry into the preference on startup
-  (`StartupRegistration::is_enabled`), without taking over an entry that points
-  at another build or recreating a removed one. Matching parses the command line
-  and compares the resolved host and data-directory paths (case and 8.3-safe),
-  so a longer path that merely contains the host name cannot match.
+- **Sign-in entry**: the installer's opt-in `startup` task writes the
+  `HKCU\...\Run\SaveScummer` value in the exact form the host uses
+  (`--minimized --data-dir ... --desktop ...`), so sign-in autostart works
+  immediately after install. The app's own preference stays off by default; on
+  first start the host reads the registry value and adopts its current state
+  (`StartupRegistration::is_enabled`), after which the checkbox changes it. The
+  host never takes over an entry that points at another build or recreates a
+  removed one. Matching parses the command line and compares the resolved host
+  and data-directory paths (case and 8.3-safe), so a longer path that merely
+  contains the host name cannot match. The uninstaller removes the entry only
+  when it still references `{app}`.
 - **Data safety**: the uninstaller removes only the application folder and the
   per-user registrations; `%LOCALAPPDATA%\SaveScummer` is never touched.
 - **Graceful upgrade**: `[Code] PrepareToInstall` runs the installed
@@ -390,20 +393,23 @@ New/changed files: `packaging/windows/installer/savescummer.iss`,
    shows Save / Load from the installed extension (under Windows 11 **Show more
    options**); a fresh Explorer process is needed to load the DLL.
 5. The sign-in task writes the same value the app's **Launch on startup** toggle
-   would; after a host start the app checkbox agrees with the OS entry, and
-   unchecking removes the installer's entry.
+   would, so autostart works right after install; on its first start the host
+   adopts that value into the (default-off) preference, and unchecking removes
+   the entry.
 6. Installing over a running installed host asks it to shut down gracefully and
    succeeds; the previous version is replaced in place (same `AppId`).
-7. Uninstalling removes the application folder, the Explorer keys and the
-   sign-in value, and leaves `%LOCALAPPDATA%\SaveScummer` intact.
+7. Uninstalling removes the application folder and the Explorer keys, removes
+   the sign-in value only while it still references the installed copy (an entry
+   repointed elsewhere is preserved), and leaves `%LOCALAPPDATA%\SaveScummer`
+   intact.
 8. The portable ZIP still runs standalone and registers the extension only via
    its helper scripts.
 9. `./scripts/release-github.ps1` attaches the installer, the portable archive
    and both `.sha256` sidecars to a single draft release; it refuses to publish
    without the installer unless `-AllowMissingInstaller` is passed.
 10. Installing over an installation whose Explorer extension is registered
-    completes the DLL replacement on the requested restart (or with the
-    extension task disabled, without one).
+    completes the DLL replacement on the requested restart. A first install with
+    the extension task disabled never registers the DLL and needs no restart.
 
 ### Known limitations
 

@@ -207,9 +207,11 @@ Other commands:
   preference. Registration failure preserves the previous preference; persistence
   failure attempts to restore the previous registration.
   Registration changes only through this command, the Launch on startup checkbox,
-  or the installer. On startup the host adopts an installer-created entry into
-  the preference; it never takes over an entry that points at another build and
-  never recreates an entry the user or a development build removed.
+  or the installer's opt-in task (which writes the entry at install time so
+  autostart works immediately; uninstalling removes it only while it still
+  references the installed copy). On startup the host adopts an existing entry
+  into the preference; it never takes over an entry that points at another build
+  and never recreates an entry the user or a development build removed.
   All builds share
   one `SaveScummer` entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
   pointing to the host executable and data directory that enabled it. Keep that

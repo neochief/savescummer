@@ -91,7 +91,9 @@ Root: HKCU; Subkey: "Software\Classes\CLSID\{#ExplorerClsid}\InprocServer32"; Va
 Root: HKCU; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\SaveScummer"; ValueType: string; ValueName: ""; ValueData: "{#ExplorerClsid}"; Flags: uninsdeletekey; Tasks: explorer
 ; Sign-in entry. Must match the format written by the host (apps/host / platform
 ; set_startup): "<host>" --minimized --data-dir "<data>" --desktop "<desktop>".
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SaveScummer"; ValueData: """{app}\bin\SaveScummer.Host.exe"" --minimized --data-dir ""{localappdata}\SaveScummer"" --desktop ""{app}\bin\SaveScummer.exe"""; Flags: uninsdeletevalue; Tasks: startup
+; The uninstaller removes it only when it still references {app}, so an entry
+; the app created (task off) or one repointed at another copy is handled too.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SaveScummer"; ValueData: """{app}\bin\SaveScummer.Host.exe"" --minimized --data-dir ""{localappdata}\SaveScummer"" --desktop ""{app}\bin\SaveScummer.exe"""; Tasks: startup
 
 [Run]
 Filename: "{app}\bin\SaveScummer.exe"; Description: "Launch SaveScummer"; Flags: nowait postinstall skipifsilent
@@ -116,4 +118,20 @@ begin
     Exec(Cli, '--no-start shutdown', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(1500);
   end;
+end;
+
+// Remove the sign-in entry only when it still launches this installation. This
+// also covers an entry the app created after a task-off install; an entry that
+// now points at another copy (for example the portable ZIP) is preserved.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Value: String;
+begin
+  if CurUninstallStep <> usUninstall then
+    exit;
+  if RegQueryStringValue(HKCU,
+       'Software\Microsoft\Windows\CurrentVersion\Run', 'SaveScummer', Value) and
+     (Pos(UpperCase(ExpandConstant('{app}\')), UpperCase(Value)) > 0) then
+    RegDeleteValue(HKCU,
+      'Software\Microsoft\Windows\CurrentVersion\Run', 'SaveScummer');
 end;
