@@ -63,6 +63,9 @@ fn explorer_actions_revalidate_generations_and_never_offer_recovery_or_unrelated
 #[test]
 fn ambiguous_and_invalid_discovery_stays_visible_and_choices_survive_restart_and_rescan() {
     let temp = tempfile::tempdir().unwrap();
+    // %TEMP% can be spelled with 8.3 short names (CI runners); compare through
+    // the platform's alias-aware location check instead of raw strings.
+    let paths = Paths::new(vec![]);
     let rt = runtime(temp.path());
     let a = GameLocation {
         data_dir: temp.path().join("a"),
@@ -91,13 +94,13 @@ fn ambiguous_and_invalid_discovery_stays_visible_and_choices_survive_restart_and
     assert!(rt.select_detected_location("game", None).is_err());
     rt.select_detected_location("game", Some(&b)).unwrap();
     scan(&rt, vec![a.clone()]);
-    assert_eq!(rt.state().unwrap().games["game"].data_dir, b.data_dir);
+    assert!(paths.same_location(&rt.state().unwrap().games["game"].data_dir, &b.data_dir));
     drop(rt);
     let rt = runtime(temp.path());
-    assert_eq!(rt.state().unwrap().games["game"].data_dir, b.data_dir);
+    assert!(paths.same_location(&rt.state().unwrap().games["game"].data_dir, &b.data_dir));
     assert!(rt.state().unwrap().games["game"].user_configured);
     rt.select_detected_location("game", None).unwrap();
-    assert_eq!(rt.state().unwrap().games["game"].data_dir, a.data_dir);
+    assert!(paths.same_location(&rt.state().unwrap().games["game"].data_dir, &a.data_dir));
     let bad = GameLocation {
         data_dir: temp.path().into(),
         executables: vec![],

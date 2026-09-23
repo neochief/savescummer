@@ -29,7 +29,11 @@ fn runtime(root: &Path) -> Runtime {
 impl Fixture {
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
-        let live = temp.path().join("Game données");
+        // Store the resolved path: the runtime resolves configured directories,
+        // and %TEMP% can be spelled with 8.3 short names on CI runners.
+        let live = Paths::new(vec![])
+            .resolve(&temp.path().join("Game données"))
+            .unwrap();
         fs::create_dir(&live).unwrap();
         fs::create_dir_all(live.join("nested/empty")).unwrap();
         fs::write(live.join("nested/雪.txt"), b"snow").unwrap();
