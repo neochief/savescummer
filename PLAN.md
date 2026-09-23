@@ -154,10 +154,11 @@ manifest, checksum generation and identity templates; each `package-<os>.ps1`
 adds only OS-specific steps (Windows: Qt deployment, Visual C++ runtime, ZIP,
 PDBs; later macOS: app bundle and dmg; Linux: tarball or AppImage). The Windows
 1.0 distribution is an Inno Setup per-user installer (primary) that registers
-the Explorer extension by default and ships an uninstaller that preserves the
-user's backup data, plus a portable ZIP (secondary) carrying the same binaries
-and an opt-in Explorer registration. No packaging script may reproduce policy
-already owned by the shared core.
+the Explorer extension and enables sign-in autostart by default on a first
+install (upgrades keep a user's opt-out) and ships an uninstaller that preserves
+the user's backup data, plus a portable ZIP (secondary) carrying the same
+binaries and an opt-in Explorer registration. No packaging script may reproduce
+policy already owned by the shared core.
 
 Releases are published to GitHub Releases from a `v<version>` tag. Creating a
 release always produces a draft with auto-generated notes for human review
@@ -866,6 +867,8 @@ Game data dir (DIR): [...prefilled path...][open icon] [Reset]
 The bottom help bar ends with [X] Launch on startup, detached on the far right. The Save/Load keyboard hints and Play sounds checkbox appear before it as described under Main window.
 
 Enabling Launch on startup registers the canonical `SaveScummer.Host` executable from the application directory with `--minimized` and the canonical absolute `SaveScummer` path. At sign-in, this starts or reuses the background host and shows its tray icon without opening the main window. The host's core must not require a UI client to initialize or operate.
+
+The Windows per-user installer enables this by default on a first install (task `checkedonce`; an upgrade presents it unchecked so an in-app opt-out is preserved). The portable package itself writes no sign-in entry: only the in-app checkbox or `startup on` adds one.
 
 By default, launching `SaveScummer` starts or reuses `SaveScummer.Host` and shows and focuses the main window. Closing the main window leaves the background host running in the tray. UI termination or disconnection does not cancel core operations.
 

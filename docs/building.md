@@ -182,18 +182,22 @@ portable package. To build only the installer from an existing payload:
 
 The installer is strictly per-user and needs no administrator rights. It installs
 to `%LOCALAPPDATA%\Programs\SaveScummer`, registers the Explorer context menu
-under `HKCU` (default on, uncheckable) and offers a sign-in entry (task off by
-default; when selected, setup writes the same `HKCU\...\Run\SaveScummer` value
-the app writes, so autostart works immediately). The app itself keeps its
-preference off by default: on its first start it reads that registry value and
-adopts its current state, after which the in-app **Launch on startup** checkbox
-can change it. Uninstalling removes the entry only when it still references the
-installed copy. Before replacing files the installer asks a
-running installed host to shut down gracefully, so an accepted save/restore
-operation can finish. Silent install and uninstall:
+under `HKCU` (default on, uncheckable) and enables a sign-in entry (task checked
+on a first install; the `checkedonce` flag presents it unchecked on upgrades so
+a user who disabled startup in-app is not opted back in). When selected, setup
+writes the same `HKCU\...\Run\SaveScummer` value the app writes, so autostart
+works immediately. The app itself keeps its preference off by default: on its
+first start it reads that registry value and adopts its current state, after
+which the in-app **Launch on startup** checkbox can change it. Uninstalling
+removes the entry only when it still references the installed copy. Before
+replacing files the installer asks a running installed host to shut down
+gracefully, so an accepted save/restore operation can finish. Silent install and
+uninstall:
 
 ```powershell
 .\SaveScummer-windows-x64-0.1.0-setup.exe /SILENT /SUPPRESSMSGBOXES
+# Keep the default-on Explorer registration but skip the sign-in entry:
+.\SaveScummer-windows-x64-0.1.0-setup.exe /SILENT /SUPPRESSMSGBOXES /MERGETASKS="!startup"
 "%LOCALAPPDATA%\Programs\SaveScummer\unins000.exe" /SILENT
 ```
 

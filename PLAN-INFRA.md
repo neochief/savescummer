@@ -104,7 +104,7 @@ savescummer/
 | D5 | Scratch policy: ad-hoc/smoke outputs go to `build/tmp/` and are covered by `clean`. The `-Test` temp moves from `.runtime/test-temp` → `build/tmp/test-temp` and is emptied at each run. | Fixes the 520 MB leak *and* makes `clean` cover scratch. |
 | D6 | Retire the legacy `build/desktop` CMake default and delete `scripts/run-desktop.ps1`. `scripts/build-desktop.ps1` gains a `-Mode dev/release` (default `dev`) that selects `build/<mode>/desktop` + the matching configuration; explicit overrides still win. | One place per mode; no competing "legacy" path (per `PLAN.md`: "Remove legacy lower-level output defaults and competing package locations"). |
 | D7 | Release publishing is **local-first and draft-first**: `scripts/release-github.ps1` uses `gh release create --draft` so the human reviews the release page and clicks Publish. GitHub Actions is deferred to Phase C (not this task). | Draft-first is the safety gate against publishing something broken; local-first keeps it runnable before CI exists. CI (Phase C) calls the *same* scripts, so nothing is redone. |
-| D8 | 1.0 distribution ("do it properly"): **Inno Setup per-user installer** is the primary channel; the portable ZIP stays as the secondary channel; the Explorer extension ships with the app and is registered **on by default** (installer checkbox to disable). | Installer is the correct way to install/uninstall a DLL loaded into Explorer.exe; default-on matches the headline feature (TortoiseGit-style). **Installer is Phase B, not this task.** |
+| D8 | 1.0 distribution ("do it properly"): **Inno Setup per-user installer** is the primary channel; the portable ZIP stays as the secondary channel; the Explorer extension ships with the app and is registered **on by default** (installer checkbox to disable), and sign-in autostart is **on by default for a first install** (`checkedonce`; upgrades keep the user's choice). | Installer is the correct way to install/uninstall a DLL loaded into Explorer.exe; default-on matches the headline feature (TortoiseGit-style). **Installer is Phase B, not this task.** |
 | D9 | Explorer DLL is **not** added to the flow in Phase A. It is wired into the release build and package in Phase B. | Keeps Phase A focused on infra; the DLL build is currently separate (build-explorer.ps1) and wants installer plumbing. |
 | D10 | **Multiplatform artifact convention, pinned now.** `dist/` stays **flat**; every artifact is OS/arch-tagged: `SaveScummer-<os>-<arch>-<ver>.<ext>` — `SaveScummer-windows-x64-0.1.0.zip`, later `SaveScummer-macos-arm64-0.1.0.tar.gz` (and `-x86_64-`), `SaveScummer-linux-x86_64-0.1.0.tar.gz`. GitHub release assets reuse these exact filenames. Each artifact keeps a per-platform expanded folder/container; internals stay the canonical executable names from PLAN.md. | OS-tagged filenames make flat `dist/` unambiguous across platforms and give the Phase C CI matrix a uniform output contract (`<target>/dist/*` per OS). Naming is trivial to extend later; deciding it now prevents a Phase A layout that must be reworked. |
 | D11 | **Shared packaging core.** `package-windows.ps1` refactors (A3) extract the platform-*neutral* parts — version reading, staging layout, `.savescummer-package.json` manifest, SHA256SUMS generation, README.txt/identify templates, final rename/move semantics — into a dot-sourced `scripts/package-common.ps1` (or small `.psm1`). Future `package-macos.ps1` / `package-linux.ps1` consume it and add only OS-specific steps (Qt deploy, dmgs/AppImage, dylibs, etc.). | PLAN.md's own rules reject duplicated policy across modules. If the shared core is extracted in Phase A, the future per-OS scripts stay small and cannot drift from the Windows conventions. |
@@ -343,7 +343,9 @@ Explorer extension. Decisions taken while implementing:
   `Enable/Disable Explorer integration.cmd` + `bin\register-explorer.ps1`.
   The DLL uses `restartreplace`, because `explorer.exe` keeps it mapped and
   Windows cannot overwrite a loaded DLL in place.
-- **Sign-in entry**: the installer's opt-in `startup` task writes the
+- **Sign-in entry**: the installer's `startup` task is checked on a first
+  install (`checkedonce`, so an upgrade presents it unchecked and never opts a
+  user back in after an in-app opt-out) and writes the
   `HKCU\...\Run\SaveScummer` value in the exact form the host uses
   (`--minimized --data-dir ... --desktop ...`), so sign-in autostart works
   immediately after install. The app's own preference stays off by default; on
@@ -392,10 +394,11 @@ New/changed files: `packaging/windows/installer/savescummer.iss`,
 4. With the Explorer task on, right-clicking a configured DIR / eligible copy
    shows Save / Load from the installed extension (under Windows 11 **Show more
    options**); a fresh Explorer process is needed to load the DLL.
-5. The sign-in task writes the same value the app's **Launch on startup** toggle
-   would, so autostart works right after install; on its first start the host
-   adopts that value into the (default-off) preference, and unchecking removes
-   the entry.
+5. The sign-in task is checked on a fresh install and writes the same value the
+   app's **Launch on startup** toggle would, so autostart works right after
+   install; on its first start the host adopts that value into the (default-off)
+   preference, and unchecking removes the entry. An upgrade presents the task
+   unchecked, so a user who disabled startup in-app is not opted back in.
 6. Installing over a running installed host asks it to shut down gracefully and
    succeeds; the previous version is replaced in place (same `AppId`).
 7. Uninstalling removes the application folder and the Explorer keys, removes

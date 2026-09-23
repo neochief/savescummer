@@ -210,7 +210,12 @@ class IconMenuRow : public QPushButton {
 };
 class IconMenu : public QMenu {
   public:
-    explicit IconMenu(QWidget *parent = nullptr) : QMenu(parent) { setObjectName("iconMenu"); }
+    explicit IconMenu(QWidget *parent = nullptr) : QMenu(parent) {
+        setObjectName("iconMenu");
+        // Match the history panel: skip Qt's hard, boxy Windows popup shadow and
+        // rely on the menu's own 1px border.
+        setWindowFlag(Qt::NoDropShadowWindowHint, true);
+    }
     QAction *addIconAction(const QIcon &icon, const QString &text,
                            std::function<void()> callback) {
         auto *action = new QWidgetAction(this);
@@ -1248,6 +1253,10 @@ void MainWindow::history(const QString &game) {
     auto *popup = new QWidget(this, Qt::Popup);
     popup_ = popup;
     popup->setObjectName("historyPopup");
+    // Qt's default Windows popup shadow is a hard, stacked-rectangle "bevel"
+    // that reads as boxy artifacts around the panel edges. The panel has its
+    // own 1px border, so use a flat edge instead.
+    popup->setWindowFlag(Qt::NoDropShadowWindowHint, true);
     auto *layout = new QVBoxLayout(popup);
     layout->setContentsMargins(0, 4, 0, 4);
     auto *scroll = new QScrollArea;

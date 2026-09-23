@@ -10,8 +10,9 @@ Everything Windows-specific for building distributions lives here.
   1.0 installer: installs `SaveScummer`, `SaveScummer.Host`, `SaveScummer.CLI`
   and `savescummer-explorer.dll` to `%LOCALAPPDATA%\Programs\SaveScummer`,
   registers the Explorer extension (on by default; the classic handler appears
-  under **Show more options** on Windows 11), optionally writes the sign-in
-  entry, and ships an uninstaller that preserves `%LOCALAPPDATA%\SaveScummer`.
+  under **Show more options** on Windows 11), enables the sign-in entry on a
+  first install (task `checkedonce`, so upgrades keep a user's opt-out), and
+  ships an uninstaller that preserves `%LOCALAPPDATA%\SaveScummer`.
   The extension DLL uses `restartreplace`, because `explorer.exe` keeps a loaded
   DLL mapped and Windows cannot overwrite it in place.
 

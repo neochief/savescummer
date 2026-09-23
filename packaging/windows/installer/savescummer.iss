@@ -7,8 +7,9 @@
 ;
 ; The installer is strictly per-user (no administrator rights): it installs to
 ; %LOCALAPPDATA%\Programs\SaveScummer, registers the Explorer integration under
-; HKCU and writes the sign-in entry under HKCU. The user's backup data under
-; %LOCALAPPDATA%\SaveScummer is never created, moved or removed here.
+; HKCU and writes the sign-in entry under HKCU (default on for a first install).
+; The user's backup data under %LOCALAPPDATA%\SaveScummer is never created,
+; moved or removed here.
 
 #ifndef SaveScummerVersion
   #define SaveScummerVersion "0.1.0"
@@ -39,6 +40,10 @@ DefaultDirName={localappdata}\Programs\SaveScummer
 DefaultGroupName=SaveScummer
 DisableProgramGroupPage=yes
 DisableReadyPage=no
+; Restore the user's previous task choices on upgrade (default). checkedonce
+; then presents the Explorer and startup tasks unchecked instead of re-checking
+; them, so an upgrade never silently re-enables a disabled integration.
+UsePreviousTasks=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -64,8 +69,11 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
+; checkedonce: checked on a first install, but presented unchecked when Setup
+; finds a previous version, so a user who disabled startup in-app (or declined
+; the task) is not opted back in by an upgrade.
 Name: "explorer"; Description: "Enable the SaveScummer Explorer context menu (Save / Load)"; GroupDescription: "Integration:"; Flags: checkedonce
-Name: "startup"; Description: "Launch SaveScummer at sign-in"; GroupDescription: "Integration:"; Flags: unchecked
+Name: "startup"; Description: "Launch SaveScummer at sign-in"; GroupDescription: "Integration:"; Flags: checkedonce
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
@@ -91,8 +99,11 @@ Root: HKCU; Subkey: "Software\Classes\CLSID\{#ExplorerClsid}\InprocServer32"; Va
 Root: HKCU; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\SaveScummer"; ValueType: string; ValueName: ""; ValueData: "{#ExplorerClsid}"; Flags: uninsdeletekey; Tasks: explorer
 ; Sign-in entry. Must match the format written by the host (apps/host / platform
 ; set_startup): "<host>" --minimized --data-dir "<data>" --desktop "<desktop>".
-; The uninstaller removes it only when it still references {app}, so an entry
-; the app created (task off) or one repointed at another copy is handled too.
+; Written when the startup task is selected; an upgrade leaves the task
+; unchecked (checkedonce), so an entry the user disabled in-app is not
+; recreated and an existing entry is left untouched. The uninstaller removes it
+; only when it still references {app}, so an entry repointed at another copy is
+; preserved too.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SaveScummer"; ValueData: """{app}\bin\SaveScummer.Host.exe"" --minimized --data-dir ""{localappdata}\SaveScummer"" --desktop ""{app}\bin\SaveScummer.exe"""; Tasks: startup
 
 [Run]
