@@ -93,6 +93,7 @@ savescummer/
 │   ├── package-common.ps1      # Platform-neutral packaging core (shared by all OS scripts)
 │   ├── package-windows.ps1     # Windows packaging: Qt deploy, VC runtime, portable ZIP
 │   ├── release-github.ps1      # Draft-first GitHub Release publisher (local and CI)
+│   ├── release.ps1             # One command: bump version, check, commit, tag, push
 │   ├── setup-qt.ps1            # Multiplatform pinned-Qt bootstrap (aqtinstall)
 │   └── build-desktop, check, explorer helpers, ...
 │

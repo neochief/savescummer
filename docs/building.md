@@ -227,6 +227,16 @@ git push origin v0.1.0
 ./scripts/release-github.ps1   # creates a DRAFT release with the installer
 ```
 
+Or cut the whole release in one command — it bumps `Cargo.toml`, refreshes
+`Cargo.lock`, runs `scripts/check.ps1`, commits "Release 0.2.0", tags `v0.2.0`
+and pushes both:
+
+```powershell
+./scripts/release.ps1 0.2.0
+./scripts/release.ps1 0.2.0 -SkipChecks   # skip scripts/check.ps1
+./scripts/release.ps1 0.2.0 -NoPush       # commit and tag locally only
+```
+
 The release script requires the GitHub CLI (`gh`); run `gh auth login` once.
 It verifies that the tag matches the `Cargo.toml` version and points at HEAD,
 uploads the installer as the single release asset, and creates a draft with
