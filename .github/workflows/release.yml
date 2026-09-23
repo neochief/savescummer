@@ -51,9 +51,7 @@ jobs:
         run: choco install innosetup --yes --no-progress
       - name: Build, test and package
         shell: pwsh
-        # The runner image ships Visual Studio 2022; the repository default
-        # generator (VS 2019) is not installed there.
-        run: ./build.ps1 release -Test -Generator 'Visual Studio 17 2022'
+        run: ./build.ps1 release -Test
       - name: Upload the Windows artifacts
         uses: actions/upload-artifact@v7
         with:

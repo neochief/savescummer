@@ -202,6 +202,41 @@ function Remove-DevelopmentAutostart {
     Write-Host 'Removed a development SaveScummer autostart entry.'
 }
 
+# Picks a CMake Visual Studio generator that exists on this machine. The
+# repository default (VS 2019) is kept when installed; machines and CI runner
+# images that ship only a newer Visual Studio get the newest installed
+# generator the local CMake supports. An explicit -Generator always wins.
+function Resolve-BuildGenerator {
+    param(
+        [string]$Requested,
+        [string]$Root
+    )
+    if ($Requested -notmatch '^Visual Studio (\d+) (\d{4})$') { return $Requested }
+    $requestedMajor = [int]$Matches[1]
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswhere)) { return $Requested }
+    $majors = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationVersion |
+        ForEach-Object { [int](($_ -split '\.')[0]) } | Sort-Object -Unique)
+    if (-not $majors -or $majors -contains $requestedMajor) { return $Requested }
+    $cmake = Get-Command cmake -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if (-not $cmake) { $cmake = Join-Path $Root '.runtime/qt-tools/cmake/data/bin/cmake.exe' }
+    if (-not (Test-Path -LiteralPath $cmake)) { return $Requested }
+    $generators = @{}
+    foreach ($line in @(& $cmake --help)) {
+        if ($line -match '^\s*\*?\s*Visual Studio (\d+) (\d{4})\b') {
+            $generators[[int]$Matches[1]] = "Visual Studio $($Matches[1]) $($Matches[2])"
+        }
+    }
+    foreach ($major in @($majors | Sort-Object -Descending)) {
+        if ($generators.ContainsKey($major)) {
+            Write-Host "Using CMake generator '$($generators[$major])' instead of '$Requested' (that Visual Studio is not installed)."
+            return $generators[$major]
+        }
+    }
+    return $Requested
+}
+
 $modeDirectory = Join-Path $root "build/$Mode"
 $desktopBuild = Join-Path $modeDirectory 'desktop'
 $configuration = if ($Mode -eq 'dev') { 'RelWithDebInfo' } else { 'Release' }
@@ -247,6 +282,11 @@ if ($Mode -eq 'clean') {
     }
     Write-Host ("Clean: removed {0}." -f ($(if ($removed.Count) { $removed -join ', ' } else { 'nothing' }))) -ForegroundColor Green
     exit 0
+}
+# Match the generator to what is installed: the VS 2019 default is not present
+# on newer machines or current CI runner images.
+if (-not $PSBoundParameters.ContainsKey('Generator')) {
+    $Generator = Resolve-BuildGenerator -Requested $Generator -Root $root
 }
 New-Item -ItemType Directory -Force -Path $modeDirectory | Out-Null
 $timings = [ordered]@{}

@@ -56,9 +56,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build and test Rust + Qt
         shell: pwsh
-        # The runner image ships Visual Studio 2022; the repository default
-        # generator (VS 2019) is not installed there.
-        run: ./build.ps1 dev -Test -Generator 'Visual Studio 17 2022'
+        run: ./build.ps1 dev -Test
 
   rust-portability:
     name: Rust checks (${{ matrix.os }}, non-blocking)
