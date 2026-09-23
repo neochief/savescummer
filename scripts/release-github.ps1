@@ -6,18 +6,24 @@
 #   ./build.ps1 release          # easy path: produces the ZIP and the installer
 #   ./scripts/release-github.ps1 # creates/updates the DRAFT release
 #
-# Every platform-tagged artifact in dist/ for this version is attached:
-# SaveScummer-<os>-<arch>-<version>.<ext> and -<suffix>.<ext> forms. Locally
-# those are the Windows ZIP and installer; the CI publish job downloads the
-# artifacts of every build-matrix job into dist/ first, so one draft carries
-# all platforms. The Windows installer is required unless -AllowMissingInstaller
-# is passed (portable-only release).
+# Release assets: the platform installer is the single default asset — it is
+# the one file users need, and GitHub adds its own "Source code" archives to
+# every release regardless. -IncludePortable also attaches the portable
+# archive; -IncludeChecksums adds .sha256 sidecars. When the installer is
+# missing, -AllowMissingInstaller publishes the portable archive instead.
+# The CI publish job downloads the artifacts of every build-matrix job into
+# dist/ first, so one draft carries all platforms.
 #
 # Re-running after a rebuild uploads fresh assets to the existing draft with
 # --clobber. A release that has already been published is never modified.
 param(
-    # Publish without the installer when Inno Setup was unavailable.
-    [switch]$AllowMissingInstaller
+    # Publish the portable archive without the installer when Inno Setup was
+    # unavailable.
+    [switch]$AllowMissingInstaller,
+    # Also attach the portable archive next to the installer.
+    [switch]$IncludePortable,
+    # Also attach .sha256 sidecars for every attached asset.
+    [switch]$IncludeChecksums
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot/..").Path
@@ -46,11 +52,9 @@ if ((git rev-parse HEAD) -ne (git rev-list -n 1 $tag)) {
 }
 
 # --- artifacts --------------------------------------------------------------
-# Attach every platform-tagged artifact in dist/ for this version:
+# Discover this version's OS/arch-tagged files in dist/:
 # SaveScummer-<os>-<arch>-<version>.<ext> and the -<suffix>.<ext> form (the
-# Windows installer is -setup.exe). The CI publish job downloads the artifacts
-# of every build-matrix job into dist/ first, so one draft carries all
-# platforms.
+# installer is -setup.exe).
 $distDirectory = Join-Path $root 'dist'
 $artifacts = @()
 if (Test-Path -LiteralPath $distDirectory) {
@@ -63,24 +67,32 @@ if (Test-Path -LiteralPath $distDirectory) {
 if ($artifacts.Count -eq 0) {
     throw "No release artifacts for version $version found in $distDirectory. Build them first with: ./build.ps1 release"
 }
-$windowsArtifacts = @($artifacts | Where-Object Name -like 'SaveScummer-windows-*')
 $installers = @($artifacts | Where-Object Name -like 'SaveScummer-*-setup.*')
-if ($windowsArtifacts.Count -gt 0 -and $installers.Count -eq 0) {
+$portables = @($artifacts | Where-Object Name -notlike 'SaveScummer-*-setup.*')
+$selected = @($installers)
+if ($IncludePortable) { $selected += $portables }
+if ($installers.Count -eq 0) {
     if (-not $AllowMissingInstaller) {
-        throw "The Windows installer is missing from $distDirectory. Build it with ./build.ps1 release, or pass -AllowMissingInstaller for a portable-only release."
+        throw "The installer is missing from $distDirectory. Build it with ./build.ps1 release, or pass -AllowMissingInstaller to publish the portable archive instead."
     }
-    Write-Warning 'Publishing the Windows artifacts without the installer.'
+    Write-Warning 'Publishing the portable archive without the installer.'
+    $selected = @($portables)
+}
+if ($selected.Count -eq 0) {
+    throw "No release asset to publish for version $version in $distDirectory."
 }
 $assets = @()
-foreach ($artifact in $artifacts) {
-    $shaFile = "$($artifact.FullName).sha256"
-    if (-not (Test-Path -LiteralPath $shaFile)) {
-        (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath $shaFile -Encoding ascii
-    }
+foreach ($artifact in $selected) {
     Write-Host "Attaching $($artifact.Name)"
     $assets += $artifact.FullName
-    $assets += $shaFile
+    if ($IncludeChecksums) {
+        $shaFile = "$($artifact.FullName).sha256"
+        if (-not (Test-Path -LiteralPath $shaFile)) {
+            (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant() |
+                Set-Content -LiteralPath $shaFile -Encoding ascii
+        }
+        $assets += $shaFile
+    }
 }
 
 # --- publish (draft-first) --------------------------------------------------

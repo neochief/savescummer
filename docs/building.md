@@ -220,19 +220,24 @@ draft for review before it becomes public:
 git tag v0.1.0
 git push origin v0.1.0
 ./build.ps1 release            # produces dist/SaveScummer-windows-x64-<version>.zip
-./scripts/release-github.ps1   # creates a DRAFT release with the archive and checksum
+./scripts/release-github.ps1   # creates a DRAFT release with the installer
 ```
 
 The release script requires the GitHub CLI (`gh`); run `gh auth login` once.
 It verifies that the tag matches the `Cargo.toml` version and points at HEAD,
-uploads the portable archive and the installer plus their `.sha256` sidecars, and
-creates a draft with auto-generated notes. The installer is required by default;
-pass `-AllowMissingInstaller` to publish a portable-only release when Inno Setup
-was unavailable (a warning is printed). Review the release page and click
+uploads the installer as the single release asset, and creates a draft with
+auto-generated notes. Pass `-IncludePortable` to also attach the portable
+archive, and `-IncludeChecksums` to add `.sha256` sidecars for every attached
+asset. When Inno Setup was unavailable, `-AllowMissingInstaller` publishes the
+portable archive instead (a warning is printed). Review the release page and click
 **Publish** to make it public. Rebuilding and rerunning the script updates the existing draft with
 `--clobber`; an already-published release is never modified. The release workflow
 performs the same steps on a per-OS matrix, so the local and CI paths stay
 identical.
+
+GitHub always adds `Source code (zip)` and `Source code (tar.gz)` archives to a
+release; they cannot be disabled or deleted. When the release notes name the
+installer explicitly, users are less likely to download those archives instead.
 
 ## Continuous integration
 

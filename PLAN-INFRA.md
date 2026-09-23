@@ -439,6 +439,11 @@ Implemented:
   (draft-first), so local and CI publishing share one implementation.
   Dispatching with an empty tag builds artifacts without touching a release;
   the manual dispatch button appears once the workflow is on the default branch.
+- Release assets are installer-only by default: `scripts/release-github.ps1`
+  attaches the installer, with `-IncludePortable` and `-IncludeChecksums`
+  opt-ins (the portable archive is still built and kept as a workflow artifact).
+  GitHub always adds auto-generated source archives to a release; they cannot be
+  disabled or deleted.
 - `scripts/setup-qt.ps1` — one Qt bootstrap for Windows, macOS and Linux:
   aqtinstall into a virtualenv under `.runtime/qt-tools/venv`, output in
   `.runtime/Qt/<version>/<kit>`, idempotent. Windows kit directories are
