@@ -54,6 +54,7 @@ savescummer/
 │   ├── cli/                    # Rust command-line client executable
 │   └── desktop/                # C++ / Qt Widgets main executable
 │       ├── src/
+│       ├── compat/             # Build-compatibility headers (Qt 6.5 on MSVC 19.38+)
 │       └── tests/
 │
 ├── crates/
@@ -91,7 +92,8 @@ savescummer/
 ├── scripts/                    # Build, test, packaging, release commands
 │   ├── package-common.ps1      # Platform-neutral packaging core (shared by all OS scripts)
 │   ├── package-windows.ps1     # Windows packaging: Qt deploy, VC runtime, portable ZIP
-│   ├── release-github.ps1      # Local draft-first GitHub Release publisher
+│   ├── release-github.ps1      # Draft-first GitHub Release publisher (local and CI)
+│   ├── setup-qt.ps1            # Multiplatform pinned-Qt bootstrap (aqtinstall)
 │   └── build-desktop, check, explorer helpers, ...
 │
 ├── .github/workflows/          # CI and tag-triggered release workflows
@@ -135,13 +137,16 @@ Generated output lives outside the committed source tree, separated by purpose
   `SaveScummer-linux-x86_64-0.1.0.tar.gz`). Every archive contains one
   top-level per-platform folder holding the canonical executables.
 - `.runtime/` — machine-local state that must survive a clean: vendored SDKs
-  (Qt, CMake tools) and development app data. `clean` never touches it.
+  (Qt, CMake tools), the aqtinstall environment used by `scripts/setup-qt.ps1`,
+  and development app data. `clean` never touches it.
 
 One entry point, `build.ps1`, orchestrates the Windows dev, release and clean
 flows: compile Rust and the Qt desktop, run optional tests, package, and write
 a build report. `clean` removes `build/` and `dist/`; `clean -Deep` also removes
 `target/`; it gracefully stops a recorded development host first and never
-removes `.runtime/`.
+removes `.runtime/`. Windows builds default to the VS 2019 generator and fall
+back to the newest installed Visual Studio when it is absent; Qt 6.5 headers on
+MSVC 19.38+ use the compatibility header in `apps/desktop/compat`.
 
 Packaging is per platform but shares a platform-neutral core.
 `package-common.ps1` owns version reading, staging layout, the package
@@ -155,12 +160,22 @@ and an opt-in Explorer registration. No packaging script may reproduce policy
 already owned by the shared core.
 
 Releases are published to GitHub Releases from a `v<version>` tag. Creating a
-release always produces a draft for human review (auto-generated notes, attached
-per-platform artifacts, checksums) before it is published.
-`scripts/release-github.ps1` does this locally with the GitHub CLI; a CI
-workflow later builds the same artifacts on a per-OS matrix and publishes the
-same draft-first release, so the local and CI paths never diverge. See
-`PLAN-INFRA.md` for the concrete implementation steps.
+release always produces a draft with auto-generated notes for human review
+before it is published. The release asset is the platform installer — the single
+file users need — and GitHub adds its own generated source archives to every
+release regardless; the portable archive and `.sha256` sidecars are explicit
+opt-ins of the release scripts.
+`scripts/release-github.ps1` publishes the draft locally with the GitHub CLI;
+`.github/workflows/release.yml` builds and tests the same artifacts on a per-OS
+matrix from the tag and attaches every platform's output to one draft, so the
+local and CI paths never diverge.
+
+`.github/workflows/ci.yml` runs on every push, pull request and manual dispatch.
+Windows must pass `scripts/check.ps1`, the Qt desktop build and its tests.
+Ubuntu and macOS run the portable Rust checks as non-blocking porting signals.
+Fresh machines bootstrap the pinned Qt SDK with `scripts/setup-qt.ps1`
+(aqtinstall; Windows, macOS and Linux) and CI caches the result; the Rust
+toolchain is pinned by `rust-toolchain.toml`.
 
 ### Application processes
 

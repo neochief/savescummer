@@ -467,24 +467,28 @@ Still open (later platform qualification): macOS/Linux desktop jobs and their
 
 ## 8. Risks, pre-flight, and constraints
 
-- **Working tree state before starting:** `PLAN.md` is modified (uncommitted)
-  and `TODO/` is untracked. Before doing infra work, ask the user whether to
-  commit/stash those first. Do not edit `PLAN.md` behavior sections; only the
-  "Next tasks" list may be marked/ammended at the end, with explicit approval.
-- `Cargo.toml` version is `0.1.0`; first tag should be `v0.1.0` (user decision
-  when they want to publish).
-- `gh` is installed but **auth must be verified** (`gh auth status`) — the
-  release script will not run against GitHub until then.
-- The Qt SDK exists **only** on this machine's `.runtime/Qt`. Anything run here
-  is fine; CI (Phase C) must install Qt itself.
+- **Plan documents:** `PLAN.md` is authoritative for application behavior.
+  Change its behavior sections only with explicit user approval, and update
+  `PLAN-INFRA.md` and `docs/building.md` together with any tooling change so the
+  documents never lag the implementation.
+- `Cargo.toml` version is `0.1.0`; tag `v0.1.0` exists and a draft release was
+  built from it. Publishing stays a manual decision; to rebuild the draft from a
+  different commit, delete and re-push the tag (the publish job updates the
+  existing draft with `--clobber`).
+- `gh` is installed and authenticated (`gh auth status` verified as `neochief`);
+  the release scripts re-check before publishing.
+- The Qt SDK is machine-local under `.runtime/Qt`. `scripts/setup-qt.ps1`
+  installs it on Windows, macOS and Linux with aqtinstall, and CI calls the same
+  script and caches the result; Python 3.8+ is the only new prerequisite.
 - Do **not** rename Cargo targets or the canonical executable filenames
   (`SaveScummer.exe`, `SaveScummer.Host.exe`, `SaveScummer.CLI.exe`) — they are
   part of the application contract (`PLAN.md`).
 - Keep all scripts pwsh-7 compatible (repo already requires pwsh).
 - **Build-entry stance for non-Windows**: `build.ps1` intentionally remains the
   Windows orchestration layer (it already owns process/registry/redist logic).
-  macOS/Linux should not be forced through it; their builds run via CI (Phase C),
-  thin per-platform wrappers, or direct Cargo/CMake/ctest commands. The **shared
+  macOS/Linux should not be forced through it; their builds run via CI
+  (`.github/workflows/ci.yml`), thin per-platform wrappers, or direct
+  Cargo/CMake/ctest commands. The **shared
   packaging core (D11)** is the only cross-platform logic that gets genuinely
   reused, so it must be platform-neutral by construction (never call vswhere,
   registry, or Windows-only deploy steps).
