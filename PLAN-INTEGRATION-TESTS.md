@@ -1,6 +1,6 @@
 # SaveScummer integration tests
 
-This sketches the integration tests for the behaviors described in [PLAN.md](PLAN.md). The aim is to establish that SaveScummer's actual implementation works correctly, responds quickly, and recovers safely when something fails. Process and window monitoring is one of several areas to test.
+This sketches the integration tests for the behaviors described in [PLAN.md](PLAN.md). UI behavior is specified in [PLAN-UI.md](PLAN-UI.md) and the failure and interruption scenarios in [PLAN-ERRORS.md](PLAN-ERRORS.md). The aim is to establish that SaveScummer's actual implementation works correctly, responds quickly, and recovers safely when something fails. Process and window monitoring is one of several areas to test.
 
 Keep the test machinery simple: ordinary tests using the project's standard test runner, temporary files and databases, and one small fake-game executable. Add scenarios as the corresponding app features are implemented. A separate dashboard, custom scenario language, or test orchestration platform is unnecessary.
 
@@ -72,7 +72,7 @@ Use real temporary directories and a real SQLite database. Compare file contents
 - Reject an unavailable explicit target without substituting a different snapshot or creating unnecessary recovery data. If the current DIR is missing, ordinary LOAD or REVERT must stop safely; dedicated interrupted-operation recovery can recreate it as described below.
 - Restart SaveScummer and verify that configuration, snapshots, history, and exact Restore/Revert relationships survive. Game exit must not clear them either.
 - Convert existing persisted records when removing location UUIDs. Preserve checkpoint/history IDs, ordering and exact source/recovery relationships, and verify the resulting SQLite records and service schemas use checkpoint-owned original-directory paths without independent history location ownership.
-- Flush history only after confirmation, preserve current DIR, and include manual saved copies and retained recovery data in the intended deletion scope. On partial deletion failure, retain records for what remains and report the failure.
+- Flush checkpoints only after confirmation, preserve current DIR, and include manual saved copies and retained recovery data in the intended deletion scope. On partial deletion failure, retain records for what remains and report the failure.
 
 ## 4. Failures and interrupted operations
 
@@ -89,7 +89,7 @@ Exercise failures in the real operation sequence. Use actual file locks and perm
 - Choose Keep current game data and verify that file contents remain unchanged, the choice is persisted, and ordinary operations resume. Disable and reject this choice if DIR is missing or inaccessible, including if it disappears between displaying the prompt and handling the command.
 - Choose Restore data from before the interrupted operation with DIR present and with DIR missing. Restore the exact pre-operation data; when DIR exists, first preserve its current contents as a new recovery snapshot. If preservation fails, leave DIR untouched and keep recovery unresolved. Keep all earlier snapshots.
 - Fail recovery with locks, permissions or unavailable recovery material. Verify the specific error, Open recovery folder and Retry recovery. Opening the folder must not clear the block. Repair the filesystem, then retry or accept the repaired current DIR without editing SQLite.
-- While recovery is unresolved, reject ordinary SAVE, LOAD, REVERT, Flush history and path changes through every entry point. Permit dedicated recovery commands against the recorded original location, allow only one attempt at a time, and show the same status and choices after UI reconnection.
+- While recovery is unresolved, reject ordinary SAVE, LOAD, REVERT, Flush checkpoints and path changes through every entry point. Permit dedicated recovery commands against the recorded original location, allow only one attempt at a time, and show the same status and choices after UI reconnection.
 - Interrupt a recovery attempt, including after file restoration but before persisting its resolution. Restart and verify that retained data survives and recovery remains possible without fabricating a completed Loaded/Reverted entry or the interrupted operation's success cue.
 - After the model conversion, recover an interrupted operation using its captured original live/source/recovery paths and generation checks. Recovery must not depend on a location UUID or on its history row being present in the visible timeline.
 - Have the fake game write saves slowly, update multiple related files, hold a file open, or exit during copying. Verify that actual copy errors follow the failure and rollback rules. Successful copying may capture mixed game states; do not require concurrent-write detection, automatic retries or game suspension.
@@ -100,13 +100,13 @@ Copying is explicitly best-effort. Tests must distinguish filesystem success fro
 
 Check that UI actions, history actions, shortcuts, and Explorer requests reach the same operation handling and per-game lock. Most checks can call the real entry-point handlers; a few desktop checks must exercise actual key delivery and UI wiring.
 
-- Ctrl+F5 and Ctrl+F9 operate on the correct active-stack game, including while SaveScummer is hidden. Exercise switching games immediately before a shortcut and having no running known game.
+- Ctrl+F5 and Ctrl+F9 operate on the correct active-stack game, including while SaveScummer is hidden. Exercise switching games immediately before a shortcut and having no running known game. When the desktop is focused, verify that a shortcut acts on the selected game's Save or Load control, including a stopped game, and that it has no target when nothing is selected and no game is running.
 - Hold a shortcut and press it repeatedly. One held press must not repeatedly perform operations, and busy requests must be rejected without running later from a queue.
-- Start an operation through one entry point, then request another through a different entry point for the same game. Also try Flush history and path changes while busy. Keep the lock through any required rollback.
+- Start an operation through one entry point, then request another through a different entry point for the same game. Also try Flush checkpoints and path changes while busy. Keep the lock through any required rollback.
 - Check shortcut registration conflicts, fullscreen use, and permission differences in desktop compatibility runs.
 - Verify the correct start, completion, failure, or busy sound is requested. Completion follows committed files and history; failure never produces a success cue. Busy feedback is rate-limited, and disabling shortcut sounds suppresses the cues.
 - For very fast operations, preserve distinguishable cue ordering without delaying file work or extending the operation lock. Keep actual audibility and sound quality as a short manual check.
-- Verify visible failure explanations and notifications when hidden.
+- Verify visible failure explanations and notifications when hidden; the scenario catalog and expected messages are in `PLAN-ERRORS.md`.
 
 ## 6. Explorer integration
 
@@ -124,9 +124,9 @@ Keep a few full-app checks for behavior that component tests cannot establish. U
 - Normal launch shows the main window; --minimized starts in the tray. Closing the main window keeps monitoring active, tray actions reopen it, and Exit actually stops the app.
 - Check the start-with-system setting and its actual effect in a test environment.
 - Show discovered games and active-stack ordering correctly, including the empty-library state.
-- Start an operation while hidden, then open the window or history. Show current progress and disable every conflicting action, including the Load arrow, history actions, Flush history, and path changes.
-- Keep progress active through copying and rollback. Do not show completion before files and history commit. Check recovery-needed blocking, error visibility, and accessibility state.
-- Verify history action availability, exact targets, unavailable snapshots, and the separate availability of the Load button and history arrow. Explore opens the correct parent directory.
+- Start an operation while hidden, then open the window. Show the operation state for the correct game and disable every conflicting main-content action, including history actions, Flush checkpoints and path changes.
+- Keep the busy state through copying and rollback. Do not show completion before files and history commit. Check automatic recovery resolution and error-block visibility against `PLAN-ERRORS.md`, and the accessibility state.
+- Verify history action availability, exact targets, unavailable snapshots, and Load button availability. Explore opens the correct parent directory.
 
 ## 8. Incremental persistence and paginated history
 
