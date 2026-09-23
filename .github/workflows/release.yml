@@ -1,0 +1,90 @@
+# Release — a v<version> tag builds the Windows distribution and attaches it to
+# a single DRAFT GitHub release. The draft is never published automatically:
+# review the release page and click Publish. The publish job calls the same
+# scripts/release-github.ps1 the local flow uses, so the two paths cannot
+# diverge.
+#
+# macOS and Linux jobs join this matrix as those platforms qualify. Every job
+# stages OS/arch-tagged artifacts (dist/SaveScummer-<os>-<arch>-<version>.*)
+# and uploads them under its own artifact name; the publish job downloads all
+# of them into dist/ and attaches them to the one draft.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v<version> tag to build and publish. Leave empty to build artifacts without publishing.'
+        required: false
+        default: ''
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows distribution
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Restore the cached Qt SDK
+        uses: actions/cache@v6
+        with:
+          path: .runtime/Qt
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/setup-qt.ps1') }}
+      - name: Install Qt
+        shell: pwsh
+        run: ./scripts/setup-qt.ps1
+      - name: Install the pinned Rust toolchain
+        shell: pwsh
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Build, test and package
+        shell: pwsh
+        # The runner image ships Visual Studio 2022; the repository default
+        # generator (VS 2019) is not installed there.
+        run: ./build.ps1 release -Test -Generator 'Visual Studio 17 2022'
+      - name: Upload the Windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: SaveScummer-windows-x64
+          path: |
+            dist/SaveScummer-windows-x64-*.zip
+            dist/SaveScummer-windows-x64-*-setup.exe
+          if-no-files-found: error
+
+  publish:
+    name: Draft release
+    needs: windows
+    if: github.event_name == 'push' || inputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Fetch the release tag
+        run: git fetch --tags --force
+      - name: Download every platform artifact
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create or update the draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/release-github.ps1
