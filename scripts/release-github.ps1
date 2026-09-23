@@ -6,8 +6,12 @@
 #   ./build.ps1 release          # easy path: produces the ZIP and the installer
 #   ./scripts/release-github.ps1 # creates/updates the DRAFT release
 #
-# The installer is attached by default; pass -AllowMissingInstaller to publish a
-# portable-only release when Inno Setup was unavailable.
+# Every platform-tagged artifact in dist/ for this version is attached:
+# SaveScummer-<os>-<arch>-<version>.<ext> and -<suffix>.<ext> forms. Locally
+# those are the Windows ZIP and installer; the CI publish job downloads the
+# artifacts of every build-matrix job into dist/ first, so one draft carries
+# all platforms. The Windows installer is required unless -AllowMissingInstaller
+# is passed (portable-only release).
 #
 # Re-running after a rebuild uploads fresh assets to the existing draft with
 # --clobber. A release that has already been published is never modified.
@@ -42,29 +46,41 @@ if ((git rev-parse HEAD) -ne (git rev-list -n 1 $tag)) {
 }
 
 # --- artifacts --------------------------------------------------------------
-$archive = Join-Path $root "dist/SaveScummer-windows-x64-$version.zip"
-if (-not (Test-Path -LiteralPath $archive)) {
-    throw "Release archive not found: $archive. Build it first with: ./build.ps1 release"
+# Attach every platform-tagged artifact in dist/ for this version:
+# SaveScummer-<os>-<arch>-<version>.<ext> and the -<suffix>.<ext> form (the
+# Windows installer is -setup.exe). The CI publish job downloads the artifacts
+# of every build-matrix job into dist/ first, so one draft carries all
+# platforms.
+$distDirectory = Join-Path $root 'dist'
+$artifacts = @()
+if (Test-Path -LiteralPath $distDirectory) {
+    $artifacts = @(Get-ChildItem -LiteralPath $distDirectory -File | Where-Object {
+        $_.Name -notlike '*.sha256' -and (
+            $_.Name -like "SaveScummer-*-$version.*" -or
+            $_.Name -like "SaveScummer-*-$version-*.*")
+    } | Sort-Object -Property Name)
 }
-$installer = Join-Path $root ('dist/' + (Get-InstallerArtifactName -Os 'windows' -Arch 'x64' -Version $version))
-$installerExists = Test-Path -LiteralPath $installer
-if (-not $installerExists -and -not $AllowMissingInstaller) {
-    throw "Installer not found: $installer. Build it first with: ./build.ps1 release, or pass -AllowMissingInstaller for a portable-only release."
+if ($artifacts.Count -eq 0) {
+    throw "No release artifacts for version $version found in $distDirectory. Build them first with: ./build.ps1 release"
 }
-if (-not $installerExists) {
-    Write-Warning "Publishing without the installer: $installer is missing."
+$windowsArtifacts = @($artifacts | Where-Object Name -like 'SaveScummer-windows-*')
+$installers = @($artifacts | Where-Object Name -like 'SaveScummer-*-setup.*')
+if ($windowsArtifacts.Count -gt 0 -and $installers.Count -eq 0) {
+    if (-not $AllowMissingInstaller) {
+        throw "The Windows installer is missing from $distDirectory. Build it with ./build.ps1 release, or pass -AllowMissingInstaller for a portable-only release."
+    }
+    Write-Warning 'Publishing the Windows artifacts without the installer.'
 }
-$artifacts = @($archive)
-if ($installerExists) { $artifacts += $installer }
 $assets = @()
 foreach ($artifact in $artifacts) {
-    $shaFile = "$artifact.sha256"
+    $shaFile = "$($artifact.FullName).sha256"
     if (-not (Test-Path -LiteralPath $shaFile)) {
-        (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant() |
+        (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant() |
             Set-Content -LiteralPath $shaFile -Encoding ascii
     }
-    $assets += (Get-Item -LiteralPath $artifact).FullName
-    $assets += (Get-Item -LiteralPath $shaFile).FullName
+    Write-Host "Attaching $($artifact.Name)"
+    $assets += $artifact.FullName
+    $assets += $shaFile
 }
 
 # --- publish (draft-first) --------------------------------------------------
