@@ -445,6 +445,10 @@ Implemented:
   normalized to the Qt online-installer name (`msvc2019_64`) so the existing
   `build.ps1` default `-QtPrefix` matches. CI caches `.runtime/Qt` with a key
   that hashes the script. Python 3.8+ is required; runners provide it.
+- CI-discovered fix: `apps/desktop/compat/msvc-stdext.h` — Qt 6.5 headers use
+  MSVC's `stdext` array-iterator helpers, which VS 2022 17.8 deprecated and
+  later toolsets (including the runner images' VS 2026) removed. The header is
+  force-included for MSVC 19.38+ and documented in `docs/building.md`.
 
 Deviation from the outline: Qt comes from `scripts/setup-qt.ps1` instead of
 `jurplel/install-qt-action`, so one multiplatform mechanism serves CI and local

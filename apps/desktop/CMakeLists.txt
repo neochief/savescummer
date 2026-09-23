@@ -6,8 +6,8 @@ add_library(desktop-ui STATIC
 target_include_directories(desktop-ui PUBLIC src)
 target_link_libraries(desktop-ui PUBLIC Qt6::Widgets Qt6::Network Qt6::Svg)
 # Qt 6.5's qcompilerdetection.h uses MSVC's non-standard stdext array-iterator
-# helpers, which MSVC 19.38 deprecated and later toolchains removed. Swap in
-# Qt's own identity fallback before any Qt header is seen.
+# helpers, which MSVC 19.38 deprecated and later toolchains removed. Force the
+# identity fallback before any Qt header is seen (see compat/msvc-stdext.h).
 if(MSVC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.38)
     target_compile_options(desktop-ui PUBLIC
         "/FI${CMAKE_CURRENT_SOURCE_DIR}/compat/msvc-stdext.h")
