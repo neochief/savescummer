@@ -1,0 +1,89 @@
+# CI — runs on every push, pull request and manual dispatch.
+#
+# Windows is the qualified platform and must pass. The ubuntu/macos job is
+# intentionally non-blocking and measures porting progress: the Rust host and
+# CLI do not need Qt, so they can be checked before those platforms qualify.
+#
+# Qt comes from scripts/setup-qt.ps1 (aqtinstall) on every platform and is
+# cached under .runtime/Qt. The cache key hashes the script, so changing the
+# pinned Qt version or kit invalidates the cache.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust checks (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned Rust toolchain
+        shell: pwsh
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Format, lint, test and build
+        shell: pwsh
+        run: ./scripts/check.ps1
+
+  desktop:
+    name: Qt desktop (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore the cached Qt SDK
+        uses: actions/cache@v6
+        with:
+          path: .runtime/Qt
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/setup-qt.ps1') }}
+      - name: Install Qt
+        shell: pwsh
+        run: ./scripts/setup-qt.ps1
+      - name: Install the pinned Rust toolchain
+        shell: pwsh
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and test Rust + Qt
+        shell: pwsh
+        # The runner image ships Visual Studio 2022; the repository default
+        # generator (VS 2019) is not installed there.
+        run: ./build.ps1 dev -Test -Generator 'Visual Studio 17 2022'
+
+  rust-portability:
+    name: Rust checks (${{ matrix.os }}, non-blocking)
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned Rust toolchain
+        shell: pwsh
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        shell: pwsh
+        continue-on-error: true
+        run: cargo fmt --all --check
+      - name: Check
+        shell: pwsh
+        continue-on-error: true
+        run: cargo check --workspace --locked
+      - name: Test
+        shell: pwsh
+        continue-on-error: true
+        run: cargo test --workspace --locked
