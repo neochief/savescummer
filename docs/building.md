@@ -33,6 +33,9 @@ and a per-user Inno Setup installer (the primary channel); see
   (`build.ps1` falls back to the newest installed Visual Studio when VS 2019 is
   absent).
 - Qt 6.5 or newer, MSVC x64 kit, including Widgets, Network, SVG and Test.
+  Qt 6.5 headers use a non-standard MSVC iterator helper that newer toolsets
+  (VS 2022 17.8 and later) removed; `apps/desktop/compat/msvc-stdext.h` is
+  force-included automatically to switch to Qt's own fallback.
 - CMake 3.21 or newer on PATH.
 - Inno Setup 6.3 or newer for the installer (optional for a portable-only build).
 
