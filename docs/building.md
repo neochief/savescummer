@@ -29,7 +29,9 @@ and a per-user Inno Setup installer (the primary channel); see
 ## Prerequisites
 
 - Rust/rustup with the repository's pinned toolchain (`rust-toolchain.toml`).
-- Visual Studio C++ build tools and a Windows SDK. Default generator: VS 2019 x64.
+- Visual Studio C++ build tools and a Windows SDK. Default generator: VS 2019 x64
+  (`build.ps1` falls back to the newest installed Visual Studio when VS 2019 is
+  absent).
 - Qt 6.5 or newer, MSVC x64 kit, including Widgets, Network, SVG and Test.
 - CMake 3.21 or newer on PATH.
 - Inno Setup 6.3 or newer for the installer (optional for a portable-only build).
@@ -37,6 +39,9 @@ and a per-user Inno Setup installer (the primary channel); see
 This machine already has these. Scripts also find the local SDK at
 `.runtime/Qt/6.5.3/msvc2019_64` and local CMake under `.runtime/qt-tools/cmake/data/bin`.
 They do not download SDKs. Rust is also found under the user's `.cargo/bin`.
+On a fresh Windows, macOS or Linux machine, `./scripts/setup-qt.ps1` installs the
+pinned Qt SDK with aqtinstall (Python 3.8+) into `.runtime/Qt`; the build scripts
+then find it without `-QtPrefix`.
 For another installation:
 
 ```powershell
@@ -218,9 +223,42 @@ creates a draft with auto-generated notes. The installer is required by default;
 pass `-AllowMissingInstaller` to publish a portable-only release when Inno Setup
 was unavailable (a warning is printed). Review the release page and click
 **Publish** to make it public. Rebuilding and rerunning the script updates the existing draft with
-`--clobber`; an already-published release is never modified. A CI workflow later
+`--clobber`; an already-published release is never modified. The release workflow
 performs the same steps on a per-OS matrix, so the local and CI paths stay
 identical.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push, pull request and manual dispatch:
+
+- **Rust checks (Windows)** — `scripts/check.ps1` (fmt, clippy, tests, build).
+  Windows is the qualified platform; this job must pass.
+- **Qt desktop (Windows)** — builds the Rust host/CLI and the Qt desktop with
+  tests: `./build.ps1 dev -Test`. The runner image ships a newer Visual Studio,
+  so `build.ps1` picks the newest installed generator when the repository
+  default (VS 2019) is absent.
+- **Rust checks (ubuntu-latest, macos-latest), non-blocking** — `cargo fmt`,
+  `cargo check` and `cargo test` for the portable Rust crates. These measure
+  porting progress before those platforms are qualified.
+
+CI installs Qt with `scripts/setup-qt.ps1` and caches `.runtime/Qt`; the cache
+key hashes the script, so changing the pinned Qt version or kit invalidates it.
+
+`.github/workflows/release.yml` runs for a `v<version>` tag (manual dispatch
+works once the workflow is on the default branch). The Windows job runs
+`./build.ps1 release -Test` and uploads the portable ZIP and the installer; the
+publish job downloads every platform's artifacts into `dist/`, so the release
+script attaches them all to one draft:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Review the draft and click **Publish**; nothing is published automatically.
+Dispatching the workflow with an empty tag builds the artifacts without
+touching a release. macOS and Linux build jobs join the same draft as those
+platforms qualify; code signing and notarization are still open.
 
 ## Development data
 
@@ -273,5 +311,7 @@ configuration unless overridden. `scripts/package-windows.ps1` deploys
 already-built files; it does not compile them. `scripts/build-installer.ps1`
 compiles the Inno Setup definition from a staged release payload.
 `scripts/build-explorer.ps1` builds and COM-tests the Explorer extension.
+`scripts/setup-qt.ps1` installs the pinned Qt SDK on Windows, macOS and Linux
+and is a no-op when that kit is already present.
 Prefer root `build.ps1` to avoid mixing profiles or accidentally using an older
 host during active Rust development.

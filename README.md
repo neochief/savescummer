@@ -1,5 +1,7 @@
 # SaveScummer
 
+[![CI](https://github.com/neochief/savescummer/actions/workflows/ci.yml/badge.svg)](https://github.com/neochief/savescummer/actions/workflows/ci.yml)
+
 SaveScummer helps you save and restore progress in games where that isn't possible by design. It helps you learn difficult games faster and spend less time replaying what you already know. Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments, experiment, fail, learn, and keep going.
 
 If your time is limited, it helps you reach interesting stories, builds, and decisions without losing hours of progress before you got gud.
@@ -44,6 +46,11 @@ together. Its application executables are `SaveScummer.exe`,
 [the build guide](docs/building.md) for prerequisites, profiles, development data,
 timings, lower-level commands and installer details.
 
+Every push and pull request runs the same checks in CI
+(`.github/workflows/ci.yml`). Tagging `v<version>` builds and packages the
+release and creates a draft GitHub release for review
+([details](docs/building.md#continuous-integration)).
+
 Install Rust with rustup and the Visual Studio C++ build tools. The repository pins
 the toolchain in `rust-toolchain.toml`; SQLite is built from its bundled source.
 
@@ -65,7 +72,8 @@ not a skipped recovery scenario.
 ## Qt desktop
 
 Install Qt 6.5 or newer (Widgets, Network, SVG and Test), CMake 3.21 or newer,
-and a compatible C++ compiler. On Windows with the local Qt 6.5.3 SDK and VS 2019:
+and a compatible C++ compiler — or run `./scripts/setup-qt.ps1` to install the
+pinned SDK on Windows, macOS or Linux. On Windows with the local Qt 6.5.3 SDK and VS 2019:
 
 ```powershell
 ./build.ps1 dev -Run -Demo

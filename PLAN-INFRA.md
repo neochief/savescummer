@@ -1,7 +1,7 @@
 # PLAN-INFRA.md — Build, Distribution, and Release Infrastructure
 
-Status: **Phase A complete; Phase B implemented** (Windows 1.0 per-user installer + distribution)
-Last reviewed: 2026-09-22
+Status: **Phase A complete; Phase B implemented; Phase C implemented** (CI + draft release workflow)
+Last reviewed: 2026-09-23
 
 This document is the handoff plan for reorganizing the **dev/build/release
 infrastructure** of SaveScummer. It is a *plan*, not an implementation. A fresh
@@ -421,35 +421,38 @@ New/changed files: `packaging/windows/installer/savescummer.iss`,
   installed host must keep the default data directory.
 - Releases are unsigned; SmartScreen may warn.
 
-## 7. Phase C — CI + cross-platform (not this task)
+## 7. Phase C — CI + cross-platform (implemented 2026-09-23)
 
-Outline only.
-- `.github/workflows/ci.yml` (every push/PR): **build matrix** on
-  `windows-latest` (and later `ubuntu-latest` / `macos-latest`).
-  `scripts/check.ps1` equivalent for the Rust + Qt workspace —
-  `rust-toolchain.toml` pins the toolchain; Qt via `jurplel/install-qt-action`
-  (pinned version) which supports all three OSes; per-OS cargo/Qt caching.
-  Host+CLI need no Qt, so a **non-blocking** `cargo check`/test job on
-  ubuntu/macos measures porting progress before those platforms are qualified.
-  **Non-Windows builds are CI-first**: `build.ps1`'s Windows-specific logic
-  (vswhere, registry, process handling, VC redist, Qt deploy) stays where it
-  is, and other platforms get thin wrappers or direct Cargo/CMake steps rather
-  than a shared orchestration layer (see Risks).
-- `.github/workflows/release.yml` (on `v*` tags + manual `workflow_dispatch`):
-  same matrix; each OS job runs `build.ps1 release -Test` (Windows) or its
-  platform equivalent, then stages per OS into `dist/` using the shared
-  packaging core (D11) with D10 filenames. One job aggregates all
-  `dist/SaveScummer-<os>-<arch>-<ver>.<ext>` artifacts into a **single draft
-  release** via the same publish steps as `scripts/release-github.ps1`
-  (draft-first, `--generate-notes`); all assets from every platform attach to
-  that one release.
-- `scripts/setup-*.ps1` bootstrap per platform (pinned Qt via aqtinstall into
-  `.runtime/`, prerequisite check) — makes fresh machines/CI self-serve.
-- macOS: `.tar.gz` (and later `.dmg`), code signing + notarization need an
-  Apple Developer ID as a **repo secret** (CodeSign/Notarization keys);
-  unsigned-but-notarized or signed variants are a later decision.
-- Linux: `.tar.gz` (AppImage optional later), branding/icon via Qt; packaging
-  stays portable until code qualifies.
+Implemented:
+
+- `.github/workflows/ci.yml` (every push, pull request and manual dispatch):
+  - **Rust checks (Windows)** — `scripts/check.ps1`; required.
+  - **Qt desktop (Windows)** — `./build.ps1 dev -Test -Generator 'Visual Studio
+    17 2022'` (runner images ship VS 2022, not the repository default VS 2019).
+  - **Rust checks (ubuntu-latest, macos-latest)** — non-blocking
+    `cargo fmt`/`check`/`test`, measuring porting progress before those
+    platforms qualify.
+- `.github/workflows/release.yml` (`v*` tag + manual dispatch): the Windows job
+  runs `./build.ps1 release -Test`, installs Inno Setup with Chocolatey and
+  uploads the OS/arch-tagged ZIP and installer; one publish job downloads every
+  platform's artifacts into `dist/` and calls `scripts/release-github.ps1`
+  (draft-first), so local and CI publishing share one implementation.
+  Dispatching with an empty tag builds artifacts without touching a release;
+  the manual dispatch button appears once the workflow is on the default branch.
+- `scripts/setup-qt.ps1` — one Qt bootstrap for Windows, macOS and Linux:
+  aqtinstall into a virtualenv under `.runtime/qt-tools/venv`, output in
+  `.runtime/Qt/<version>/<kit>`, idempotent. Windows kit directories are
+  normalized to the Qt online-installer name (`msvc2019_64`) so the existing
+  `build.ps1` default `-QtPrefix` matches. CI caches `.runtime/Qt` with a key
+  that hashes the script. Python 3.8+ is required; runners provide it.
+
+Deviation from the outline: Qt comes from `scripts/setup-qt.ps1` instead of
+`jurplel/install-qt-action`, so one multiplatform mechanism serves CI and local
+machines and no third-party action is added.
+
+Still open (later platform qualification): macOS/Linux desktop jobs and their
+`.tar.gz`/`.dmg` packaging, code signing and notarization secrets
+(repo secrets), and the native Linux/macOS adapters themselves.
 
 ---
 
