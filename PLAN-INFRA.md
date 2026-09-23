@@ -435,13 +435,11 @@ Implemented:
   - **Rust checks (ubuntu-latest, macos-latest)** — non-blocking
     `cargo fmt`/`check`/`test`, measuring porting progress before those
     platforms qualify.
-- `.github/workflows/release.yml` (`v*` tag + manual dispatch): the Windows job
-  runs `./build.ps1 release -Test`, installs Inno Setup with Chocolatey and
-  uploads the OS/arch-tagged ZIP and installer; one publish job downloads every
+- `.github/workflows/release.yml` (`v*` tags): the Windows job runs
+  `./build.ps1 release -Test`, installs Inno Setup with Chocolatey and uploads
+  the OS/arch-tagged ZIP and installer; one publish job downloads every
   platform's artifacts into `dist/` and calls `scripts/release-github.ps1`
   (draft-first), so local and CI publishing share one implementation.
-  Dispatching with an empty tag builds artifacts without touching a release;
-  the manual dispatch button appears once the workflow is on the default branch.
 - Release assets are installer-only by default: `scripts/release-github.ps1`
   attaches the installer, with `-IncludePortable` and `-IncludeChecksums`
   opt-ins (the portable archive is still built and kept as a workflow artifact).

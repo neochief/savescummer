@@ -270,8 +270,7 @@ installer explicitly, users are less likely to download those archives instead.
 CI installs Qt with `scripts/setup-qt.ps1` and caches `.runtime/Qt`; the cache
 key hashes the script, so changing the pinned Qt version or kit invalidates it.
 
-`.github/workflows/release.yml` runs for a `v<version>` tag (manual dispatch
-works once the workflow is on the default branch). The Windows job runs
+`.github/workflows/release.yml` runs for a `v<version>` tag. The Windows job runs
 `./build.ps1 release -Test` and uploads the portable ZIP and the installer; the
 publish job downloads every platform's artifacts into `dist/`, so the release
 script attaches them all to one draft:
@@ -281,9 +280,9 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Review the draft and click **Publish**; nothing is published automatically.
-Dispatching the workflow with an empty tag builds the artifacts without
-touching a release. macOS and Linux build jobs join the same draft as those
+Review the draft and click **Publish**; nothing is published automatically. A
+failed run is retried with GitHub's **Re-run** button; changed content means
+releasing a new version. macOS and Linux build jobs join the same draft as those
 platforms qualify; code signing and notarization are still open.
 
 ## Development data

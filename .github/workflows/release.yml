@@ -10,15 +10,11 @@
 # of them into dist/ and attaches them to the one draft.
 name: Release
 
+# Starting a release is a tag: `git push origin v<version>`. A failed run is
+# retried with GitHub's Re-run button; changed content means a new version.
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing v<version> tag to build and publish. Leave empty to build artifacts without publishing.'
-        required: false
-        default: ''
 
 concurrency:
   group: release-${{ github.ref }}
@@ -32,7 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - name: Restore the cached Qt SDK
         uses: actions/cache@v6
@@ -64,7 +59,6 @@ jobs:
   publish:
     name: Draft release
     needs: windows
-    if: github.event_name == 'push' || inputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -72,7 +66,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - name: Fetch the release tag
         run: git fetch --tags --force
