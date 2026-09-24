@@ -16,6 +16,12 @@ Every decision here is final. There are no open questions: where a choice
 had alternatives, the alternative was weighed and the choice is written
 down with its reason.
 
+Windows is the platform that should already work. macOS and Linux are
+planned but not implemented yet. Even so, every piece of the
+infrastructure is built with them in mind: shared code stays
+platform-neutral, platform logic goes in its own module, and nothing
+assumes Windows paths, tools or file names.
+
 Build order when implementing: the shared foundations (§1–§4), then Windows
 (§5) end to end, then macOS (§6) and Linux (§7). CI (§8) grows a job per
 platform as it lands. The work is done when all three acceptance checklists
@@ -28,24 +34,49 @@ change with it.
 
 ## 1. The system at a glance
 
-SaveScummer is three cooperating executables plus, on Windows, a shell
-extension. Their names are part of the application contract and never
-change (Windows adds `.exe`):
+SaveScummer is three cooperating programs plus, on Windows, a shell
+extension:
 
-| Executable | What it is |
+| Component | What it is |
 |---|---|
-| `SaveScummer` | C++/Qt 6 desktop client |
-| `SaveScummer.Host` | Rust background host (SQLite, monitoring, operations) |
-| `SaveScummer.CLI` | Rust command-line client |
-| `savescummer-explorer.dll` | Windows Explorer context-menu extension (Windows only) |
+| Desktop | C++/Qt 6 desktop client |
+| Host | Rust background host (SQLite, monitoring, operations) |
+| CLI | Rust command-line client |
+| Explorer extension | Windows Explorer context-menu handler (Windows only) |
 
-It ships on three platforms, one release file each:
+How they're packaged differs per platform. One release file each, and what
+the user actually ends up with:
 
-| Platform | Release file | Made with |
-|---|---|---|
-| Windows 10/11 x64 | `SaveScummer-windows-x64-<ver>-setup.exe` | Inno Setup |
-| macOS 13+ Apple Silicon | `SaveScummer-macos-arm64-<ver>.dmg` | `hdiutil` |
-| Linux x86_64 (glibc ≥ 2.35) | `SaveScummer-linux-x86_64-<ver>.AppImage` | `linuxdeploy` + `appimagetool` |
+**Windows 10/11 x64**
+- Release file: `SaveScummer-windows-x64-<ver>-setup.exe`, made with Inno Setup.
+- Installs a folder, `%LOCALAPPDATA%\Programs\SaveScummer\`, containing:
+  - `bin\SaveScummer.exe` — desktop
+  - `bin\SaveScummer.Host.exe` — host
+  - `bin\SaveScummer.CLI.exe` — CLI
+  - `bin\savescummer-explorer.dll` — Explorer extension
+
+**macOS 13+ Apple Silicon**
+- Release file: `SaveScummer-macos-arm64-<ver>.dmg`, made with `hdiutil`.
+- The user drags `SaveScummer.app` to Applications. Inside the bundle:
+  - `Contents/MacOS/SaveScummer` — desktop
+  - `Contents/MacOS/SaveScummer.Host` — host
+  - `Contents/MacOS/SaveScummer.CLI` — CLI
+- No Explorer-extension equivalent.
+
+**Linux x86_64 (glibc ≥ 2.35)**
+- Release file: `SaveScummer-linux-x86_64-<ver>.AppImage`, made with
+  `linuxdeploy` + `appimagetool`.
+- That single file *is* the install; it acts as all three programs:
+  - `<file>.AppImage` — desktop
+  - `<file>.AppImage host …` — host
+  - `<file>.AppImage cli …` — CLI
+- No Explorer-extension equivalent.
+
+The executable names are the build's contract: the Cargo and CMake targets
+always produce `SaveScummer`, `SaveScummer.Host`, and `SaveScummer.CLI`
+(plus `.exe` on Windows). Each platform chapter (§5–§7) owns how they're
+laid out and reached; on Linux the AppImage's `AppRun` dispatches to them
+(§7.2).
 
 All build, package, and release automation is **one Rust program**,
 `cargo xtask`, living in the workspace. It runs the same on every OS and
@@ -70,8 +101,9 @@ calls out to CMake, Qt's deploy tools, and each platform's packaging tool.
 
 ### The rules that don't bend
 
-1. **Canonical names are fixed.** The executables above keep their exact
-   names everywhere.
+1. **Executable names are fixed.** The build always produces
+   `SaveScummer`, `SaveScummer.Host`, and `SaveScummer.CLI`; platforms
+   change how they're packaged, never what they're called.
 2. **One version source.** `Cargo.toml` → `[workspace.package] version`.
    Everything reads it; the git tag must equal `v<version>`.
 3. **Draft-first, always.** Tooling may create or update a *draft* release;
@@ -275,9 +307,14 @@ Clang from Xcode 15+ on macOS, GCC 11+ on Linux. **CMake** ≥ 3.21 from
 PATH (Visual Studio, Xcode's command-line tools, or the distro provide it).
 
 **Platform tools**, each installed only by its explicit setup command:
-Inno Setup 6 (`setup inno`, via winget), linuxdeploy with its Qt plugin and
-appimagetool (`setup linux-tools`, pinned release + SHA-256, into
-`.runtime/tools/`), and cargo-about (`setup cargo-about`, pinned version).
+Inno Setup 6 (`setup inno`: the pinned installer from jrsoftware.org,
+verified by SHA-256, installed silently per-user into
+`.runtime/tools/inno-setup/`; no winget or Chocolatey, which aren't
+reliably present on CI runners and don't pin versions), linuxdeploy with
+its Qt plugin and appimagetool (`setup linux-tools`, pinned release +
+SHA-256, into `.runtime/tools/`), and cargo-about (`setup cargo-about`,
+pinned version). xtask uses the tools from `.runtime/tools/`, so developers
+and CI run the same versions.
 
 ### The quality gate — `cargo xtask check`
 
@@ -559,8 +596,8 @@ qt` (Linux also `setup linux-tools`), `cargo xtask check`,
 
 **`release.yml`** — `v*` tags only, with a concurrency group that never
 cancels. One build job per platform: checkout with full history, caches,
-setup commands (Windows `choco install innosetup`; all
-`setup cargo-about`), `cargo xtask dist`, upload the one file from `dist/`
+setup commands (all `setup qt` and `setup cargo-about`; Windows also
+`setup inno`, Linux also `setup linux-tools`), `cargo xtask dist`, upload the one file from `dist/`
 (`if-no-files-found: error`). Then one **publish** job (`needs:` all three,
 `contents: write`) downloads all three files into `dist/`, fetches the tag,
 and runs `cargo xtask publish` with `GH_TOKEN`: one draft release carrying
