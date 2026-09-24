@@ -158,7 +158,11 @@ Used fields:
 1. Keys must start with `<base>/` (all manifest entries do); strip it.
 2. `when.os` selects the OS bucket; absent `os` means every OS.
 3. `bit` and `store` are ignored; multiple entries per OS are kept.
-4. `.app` bundles are kept as-is (runtime resolves the process); `.sh`
+4. Drop entries that can't be a program, such as documents (Total War: Shogun 2
+   lists `data/encyclopedia/how_to_play.html`). Why: executables decide which
+   build is installed (4.3), and a file every build ships would make every
+   install look like that build.
+5. `.app` bundles are kept as-is (runtime resolves the process); `.sh`
    launchers are kept for install validation but never used for monitoring.
 
 Loose installs (for stores without an ID, mainly Epic and standalone):
@@ -304,47 +308,91 @@ Each detected install becomes its own game record:
 
 ### 4.3 Candidate filtering and resolution
 
-For one install, with platform = runtime OS, store = discovery source:
+For one install, with platform = the game build being run (not the runtime OS),
+store = discovery source. Why: `when.os` in the manifest describes the build a
+path belongs to. A Windows build running through Proton on Linux writes exactly
+where it would on Windows, so it has platform `windows`; with the runtime OS it
+would match the native Linux rows instead.
 
-1. Keep candidates where `when.os` is absent or equals the platform, and
-   `when.store` is absent or equals the store.
-2. Resolve placeholders to concrete paths (4.4).
-3. Apply the sticky ladder (4.5).
+1. Decide the possible builds (below).
+2. For each possible build, keep candidates where `when.os` is absent or equals
+   that build, and `when.store` is absent or equals the store.
+3. Resolve placeholders to concrete paths for that build (4.4).
+4. Apply the sticky ladder (4.5) once, over the candidates of all possible
+   builds together.
+
+**Which build an install runs.** Only Linux has a choice: a Steam game there
+can be the native Linux build or the Windows build through Proton. Windows
+installs are always the Windows build, macOS installs the macOS build (no Wine
+support in v1). On Linux the resolver decides from the game's own files:
+
+- Check which of the catalog's per-OS executables exist in the install dir.
+  Only one build's executables exist → that build. Why: Steam installs one
+  build's files at a time and swaps them when the user switches, so the files
+  on disk say what will run. Caves of Qud with only `CoQ.exe` is the Windows
+  build; with only `CoQ.x86_64` it is the Linux build.
+- The files can't tell when both builds' executables exist, the catalog lists
+  executables for one build or none (Europa Universalis IV, Stellaris), or both
+  builds list the same file (Vampire Survivors). Then **both builds are
+  possible**: the ladder sees both candidate sets and existing saves decide.
+  Why: guessing picks the wrong folder for roughly one in ten affected games.
+- The Proton prefix is always `<library>/steamapps/compatdata/<appid>/pfx`,
+  computed whether or not it exists. Its existence is never evidence of a
+  build. Why: it doesn't exist on a fresh install before the first launch, and
+  it stays behind after the user switches back to the native build.
+- An install with two possible builds is still **one install and one game
+  record**, never two (4.2 splits records per install, not per build). Its
+  executables are both builds' executables, so the monitor recognizes whichever
+  one runs.
 
 If filtering leaves no candidate, the game has no save dir for that install and
 is reported as unsupported (no operations).
 
 ### 4.4 Placeholders and Proton
 
-Template placeholders (bundle → resolved):
+Template placeholders (bundle → resolved), by the build being run. `—` means
+the placeholder does not resolve for that build and the candidate is dropped.
 
-| Bundle | Windows | macOS | Linux |
-|---|---|---|---|
-| `{INSTALL_DIR}` | install dir | install dir | install dir |
-| `{APPDATA}` | `%APPDATA%` | — | Proton prefix |
-| `{LOCALAPPDATA}` | `%LOCALAPPDATA%` | — | Proton prefix |
-| `{LOCALLOW}` | `%LOCALAPPDATA%Low` | — | Proton prefix |
-| `{DOCUMENTS}` | Documents | — | Proton prefix |
-| `{PUBLIC}` | `%PUBLIC%` | — | Proton prefix |
-| `{PROGRAMDATA}` | `%PROGRAMDATA%` | — | Proton prefix |
-| `{PROGRAMFILES}` | Program Files | — | — |
-| `{HOME}` | profile | home | home |
-| `{XDG_DATA_HOME}` | — | — | XDG data home |
-| `{XDG_CONFIG_HOME}` | — | — | XDG config home |
-| `{STORE_USER_ID}` | current Steam id | same | same |
-| `{STEAM_USERDATA}` | `<root>/userdata/<current steam user>` | same | same |
+| Bundle | Windows build | Windows build via Proton | macOS build | Linux build |
+|---|---|---|---|---|
+| `{INSTALL_DIR}` | install dir | install dir | install dir | install dir |
+| `{HOME}` | user profile | prefix profile | home | home |
+| `{APPDATA}` | `%APPDATA%` | prefix | — | — |
+| `{LOCALAPPDATA}` | `%LOCALAPPDATA%` | prefix | — | — |
+| `{LOCALLOW}` | `%LOCALAPPDATA%Low` | prefix | — | — |
+| `{DOCUMENTS}` | Documents | prefix | — | — |
+| `{PUBLIC}` | `%PUBLIC%` | prefix | — | — |
+| `{PROGRAMDATA}` | `%PROGRAMDATA%` | prefix | — | — |
+| `{PROGRAMFILES}` | Program Files | prefix | — | — |
+| `{WINDIR}` | Windows folder | prefix | — | — |
+| `{XDG_DATA_HOME}` | — | — | — | XDG data home |
+| `{XDG_CONFIG_HOME}` | — | — | — | XDG config home |
+| `{STORE_USER_ID}` | current Steam id | same | same | same |
+| `{STEAM_USERDATA}` | `<root>/userdata/<current steam user>` | same | same | same |
 
-Proton (Steam, Linux, Windows build): `os: windows` candidates apply when the
-install is a Proton install (compatdata prefix exists and no native build is in
-use). Windows placeholders resolve inside the prefix:
+Proton (Steam, Linux, Windows build): the game is the Windows build, so
+`os: windows` candidates apply when the install is a Proton install (compatdata
+prefix exists and no native build is in use). The prefix is a private Windows
+drive at `<library>/steamapps/compatdata/<appid>/pfx`; every Windows location,
+including the user's home, resolves inside it:
 
 ```
+{HOME}         → <pfx>/drive_c/users/steamuser
 {APPDATA}      → <pfx>/drive_c/users/steamuser/AppData/Roaming
 {LOCALAPPDATA} → <pfx>/drive_c/users/steamuser/AppData/Local
 {LOCALLOW}     → <pfx>/drive_c/users/steamuser/AppData/LocalLow
 {DOCUMENTS}    → <pfx>/drive_c/users/steamuser/Documents
+{PUBLIC}       → <pfx>/drive_c/users/Public
+{PROGRAMDATA}  → <pfx>/drive_c/ProgramData
+{PROGRAMFILES} → <pfx>/drive_c/Program Files
+{WINDIR}       → <pfx>/drive_c/windows
 {INSTALL_DIR}  → unchanged (the Windows install dir)
 ```
+
+`{HOME}` matters as much as the AppData folders: manifest rows often spell
+Windows locations from the profile (Caves of Qud:
+`<home>/AppData/LocalLow/Freehold Games/CavesOfQud/Saves`). Resolving it to the
+Linux home would point Proton saves at `~/AppData/...`, which never exists.
 
 `steamuser` is the default profile name; if the prefix contains exactly one
 other `drive_c/users/*` profile, that one is used instead. The bundle contains
@@ -368,13 +416,26 @@ Run on first detection, then keep the result while the chosen directory exists:
 3. Tie-break by exact save-directory name (`save`, `saves`, `savegame`,
    `savegames`, `saved games`, `save data`).
 4. Fresh install, nothing exists → exact-name rule first, then first candidate.
+   This pick is **provisional**: every scan runs the ladder again until some
+   candidate exists, and only then does the pick stick. Why: with no saves yet
+   the choice is a guess (native or Proton folder, old or new layout); nothing
+   is lost by revising it, because there can be no checkpoints before the
+   first save.
 5. If one candidate is an ancestor of the others and sits at least one named
    segment below a known-folder/install root (never a bare `%APPDATA%`, install
    dir or volume root), it may stand in for the whole set.
 6. Ambiguity never blocks the game. The chosen DIR is persisted as the game's
    `data_dir`; checkpoints are bound to it. Later scans do not re-rank while it
-   exists; if it disappears, the ladder runs again. Configure lets the user
-   override at any time.
+   exists and is still one of the install's candidates; otherwise the ladder
+   runs again. Configure lets the user override at any time.
+7. **A build switch counts as the pick disappearing.** When the files show the
+   install changed build (native → Proton or back), candidates of the old build
+   are no longer the install's candidates, so a pick among them is dropped even
+   though its folder still exists, and the ladder runs again. Why: the old
+   folder usually survives the switch, and keeping it would back up and restore
+   a folder the game no longer uses. Old checkpoints stay bound to the old
+   folder and become usable again if the user switches back (PLAN-HOST.md,
+   vanished DIR).
 
 ## 5. Cases
 
@@ -396,18 +457,39 @@ Run on first detection, then keep the result while the chosen directory exists:
    sets map to it.
 9. **Same store twice** (two Steam libraries): install identity splits records;
    the first keeps `steam-<id>`, the second `steam-<id>#<identity>`.
-10. **Linux native**: linux candidates and XDG placeholders.
-11. **Linux + Proton**: windows candidates translated into the compatdata prefix;
+10. **Linux native** (Caves of Qud, only `CoQ.x86_64` present): Linux build;
+    linux candidates and XDG placeholders
+    (`{XDG_CONFIG_HOME}/unity3d/Freehold Games/CavesOfQud/Saves`).
+11. **Linux + Proton** (Caves of Qud, only `CoQ.exe` present): Windows build;
+    windows candidates translated into the compatdata prefix, `{HOME}` included
+    (`<pfx>/drive_c/users/steamuser/AppData/LocalLow/Freehold Games/CavesOfQud/Saves`);
     same bundle entry as Windows.
-12. **Native and Windows builds both shipped**: native install → linux
-    candidates; Proton install → translated windows candidates.
-13. **Fresh install, no save dir yet**: name rule / first candidate; sticky;
-    when the game writes its first save, the pick is already stable.
-14. **Saves only in Steam userdata** (Risk of Rain 2): `{STEAM_USERDATA}`
+12. **Proton before the first launch** (only `CoQ.exe`, no prefix yet): still
+    the Windows build; the prefix path is computed anyway; the pick is
+    provisional until a folder exists.
+13. **Stale prefix** (only `CoQ.x86_64` present, a prefix left from an earlier
+    Proton run): Linux build; the prefix is ignored.
+14. **Files can't tell the build** (Europa Universalis IV has no executables;
+    Vampire Survivors lists the same `.exe` for both; both builds' files
+    present): both candidate sets go to one ladder; the folder with saves wins;
+    one game record whose executables cover both builds.
+15. **Build switch, both folders exist** (played natively, then forced Proton):
+    the files now show the Windows build; the Linux pick is dropped although
+    its folder exists; the ladder picks the prefix folder. Old checkpoints stay
+    bound to the Linux folder.
+16. **Switching back** (Proton → native again): the Linux folder is picked
+    again and its old checkpoints are usable, with the same IDs and history.
+17. **Both folders hold the same saves** (Steam Cloud synced them across
+    builds, files can't tell the build): newest activity picks; sticky
+    prevents flip-flopping on later scans.
+18. **Fresh install, no save dir yet**: name rule / first candidate,
+    provisional; each scan re-runs the ladder until a candidate exists, then the
+    pick sticks.
+19. **Saves only in Steam userdata** (Risk of Rain 2): `{STEAM_USERDATA}`
     candidate resolves and participates in the ladder normally.
-15. **Upstream rename**: store-id identity keeps the same `id`, so history and
+20. **Upstream rename**: store-id identity keeps the same `id`, so history and
     overrides survive.
-16. **Addendum game lands upstream** (Void War): manifest data wins, warning is
+21. **Addendum game lands upstream** (Void War): manifest data wins, warning is
     emitted, `games.csv` `Info` still applied.
 
 ## 6. Bundle delivery and updates
@@ -455,6 +537,7 @@ tests never touch a real filesystem.
 ```rust
 pub trait Probe {
     fn is_dir(&self, path: &Path) -> bool;
+    fn is_file(&self, path: &Path) -> bool;   // which build's executables exist
     fn install_identity(&self, install_dir: &Path) -> Option<String>;
     /// Newest modification among files matching `globs`, or all files when empty.
     fn newest_activity(&self, dir: &Path, globs: &[String]) -> Option<u64>;
@@ -463,9 +546,10 @@ pub trait Probe {
 pub struct Install {                    // produced by the scanner, passed in
     pub catalog_id: Id,
     pub store: Store,                   // steam | gog | epic | standalone
-    pub platform: Platform,             // windows | macos | linux
+    pub os: Platform,                   // the machine: windows | macos | linux
     pub install_dir: PathBuf,
-    pub executables: Vec<PathBuf>,
+    /// Where a Proton prefix for this install lives (Steam on Linux), whether
+    /// or not it exists yet. The resolver decides the build, not the scanner.
     pub proton_prefix: Option<PathBuf>,
 }
 
@@ -494,12 +578,30 @@ pub fn assign_games(decisions: &[Decision]) -> Vec<GameRecord>;
   `gog-...`). `candidates` exists for diagnostics (logs and the CLI); it is
   never a blocking prompt.
 - Stickiness is explicit: the host passes the persisted `current_pick`;
-  `resolve` keeps it while it exists and re-runs the ladder otherwise.
+  `resolve` keeps it while it exists and is still a candidate of the install's
+  possible builds, and re-runs the ladder otherwise.
+- The build decision (4.3) lives here, not in the scanner, because it reads
+  catalog data (per-OS executables). The scanner only reports where the install
+  and its would-be prefix are. `Chosen` carries the executables of every
+  possible build, for the monitor.
 
-Tests: in-memory `Probe` maps cover every Section 5 case — single and multiple
-candidates, activity ordering, sticky retention and re-resolution after
-deletion, ancestor guard, store filtering, Proton translation, `{STEAM_USERDATA}`
-resolution, install merge/split, unsupported games, rename stability.
+Tests: in-memory `Probe` maps, **one named test per Section 5 case**, so a
+missing case is visible in the test list. Beyond the cases:
+
+- single and multiple candidates, activity ordering, sticky retention and
+  re-resolution after deletion, ancestor guard, store filtering, unsupported
+  games, rename stability;
+- placeholders per build: every row of the 4.4 table, including `{HOME}` inside
+  a Proton prefix and Windows placeholders dropped for a Linux build;
+- build decision: only Windows files, only Linux files, both, none in the
+  catalog, the same file listed for both, a missing or stale prefix; Windows
+  and macOS installs never consider another build;
+- provisional picks: a non-existent pick is revised on the next scan and sticks
+  once its folder exists;
+- build switches: native → Proton → native with both folders present returns
+  to the original folder;
+- one record per install even with two possible builds, with both builds'
+  executables.
 
 ### 7.3 Host wiring (not a third testable unit)
 
@@ -532,6 +634,9 @@ temporary directories, never real game libraries or the network.
 | Multi-target pick | sticky ladder: existence → newest activity → name → ancestor |
 | New/legacy marking | none in manifest; runtime recency decides |
 | Installs | one game record per install; merge on identical save DIR |
+| Build on Linux | the install's executables decide; undecided → both builds' candidates, one ladder; prefix existence is never evidence |
+| Fresh-install pick | provisional until a candidate exists |
+| Build switch | drops the old build's pick even if its folder exists |
 | Ambiguity UX | auto-pick silently; Configure as correction; never block |
 | Steam userdata saves | resolved via current Steam user; included as candidates |
 | Untagged file entries | included as candidates |

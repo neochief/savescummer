@@ -205,6 +205,10 @@ Cards trade some density for recognition: about eight fit in a default-height wi
 
   The count includes only *newly* found known games, with the singular form for one game. Scan and Add custom game behave the same in the zero-games layout, so users learn them once.
 
+  The button is a fallback, not the normal way games appear. The host also scans in the background: when the window is shown or focused, when a store reports an install, and periodically (PLAN-HOST.md, Known games and scanning). The window reports being shown or focused to the host with its focus report; the host decides whether a scan is due.
+
+  Background scans are **silent**: the button keeps its idle state, and newly found games simply appear in their group. Only a scan the user started drives the `Scanning…` and result states. Why: focus scans happen on nearly every alt-tab, and a button that flickers `Scanning… → No new games` each time is noise. If the user presses the button while a background scan is running, the button shows `Scanning…` until the scan they asked for finishes, and counts games found since they pressed.
+
 
 ## GAME HEADER AND ACTIONS
 
@@ -595,7 +599,7 @@ UI tests run against a fake service that can simulate being busy, failing, missi
     - external focus moves a game up and selects it;
     - a manual selection is kept when games start or close;
     - the fallback when the active game closes.
-- **Scan:** the zero, singular and plural messages, counting only newly found known games.
+- **Scan:** the zero, singular and plural messages, counting only newly found known games; background scans leave the button idle while their games appear; pressing Scan during a background scan shows `Scanning…` until the requested scan finishes; showing or focusing the window sends the focus report.
 - **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Manual copies count as ordinary checkpoints for Load, and show the `Folder last changed` tooltip on their time.
 - **History rows:** spinner and success states on the Load and Revert buttons, and Reverted rows that can themselves be reverted and deleted.
 - **Labels:**

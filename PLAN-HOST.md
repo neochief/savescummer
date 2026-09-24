@@ -107,7 +107,40 @@ Finding known games belongs to the catalog module: which stores to read, how ins
 - It passes back the previously chosen DIR so the catalog's choice stays sticky.
 - It never adds its own rules on top. A game that needs a different rule is a catalog change.
 
-Scans run when the host starts, every 15 minutes (including with no UI), when the user presses Scan games, and when a new catalog bundle arrives. Only one scan runs at a time; a request during a scan joins it instead of starting another. Scan state and its result (how many known games are *newly* found) are published so every client shows the same thing.
+A game the user just installed should be in the library the next time they look, without pressing anything. Why: the host usually runs in the tray from login, so a scan only at host start misses everything installed afterwards.
+
+There are two kinds of scan, because they cost very different amounts:
+
+- **Install scan:** read the store records (Steam libraries and app manifests, the GOG and uninstall registry, Epic manifests), check executables, and run the catalog resolver. It costs tens of milliseconds and grows with the number of libraries, not the catalog size: each Steam `steamapps` folder is listed once and catalog games are looked up by ID, never one file check per catalog game. It is safe to run often.
+- **Full scan:** an install scan plus re-checking every checkpoint on disk (see CHECKPOINTS AND HISTORY). The checkpoint part opens every file of every checkpoint, so it grows with history and runs only when needed.
+
+Triggers:
+
+| Trigger | Scan |
+|---|---|
+| Host start | full |
+| The user presses Scan games | full |
+| A new catalog bundle arrives | full |
+| Every 15 minutes, including with no UI | full |
+| The desktop window is shown or gains focus (from the UI's focus report), at most once per 20 seconds | install |
+| A watched store location changes, 2 seconds after the last change | install |
+
+Why focus: it is the moment the user looks, and the cooldown means alt-tabbing never causes repeated scans. Why watching as well: with the window already open while Steam finishes a download, focus never fires; and in SteamOS Game Mode our window never gets focus at all, so watching and the periodic scan are the only triggers there.
+
+**Watched locations** are few and fixed: each Steam library's `steamapps` folder (not recursive: app manifests are created when an install starts and rewritten when it completes), the main Steam `libraryfolders.vdf` (a library added or removed changes the watch list), the Epic manifests folder, Heroic's install lists on Linux, and on Windows the uninstall registry keys (both views, machine and user) and the GOG games key. Unrelated changes there (a Windows update, another app's installer) only cause a cheap scan that finds nothing. Loose install folders (Epic without manifests, standalone candidates) can't be watched; focus and periodic scans cover them.
+
+Per platform:
+
+- **Windows:** folder change notifications and registry change notifications. A folder watch keeps the folder open, which would stop the user from safely removing a USB drive holding a Steam library, so the host releases a drive's watches when Windows asks to remove it and watches again when the drive returns.
+- **macOS:** FSEvents; it holds nothing open, so ejecting is never blocked. The first access to a removable or network volume, or to Documents, makes macOS ask the user for permission. The first scan to touch such a location must follow a user action (first run, Scan games), never a silent background scan. Why: a permission dialog out of nowhere looks like the app is snooping.
+- **Linux / SteamOS:** inotify; a watch is dropped automatically on unmount. New mounts (a Steam Deck SD card under `/run/media`) are watched for so their libraries are picked up.
+- **Everywhere:** network drives don't reliably report changes, and the OS may drop events under load and only say "something changed". Both are answered with a scan; focus and periodic scans remain the safety net.
+
+How scans run:
+
+- On their own background worker. A scan never holds up requests and never pauses game monitoring. Why: a library on a sleeping hard disk takes seconds to spin up, and an offline network share can hang for 20 seconds or more; neither may delay a Save hotkey or a game-start marker.
+- Only one scan runs at a time; a request during a scan joins it and gets that scan's result, instead of starting another or returning early. A full scan requested during an install scan runs right after it.
+- Scan state is published with its origin: a user-requested scan, or a background one. Only a user-requested scan's state and result (how many known games are *newly* found) are shown in the UI; background scans are silent and their games simply appear.
 
 Rules the host enforces around scanning:
 
@@ -209,7 +242,7 @@ Game/
 
 Copying DIR in Explorer is a supported way to save. The user never has to import, rename or tag the copy.
 
-- Look for copies at startup, on every scan, when a game's history is opened, and before a default Load.
+- Look for copies at startup, on every full scan, when a game's history is opened, and before a default Load.
 - Match only complete native duplicate names derived from DIR's actual name. A folder that merely starts with the same name isn't a checkpoint.
 - Register each new copy once, as an ordinary saved checkpoint, without touching its name or contents.
 - Its real save time is unknown. Use the folder's modification time as an *estimate* for ordering and display, and mark it as estimated. Never present discovery time as save time.
@@ -535,7 +568,16 @@ Rules must be provable without a desktop, and the OS parts must be proven for re
 ### What must be proven
 
 - **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the stack after a host restart; exactly one start and one close marker per session.
-- **Library:** scans don't duplicate games; installs and uninstalls are noticed; unavailable drives aren't uninstalls; overrides and custom games survive scans; the periodic scan's handler (without waiting 15 minutes); every DIR safety rule, including aliases, case rules, redirected folders, Proton equivalents and a DIR that doesn't exist yet; no test ever copies or replaces a real system folder.
+- **Library:** scans don't duplicate games; installs and uninstalls are noticed; unavailable drives aren't uninstalls; overrides and custom games survive scans; every DIR safety rule, including aliases, case rules, redirected folders, Proton equivalents and a DIR that doesn't exist yet; no test ever copies or replaces a real system folder.
+- **Scanning:**
+  - the periodic scan's handler (without waiting 15 minutes);
+  - a focus report runs an install scan, and a second one within 20 seconds doesn't;
+  - a fake Steam library gaining an app manifest and executable is found within a few seconds with no request; a burst of changes causes one scan; a library added through `libraryfolders.vdf` is watched from then on;
+  - install scans never re-check checkpoints, full scans do;
+  - a scan blocked on a slow probe delays neither requests nor monitor markers;
+  - a request during a scan joins it and gets its result; a full-scan request during an install scan runs after it;
+  - background scans publish their origin, and a user-requested scan's result counts only newly found games;
+  - Windows: a drive's watches are released on a removal request and restored when it returns.
 - **Checkpoints:** manual copies registered once, localized names, lookalike folders ignored; estimated versus known times; external deletion, replacement (between scans and while the host is off) and in-place edits; unreadable folders not retired; changed recovery checkpoints never imported.
 - **Operations:** Save, Load, Load this save, Revert, reverting a revert and Delete compared by actual file contents; every rejection happens before anything is created; a changed DIR (A to B and back to A); visible history after deletions, including empty sessions disappearing; Flush with partial failures; labels (limits and trimming, shown on Saved and Loaded rows, kept after deletion, cleared by Flush, not carried to a replaced folder, set while busy, rejected for a gone checkpoint, never written into folders); delete countdowns (cancel versus run, waiting while busy, dropped by Flush, finished on shutdown, dropped after a crash).
 - **Failures:** a failure injected at every step, and a kill at every recorded step, each checked against the four recovery rules by both the files and the records; other games stay usable.
