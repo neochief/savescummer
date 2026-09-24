@@ -2,7 +2,7 @@
 
 I want building, packaging and releasing the app to be boring: one command to build, one command to cut a release, and one file per platform for users to download.
 
-This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
+This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN-HOST.md and PLAN-UI.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
 
 This is the target design: where the code disagrees, the code changes.
 
@@ -361,7 +361,7 @@ All three are set to the minimum macOS.
 
 The README gives both:
 
-- **Upgrade:** quit (menu-bar icon → Quit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
+- **Upgrade:** quit (menu-bar icon → Exit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
 - **Remove:** turn off launch at login, quit, drag to Trash. `~/Library/Application Support/SaveScummer` is never touched.
 
 ### Done when
@@ -466,7 +466,7 @@ Tooling only ever makes drafts; I publish by hand. A published release is never 
 
 ## WHAT THE APP MUST PROVIDE
 
-These belong in PLAN.md, but this plan depends on them:
+[PLAN-HOST.md](PLAN-HOST.md) owns these; they are repeated here because this plan depends on them:
 
 - **`SaveScummer.Host --autostart on|off [--data-dir <dir>]`** sets the launch-at-login preference, writes or removes the platform's entry, and exits:
   - Windows: a `Run` value
@@ -496,7 +496,7 @@ Whenever the build changes, this plan and `docs/building.md` change with it.
 ## NOT DOING
 
 - Code signing on any platform — it costs money and yearly upkeep; the workarounds above are documented instead.
-- Update checks or auto-update — the app never phones home; users install the next release.
+- Update checks or auto-update — the app never checks for its own updates; users install the next release. Its only network use is fetching catalog updates and Steam artwork.
 - Intel Mac, 32-bit or ARM Linux builds.
 - Distro packages, Flatpak, Microsoft Store, Mac App Store — the three release files cover everyone.
 - Shell integration outside Windows — see macOS and Linux above.

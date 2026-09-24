@@ -1,6 +1,6 @@
 # Save Scummer UI
 
-This is the main window. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) lives in [`PLAN.md`](PLAN.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
+This is the main window. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 
 The app should feel like a game-oriented desktop utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is a timeline listing every event, newest first.
 
@@ -123,7 +123,7 @@ The running game gets its own group at the top of the sidebar. It is selected wh
 │                        │ 10:04:12                                                         │
 │                        │ YESTERDAY                                                        │
 │                        │ Yesterday                  ◆ Saved                       [↶] [✕] │
-│                        │ 23:20:12                     Add name…                           │
+│                        │ 23:20:12                     Add label…                          │
 │                        │ Yesterday                  ■ Game closed                         │
 │ + Add custom game      │ 22:58:40                                                         │
 │ ⟳ Scan games           │                                                                  │
@@ -163,8 +163,8 @@ The sidebar is the game library and the main way to navigate. It stays narrow, a
 - The background is the game's Steam hero art, cropped to fill the card.
 - The game's logo sits on the left, fitted to the card height, over a dark gradient that fades out to the right. The gradient keeps light and dark logos readable on busy art.
 - A small `●` in the top-right corner marks a running game. Why: when every game is running, the list is flat with no `RUNNING` heading, so the card has to say it.
-- Nothing else goes on the card: no counts, timestamps or descriptions.
-- The game's name is always the card's accessible name and tooltip, even when only the logo shows it.
+- Nothing else goes on the card: no counts, timestamps or descriptions. The one exception is the **install tag** the host supplies when the same game is installed twice (`Steam`, `GOG`): a small tag in the bottom-right corner. Why: two cards with the same art are otherwise impossible to tell apart. Games with one install never show a tag.
+- The game's name is always the card's accessible name and tooltip, even when only the logo shows it. With an install tag, both include it: `Dead Cells — GOG`. The game header shows it the same way.
 
 **Selection:** the selected card gets an accent outline, and the other cards are slightly dimmed. Why: an outline alone gets lost on busy art. A hovered card is shown undimmed.
 
@@ -176,8 +176,7 @@ The sidebar is the game library and the main way to navigate. It stays narrow, a
 
 **Where the art comes from.** The host supplies it; the UI never downloads artwork itself.
 
-- The host reads Steam's local cache first (`Steam/appcache/librarycache/<appid>/`, including its hashed subfolders), then falls back to Steam's public CDN (`shared.fastly.steamstatic.com/store_item_assets/steam/apps/<appid>/` with `library_hero.jpg`, `logo.png` and `header.jpg`). Why: the cache works offline, but Steam has changed its layout before, and the CDN has every game's art, even games Steam hasn't cached.
-- The host scales images down to card size and keeps its own copy, so drawing the sidebar is a small local read.
+- The host provides each game's hero art, logo, header image and icon, already scaled down and stored locally, and says when new art arrives (where it gets them is in PLAN-HOST). Drawing the sidebar is a small local read.
 - Steam's library places each logo at a position chosen per game, stored only in its binary `appinfo.vdf`. We don't use that; left-aligning the logo works on a small card.
 - The app's own icon (`assets/icon.svg`) stays the window, taskbar and tray icon.
 
@@ -228,13 +227,15 @@ This is the main action and has the strongest emphasis. It supports the core loo
 
 ### Load
 
-The main Load button restores the **latest retained checkpoint**. Checkpoints imported from backups that already existed are treated like any other checkpoint and are never labeled differently in this window.
+The main Load button restores the **latest retained checkpoint**. Manual copies the user made in Explorer are treated like any other checkpoint and are never marked differently in this window.
 
-What Load will restore is shown *inside the button*, on a smaller, quieter second line: `3 seconds ago`, `Yesterday`, `2012-12-12`. This line uses the same age wording as the history, updates live, and replaces any separate "Last save" line. With no checkpoints, the button is disabled and its second line reads `No saves yet`.
+What Load will restore is shown *inside the button*, on a smaller, quieter second line: `3 seconds ago`, `Yesterday`, `2012-12-12`. This line uses the same age wording as the history, updates live, and replaces any separate "Last save" line. With no checkpoints, the button is disabled and its second line reads `No saves yet`. When the game's save folder doesn't exist, Load is disabled too, with the same `No game data yet` tooltip as Save; the second line still shows what it would restore. The history's Load and Revert buttons follow the same rule.
+
+If that save has a label, the label comes first: `Before boss fight · 3 seconds ago`. The button keeps its width, so a long label is shortened with `…` and the age always stays visible. The full label is in the tooltip. Why: a label says *which* save far better than a time, and Load is where the user needs to know that.
 
 A pending deletion doesn't change Load. It still targets the latest checkpoint, even if that checkpoint is counting down to deletion, and loading doesn't cancel the deletion. The host runs the two one after the other, and the latest checkpoint is recalculated only after the deletion succeeds.
 
-Every successful Load also creates an **undo checkpoint** holding the state just before the load. That is what a loaded row's Revert restores. Load errors go to the error block.
+Every successful Load, and every Revert, also creates a **recovery point** holding the state just before it. That is what the row's Revert restores. Load errors go to the error block.
 
 ### `···` menu
 
@@ -249,7 +250,7 @@ Each command has its own icon:
                                  └──────────────────────────┘
 ```
 
-- **Open in File Explorer** opens the original save-data location. If the save source is a file, it opens the folder containing it; if the source is a directory, it opens that directory.
+- **Open in File Explorer** opens the game's save folder (DIR), which is always a folder. If the game hasn't created it yet, it opens the nearest folder above it that exists.
 - **Configure paths…**
 - **Flush checkpoints…**, the name used for this action everywhere.
 
@@ -298,47 +299,56 @@ Details that are easy to get wrong:
 | Icon | Event | Weight | Actions |
 | --- | --- | --- | --- |
 | ◆ | Saved | Significant | Load this save, Delete |
-| ↶ | Loaded · <time of the save it loaded> | Significant | Revert this load, Delete |
-| ↷ | Load reverted | Significant | None |
+| ↶ | Loaded · <label or time of the save it loaded> | Significant | Revert this load, Delete |
+| ↷ | Reverted · <time of the row it reverted> | Significant | Revert this revert, Delete |
 | ● | Game started | Light | None |
 | ■ | Game closed | Light | None |
 
 The glyphs above are placeholders, but each event kind needs a stable icon that is easy to tell apart. Started and closed rows make play sessions visible without a separate session UI.
 
-- **Saved** can carry a caption (see below). Imported backups use this same row with no special marking.
+- **Saved** can carry a label (see below). Manual copies use this same row with no special marking. Their real save time is unknown, so their time column shows the folder's last-modified time, and the exact-time line's tooltip says so (`Folder last changed`).
+- **Loaded** names the save it loaded by that save's label, or by its exact `HH:mm:ss` when it has none: `Loaded · Before boss fight`, `Loaded · 10:47:10`. It follows the label live, so renaming a save renames its loads too, and it keeps the label even after that save is deleted. A long label is shortened with `…`, and the full label is in the tooltip.
 - **Load this save** loads *that* save instead of the latest one. It uses the same button style and icon family as Revert.
-- **Revert this load** restores that load's undo checkpoint, which is the state just before the load. The result is a `Load reverted` row, which only records what happened: it has no actions and doesn't create another undo point. After a successful revert, the original loaded row loses its Revert button.
+- **Revert this load** restores that load's recovery point, which is the state just before the load. Like a Load, it first keeps the current state as a new recovery point, so a revert never loses progress. The result is a `Reverted` row with its own Revert, which undoes the revert. Nothing is used up: the loaded row keeps its Revert too. Why: one rule for every restore is easy to trust, and any state the user leaves can be brought back.
 - Revert changes game data; Delete destroys a checkpoint, so they must not get equal emphasis. Delete stays quiet until the row is hovered, focused or selected.
 
-### Save captions
+### Labels
 
-A save's caption goes on the row's second line, under `Saved`, for example `Before boss fight`. It is edited right there in the row. Why: the user names a save while it's fresh, without opening a dialog, and the history reads like a log of decisions instead of a column of identical `Saved` rows.
+A save's label goes on the row's second line, under `Saved`, for example `Before boss fight`. It is edited right there in the row. Why: the user names a save while it's fresh, without opening a dialog, and the history reads like a log of decisions instead of a column of identical `Saved` rows.
 
-A new save has no caption. Its second line shows a dimmed `Add name…` suggestion, which looks like a button when hovered:
+A new save has no label. Its second line shows a dimmed `Add label…` suggestion, which looks like a button when hovered:
 
 ```text
 3 seconds ago   ◆ Saved                                 [↶] [✕]
-12:24:03          Add name…
+12:24:03          Add label…
 ```
 
-Clicking the caption, or `Add name…`, turns that line into a text field with an inline **Save** button on the right:
+Clicking the label, or `Add label…`, turns that line into a text field with an inline check button (`✓`) on the right. Why an icon: a second button called "Save" would be confused with the main Save action.
 
 ```text
 3 seconds ago   ◆ Saved                                 [↶] [✕]
-12:24:03          [Before boss fight_          ] [Save]
+12:24:03          [Before boss fight_          ] [✓]
 ```
 
 Changes save automatically, so the user never has to remember to confirm. A save happens on any of these:
 
 - a short pause after typing, restarted by every keypress;
 - the field losing focus;
-- pressing the inline Save button.
+- pressing the check button, or Enter.
 
-Clearing the text removes the caption, and the line goes back to `Add name…`. A caption is only a label: editing it changes no game files and adds no history event.
+Clearing the text removes the label, and the line goes back to `Add label…`. A label is only a name: editing it changes no game files and adds no history event.
+
+- **One line, up to 100 characters.** The field stops accepting text at the limit, and pasted line breaks become spaces. Leading and trailing spaces are dropped, so a label of only spaces is the same as none.
+- **Editing works while the game is busy** and while the save is counting down to deletion, because it touches no files.
+- **The label belongs to the save, not to the row.** Every place that names the save shows it: this row, the Loaded rows that loaded it, the Load button, the Flush dialog's Details and the Explorer menu's Load item.
+- **Escape cancels the edit.** It puts back the label from before editing started and closes the field, undoing anything autosave already stored during this edit. Why: autosave is there so the user never has to confirm, not so a slip can't be taken back.
+- **If the save disappears while its label is being edited** (deleted, flushed or changed outside the app), the edit is dropped along with the row, with no error.
+
+Only saved checkpoints have labels. Recovery points don't: a Loaded or Reverted row's second line stays empty.
 
 ### Deleting a single entry
 
-Delete is deliberately not immediate. Deleting a saved row removes the checkpoint. Deleting a loaded row removes its undo state, and then the whole row. Pressing the trash button turns the row's action buttons into a countdown. It takes the buttons' place and grows leftwards from the row's right edge. The rest of the row stays where it is. Cancel brings the normal buttons back.
+Delete is deliberately not immediate. Deleting a saved row removes the checkpoint. Deleting a loaded or reverted row removes its recovery point, and then the whole row. Pressing the trash button turns the row's action buttons into a countdown. It takes the buttons' place and grows leftwards from the row's right edge. The rest of the row stays where it is. Cancel brings the normal buttons back.
 
 ```text
 Normal
@@ -358,7 +368,7 @@ Deleting (no Cancel)
 12:24:03                     Before entering the station
 ```
 
-A loaded row works the same way:
+Loaded and reverted rows work the same way:
 
 ```text
 1 hour and 12 minutes ago  ↶ Loaded · 10:47:10                 [↶] [✕]
@@ -515,23 +525,23 @@ With Details expanded:
 │  ▾ Details                                                             │
 │  ┌────────────────────────────────────────────────────────────┐        │
 │  │ SAVED BACKUPS                                              │        │
-│  │   …\void-war\2026-09-24_12-24-03                           │        │
-│  │   …\void-war\2026-09-24_10-47-10                           │        │
-│  │   …\void-war\2026-09-23_23-20-12                           │        │
+│  │   …\Void_War - Copy (42)     Before entering the station   │        │
+│  │   …\Void_War - Copy (41)     Boss fight                    │        │
+│  │   …\Void_War - Copy (40)                                   │        │
 │  │   Show more (39)                                           │        │
 │  │ RECOVERY POINTS                                            │        │
-│  │   …\void-war\recovery\2026-09-24_11-18-44                  │        │
-│  │   …\void-war\recovery\2026-09-23_22-58-40                  │        │
+│  │   …\Void_War.recovery-000002                               │        │
+│  │   …\Void_War.recovery-000001                               │        │
 │  │ INCOMPLETE COPIES                                          │        │
-│  │   …\void-war\partial\2026-09-22_19-02-55                   │        │
+│  │   …\Void_War.partial-000001                                │        │
 │  └────────────────────────────────────────────────────────────┘        │
 ```
 
 - **When it's available:** there are saved checkpoints, recovery checkpoints or history entries, and the game is neither busy nor waiting for recovery. Recovery data left by an interrupted operation is included only after that interruption is resolved.
 - **The dialog is only a preview.** Before opening it, the app checks which files would be affected and shows them. Nothing from the preview is passed back to the host. Why: simplicity. The dialog tells the user what the action does; it isn't a contract.
 - **Text:** "Permanently delete all backups and clear this game's history?" followed by "Your current game data will be kept."
-- **Counts:** separate counts for saved backups, recovery points and incomplete copies, with zero counts left out. The paths go under **Details**, loaded in pages.
-- **On confirm:** the dialog closes and the UI sends a plain Flush request for the game. The host does the whole job again from scratch: it deletes every saved and recovery checkpoint, imported ones included, and clears the history. DIR is not touched. Only the records whose files were actually deleted are cleared. While it runs, the game is in the normal busy state, and any failures go to the error block.
+- **Counts:** separate counts for saved backups, recovery points and incomplete copies, with zero counts left out. The paths go under **Details**, loaded in pages. A labeled saved backup shows its label after the path, shortened with `…` when needed, so the user can recognize saves they'd miss.
+- **On confirm:** the dialog closes and the UI sends a plain Flush request for the game. The host does the whole job again from scratch: it deletes every saved and recovery checkpoint, manual copies included, and clears the history. DIR is not touched. Only the records whose files were actually deleted are cleared. While it runs, the game is in the normal busy state, and any failures go to the error block.
 - **Cancel** is the default button.
 
 
@@ -567,7 +577,7 @@ The window can be resized down to a minimum size. At that size:
 
 There is no separate narrow layout.
 
-Accessibility: icon-only controls (`···`, the history row Load, Revert and Delete buttons) need accessible names and tooltips. Keyboard focus follows visual order, and destructive actions stay reachable by keyboard.
+Accessibility: icon-only controls (`···`, the history row Load, Revert and Delete buttons, the label check button) need accessible names and tooltips. Keyboard focus follows visual order, and destructive actions stay reachable by keyboard.
 
 
 ## TESTING
@@ -577,6 +587,7 @@ UI tests run against a fake service that can simulate being busy, failing, missi
 - **Sidebar:**
   - card art fallbacks: no logo, no hero art, no art at all, and custom games;
   - the running marker, including a flat list where every game is running;
+  - the install tag on the card, tooltip and header, only for games installed twice;
     - headings only when both groups are non-empty;
     - hidden uninstalled games;
     - the switch to the zero-games layout based on *visible* games.
@@ -585,9 +596,16 @@ UI tests run against a fake service that can simulate being busy, failing, missi
     - a manual selection is kept when games start or close;
     - the fallback when the active game closes.
 - **Scan:** the zero, singular and plural messages, counting only newly found known games.
-- **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Imported backups count as ordinary checkpoints for Load.
-- **History rows:** spinner and success states on the Load and Revert buttons, and `Load reverted` rows with no actions.
-- **Captions:** the `Add name…` placeholder; the autosave pause restarting on every keypress; saving on focus loss and on the Save button; clearing a caption.
+- **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Manual copies count as ordinary checkpoints for Load, and show the `Folder last changed` tooltip on their time.
+- **History rows:** spinner and success states on the Load and Revert buttons, and Reverted rows that can themselves be reverted and deleted.
+- **Labels:**
+    - the `Add label…` placeholder;
+    - the autosave pause restarting on every keypress, and saving on focus loss, on the check button and on Enter;
+    - clearing a label, a spaces-only label, the 100-character limit and pasted line breaks;
+    - a label shown on Loaded rows, the Load button and Flush Details, updating live, with `…` and a tooltip when too long;
+    - a Loaded row falling back to the time when the save has no label, and keeping the label after the save is deleted;
+    - editing while the game is busy, and the save disappearing mid-edit;
+    - Escape restoring the label from before the edit, even after an autosave.
 - **Deletion countdowns:**
     - they run independently;
     - Cancel works, including while the game is busy;

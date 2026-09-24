@@ -5,7 +5,7 @@ It contains the preview runtime, icons and styles; no build step or server is re
 
 `save-scummer-main.html` is the editable HTML/CSS/JavaScript fragment used to generate
 the standalone preview. It is the design reference for the Qt UI described in
-[`PLAN.md`](../PLAN.md). After editing the fragment, regenerate `index.html` with
+[`PLAN-UI.md`](../PLAN-UI.md). After editing the fragment, regenerate `index.html` with
 the Visualize skill's `scripts/render.py` export helper.
 
 Select a game row to show its controls and instructions. Expand **Other games**

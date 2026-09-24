@@ -429,5 +429,5 @@ backup folders and collecting Flush paths still scale with that game's retained
 files. See [history capacity measurements](docs/history-capacity.md) for the
 metadata benchmark, its fixture scope and reproduction command.
 
-See [PLAN.md](PLAN.md), [PLAN-INTEGRATION-TESTS.md](PLAN-INTEGRATION-TESTS.md) and
+See [PLAN.md](PLAN.md) (which links every plan) and
 [protocol/README.md](protocol/README.md) for the target behavior and service contract.

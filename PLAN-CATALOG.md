@@ -238,6 +238,9 @@ addendum with no `Keep` row; multi-target games with no name/ancestor signal
 
 - Sorted games and candidates; no timestamps in the bundle (source revision only).
 - CI runs the generator and fails on a dirty `git diff`.
+- `cargo xtask catalog` regenerates the bundle and prints the build report.
+  `--check` regenerates in memory and fails if the committed bundle differs
+  (what CI runs). `--strict` also fails on warnings, for cleanup passes.
 - Regenerating from the same lock + inputs must be byte-identical.
 
 ### 3.7 Worked example: HighFleet (manifest → bundle)
@@ -287,15 +290,15 @@ Each detected install becomes its own game record:
 - Key: store + install directory identity (volume/file id, not the path string),
   so a moved or reinstalled directory stays the same install and history.
 - Two installs of the same game → two records, each with its own DIR,
-  checkpoints and history. Display shows the store/install label when names
-  collide ("Dead Cells — Steam", "Dead Cells — GOG").
+  checkpoints and history. The host gives them an install tag so they can be
+  told apart ("Dead Cells — Steam", "Dead Cells — GOG"; see PLAN-HOST.md).
 - If two installs resolve to the **same** save DIR, they merge into one record;
   a directory carries one checkpoint history.
 - Install-level catalog ids: the first install for a catalog id keeps
   `steam-<id>`; additional installs get `steam-<id>#<install-identity>`.
 - The monitor maps each install's executable paths to its record, so Save/Load
-  hotkeys always target the running install. With nothing running, the selected
-  library row decides.
+  hotkeys always target the running install. Which game hotkeys target
+  otherwise is the host's rule (PLAN-HOST.md).
 - No discovery error and no prompt is ever produced because a game has several
   installs.
 
@@ -488,8 +491,8 @@ pub fn assign_games(decisions: &[Decision]) -> Vec<GameRecord>;
 ```
 
 - `game_id` is install-level (`steam-588650`, `steam-588650#<identity>`,
-  `gog-...`). `candidates` exists for diagnostics and the Configure correction
-  UI; it is never a blocking prompt.
+  `gog-...`). `candidates` exists for diagnostics (logs and the CLI); it is
+  never a blocking prompt.
 - Stickiness is explicit: the host passes the persisted `current_pick`;
   `resolve` keeps it while it exists and re-runs the ladder otherwise.
 

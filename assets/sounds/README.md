@@ -1,7 +1,7 @@
 # SaveScummer sounds
 
-Six original, procedurally synthesized cues matching the Play sounds section of
-`PLAN.md`. All production files are mono, 48 kHz, 16-bit PCM WAV. No recordings,
+Six original, procedurally synthesized cues matching the Sounds section of
+`PLAN-HOST.md`. All production files are mono, 48 kHz, 16-bit PCM WAV. No recordings,
 external samples, paid services or additional runtime packages are required.
 
 | Event | Asset | Duration | Peak | Character |

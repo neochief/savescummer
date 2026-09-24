@@ -4,17 +4,16 @@ Status: draft for review. This is the complete list of failure, interruption and
 situations for the application, how each is detected, what the user sees, and how it is
 tested.
 
-- Core application behavior: [`PLAN.md`](PLAN.md).
+- Host behavior, including how and what to test: [`PLAN-HOST.md`](PLAN-HOST.md).
 - Main-window presentation and mockups: [`PLAN-UI.md`](PLAN-UI.md).
-- Integration test intent: [`PLAN-INTEGRATION-TESTS.md`](PLAN-INTEGRATION-TESTS.md).
 
 ---
 
 ## 1. Principles
 
 - **Deterministic recovery.** An interrupted operation is resolved by fixed rules, never
-  by a user prompt. The host `recover` command remains an internal capability but is not
-  exposed in the main window.
+  by a user prompt. There is no manual recovery command; Retry only re-runs the same
+  rules.
 - **Change nothing you cannot verify.** When the state is uncertain, keep the current
   live data, retain every recovery path, and surface an explanation.
 - **Never delete recovery material before the interruption is resolved.** Retained
@@ -82,7 +81,7 @@ The game may still be using it. Close the game, then try again.
 |---|---|---|
 | E-A1 | Host killed during a save copy or staging | Live directory untouched. Cleared as failed (R1). One-line sticky notice: "The last save was interrupted and wasn't completed." |
 | E-A2 | Host killed during a restore or revert before the move | Live directory unchanged. Cleared as failed (R1). Silent. |
-| E-A3 | Killed after the replacement was installed, before commit | The load/revert is finished automatically (R3). No notice. |
+| E-A3 | Killed after the result was in place (a save's copy renamed to its native name, or a load/revert replacement installed), before commit | Finished automatically (R3). No notice. |
 | E-A4 | Disposal folder left behind by a failed delete | Reserved name, never mistaken for a backup; removed on the next scan or host start. |
 | E-A5 | Backup deleted or replaced externally | Generation retired; affected rows refresh or disappear silently. |
 
@@ -96,12 +95,11 @@ The game may still be using it. Close the game, then try again.
 | E-C4 | Permission denied on destination | "Windows blocked writing to the backups folder." | Retry · Open backups folder |
 | E-C5 | Drive or share unavailable | "The drive with the save folder isn't connected." | Retry · Open save folder |
 | E-C6 | Link, junction or special file inside the save folder | "The save folder contains a link SaveScummer can't copy." | Open save folder |
-| E-C7 | Backup changed or removed since it was shown | "This backup was changed or removed outside SaveScummer." | Refresh · Open backup folder |
-| E-C8 | Backup belongs to a different save folder | "This backup was made from a different save folder." | Open backup folder · Open save folder · Configure paths… |
-| E-C9 | Save folder invalid or overlapping | "The configured save folder isn't valid or overlaps another game's folder." | Open folder · Configure paths… |
-| E-C10 | Flush confirmation is stale | "Backups changed while this window was open. Review and confirm again." | Reopen summary |
+| E-C7 | Backup changed or removed since it was shown | "This backup was changed or removed outside SaveScummer." | Open backups folder |
+| E-C8 | Backup belongs to a different save folder | "This backup was made from a different save folder." | Open backup · Open save folder · Configure paths… |
+| E-C9 | Save folder invalid or overlapping | "The configured save folder isn't valid or overlaps another game's folder." | Open save folder · Configure paths… |
 | E-C11 | Host is shutting down | "SaveScummer is shutting down." | Retry after restart |
-| E-C12 | Delete target changed or points at live data | "This backup no longer matches what SaveScummer recorded." | Refresh · Open backup folder |
+| E-C12 | Delete target changed or points at live data | "This backup no longer matches what SaveScummer recorded." | Open backups folder |
 
 ### 4.3 Blocked / uncertain — material retained
 
@@ -109,7 +107,7 @@ The game may still be using it. Close the game, then try again.
 |---|---|---|---|
 | E-B1 | Rollback could not put the original back (R4) | "The previous load was interrupted. The original save couldn't be put back automatically — the game may be holding it, or the drive is unavailable." | Retry · Open save folder · Open recovery folder |
 | E-B2 | Load applied but the metadata commit failed | "The load was applied, but SaveScummer couldn't record it. The database may be full or busy." | Retry · Open save folder |
-| E-B3 | Delete could not finish | "Couldn't finish deleting this backup. It will be cleaned up automatically." | Retry · Open backup folder |
+| E-B3 | Delete could not finish | "Couldn't finish deleting this backup. It will be cleaned up automatically." | Retry · Open backup |
 | E-B4 | Database unreadable or unwritable on startup | "SaveScummer couldn't open its database." | Restart app |
 
 A blocked game keeps Save/Load and its history actions disabled. Other games are
@@ -122,7 +120,7 @@ unaffected. R4 retries automatically at each host start.
 | E-D1 | Backup folder locked (rename to disposal name fails) | Nothing is touched. E-C1-style error; retry later. |
 | E-D2 | Deletion fails partway (after the rename) | Contents are removed on the next scan or host start; the record is retained until deletion succeeds. E-B3 if it persists. |
 | E-D3 | Drive removed during deletion | Records for undeleted data are retained; retry when the drive returns. |
-| E-D4 | Flush preview changed externally | Confirmation invalidated; E-C10. |
+| E-D4 | Backups changed after the Flush preview was shown | Not an error. The preview isn't binding: on confirm the host finds every checkpoint again and deletes what exists then. |
 
 Per-checkpoint deletion and Flush both delete through a reserved disposal name first, so
 a locked folder is never partially deleted under its real name.
@@ -132,11 +130,11 @@ a locked folder is never partially deleted under its real name.
 | ID | Situation | Behavior |
 |---|---|---|
 | E-L1 | Save folder is a symbolic link or junction | Resolved to the real directory at Configure time. All operations run against the real directory; the link is never renamed, replaced or copied. Not an error. |
-| E-L2 | Link repointed, broken or no longer resolving | Validation fails: "This save folder is a shortcut that changed or can't be resolved. Configure the real folder." Buttons: Configure paths… · Open folder. |
+| E-L2 | Link repointed, broken or no longer resolving | Validation fails: "This save folder is a shortcut that changed or can't be resolved. Configure the real folder." Buttons: Configure paths… · Open save folder. |
 | E-L3 | Link inside the save folder | Copy/fingerprint rejects it; E-C6. |
 | E-L4 | Backup folder replaced by a link | Treated as changed externally (E-A5/E-C7); restoring from it is refused. |
-| E-N1 | Save directory does not exist yet | Save disabled, status `Not run yet`; Load can recreate the directory. Open save folder (may not exist). |
-| E-N2 | User moved the save directory | Configuration error; operation refused (E-C9). |
+| E-N1 | Save directory does not exist yet, or is empty | Save disabled with `No game data yet`; the status stays `Running`/`Stopped`. A missing directory also disables Load and Revert (they never recreate it); an empty one doesn't. Open save folder (may not exist). |
+| E-N2 | Save directory moved or deleted | Known game: the catalog picks its DIR again, possibly a new folder; checkpoints from the old folder stay recorded but can't be restored into the new one. Override or custom game: Save, Load and Revert are unavailable until the folder returns or is reconfigured (E-C9). |
 | E-N3 | Drive temporarily unavailable | Marked unavailable; the generation is not retired. Retry when accessible. |
 | E-N4 | Game uninstalled | Not shown in the sidebar (known and custom alike). History and checkpoints are retained. |
 | E-N5 | Desktop disconnected from the host | Reconnecting state; no operation errors are produced. |
@@ -175,7 +173,6 @@ a locked folder is never partially deleted under its real name.
 | Junction | `mklink /J` (no admin required). |
 | Symlink | Windows: developer mode or `CreateSymbolicLinkW`; Linux/macOS: `ln -s`. |
 | Drive unavailable | Detach a VHD or use an unreachable UNC path. |
-| Stale confirmation | Mutate a backup folder between preview and confirmation. |
 | Version mismatch | Run a desktop built for a different protocol revision against the host. |
 
 ### 5.3 Coverage matrix
@@ -194,7 +191,7 @@ a locked folder is never partially deleted under its real name.
 | E-C7 | integration | changed backup row | edit backup |
 | E-C8 | core unit + Qt | wrong-directory checkpoint | fixture state |
 | E-C9 / E-N2 | core unit + Qt | invalid/overlapping DIR | fixture state |
-| E-C10 | integration + Qt | stale Flush revision | mutate between preview/confirm |
+| E-D4 | integration | Flush deletes what exists at confirm time | mutate between preview/confirm |
 | E-C11 | host test | shutdown admission | host shutdown |
 | E-C12 | core unit | unsafe delete refusal | changed alias fixture |
 | E-B1 | core unit + integration | failed rollback retained state | locked original |
@@ -204,7 +201,7 @@ a locked folder is never partially deleted under its real name.
 | E-L1 | integration | symlinked/junction DIR | mklink /J, ln -s |
 | E-L2 | integration | repointed/broken link | recreate link |
 | E-L4 | integration | backup replaced by link | mklink /J over backup |
-| E-N1 | core unit + Qt | `Not run yet` state | fixture state |
+| E-N1 | core unit + Qt | `No game data yet` for missing and empty DIR | fixture state |
 | E-N3 | integration | temporarily unavailable volume | detached VHD |
 | E-N4 | Qt | hidden uninstalled games | fixture state |
 | E-N5 | Qt | disconnected state | fake service |
@@ -219,7 +216,8 @@ a locked folder is never partially deleted under its real name.
 - No hint is shown when saving while the game is running (E-X1).
 - Per-checkpoint delete uses a 5-second inline countdown with Cancel.
 - Recovery is fully automatic (R1–R4); the recovery prompt and the `Recovery needed`
-  status are removed from the UI. The host `recover` command is retained, unused.
+  status are removed from the UI. There is no manual `recover` command.
 - Links and junctions resolve to the real directory; operations never consume the link.
-- `Forget this game` has no UI; custom games are permanent hidden records. The host
-  command is retained for a future management screen.
+- Custom games are kept forever; there is no `Forget this game` in this version.
+- The Flush preview isn't binding; a backup changing after the preview is not an error (E-D4).
+- A label edit for a save that has since disappeared is dropped quietly, with no error.
