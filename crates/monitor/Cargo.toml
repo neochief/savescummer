@@ -1,7 +1,0 @@
-[package]
-name = "savescummer-monitor"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-savescummer-core.workspace = true
