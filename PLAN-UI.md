@@ -77,19 +77,18 @@ Nothing is preselected. The sidebar is a flat list, and the main area stays quie
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
 │ SaveScummer                                                                       ─  □  × │
 ├────────────────────────┬──────────────────────────────────────────────────────────────────┤
-│   ▣ XCOM 2             │                                                                  │
-│   ▣ Noita              │                                                                  │
-│   ▣ Battle Brothers    │                                                                  │
-│   ▣ Void War           │                                                                  │
-│                        │                                                                  │
-│                        │                                                                  │
-│                        │                   No known games are running.                    │
-│                        │                                                                  │
-│                        │                                                                  │
-│                        │                                                                  │
-│                        │                                                                  │
-│                        │                                                                  │
-│                        │                                                                  │
+│ ┌────────────────────┐ │                                                                  │
+│ │ XCOM 2             │ │                                                                  │
+│ └────────────────────┘ │                                                                  │
+│ ┌────────────────────┐ │                                                                  │
+│ │ NOITA              │ │                   No known games are running.                    │
+│ └────────────────────┘ │                                                                  │
+│ ┌────────────────────┐ │                                                                  │
+│ │ BATTLE BROTHERS    │ │                                                                  │
+│ └────────────────────┘ │                                                                  │
+│ ┌────────────────────┐ │                                                                  │
+│ │ VOID WAR           │ │                                                                  │
+│ └────────────────────┘ │                                                                  │
 │                        │                                                                  │
 │ + Add custom game      │                                                                  │
 │ ⟳ Scan games           │                                                                  │
@@ -107,19 +106,19 @@ The running game gets its own group at the top of the sidebar. It is selected wh
 │ SaveScummer                                                                       ─  □  × │
 ├────────────────────────┬──────────────────────────────────────────────────────────────────┤
 │ RUNNING                │ ▣ VOID WAR                                                       │
-│ ▌▣ Void War            │   Running                                                        │
-│                        │                                                                  │
-│ INSTALLED              │ [ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]                         │
-│   ▣ XCOM 2             │             [  3 seconds ago  ]                                  │
-│   ▣ Noita              │                                                                  │
-│   ▣ Battle Brothers    ├──────────────────────────────────────────────────────────────────┤
-│                        │ HISTORY                                                          │
-│                        │                                                                  │
-│                        │ TODAY                                                            │
-│                        │ 3 seconds ago              ◆ Saved                       [↶] [✕] │
-│                        │ 12:24:03                     Before entering the station         │
-│                        │ 1 hour and 12 minutes ago  ↶ Loaded · 10:47:10           [↶] [✕] │
-│                        │ 11:18:44                                                         │
+│ ┏━━━━━━━━━━━━━━━━━━━━┓ │   Running                                                        │
+│ ┃ VOID WAR         ● ┃ │                                                                  │
+│ ┗━━━━━━━━━━━━━━━━━━━━┛ │ [ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]                         │
+│ INSTALLED              │             [  3 seconds ago  ]                                  │
+│ ┌────────────────────┐ │                                                                  │
+│ │ XCOM 2             │ ├──────────────────────────────────────────────────────────────────┤
+│ └────────────────────┘ │ HISTORY                                                          │
+│ ┌────────────────────┐ │                                                                  │
+│ │ NOITA              │ │ TODAY                                                            │
+│ └────────────────────┘ │ 3 seconds ago              ◆ Saved                       [↶] [✕] │
+│ ┌────────────────────┐ │ 12:24:03                     Before entering the station         │
+│ │ BATTLE BROTHERS    │ │ 1 hour and 12 minutes ago  ↶ Loaded · 10:47:10           [↶] [✕] │
+│ └────────────────────┘ │ 11:18:44                                                         │
 │                        │ 2 hours ago                ● Game started                        │
 │                        │ 10:04:12                                                         │
 │                        │ YESTERDAY                                                        │
@@ -133,11 +132,11 @@ The running game gets its own group at the top of the sidebar. It is selected wh
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`✕` stands for the trash icon. The error and instructions blocks, when present, sit between the action row and HISTORY.
+`✕` stands for the trash icon. Each sidebar box is an art card (see SIDEBAR): the capitalized name stands for the game's logo, the heavy border marks the selected card and `●` marks a running game. The error and instructions blocks, when present, sit between the action row and HISTORY.
 
 ## ACTIVE STACK, SELECTION AND FOCUS
 
-The ACTIVE STACK holds the running games, ordered by when the user last switched to each game's window outside the app. Its top game is the **active game**: the first row under `RUNNING` and the target of global hotkeys while the app is unfocused. The game **selected** in the main view can be different, because the user may be browsing another game.
+The ACTIVE STACK holds the running games, ordered by when the user last switched to each game's window outside the app. Its top game is the **active game**: the first card under `RUNNING` and the target of global hotkeys while the app is unfocused. The game **selected** in the main view can be different, because the user may be browsing another game.
 
 The key rule: **only an external focus change moves a game up the stack and selects it.** The user has necessarily left the app to switch to the game, so the view never changes while they're using it. Starting or closing a game in the background moves it between groups but never takes over the view. A newly started game appears under `RUNNING` but doesn't jump ahead of games with a more recent focus.
 
@@ -156,9 +155,33 @@ Consequences:
 
 ## SIDEBAR
 
-The sidebar is the game library and the main way to navigate. It is narrow and dense, and each row shows only an icon and a name. Don't add counts, timestamps or descriptions, because the sidebar has to stay usable with a large library. The selected row gets a compact but unmistakable highlight, such as an accent stripe, a slightly different background or brighter text. Don't use cards.
+The sidebar is the game library and the main way to navigate. It stays narrow, and each game is a small wide art card, like a game in the Steam library. Why: players recognize a game by its art faster than by its name, and the art gives the app the game feel the plain list lacked.
 
-**Icons** are the game's cached Steam artwork, supplied by the host. While an icon is missing or loading, a neutral placeholder with the game's initials takes its place. The UI never downloads artwork itself. The app's own icon (`assets/icon.svg`) stays the window, taskbar and tray icon.
+**Cards:**
+
+- About 3:1 and roughly 76 px tall, the full width of the sidebar, with a small gap between cards.
+- The background is the game's Steam hero art, cropped to fill the card.
+- The game's logo sits on the left, fitted to the card height, over a dark gradient that fades out to the right. The gradient keeps light and dark logos readable on busy art.
+- A small `●` in the top-right corner marks a running game. Why: when every game is running, the list is flat with no `RUNNING` heading, so the card has to say it.
+- Nothing else goes on the card: no counts, timestamps or descriptions.
+- The game's name is always the card's accessible name and tooltip, even when only the logo shows it.
+
+**Selection:** the selected card gets an accent outline, and the other cards are slightly dimmed. Why: an outline alone gets lost on busy art. A hovered card is shown undimmed.
+
+**Fallbacks.** Many games lack some art, and custom games have none. Each card uses the best art available:
+
+- No logo: the game's name as text, in the logo's place.
+- No hero art: the Steam header image (`header.jpg`), cropped the same way.
+- No art at all, or still loading: a neutral background with the game's initials and its name as text.
+
+**Where the art comes from.** The host supplies it; the UI never downloads artwork itself.
+
+- The host reads Steam's local cache first (`Steam/appcache/librarycache/<appid>/`, including its hashed subfolders), then falls back to Steam's public CDN (`shared.fastly.steamstatic.com/store_item_assets/steam/apps/<appid>/` with `library_hero.jpg`, `logo.png` and `header.jpg`). Why: the cache works offline, but Steam has changed its layout before, and the CDN has every game's art, even games Steam hasn't cached.
+- The host scales images down to card size and keeps its own copy, so drawing the sidebar is a small local read.
+- Steam's library places each logo at a position chosen per game, stored only in its binary `appinfo.vdf`. We don't use that; left-aligning the logo works on a small card.
+- The app's own icon (`assets/icon.svg`) stays the window, taskbar and tray icon.
+
+Cards trade some density for recognition: about eight fit in a default-height window, and a large library scrolls.
 
 **Groups:**
 
@@ -193,7 +216,8 @@ The sidebar is the game library and the main way to navigate. It is narrow and d
                          [ 3 seconds ago ]
 ```
 
-- The icon and name come first. The status sits directly under the name and is only ever `Running` or `Stopped`. There are no badges and no separate readiness indicator.
+- The game's small square Steam icon comes first, next to the name. It isn't the card art or the logo. Why: the art is already in the sidebar, and a large logo here would compete with Save. Without an icon, the initials placeholder takes its place.
+- The status sits directly under the name and is only ever `Running` or `Stopped`. There are no badges and no separate readiness indicator.
 - **The host decides whether each action is available, separately from the status.** When there is no game data to copy, Save is disabled and its tooltip and accessible name say `No game data yet`. Nothing else signals this.
 - The order is fixed: Save, then Load, then `···`, which is always last.
 - Directly below the row sits the **error block**, then the **instructions block**. The error block stays until the next action or game selection and never becomes a modal dialog.
@@ -215,6 +239,15 @@ Every successful Load also creates an **undo checkpoint** holding the state just
 ### `···` menu
 
 Each command has its own icon:
+
+```text
+[ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]
+            [  3 seconds ago  ]  ┌──────────────────────────┐
+                                 │ ▤  Open in File Explorer │
+                                 │ ✎  Configure paths…      │
+                                 │ ✕  Flush checkpoints…    │
+                                 └──────────────────────────┘
+```
 
 - **Open in File Explorer** opens the original save-data location. If the save source is a file, it opens the folder containing it; if the source is a directory, it opens that directory.
 - **Configure paths…**
@@ -251,7 +284,7 @@ Each row has:
 
 1. **A time column** with two lines. The first line is relative: `4 seconds ago` and `1 hour and 12 minutes ago` for today, then `Yesterday`, the full localized weekday for recent days, and `yyyy-MM-dd` for older dates. The second line is always the exact local `HH:mm:ss` and never changes.
 2. **An event icon and description.** The icon supplements the text and never replaces it.
-3. **Actions** at the end of the row, when the row has any.
+3. **Actions** at the end of the row's first line, when the row has any. They sit together in one line, with Delete always last.
 
 Details that are easy to get wrong:
 
@@ -305,10 +338,34 @@ Clearing the text removes the caption, and the line goes back to `Add name…`. 
 
 ### Deleting a single entry
 
-Delete is deliberately not immediate. Deleting a saved row removes the checkpoint. Deleting a loaded row removes its undo state, and then the whole row. Pressing the trash button turns the row into a countdown:
+Delete is deliberately not immediate. Deleting a saved row removes the checkpoint. Deleting a loaded row removes its undo state, and then the whole row. Pressing the trash button turns the row's action buttons into a countdown. It takes the buttons' place and grows leftwards from the row's right edge. The rest of the row stays where it is. Cancel brings the normal buttons back.
 
 ```text
-Deleting in 5 [Cancel]      (5 → 4 → 3 → 2 → 1, updated in place)
+Normal
+3 seconds ago              ◆ Saved                             [↶] [✕]
+12:24:03                     Before entering the station
+
+Counting down (5 → 4 → 3 → 2 → 1, updated in place)
+3 seconds ago              ◆ Saved              Deleting in 5 [Cancel]
+12:24:03                     Before entering the station
+
+Countdown over, game busy
+3 seconds ago              ◆ Saved         Waiting to delete… [Cancel]
+12:24:03                     Before entering the station
+
+Deleting (no Cancel)
+3 seconds ago              ◆ Saved                         ◌ Deleting…
+12:24:03                     Before entering the station
+```
+
+A loaded row works the same way:
+
+```text
+1 hour and 12 minutes ago  ↶ Loaded · 10:47:10                 [↶] [✕]
+11:18:44
+
+1 hour and 12 minutes ago  ↶ Loaded · 10:47:10  Deleting in 3 [Cancel]
+11:18:44
 ```
 
 Why a countdown instead of a dialog: deleting a checkpoint should be quick, and a mistake needs to be undoable. A confirmation dialog repeated on every row gets clicked through without reading.
@@ -322,7 +379,7 @@ The host owns the countdown. The UI only sends delete and cancel requests and di
     - `Waiting to delete… [Cancel]` if the game is busy when the countdown ends.
     - `Deleting…` with a spinner once the deletion runs, with no Cancel.
 - **Cancel versus run is decided by the host, one request at a time.** A cancel the host accepts guarantees nothing is deleted. A cancel that arrives too late shows the real state instead of pretending to restore the row.
-- **Outcome:** the row is removed only after the host confirms the files are deleted from disk. If the deletion fails, the normal row comes back and the error block shows the failure. There's no automatic retry; the user can press Delete again. Other deletions continue either way.
+- **Outcome:** the row is removed only after the host confirms the files are deleted from disk. If the deletion fails, the normal buttons come back and the error block shows the failure. There's no automatic retry; the user can press Delete again. Other deletions continue either way.
 - **Leaving doesn't cancel anything.** Switching games, scrolling away, hiding the window or disconnecting the UI leaves accepted deletions running. When the user returns, the rows are rebuilt from the host's state.
 - **If Flush removes an entry** that is waiting to be deleted, that deletion is dropped quietly, with no second attempt and no "not found" error.
 
@@ -353,15 +410,40 @@ There are only three dialogs. All of them:
 - use text-only buttons;
 - rely on the platform's standard behavior for focus, keyboard navigation, the default button and cancelling. Don't write custom Enter or focus handling; a deliberately focused button must still activate normally.
 
+The title of a per-game dialog includes the game's name (`Configure paths · Void War`), because the dialog covers the header that would otherwise show which game it's for.
+
 Deleting a single checkpoint is not a dialog; it uses the row countdown above.
 
 ### Add custom game
 
 ```text
-Game executable: [...........................] [Browse…]
-Save location:   [...........................] [Browse…]
-Name:            [...........................]
-                                        [Add] [Cancel]
+┌────────────────────────────────────────────────────────────────────────┐
+│ Add custom game                                                      × │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Game executable  [                                 ] [Browse…]        │
+│  Save location    [                                 ] [Browse…]        │
+│  Name             [                                 ]                  │
+│                                                                        │
+│                                                   [ Add ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+After Browse filled in Name, with a validation error:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Add custom game                                                      × │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Game executable  [D:\Starsector\starsector.exe     ] [Browse…]        │
+│  Save location    [saves                            ] [Browse…]        │
+│  Name             [starsector                       ]                  │
+│                                                                        │
+│  ⚠ Save location must be an absolute path.                             │
+│                                                                        │
+│                                                   [ Add ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 - The fields stay in this order. The name must be non-blank after trimming, and both paths must be non-blank absolute paths.
@@ -372,25 +454,84 @@ Name:            [...........................]
 
 ### Configure paths
 
+Known game:
+
 ```text
-Game executable:     [...prefilled path...] [open] [Reset]
-Game data dir (DIR): [...prefilled path...] [open] [Reset]
-                                           [Save] [Cancel]
+┌────────────────────────────────────────────────────────────────────────┐
+│ Configure paths · Void War                                           × │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Game executable  [C:\…\Void War\VoidWar.exe      ] [Open] [Reset]     │
+│  Game data dir    [C:\Users\…\LocalLow\Void War   ] [Open] [Reset]     │
+│                                                                        │
+│                                                  [ Save ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-- For custom games, Name is editable, the DIR label reads "Save location" (as in the Add dialog) and there's no Reset.
-- Changes are applied only after the core validates them. If validation fails, the saved configuration doesn't change and the entered values stay for the user to fix.
+Custom game:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Configure paths · Starsector                                         × │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Name             [Starsector                     ]                    │
+│  Game executable  [D:\Starsector\starsector.exe   ] [Open]             │
+│  Save location    [D:\Starsector\saves            ] [Open]             │
+│                                                                        │
+│                                                  [ Save ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+- For custom games, Name is editable, the data field is labelled "Save location" (as in the Add dialog) and there's no Reset.
+- Changes are applied only after the core validates them. If validation fails, the error appears in the dialog like in Add custom game, the saved configuration doesn't change, and the entered values stay for the user to fix.
 - **Save** is the default button.
 
 ### Flush checkpoints
 
-This is the only bulk delete, so it is built to prevent mistakes:
+This is the only bulk delete, so it shows the user what will go before they confirm:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Flush checkpoints · Void War                                         × │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Permanently delete all backups and clear this game's history?         │
+│  Your current game data will be kept.                                  │
+│                                                                        │
+│    Saved backups        42                                             │
+│    Recovery points       2                                             │
+│    Incomplete copies     1                                             │
+│                                                                        │
+│  ▸ Details                                                             │
+│                                                                        │
+│                                                 [ Flush ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+With Details expanded:
+
+```text
+│  ▾ Details                                                             │
+│  ┌────────────────────────────────────────────────────────────┐        │
+│  │ SAVED BACKUPS                                              │        │
+│  │   …\void-war\2026-09-24_12-24-03                           │        │
+│  │   …\void-war\2026-09-24_10-47-10                           │        │
+│  │   …\void-war\2026-09-23_23-20-12                           │        │
+│  │   Show more (39)                                           │        │
+│  │ RECOVERY POINTS                                            │        │
+│  │   …\void-war\recovery\2026-09-24_11-18-44                  │        │
+│  │   …\void-war\recovery\2026-09-23_22-58-40                  │        │
+│  │ INCOMPLETE COPIES                                          │        │
+│  │   …\void-war\partial\2026-09-22_19-02-55                   │        │
+│  └────────────────────────────────────────────────────────────┘        │
+```
 
 - **When it's available:** there are saved checkpoints, recovery checkpoints or history entries, and the game is neither busy nor waiting for recovery. Recovery data left by an interrupted operation is included only after that interruption is resolved.
+- **The dialog is only a preview.** Before opening it, the app checks which files would be affected and shows them. Nothing from the preview is passed back to the host. Why: simplicity. The dialog tells the user what the action does; it isn't a contract.
 - **Text:** "Permanently delete all backups and clear this game's history?" followed by "Your current game data will be kept."
-- **Counts:** separate counts for saved backups, recovery points and incomplete copies. Their paths go under **Details**, loaded in pages that belong to this particular confirmation.
-- **The confirmation must match the disk.** Before showing it, rescan the backups. If a backup is deleted, replaced, changed or newly found outside the app, the confirmation becomes invalid and a fresh one is required. Why: the user must never delete something they weren't shown.
-- **On confirm:** delete every saved and recovery checkpoint, imported ones included, and clear the history. DIR is not touched. Only the records whose files were actually deleted are cleared, and any failures are reported.
+- **Counts:** separate counts for saved backups, recovery points and incomplete copies, with zero counts left out. The paths go under **Details**, loaded in pages.
+- **On confirm:** the dialog closes and the UI sends a plain Flush request for the game. The host does the whole job again from scratch: it deletes every saved and recovery checkpoint, imported ones included, and clears the history. DIR is not touched. Only the records whose files were actually deleted are cleared. While it runs, the game is in the normal busy state, and any failures go to the error block.
 - **Cancel** is the default button.
 
 
@@ -434,6 +575,8 @@ Accessibility: icon-only controls (`···`, the history row Load, Revert and De
 UI tests run against a fake service that can simulate being busy, failing, missing snapshots, pending deletions and a disconnected host. They focus on the rules that are easy to break:
 
 - **Sidebar:**
+  - card art fallbacks: no logo, no hero art, no art at all, and custom games;
+  - the running marker, including a flat list where every game is running;
     - headings only when both groups are non-empty;
     - hidden uninstalled games;
     - the switch to the zero-games layout based on *visible* games.

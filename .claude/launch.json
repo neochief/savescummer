@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sidebar-cards-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/neoch/AppData/Local/Temp/claude/C--Users-neoch-savescummer/eb6d35de-5e8a-4ba2-9d78-25f7f02fe798/scratchpad/serve.js"],
+      "port": 5178
+    }
+  ]
+}
