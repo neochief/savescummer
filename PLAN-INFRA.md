@@ -1,508 +1,670 @@
-# PLAN-INFRA.md — Build, Distribution, and Release Infrastructure
+# PLAN-INFRA.md — Build, Distribution & Release Infrastructure
 
-Status: **Phase A complete; Phase B implemented; Phase C implemented** (CI + draft release workflow)
-Last reviewed: 2026-09-23
+Status: **target design** — the final state. Where the code disagrees, the
+code changes.
+Date: 2026-09-24
 
-This document is the handoff plan for reorganizing the **dev/build/release
-infrastructure** of SaveScummer. It is a *plan*, not an implementation. A fresh
-session should be able to pick it up and execute the phases below without
-re-deriving the decisions.
+## 0. How to read this
 
-It complements `PLAN.md`, which remains authoritative for **application
-behavior**. This file only governs **build, packaging, distribution, and
-release tooling**. It supersedes the "Reorganize build and distribution output"
-task sketched at the bottom of `PLAN.md` (around line 840) and expands it into a
-three-phase roadmap.
+This document covers everything between "source code" and "a person has the
+app installed": builds, packaging, installers, CI, and releases. `PLAN.md`
+is authoritative for the application itself; this document never changes
+application behavior, only the machinery around it. The few things this
+infrastructure needs from the application are listed in §11.
+
+Every decision here is final. There are no open questions: where a choice
+had alternatives, the alternative was weighed and the choice is written
+down with its reason.
+
+Build order when implementing: the shared foundations (§1–§4), then Windows
+(§5) end to end, then macOS (§6) and Linux (§7). CI (§8) grows a job per
+platform as it lands. The work is done when all three acceptance checklists
+pass.
+
+Whenever the infrastructure changes, this document and `docs/building.md`
+change with it.
 
 ---
 
-## 1. Context (for a fresh session)
+## 1. The system at a glance
 
-SaveScummer is a Windows desktop app for backing up/restoring game saves.
-Three executables, one per canonical identity (see `PLAN.md`):
+SaveScummer is three cooperating executables plus, on Windows, a shell
+extension. Their names are part of the application contract and never
+change (Windows adds `.exe`):
 
-- `SaveScummer.exe` — C++/Qt 6 Widgets desktop client
-- `SaveScummer.Host.exe` — Rust background host (owns SQLite, monitoring, ops)
-- `SaveScummer.CLI.exe` — Rust command-line client
+| Executable | What it is |
+|---|---|
+| `SaveScummer` | C++/Qt 6 desktop client |
+| `SaveScummer.Host` | Rust background host (SQLite, monitoring, operations) |
+| `SaveScummer.CLI` | Rust command-line client |
+| `savescummer-explorer.dll` | Windows Explorer context-menu extension (Windows only) |
 
-Plus a native Windows Explorer shell extension (`SaveScummer-explorer`),
-currently built **separately** and registered by hand.
+It ships on three platforms, one release file each:
 
-Key backend facts:
-- Rust workspace (`Cargo.toml`), version `0.1.0` in `[workspace.package]`.
-- Qt 6.5.3 lives locally at `.runtime/Qt/6.5.3/msvc2019_64` (this machine only;
-  scripts do not download SDKs). Renders the app needs Qt *installed*.
-- CMake 3.21+ project (`CMakeLists.txt`), default generator `Visual Studio 16 2019`.
-- PowerShell 7 (`pwsh`) is required (VS Code tasks already assume it).
-- `git` tags: **none exist yet**. First release will create `v0.1.0`.
-- GitHub CLI `gh` is installed at `C:\Program Files\GitHub CLI\gh.exe`
-  (auth state must be verified; see Phase A item A8).
-- `scripts/check.ps1` runs fmt/clippy/tests/build; `build.ps1` (root) is the
-  single entry point coordinating Rust + Qt + packaging.
-
-### Current disk usage (audit, 2026-09-22)
-
-| Path | Size | Contents / verdict |
+| Platform | Release file | Made with |
 |---|---|---|
-| `target/` | 2.9 GB | Cargo cache — normal, keep. |
-| `build/` | 154 MB | `dev/`, `release/`, plus a **legacy `build/desktop`** CMake default that two scripts still fall back to. |
-| `.runtime/Qt` | 211 MB | Vendored Qt SDK — legitimate machine-local tool. |
-| `.runtime/qt-tools` | 110 MB | Vendored CMake — legitimate machine-local tool. |
-| `.runtime/test-temp` | **520 MB** | Leftover TEMP dir from `build.ps1 -Test` runs — **never cleaned**. Bug. |
-| `.runtime/*-smoke-*` etc. | ~1 MB | ~12 one-off scratch dirs (artwork/package/sound/rename smoke, icon-gen, icon-verify). |
+| Windows 10/11 x64 | `SaveScummer-windows-x64-<ver>-setup.exe` | Inno Setup |
+| macOS 13+ Apple Silicon | `SaveScummer-macos-arm64-<ver>.dmg` | `hdiutil` |
+| Linux x86_64 (glibc ≥ 2.35) | `SaveScummer-linux-x86_64-<ver>.AppImage` | `linuxdeploy` + `appimagetool` |
 
-`target/`, `build/`, `.runtime/` are all already gitignored; nothing
-artifact-like is tracked. Good baseline.
+All build, package, and release automation is **one Rust program**,
+`cargo xtask`, living in the workspace. It runs the same on every OS and
+needs nothing beyond the Rust toolchain the project already requires; it
+calls out to CMake, Qt's deploy tools, and each platform's packaging tool.
+
+```
+                ┌──────────────── cargo xtask ────────────────┐
+   repo ──────▶ │ version · cargo build/test · cmake build/test│
+                │ app package (build/<mode>/package/)          │
+                └──────┬───────────────┬───────────────┬──────┘
+                Windows│          macOS│          Linux│
+             Qt DLLs + VC runtime  macdeployqt     linuxdeploy
+             Explorer DLL          ad-hoc sign     AppRun dispatch
+             Inno Setup            hdiutil         appimagetool
+                       ▼               ▼               ▼
+                dist/…-setup.exe   dist/….dmg    dist/….AppImage
+                       └───────────────┼───────────────┘
+                                       ▼
+                     one DRAFT GitHub release ──▶ a human publishes
+```
+
+### The rules that don't bend
+
+1. **Canonical names are fixed.** The executables above keep their exact
+   names everywhere.
+2. **One version source.** `Cargo.toml` → `[workspace.package] version`.
+   Everything reads it; the git tag must equal `v<version>`.
+3. **Draft-first, always.** Tooling may create or update a *draft* release;
+   only a human publishes.
+4. **Four roots.** `target/` is Cargo's; `build/` is regenerable; `dist/`
+   holds only release files; `.runtime/` is long-lived machine state and is
+   never cleaned.
+5. **CI runs what developers run.** Workflows call `cargo xtask`; they never
+   reimplement build logic.
+6. **One build language: Rust.** No PowerShell, bash, or Python build
+   scripts, and no task runners (just/make). Platform-specific code lives in
+   platform modules of `xtask`, compiled only on their OS.
+7. **One file per platform per release.** The most user-friendly format the
+   platform has; nothing else is uploaded.
+8. **No silent downloads.** Anything fetched from the internet (Qt, Inno
+   Setup, AppImage tools, cargo-about) is fetched only by an explicit
+   `cargo xtask setup …`, at a pinned version.
+9. **User data is sacred.** No install, upgrade, uninstall, or clean ever
+   touches the application's data directory.
+10. **Every failure says what to run next.**
 
 ---
 
-## 2. Target layout (the end state, Phase A)
-
-Three-tier policy, plus a `dist/` root for distributables (adopting the
-`PLAN.md` sketch):
+## 2. Repository layout and disk tiers
 
 ```
 savescummer/
-├── target/            Cargo cache only. Never touched directly by scripts.
-├── build/             Intermediates (everything regenerable on this machine):
-│   ├── dev/             dev CMake tree, logs (host.*.log), session.json, build-report.json,
-│   │                    and the dev portable package (<sv>-dev.zip, includes PDBs)
-│   └── release/         release CMake tree, build-report.json
-│   └── tmp/             disposable scratch (all ad-hoc/smoke outputs; incl. test-temp)
-├── dist/              DISTRIBUTABLES (release output; gitignored; flat, OS-tagged names —
-│   │                  future platform artifacts land here too, see D10):
-│   ├── SaveScummer-windows-x64/            expanded portable application (release)
-│   ├── SaveScummer-windows-x64-<ver>.zip   distributable archive (one top-level dir inside)
-│   └── (future) SaveScummer-<os>-<arch>-<ver>.<ext> for macOS/Linux release artifacts
+├── .cargo/config.toml   alias: xtask = "run --package xtask --"
+├── rust-toolchain.toml  pinned Rust (§4)
+├── about.toml           accepted licenses for cargo-about (§4)
+├── xtask/               the build program (§3)
 ├── packaging/
-│   └── windows/
-│       ├── licenses/   (moved from packaging/licenses; LGPL/GPL + README)
-│       └── installer/  (Phase B: Inno Setup script, icons, config)
-├── scripts/           powershell helpers (flat; no subfolders)
-└── (untouched) crates/, apps/, integrations/, protocol/, catalog/, docs/
+│   ├── licenses/        Qt license texts, shipped on every platform
+│   ├── windows/         savescummer.iss
+│   ├── macos/           Info.plist.in
+│   └── linux/           SaveScummer.desktop, AppRun
+├── assets/              icons, sounds (+ generate-sounds.mjs, asset tooling)
+├── target/              Cargo's. Never written directly.
+├── build/               Everything regenerable:
+│   ├── dev/               desktop tree, app package, session.json, logs,
+│   │                      build-report.json
+│   ├── release/           desktop + explorer trees, app package,
+│   │                      build-report.json
+│   └── tmp/               scratch; the test temp is emptied each run
+├── dist/                The release file(s), nothing else
+└── .runtime/            Never cleaned:
+    ├── Qt/<version>/<kit>   Qt SDK
+    ├── tools/               aqtinstall venv, linuxdeploy, appimagetool
+    └── dev/                 dev app data (the dev host's --data-dir)
 ```
 
-**Purpose of each root:**
+There is no `scripts/` directory.
 
-| Root | Definition | Cleanable by `build.ps1 clean`? |
+| Root | Contents | Removed by `cargo xtask clean`? |
 |---|---|---|
-| `target/` | Cargo only. | Only with `-Deep`. |
-| `build/` | Everything regenerable: CMake trees, logs, reports, scratch, dev packages. | Yes — default. |
-| `dist/` | Release distributables (regenerable via `build.ps1 release`). | Yes — default. |
-| `.runtime/` | Only long-lived machine-local state: vendored SDKs, dev app data. Nothing disposable. | **Never.** |
+| `target/` | Cargo cache | only with `--deep` |
+| `build/` | trees, app packages, logs, reports, scratch | yes |
+| `dist/` | release files | yes |
+| `.runtime/` | SDKs, tools, dev data | **never** |
+
+`.gitignore` covers the four roots plus `*.db`, `*.db-shm`, `*.db-wal`.
+
+**Artifact names** are always
+`SaveScummer-<os>-<arch>-<version>[-<suffix>].<ext>`. Arch tags follow each
+OS's idiom — `x64` on Windows, `arm64`/`x86_64` elsewhere — and are never
+normalized across platforms.
+
+**The app package** is the assembled, runnable app under
+`build/<mode>/package/`: a folder on Windows (the installer's payload), a
+`.app` bundle on macOS, an AppDir on Linux. Release packages carry no debug
+symbols; dev packages keep them.
 
 ---
 
-## 3. Decisions log (with rationale)
+## 3. `cargo xtask`
 
-| # | Decision | Rationale |
-|---|---|---|
-| D1 | Distributables move under `dist/`; `build/` becomes intermediates-only. | Matches the existing `PLAN.md` sketch ("Move all distributable output to dist\"). Gives a single obvious place to point the GitHub release script and clean. |
-| D2 | Application version is **single-sourced from `Cargo.toml`** (`[workspace.package] version`). CMake reads it; PowerShell scripts read it; the git tag must equal `v<version>`. | One source of truth; removes the current Cargo/CMake drift risk; tag↔version is the natural check before releasing. |
-| D3 | **Versioned** artifact names: release zip `dist/SaveScummer-windows-x64-<ver>.zip`; dev zip `build/dev/SaveScummer-windows-x64-<ver>-dev.zip`. The ZIP contains **one top-level `SaveScummer-windows-x64/` directory**. | GitHub release assets must be unique/versioned; the top-level folder keeps extraction clean. (Deviation from the unversioned `SaveScummer-windows-x64.zip` in the `PLAN.md` sketch — deliberate, see rationale. Optional sub-decision: name the top-level folder `SaveScummer-windows-x64-<ver>/` instead if version collision on extraction ever becomes a concern.) |
-| D4 | Tiered clean: `build.ps1 clean` wipes `build/` + `dist/`; `clean -Deep` also wipes `target/`; `clean` **never touches `.runtime/`** and gracefully stops the recorded dev host first. | Matches the three-tier policy; dev data and vendored SDKs survive. |
-| D5 | Scratch policy: ad-hoc/smoke outputs go to `build/tmp/` and are covered by `clean`. The `-Test` temp moves from `.runtime/test-temp` → `build/tmp/test-temp` and is emptied at each run. | Fixes the 520 MB leak *and* makes `clean` cover scratch. |
-| D6 | Retire the legacy `build/desktop` CMake default and delete `scripts/run-desktop.ps1`. `scripts/build-desktop.ps1` gains a `-Mode dev/release` (default `dev`) that selects `build/<mode>/desktop` + the matching configuration; explicit overrides still win. | One place per mode; no competing "legacy" path (per `PLAN.md`: "Remove legacy lower-level output defaults and competing package locations"). |
-| D7 | Release publishing is **local-first and draft-first**: `scripts/release-github.ps1` uses `gh release create --draft` so the human reviews the release page and clicks Publish. GitHub Actions is deferred to Phase C (not this task). | Draft-first is the safety gate against publishing something broken; local-first keeps it runnable before CI exists. CI (Phase C) calls the *same* scripts, so nothing is redone. |
-| D8 | 1.0 distribution ("do it properly"): **Inno Setup per-user installer** is the primary channel; the portable ZIP stays as the secondary channel; the Explorer extension ships with the app and is registered **on by default** (installer checkbox to disable), and sign-in autostart is **on by default for a first install** (`checkedonce`; upgrades keep the user's choice). | Installer is the correct way to install/uninstall a DLL loaded into Explorer.exe; default-on matches the headline feature (TortoiseGit-style). **Installer is Phase B, not this task.** |
-| D9 | Explorer DLL is **not** added to the flow in Phase A. It is wired into the release build and package in Phase B. | Keeps Phase A focused on infra; the DLL build is currently separate (build-explorer.ps1) and wants installer plumbing. |
-| D10 | **Multiplatform artifact convention, pinned now.** `dist/` stays **flat**; every artifact is OS/arch-tagged: `SaveScummer-<os>-<arch>-<ver>.<ext>` — `SaveScummer-windows-x64-0.1.0.zip`, later `SaveScummer-macos-arm64-0.1.0.tar.gz` (and `-x86_64-`), `SaveScummer-linux-x86_64-0.1.0.tar.gz`. GitHub release assets reuse these exact filenames. Each artifact keeps a per-platform expanded folder/container; internals stay the canonical executable names from PLAN.md. | OS-tagged filenames make flat `dist/` unambiguous across platforms and give the Phase C CI matrix a uniform output contract (`<target>/dist/*` per OS). Naming is trivial to extend later; deciding it now prevents a Phase A layout that must be reworked. |
-| D11 | **Shared packaging core.** `package-windows.ps1` refactors (A3) extract the platform-*neutral* parts — version reading, staging layout, `.savescummer-package.json` manifest, SHA256SUMS generation, README.txt/identify templates, final rename/move semantics — into a dot-sourced `scripts/package-common.ps1` (or small `.psm1`). Future `package-macos.ps1` / `package-linux.ps1` consume it and add only OS-specific steps (Qt deploy, dmgs/AppImage, dylibs, etc.). | PLAN.md's own rules reject duplicated policy across modules. If the shared core is extracted in Phase A, the future per-OS scripts stay small and cannot drift from the Windows conventions. |
+`xtask/` is a binary crate in the workspace (`publish = false`), invoked as
+`cargo xtask <command>` through the alias in `.cargo/config.toml`. It is
+organized as shared modules plus `windows.rs`, `macos.rs`, `linux.rs`
+compiled under `cfg(target_os = …)`. Shared code never contains
+platform-specific logic.
 
----
+### Commands
 
-## 4. Phase A — infrastructure cleanup + local release process
+| Command | What it does |
+|---|---|
+| `check` | The quality gate (§4). |
+| `build [--release] [--test] [--package]` | Build the Rust workspace and the desktop. `--test` runs Rust and desktop tests. `--package` assembles the app package (always on with `--release`). |
+| `run [--demo] [--stop-other-hosts]` | Dev build, then start the dev host against `.runtime/dev` and the desktop connected to it (§3.2). `--demo` uses simulated operations. |
+| `host start [--demo]` / `host stop` | Start or stop just the dev host; used by `run` and by VS Code debugging tasks. |
+| `dist` | `build --release --test`, then the platform's release file into `dist/`. |
+| `clean [--deep]` | Stop dev/output processes, remove `build/` and `dist/` (and `target/` with `--deep`). Never needs a toolchain. |
+| `release <version>` | Cut a release (§9). |
+| `publish` | Create or update the draft GitHub release from `dist/` (§9). |
+| `setup <qt\|inno\|linux-tools\|cargo-about>` | Explicit, pinned bootstraps (§4). |
+| `explorer <build\|register\|unregister\|check> [--dev]` | Windows only: the Explorer extension (§5.3). |
+| `catalog [--check] [--strict]` | The game catalog build; its behavior is owned by `PLAN-CATALOG.md`. |
 
-Everything below is Phase A scope. Implement in roughly this order; each item
-is independent enough to review separately. Keep changes consistent with the
-repo's style (PowerShell 7, `$ErrorActionPreference='Stop'`, clear messages).
+Every command validates its inputs up front and fails with a plain message
+naming the command to run next (e.g. "Qt 6.11.2 not found — run `cargo xtask
+setup qt`").
 
-### A1 — `.gitignore`
-Add `/dist/` (alongside the existing `target/`, `build/`, `.runtime/`).
+### 3.1 Shared building blocks
 
-### A2 — `build.ps1`: `clean` mode + test-temp fix
-- Add `clean` to the `$Mode` `ValidateSet` (`dev`, `release`, `clean`) and a
-  `[switch]$Deep`. `-Run`/`-Demo` are invalid for `clean` (throw).
-- Handle `clean` **early**, right after param validation and before any
-  prerequisite/cargo/Qt logic — cleaning must not require a toolchain.
-- `clean` behavior:
-  1. If `build/dev/session.json` exists, gracefully stop the **recorded dev
-     host** using the existing shutdown block (reuse the logic currently in the
-     dev-mode pre-build section; consider extracting a `Stop-RecordedDevHost`
-     helper so the rebuild path and `clean` share it).
-  2. `Remove-Item build -Recurse -Force` and `Remove-Item dist -Recurse -Force`
-     (guard each with a `Test-Path`).
-  3. If `-Deep`: also `Remove-Item target -Recurse -Force`.
-  4. Print a concise summary of what was removed. `clean` must **never** touch
-     `.runtime/`.
-- `-Test` temp: change lines ~97-99 from `.runtime/test-temp` to
-  `build/tmp/test-temp`; **remove it if it exists before each run** (so it
-  cannot accumulate), then create it fresh (`.runtime/test-temp` is deleted in
-  the one-time cleanup, A12).
-- After packaging, print final artifact paths for both modes (already partially
-  done; ensure the release path now points at `dist/`).
+- **Version:** read by parsing `Cargo.toml` with the `toml` crate and taking
+  `workspace.package.version` — no pattern matching.
+- **Artifact names:** one function builds every name from os, arch,
+  version, suffix, extension.
+- **Staging and atomic swap:** a package is assembled in a fresh
+  `.staging-<uuid>` sibling, then swapped into place after stopping anything
+  running from the old one. A failed run never damages the existing package.
+- **Package manifest:** `.savescummer-package.json` in every package (mode,
+  version, platform, Qt version, configuration, creation time) marks it as
+  generated output.
+- **Checksums:** `SHA256SUMS.txt` in every package.
+- **Third-party notices:** `THIRD-PARTY-LICENSES.html` in every package,
+  generated by `cargo about` from the crates the host and CLI link; a
+  dependency under a license not in `about.toml` fails packaging.
+- **Build report:** `build/<mode>/build-report.json` — steps, timings,
+  binary paths and sizes.
 
-### A3 — `scripts/package-windows.ps1`: dist output, versioned names, top-level folder
-- **First extract the platform-neutral packaging core** (D11): version reading,
-  staging layout, `.savescummer-package.json` + `SHA256SUMS.txt` generation,
-  README.txt/identity templates, safe final rename/move, into a dot-sourced
-  `scripts/package-common.ps1`. `package-windows.ps1` consumes it and keeps only
-  Windows-specific steps (cmake `--install`, Qt DLL deploy, vswhere/VC CRT
-  discovery, PDB handling, `Stop-PackageProcess`). Future per-OS scripts reuse
-  the core unchanged (D10/D11).
-- Read the version from `Cargo.toml` (this moves into the shared core):
-  ```powershell
-  $manifest = Get-Content -LiteralPath (Join-Path $root 'Cargo.toml') -Raw
-  if (-not ($manifest -match '(?m)^\s*version\s*=\s*"(\d+\.\d+\.\d+)"')) {
-      throw 'Cannot read the application version from Cargo.toml.'
-  }
-  $version = $Matches[1]
-  ```
-  Being the **first three-part version field** in the file keeps this pointing
-  at `[workspace.package]` (dependency versions like `"1"` / `"0.37"` don't match).
-- Output paths:
-  - Release: staged package → `dist/SaveScummer-windows-x64/`; zip →
-    `dist/SaveScummer-windows-x64-<ver>.zip`; SHA256SUMS.txt inside the package.
-  - Dev: staged package → `build/dev/SaveScummer-windows-x64/`; zip →
-    `build/dev/SaveScummer-windows-x64-<ver>-dev.zip` (dev keeps PDBs).
-- Restructure the staging directory so the **zip root contains exactly one
-  top-level `SaveScummer-windows-x64/` folder** (create it inside `$stage`,
-  move `bin/`, `licenses/`, `README.txt`, `.savescummer-package.json`,
-  `SHA256SUMS.txt` under it), then `Compress-Archive` that folder. Verify the
-  archive root has exactly one entry (pwsh 7 uses forward slashes; ok).
-- The `$package` guard (currently "must be a `SaveScummer` folder inside
-  `repository/build`") must now **allow `dist/` for release and `build/dev/`
-  for dev**, and reject anything else. Update the `.savescummer-package.json`
-  marker + `Stop-PackageProcess` prefix logic to the new package location.
-- Update the generated `README.txt` to mention the versioned zip.
-- Update the final "Executable/Archive" output lines to print the new paths.
+### 3.2 Process handling
 
-### A4 — `scripts/build-desktop.ps1`: `-Mode` instead of a legacy default
-- Remove the `build/desktop` default `BuildDirectory`.
-- Add `-Mode dev|release` (default `dev`); when not overridden, set
-  `BuildDirectory = build/<mode>/desktop` and the matching configuration
-  (`RelWithDebInfo` for `dev`, `Release` for `release`). Explicit
-  `-BuildDirectory` / `-Configuration` arguments still win.
-- Keep the existing CMake/ctest logic unchanged.
+A running host may be mid-save, and Windows cannot replace a running
+executable, so xtask stops processes politely, in this order: desktops are
+asked to close; hosts are asked to shut down through their sibling CLI
+(`--data-dir <dir> shutdown`, up to 30 s) so an accepted operation
+finishes; only then are stragglers terminated. This one routine is used
+everywhere:
 
-### A5 — delete `scripts/run-desktop.ps1`
-Legacy helper targeting `build/desktop` only. Delete it; it is superseded by
-`build.ps1 dev -Run`. Update docs (A9).
+- **The recorded dev host.** `run`/`host start` record the host in
+  `build/dev/session.json` (PID, start time, path). Stopping verifies all
+  three still match before acting, so a reused PID is never killed. The
+  session file is deleted last.
+- **Output processes.** Before rebuilding or cleaning, anything running
+  from `build/` or `dist/` is stopped — never anything under `target/` or
+  `.runtime/`.
+- **Other hosts.** A dev `run` leaves the user's installed host alone; if
+  one is running, xtask warns that the dev instance won't own the tray icon
+  or global shortcuts. `--stop-other-hosts` stops it (gracefully) instead.
+- **Stale dev autostart.** Any launch-at-login entry that points into
+  `target/` or `build/` is removed on every dev build, so sign-in never
+  starts a debug host. Entries pointing elsewhere are the user's and stay.
 
-### A6 — version single-source in CMake
-In `CMakeLists.txt`, replace the hardcoded `project(SaveScummer VERSION 0.1.0 …)`
-with a read from `Cargo.toml` (place the `file(READ)` before `project()`; it
-needs no compiler):
+`run` starts the host hidden, waits for its `"ready":true` line (30 s),
+then launches the desktop with the host's endpoint.
+
+### 3.3 The desktop build
+
+xtask drives CMake: configure `build/<mode>/desktop` with
+`-DCMAKE_PREFIX_PATH=<Qt kit>` and the configuration `RelWithDebInfo` (dev)
+or `Release` (release); build `savescummer-desktop` and, with `--test`,
+`desktop-tests`; run ctest with `SAVESCUMMER_TEST_HOST` set to the freshly
+built host (Linux CI adds `QT_QPA_PLATFORM=offscreen`). On failure it prints
+the JUnit XML. On Windows no generator is passed, so CMake picks the newest
+installed Visual Studio (2022 or later).
+
+The CMake project reads the version from `Cargo.toml` before `project()`,
+matching only a line that starts with `version = "x.y.z"`:
+
 ```cmake
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml" _savescummer_manifest)
-string(REGEX MATCH "version = \"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ver "${_savescummer_manifest}")
-if(NOT _ver)
+# "\n" pins the match to a line start (CMake's ^ means start-of-file), so an
+# inline dependency such as foo = { version = "1.2.3" } never matches.
+string(REGEX MATCH "\n[ \t]*version[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _v "${_savescummer_manifest}")
+if(NOT _v)
     message(FATAL_ERROR "Cannot read the SaveScummer version from Cargo.toml.")
 endif()
 project(SaveScummer VERSION ${CMAKE_MATCH_1} LANGUAGES CXX)
 ```
-(First three-part version field = `[workspace.package]`; document this
-invariant with a comment.)
 
-### A7 — screenshots live under the active build tree
-Currently `apps/desktop/tests/desktop_test.cpp` hardcodes
-`SOURCE_DIR + "/build/desktop/screenshots/"` in 7 places (`SOURCE_DIR` is
-`${PROJECT_SOURCE_DIR}`, defined in `apps/desktop/CMakeLists.txt`). Fix so the
-path derives from the CMake build dir instead:
-- In `apps/desktop/CMakeLists.txt`, add to the test target's compile
-  definitions a `SAVESCUMMER_SCREENSHOT_DIR="${CMAKE_BINARY_DIR}/screenshots"`
-  (alongside the existing `FIXTURE_DIR` / `SOURCE_DIR`).
-- In `desktop_test.cpp`, replace the 7 hardcoded uses (including the
-  `mkpath`) with the value of `SAVESCUMMER_SCREENSHOT_DIR`, falling back to an
-  env override (`qEnvironmentVariable`) for flexibility.
-- Result: screenshots at `build/<mode>/desktop/screenshots`. Update docs (A9).
-
-### A8 — new `scripts/release-github.ps1` (local, draft-first)
-Zero-required-parameter script that publishes the release ZIP as a **draft**:
-1. Read `$version` from `Cargo.toml` (same regex as A3).
-2. Preconditions (each fails with an actionable message):
-   - `gh` on PATH, origin remote exists (`git remote get-url origin`).
-   - `gh auth status` succeeds (else instruct `gh auth login`).
-   - Tag `v$version` exists (`git rev-parse -q --verify refs/tags/v$version`);
-     if missing, print `git tag v<version> && git push origin v<version>` and
-     exit non-zero.
-   - Tag points at `HEAD` (`git rev-list -n1 v$version` == `git rev-parse HEAD`).
-   - Artifact `dist/SaveScummer-windows-x64-<ver>.zip` exists; else instruct
-     `./build.ps1 release`.
-3. Write sidecar `dist/SaveScummer-windows-x64-<ver>.zip.sha256` (hash of the
-   zip) if absent.
-4. Publish draft with `gh` semantics:
-   - If `gh release view v$version` fails (not created): `gh release create
-     v$version --draft --generate-notes --title "SaveScummer v$version" <zip> <sha256>`.
-   - If it exists **and is a draft**: `gh release upload v$version <zip> <sha256> --clobber`
-     (re-running after a rebuild updates the draft).
-   - If it exists **and is published**: error — refuse to clobber a live release.
-5. Print the draft URL from `gh release view v$version --json url`.
-Design it to be purely additive/local so Phase C's CI workflow can call the
-same script (or its logic) unchanged.
-
-### A9 — docs: `docs/building.md` + `README.md`
-`docs/building.md`:
-- Commands section: add `./build.ps1 clean` and `clean -Deep` (three-tier
-  policy; `.runtime/` untouched).
-- dev/release table + "Output" list: rewrite to `build/<mode>/desktop` CMake
-  trees + `build/release/` report as *intermediates*, and `dist/` +
-  `dist/SaveScummer-windows-x64-<ver>.zip` as the distributables (note dev
-  package stays in `build/dev/` incl. PDBs).
-- Add a **"Publishing a GitHub release"** section: version is single-sourced
-  from `Cargo.toml`; tag must equal `v<version>`; commands `git tag v0.1.0`,
-  `./build.ps1 release`, `./scripts/release-github.ps1`; draft-first review
-  before Publish; mention `gh auth login` once as prerequisite; note CI comes
-  later and calls the same steps.
-- "Lower-level entry points": remove the `run-desktop.ps1` sentence; describe
-  `build-desktop.ps1 -Mode`.
-- Update the non-Windows CMake example to not reuse the legacy `build/desktop`
-  path (e.g. `build/local-desktop`).
-
-`README.md`:
-- Update release-output paths (lines ~18-19 and ~100-101) to
-  `dist/SaveScummer-windows-x64-<ver>.zip` (versioned).
-- Add `./build.ps1 clean` to the build/test command list; add a one-line
-  pointer to `docs/building.md` for release publishing.
-- Update the screenshots path (line ~72) to `build/<mode>/desktop/screenshots`.
-
-### A10 — `.vscode`
-Verify only — **no changes expected**: `tasks.json` calls `build.ps1` and
-`scripts/vscode-session.ps1` (no stale paths); `launch.json` uses
-`.runtime/vscode` + `.runtime/Qt` (both stay). Confirm after edits that nothing
-references the legacy path.
-
-### A11 — `packaging/` → per-platform home
-Move `packaging/licenses/*` → `packaging/windows/licenses/` and update the
-`package-windows.ps1` copy path (A3). This is Phase-B prep. Add
-`packaging/windows/README.md` explaining the layout and reserving
-`packaging/windows/installer/` for Phase B. (Nothing else is created yet.)
-
-### A12 — one-time artifact cleanup
-Delete the following (inspected 2026-09-22; all regenerable/derived):
-- `.runtime/test-temp` (520 MB; superseded by `build/tmp/test-temp`).
-- `.runtime/artwork-smoke-*`, `.runtime/package-check-*`,
-  `.runtime/package-smoke-*`, `.runtime/sound-smoke-*`, `.runtime/rename-smoke`
-  (ad-hoc smoke scratch).
-- `.runtime/icon-gen`, `.runtime/icon-gen-cropped`, `.runtime/icon-verify`
-  (PNG size exports derived from `assets/icon.svg`; before deleting, confirm
-  `assets/icon.svg` exists — it does).
-Keep: `.runtime/dev`, `.runtime/explorer-dev`, `.runtime/vscode`,
-`.runtime/Qt`, `.runtime/qt-tools`.
-Then run `./build.ps1 clean` to clear `build/` debris (old zips, the legacy
-`build/desktop` tree, old screenshots).
+This requires `[workspace.package]` to stay above any dependency written as
+its own table (`[dependencies.foo]` with `version = …` on its own line). It
+also sets C++17, `AUTOMOC`/`AUTORCC`,
+`find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets Network Svg)`, the
+`SaveScummer` output name, `install()` rules, and
+`qt_generate_deploy_app_script` for the Qt deploy step. Tests write
+screenshots to `build/<mode>/desktop/screenshots`, never the source tree.
 
 ---
 
-## 5. Verification / acceptance checklist (Phase A)
+## 4. Toolchains
 
-Run through `scripts/check.ps1` (fmt/clippy/tests/build) **and** the following:
+**Rust** is pinned in `rust-toolchain.toml` (channel, `minimal` profile,
+`rustfmt` + `clippy`, and the `aarch64-apple-darwin` target). rustup applies
+it automatically everywhere. Bumping Rust is a deliberate one-line commit.
 
-1. `git status` shows no artifacts tracked; `target/ build/ dist/ .runtime/`
-   all gitignored.
-2. `./build.ps1 clean` removes `build/` + `dist/` (gracefully stopping the
-   recorded dev host first), and `clean -Deep` also removes `target/`;
-   `.runtime/` is untouched either way.
-3. `./build.ps1 dev -Run` builds and runs; artifacts land under `build/dev/`.
-4. `./build.ps1 dev -Test` runs; test temp is recreated fresh at
-   `build/tmp/test-temp`.
-5. `./build.ps1 release` produces `dist/SaveScummer-windows-x64-<ver>.zip`
-   and the expanded `dist/SaveScummer-windows-x64/`; the zip root has exactly
-   one `SaveScummer-windows-x64/` entry; `SHA256SUMS.txt` is inside; zip name
-   embeds the version; `build/release/build-report.json` still written.
-6. CMake configures with the Cargo-sourced version (build output / report shows
-   `0.1.0`).
-7. Qt tests write screenshots under `build/<mode>/desktop/screenshots`.
-8. `./scripts/release-github.ps1` fails cleanly with an actionable message when
-   the tag is missing (expected pre-tag). After the user tags `v0.1.0` it
-   creates a **draft** release — only actually run when the user wants to
-   publish.
-9. Repo-wide grep finds **no** stale references to `build/desktop`,
-   `run-desktop.ps1`, or the unversioned zip name (`SaveScummer-windows-x64.zip`).
-10. `.runtime/` contains only `dev`, `explorer-dev`, `vscode`, `Qt`, `qt-tools`.
-11. All modified `.ps1` files parse cleanly (`pwsh -NoProfile -Command
-    "$null=[System.Management.Automation.Language.Parser]::ParseFile('<path>',
-    [ref]$null,[ref]$e); $e"` returns no errors).
+**Qt tracks the latest minor release**, currently **6.11**, with the exact
+patch pinned in one constant in `xtask`. Open-source Qt gets patch releases
+only for the newest minor, so staying current is the only way to get fixes:
+patch releases are taken promptly, and a new minor is adopted within about
+two months of its release, in its own commit, once all three platforms
+build and pass tests. The app uses only Widgets, Network, and Svg — the
+most stable parts of Qt — so a minor bump is normally a rebuild.
+`cargo xtask setup qt` installs the pinned kit with aqtinstall (in a venv
+under `.runtime/tools/`; it needs Python 3.9+) to `.runtime/Qt/<version>/`.
+It's idempotent, and CI caches `.runtime/Qt` keyed on the pin.
 
----
+**C++ compilers:** MSVC from Visual Studio 2022 or later on Windows, Apple
+Clang from Xcode 15+ on macOS, GCC 11+ on Linux. **CMake** ≥ 3.21 from
+PATH (Visual Studio, Xcode's command-line tools, or the distro provide it).
 
-## 6. Phase B — 1.0 proper Windows distribution (implemented)
+**Platform tools**, each installed only by its explicit setup command:
+Inno Setup 6 (`setup inno`, via winget), linuxdeploy with its Qt plugin and
+appimagetool (`setup linux-tools`, pinned release + SHA-256, into
+`.runtime/tools/`), and cargo-about (`setup cargo-about`, pinned version).
 
-Status: implemented 2026-09-22. The 1.0 Windows distribution is an Inno Setup
-per-user installer (primary) plus the portable ZIP (secondary); both carry the
-Explorer extension. Decisions taken while implementing:
+### The quality gate — `cargo xtask check`
 
-- **Installer artifact**: `dist/SaveScummer-windows-x64-<ver>-setup.exe`
-  (`Get-InstallerArtifactName` in `scripts/package-common.ps1`).
-- **Build trigger**: `./build.ps1 release` always builds the Explorer extension,
-  packages the portable ZIP, and then compiles the installer. If Inno Setup is
-  absent it prints a warning and still produces the portable package.
-- **Explorer registration**: the installer writes the `HKCU\Software\Classes`
-  CLSID and `Directory\shellex\ContextMenuHandlers\SaveScummer` keys directly
-  (no `pwsh` dependency on the target). The portable package opts in through
-  `Enable/Disable Explorer integration.cmd` + `bin\register-explorer.ps1`.
-  The DLL uses `restartreplace`, because `explorer.exe` keeps it mapped and
-  Windows cannot overwrite a loaded DLL in place.
-- **Sign-in entry**: the installer's `startup` task is checked on a first
-  install (`checkedonce`, so an upgrade presents it unchecked and never opts a
-  user back in after an in-app opt-out) and writes the
-  `HKCU\...\Run\SaveScummer` value in the exact form the host uses
-  (`--minimized --data-dir ... --desktop ...`), so sign-in autostart works
-  immediately after install. The app's own preference stays off by default; on
-  first start the host reads the registry value and adopts its current state
-  (`StartupRegistration::is_enabled`), after which the checkbox changes it. The
-  host never takes over an entry that points at another build or recreates a
-  removed one. Matching parses the command line and compares the resolved host
-  and data-directory paths (case and 8.3-safe), so a longer path that merely
-  contains the host name cannot match. The uninstaller removes the entry only
-  when it still references `{app}`.
-- **Data safety**: the uninstaller removes only the application folder and the
-  per-user registrations; `%LOCALAPPDATA%\SaveScummer` is never touched.
-- **Graceful upgrade**: `[Code] PrepareToInstall` runs the installed
-  `SaveScummer.CLI.exe --no-start shutdown` before files are replaced, so an
-  accepted operation can finish.
-- **Identity**: all three executables already carry version resources; the
-  Explorer DLL now has one too (`integrations/windows-explorer/savescummer-explorer.rc.in`).
-  The host/CLI build scripts now declare `rerun-if-changed=Cargo.toml`, because
-  winresource emits none and a stale resource had shipped
-  `SaveScummer_Host.exe` instead of the canonical `SaveScummer.Host.exe`.
-- **Signing**: `.iss` has a `SignedBuild`/`SignTool` slot; releases are unsigned
-  and documented as such.
-- **Publishing policy**: `release-github.ps1` requires the installer by default
-  and accepts `-AllowMissingInstaller` for a deliberate portable-only release,
-  matching `build.ps1 release`'s warn-and-continue behavior when Inno Setup is
-  absent.
-
-New/changed files: `packaging/windows/installer/savescummer.iss`,
-`packaging/windows/portable/*.cmd`, `scripts/build-installer.ps1`,
-`scripts/setup-innosetup.ps1`, `scripts/package-common.ps1`,
-`scripts/package-windows.ps1`, `scripts/release-github.ps1`, `build.ps1`,
-`integrations/windows-explorer/{CMakeLists.txt,savescummer-explorer.rc.in}`,
-`apps/host/build.rs`, `apps/cli/build.rs`,
-`crates/platform/src/{desktop.rs,windows.rs}`, `apps/host/src/lib.rs`,
-`apps/host/src/feedback_tests.rs` (adoption tests).
-
-### Phase B acceptance checklist
-
-1. `./scripts/setup-innosetup.ps1` makes `ISCC.exe` available.
-2. `./build.ps1 release` builds the Explorer extension, then produces
-   `dist/SaveScummer-windows-x64-<ver>.zip` and
-   `dist/SaveScummer-windows-x64-<ver>-setup.exe`.
-3. Installing the setup to the default location needs no administrator rights and
-   places `bin\{SaveScummer,SaveScummer.Host,SaveScummer.CLI}.exe` and
-   `bin\savescummer-explorer.dll` under `%LOCALAPPDATA%\Programs\SaveScummer`.
-4. With the Explorer task on, right-clicking a configured DIR / eligible copy
-   shows Save / Load from the installed extension (under Windows 11 **Show more
-   options**); a fresh Explorer process is needed to load the DLL.
-5. The sign-in task is checked on a fresh install and writes the same value the
-   app's **Launch on startup** toggle would, so autostart works right after
-   install; on its first start the host adopts that value into the (default-off)
-   preference, and unchecking removes the entry. An upgrade presents the task
-   unchecked, so a user who disabled startup in-app is not opted back in.
-6. Installing over a running installed host asks it to shut down gracefully and
-   succeeds; the previous version is replaced in place (same `AppId`).
-7. Uninstalling removes the application folder and the Explorer keys, removes
-   the sign-in value only while it still references the installed copy (an entry
-   repointed elsewhere is preserved), and leaves `%LOCALAPPDATA%\SaveScummer`
-   intact.
-8. The portable ZIP still runs standalone and registers the extension only via
-   its helper scripts.
-9. `./scripts/release-github.ps1` attaches the installer, the portable archive
-   and both `.sha256` sidecars to a single draft release; it refuses to publish
-   without the installer unless `-AllowMissingInstaller` is passed.
-10. Installing over an installation whose Explorer extension is registered
-    completes the DLL replacement on the requested restart. A first install with
-    the extension task disabled never registers the DLL and needs no restart.
-
-### Known limitations
-
-- The classic `IContextMenu` handler appears under Windows 11 **Show more
-  options**; the modern `IExplorerCommand` menu is not implemented.
-- Explorer holds a loaded DLL, so an extension update or removal completes after
-  an Explorer restart or sign-out (`restartreplace` requests one).
-- The Explorer bridge resolves the host at `%LOCALAPPDATA%\SaveScummer`, so the
-  installed host must keep the default data directory.
-- Releases are unsigned; SmartScreen may warn.
-
-## 7. Phase C — CI + cross-platform (implemented 2026-09-23)
-
-Implemented:
-
-- `.github/workflows/ci.yml` (every push, pull request and manual dispatch):
-  - **Rust checks (Windows)** — `scripts/check.ps1`; required.
-  - **Qt desktop (Windows)** — `./build.ps1 dev -Test -Generator 'Visual Studio
-    17 2022'` (runner images ship VS 2022, not the repository default VS 2019).
-  - **Rust checks (ubuntu-latest, macos-latest)** — non-blocking
-    `cargo fmt`/`check`/`test`, measuring porting progress before those
-    platforms qualify.
-- `.github/workflows/release.yml` (`v*` tags): the Windows job runs
-  `./build.ps1 release -Test`, installs Inno Setup with Chocolatey and uploads
-  the OS/arch-tagged ZIP and installer; one publish job downloads every
-  platform's artifacts into `dist/` and calls `scripts/release-github.ps1`
-  (draft-first), so local and CI publishing share one implementation.
-- Release assets are installer-only by default: `scripts/release-github.ps1`
-  attaches the installer, with `-IncludePortable` and `-IncludeChecksums`
-  opt-ins (the portable archive is still built and kept as a workflow artifact).
-  GitHub always adds auto-generated source archives to a release; they cannot be
-  disabled or deleted.
-- `scripts/setup-qt.ps1` — one Qt bootstrap for Windows, macOS and Linux:
-  aqtinstall into a virtualenv under `.runtime/qt-tools/venv`, output in
-  `.runtime/Qt/<version>/<kit>`, idempotent. Windows kit directories are
-  normalized to the Qt online-installer name (`msvc2019_64`) so the existing
-  `build.ps1` default `-QtPrefix` matches. CI caches `.runtime/Qt` with a key
-  that hashes the script. Python 3.8+ is required; runners provide it.
-- CI-discovered fix: `apps/desktop/compat/msvc-stdext.h` — Qt 6.5 headers use
-  MSVC's `stdext` array-iterator helpers, which VS 2022 17.8 deprecated and
-  later toolsets (including the runner images' VS 2026) removed. The header is
-  force-included for MSVC 19.38+ and documented in `docs/building.md`.
-
-Deviation from the outline: Qt comes from `scripts/setup-qt.ps1` instead of
-`jurplel/install-qt-action`, so one multiplatform mechanism serves CI and local
-machines and no third-party action is added.
-
-Still open (later platform qualification): macOS/Linux desktop jobs and their
-`.tar.gz`/`.dmg` packaging, code signing and notarization secrets
-(repo secrets), and the native Linux/macOS adapters themselves.
+`cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked
+-- -D warnings`, `cargo test --workspace --locked`, `cargo build --workspace
+--locked`, then `cargo xtask catalog --check`. First failure stops it.
+Desktop tests are not part of `check`; they run with `build --test`.
 
 ---
 
-## 8. Risks, pre-flight, and constraints
+## 5. Windows
 
-- **Plan documents:** `PLAN.md` is authoritative for application behavior.
-  Change its behavior sections only with explicit user approval, and update
-  `PLAN-INFRA.md` and `docs/building.md` together with any tooling change so the
-  documents never lag the implementation.
-- `Cargo.toml` version is `0.1.0`; tag `v0.1.0` exists and a draft release was
-  built from it. Publishing stays a manual decision; to rebuild the draft from a
-  different commit, delete and re-push the tag (the publish job updates the
-  existing draft with `--clobber`).
-- `gh` is installed and authenticated (`gh auth status` verified as `neochief`);
-  the release scripts re-check before publishing.
-- The Qt SDK is machine-local under `.runtime/Qt`. `scripts/setup-qt.ps1`
-  installs it on Windows, macOS and Linux with aqtinstall, and CI calls the same
-  script and caches the result; Python 3.8+ is the only new prerequisite.
-- Do **not** rename Cargo targets or the canonical executable filenames
-  (`SaveScummer.exe`, `SaveScummer.Host.exe`, `SaveScummer.CLI.exe`) — they are
-  part of the application contract (`PLAN.md`).
-- Keep all scripts pwsh-7 compatible (repo already requires pwsh).
-- **Build-entry stance for non-Windows**: `build.ps1` intentionally remains the
-  Windows orchestration layer (it already owns process/registry/redist logic).
-  macOS/Linux should not be forced through it; their builds run via CI
-  (`.github/workflows/ci.yml`), thin per-platform wrappers, or direct
-  Cargo/CMake/ctest commands. The **shared
-  packaging core (D11)** is the only cross-platform logic that gets genuinely
-  reused, so it must be platform-neutral by construction (never call vswhere,
-  registry, or Windows-only deploy steps).
-- Do **not** add task runners (just/make/cake), move `target/`, or subdivide
-  `scripts/` into folders — intentionally out of scope (respect existing
-  convention).
-- Explorer build scripts (`build-explorer.ps1`, `register-explorer.ps1`,
-  `dev-explorer.ps1`) reference `.runtime/qt-tools/cmake` — unaffected by
-  Phase A; leave them alone.
+### 5.1 The app package
 
-## 9. Out of scope for Phase A
+`build/<mode>/package/SaveScummer-windows-x64/`: the `cmake --install`
+deploy (Qt DLLs into `bin/`), `SaveScummer.Host.exe` and
+`SaveScummer.CLI.exe`, the VC runtime DLLs copied app-locally from the
+newest installed Visual Studio (found with vswhere), the Explorer DLL
+(release only), the Qt license texts, `README.txt` (LGPL attribution,
+source links, and the note that the Qt DLLs may be replaced with
+interface-compatible builds), `THIRD-PARTY-LICENSES.html`, the package
+manifest, and `SHA256SUMS.txt`. Dev packages add the PDBs.
 
-- Installer (Phase B), CI workflows (Phase C), code signing, macOS/Linux
-  packaging.
-- Any change to application behavior, the IPC protocol, catalog, or tests
-  beyond the screenshot-path fix (A7).
+### 5.2 Identity
+
+Every binary carries a version resource from the single version: host and
+CLI via `winresource` in `build.rs` (which **must** print
+`cargo:rerun-if-changed=Cargo.toml`, or a version bump ships a stale
+resource), desktop and Explorer DLL via `.rc.in` templates filled by CMake.
+The icon is `assets/icon.ico`.
+
+### 5.3 The Explorer extension
+
+A classic COM `IContextMenu` handler, registered per-user under
+`HKCU\Software\Classes` (no admin). On Windows 11 it appears under *Show
+more options*; the modern `IExplorerCommand` menu requires package identity
+(MSIX) and code signing, which this project doesn't have, so the classic
+handler is the design.
+
+Its identity lives in exactly **one** file,
+`integrations/windows-explorer/identity.h`. xtask parses it and passes the
+values to Inno Setup (`/D` defines) and to its own registration code:
+
+| | Release | Development |
+|---|---|---|
+| CLSID | `{3F8F42CE-463F-41B6-98D1-8C8D16B88931}` | `{43BFBA41-D0AB-44D3-A5D6-600EB5C74D18}` |
+| Handler name | `SaveScummer` | `SaveScummerDev` |
+
+The dev identity means a dev registration never shadows the installed one.
+`cargo xtask explorer build` builds the DLL and runs its COM tests;
+`register`/`unregister [--dev]` write or remove the per-user registration
+(`InprocServer32` with `ThreadingModel=Apartment`, plus
+`Directory\shellex\ContextMenuHandlers\<name>`); `check` exercises the real
+handler without registering anything.
+
+The extension's Rust bridge finds the host's data directory through the
+`savescummer-platform` crate's default-data-directory function — the same
+code the host uses — never by joining a folder name itself.
+
+`explorer.exe` keeps the DLL loaded, so it can't be overwritten in place;
+the installer replaces it on restart, and a fresh Explorer process picks up
+changes.
+
+### 5.4 The installer
+
+`packaging/windows/savescummer.iss`, compiled by `cargo xtask dist` with
+`/D` defines for version, payload, output, and the Explorer identity — the
+`.iss` is never compiled by hand. It is a **per-user** installer to
+`%LOCALAPPDATA%\Programs\SaveScummer` (no admin), and its payload is exactly
+the release app package.
+
+- **Stable `AppId`**, so upgrades replace in place; `PrivilegesRequired=lowest`.
+- **Two tasks — Explorer menu and launch at sign-in — both `checkedonce`
+  with `UsePreviousTasks=yes`:** checked on a first install, unchecked on
+  upgrades, so a user who turned either off is never opted back in.
+- **Launch at sign-in** is set by running the installed
+  `SaveScummer.Host.exe --autostart on` (§11) — the host is the only writer
+  of that entry. The uninstaller runs `--autostart off`, which removes the
+  entry only if it points at this installation.
+- **The Explorer DLL** is its own `[Files]` entry with `restartreplace`.
+- **Registry writes are HKCU-only**, and the CLSID subtree uses
+  `uninsdeletekey`.
+- **Before replacing files**, `PrepareToInstall` runs the installed
+  `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes;
+  the desktop is closed by Inno's Restart Manager (`CloseApplications=yes`).
+- **Data safety:** `%LOCALAPPDATA%\SaveScummer` is never touched.
+- **Unsigned.** SmartScreen shows "More info → Run anyway" on first run;
+  the README and release notes say so. The script has an off-by-default
+  `SignedBuild` block (`SignTool`, `SignedUninstaller`) so signing can be
+  switched on without other changes.
+
+`dist` fails if Inno Setup is missing (there's nothing to ship without it)
+or if the payload lacks `bin/SaveScummer.exe` or the Explorer DLL.
+
+### 5.5 Windows acceptance checklist
+
+1. `cargo xtask clean` stops recorded and output processes, removes `build/`
+   and `dist/`; `--deep` also `target/`; `.runtime/` untouched.
+2. `cargo xtask run` builds and runs against `.runtime/dev`, recording
+   `build/dev/session.json`; an installed host keeps running unless
+   `--stop-other-hosts`.
+3. `cargo xtask dist` leaves exactly one file in `dist/`, the `-setup.exe`,
+   and a release package under `build/release/package/` with
+   `SHA256SUMS.txt`, `THIRD-PARTY-LICENSES.html`, and no PDBs.
+4. CMake configure shows the Cargo version; screenshots land in
+   `build/<mode>/desktop/screenshots`.
+5. Installing needs no admin, puts the binaries under
+   `%LOCALAPPDATA%\Programs\SaveScummer\bin`, and the Explorer task adds the
+   menu (under *Show more options* on Windows 11).
+6. The sign-in task is checked on first install and unchecked on upgrade;
+   when checked, sign-in starts the host minimized.
+7. Installing over a running host shuts it down gracefully first; a DLL
+   update completes after restart.
+8. Uninstalling removes the app, its registrations, and its own sign-in
+   entry — never `%LOCALAPPDATA%\SaveScummer`.
+
+---
+
+## 6. macOS
+
+Apple Silicon only (M1 or later), macOS 13 or newer (Qt 6.11's minimum).
+Intel Macs are not supported.
+
+### 6.1 Build
+
+Built on an Apple Silicon Mac. Rust builds with
+`--target aarch64-apple-darwin`; CMake with
+`-DCMAKE_OSX_ARCHITECTURES=arm64` and
+`-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0`, and Rust with
+`MACOSX_DEPLOYMENT_TARGET=13.0`, so the whole app agrees on its minimum OS.
+xtask refuses to run the macOS build on an Intel Mac.
+
+### 6.2 The app package
+
+`build/<mode>/package/SaveScummer.app`, bundle identifier
+`com.savescummer.SaveScummer` (fixed forever — macOS keys permissions and
+settings on it):
+
+- `Contents/MacOS/SaveScummer` (desktop), `SaveScummer.Host`,
+  `SaveScummer.CLI` side by side.
+- `Contents/Info.plist` from `packaging/macos/Info.plist.in`:
+  `CFBundleShortVersionString`/`CFBundleVersion` from the Cargo version,
+  `LSMinimumSystemVersion` 13.0, the icon.
+- Qt frameworks deployed by `macdeployqt`; licenses, notices, manifest, and
+  checksums in `Contents/Resources/`.
+- **Ad-hoc signed** (`codesign --force --deep --sign -`) as the last step:
+  Apple Silicon refuses to run binaries without a valid signature, and
+  `macdeployqt` invalidates the linker's ad-hoc signatures when it rewrites
+  library paths.
+
+### 6.3 The release file
+
+A DMG made with `hdiutil create -format UDZO` from a folder holding the
+`.app` and an `Applications` link, so installing is drag-and-drop. Never a
+zip: PowerShell- or .NET-style zips break the symlinks inside Qt's
+frameworks.
+
+**Unsigned and not notarized.** On first launch macOS blocks the app; the
+user opens it via *System Settings → Privacy & Security → Open Anyway*. The
+README and release notes show this step with screenshots.
+
+### 6.4 Launch at login
+
+The host writes and removes `~/Library/LaunchAgents/com.savescummer.host.plist`
+(pointing at the host inside the bundle, with `--minimized` and the data
+directory) and loads or unloads it with `launchctl`. It's driven by the
+in-app setting through the same `--autostart on|off` code as every
+platform (§11). macOS shows its standard "Background item added" notice.
+
+### 6.5 Integration, upgrade, removal
+
+- **No Finder integration.** The only sanctioned route is a FinderSync app
+  extension, which requires proper code signing.
+- **Upgrade:** quit SaveScummer (menu-bar icon → Quit), drag the new app
+  over the old one. Replacing a running app is safe on macOS — running
+  processes keep the old files — and the next launch runs the new version.
+  The README gives these two steps.
+- **Removal:** turn off *Launch at login*, quit, drag the app to the Trash.
+  The README says this and gives the data location
+  (`~/Library/Application Support/SaveScummer`), which removal never
+  touches.
+
+### 6.6 macOS acceptance checklist
+
+1. `cargo xtask dist` on an Apple Silicon Mac leaves exactly
+   `SaveScummer-macos-arm64-<ver>.dmg` in `dist/`; on an Intel Mac it
+   refuses with a clear message.
+2. Every binary in the bundle is arm64 (`lipo -archs`) and
+   `codesign --verify --deep --strict` passes on the ad-hoc signature.
+3. The DMG shows the app and an Applications link; dragging installs it;
+   after *Open Anyway* it runs on a clean macOS 13+ machine.
+4. `Info.plist` carries the Cargo version and minimum OS 13.0.
+5. Enabling launch at login writes the LaunchAgent and the host starts at
+   login; disabling removes it.
+6. Replacing the app while it runs does not corrupt data; the next launch
+   runs the new version.
+7. Nothing ever touches `~/Library/Application Support/SaveScummer`.
+
+---
+
+## 7. Linux
+
+x86_64, any mainstream distribution with glibc 2.35 or newer (Ubuntu 22.04
+and later, Fedora, Arch, SteamOS, …). No distro packages (`.deb`/`.rpm`):
+one AppImage runs on all of them without installation or root.
+
+### 7.1 Build
+
+Built on **Ubuntu 22.04** (locally or `ubuntu-22.04` in CI). A binary only
+runs on systems whose glibc is at least as new as the one it was built
+against, so the oldest supported base is the build base.
+
+### 7.2 The app package and release file
+
+The app package is an AppDir, `build/<mode>/package/SaveScummer.AppDir`,
+produced by `linuxdeploy` with its Qt plugin. It contains the three
+executables, Qt and every library not guaranteed on a base system (per the
+AppImage exclude list), both the `xcb` and `wayland` Qt platform plugins,
+`packaging/linux/SaveScummer.desktop` and the icon, licenses, notices,
+manifest, and checksums.
+
+`packaging/linux/AppRun` is the entry point and dispatches on its first
+argument: `host …` runs `SaveScummer.Host`, `cli …` runs `SaveScummer.CLI`,
+anything else runs the desktop. So the single file serves as all three
+executables.
+
+`appimagetool` turns the AppDir into
+`SaveScummer-linux-x86_64-<ver>.AppImage`, using the static AppImage
+runtime so it doesn't need `libfuse2` on the user's system. **Unsigned.**
+
+### 7.3 Launch at login
+
+The XDG convention: the host writes and removes
+`~/.config/autostart/SaveScummer.desktop` with
+`Exec="<AppImage path>" host --minimized --data-dir "<data>"`, through the
+same `--autostart on|off` code (§11). The AppImage path comes from the
+`APPIMAGE` variable the AppImage runtime sets. Because users download each
+version under a new file name, the host refreshes the entry to its own
+current path whenever it starts with autostart enabled (§11).
+
+### 7.4 Integration, upgrade, removal
+
+- **No file-manager integration.** There's no cross-desktop mechanism for
+  it on Linux. Adding the app to the application menu is left to the
+  user's AppImage tool (e.g. Gear Lever, AppImageLauncher), which reads the
+  embedded `.desktop` file.
+- **Upgrade:** download the new AppImage, quit the old one, start the new
+  one; delete the old file. The README gives these steps.
+- **Removal:** turn off *Launch at login*, quit, delete the file. The README
+  gives the data location (`~/.local/share/SaveScummer`), which removal
+  never touches.
+
+### 7.5 Linux acceptance checklist
+
+1. `cargo xtask dist` on Ubuntu 22.04 leaves exactly
+   `SaveScummer-linux-x86_64-<ver>.AppImage` in `dist/`.
+2. The AppImage runs after `chmod +x` on a stock Ubuntu 22.04 desktop and
+   on current Fedora, without `libfuse2`, under both X11 and Wayland.
+3. `SaveScummer-….AppImage host --version` and `… cli --version` print the
+   Cargo version.
+4. Enabling launch at login writes the XDG entry pointing at the AppImage
+   and the host starts at login; running a newer AppImage re-points it;
+   disabling removes it.
+5. Nothing ever touches `~/.local/share/SaveScummer`.
+
+---
+
+## 8. Continuous integration
+
+Two workflows in `.github/workflows/`. Every step is a `cargo xtask`
+command.
+
+**`ci.yml`** — branch pushes, pull requests, manual dispatch; not tags. A
+concurrency group cancels superseded runs per ref. One required job per
+platform — `windows-latest`, `macos-latest` (Apple Silicon),
+`ubuntu-22.04` — each: checkout, Rust cache, Qt cache → `cargo xtask setup
+qt` (Linux also `setup linux-tools`), `cargo xtask check`,
+`cargo xtask build --test`.
+
+**`release.yml`** — `v*` tags only, with a concurrency group that never
+cancels. One build job per platform: checkout with full history, caches,
+setup commands (Windows `choco install innosetup`; all
+`setup cargo-about`), `cargo xtask dist`, upload the one file from `dist/`
+(`if-no-files-found: error`). Then one **publish** job (`needs:` all three,
+`contents: write`) downloads all three files into `dist/`, fetches the tag,
+and runs `cargo xtask publish` with `GH_TOKEN`: one draft release carrying
+all platforms.
+
+---
+
+## 9. Versioning and releases
+
+**Cutting a release** — `cargo xtask release <version>` is the only writer
+of the version:
+
+1. Validates: three-part version (a leading `v` is accepted), on a branch,
+   clean working tree, version differs from the current one, tag
+   `v<version>` exists neither locally nor on origin.
+2. Rewrites `workspace.package.version` with `toml_edit` (formatting
+   preserved) and refreshes `Cargo.lock` (`cargo update --workspace`).
+3. Runs `cargo xtask check` (skippable with `--skip-checks` for
+   emergencies). On failure the bump is reverted and the tree ends clean.
+4. Commits `Release <version>`, creates the annotated tag `v<version>`, and
+   pushes branch and tag (`--no-push` stops and prints the two commands).
+
+The tag triggers `release.yml` (§8).
+
+**Publishing** — `cargo xtask publish`, identical locally and in CI. It
+checks that `gh` is installed and authenticated, `origin` exists, and tag
+`v<version>` exists and points at `HEAD`. It uploads exactly the three
+release files for that version from `dist/` and fails if any is missing.
+If the release is already published it refuses; if a draft exists it
+re-uploads with `--clobber`; otherwise it creates the draft with
+`--generate-notes`. It prints the draft URL. A human publishes.
+
+To rebuild a draft from a different commit, delete the tag locally and on
+origin and push it again. A published release is never changed; that's
+what a new version is for.
+
+---
+
+## 10. Documentation
+
+- **`docs/building.md`** — the how-to, organized per OS: prerequisites, every
+  `cargo xtask` command and flag, outputs, the release runbook, CI, dev
+  data locations, VS Code tasks. It's the only place flags are listed.
+- **`README.md`** — the short version: install instructions per platform
+  (including the SmartScreen, *Open Anyway*, and `chmod +x` steps, upgrade
+  and removal, and where data lives), the quickest build commands, and a
+  link to the guide.
+- **This document** — decisions and reasons, not flag lists.
+
+---
+
+## 11. What this plan needs from the application
+
+These behaviors belong to `PLAN.md` and must be specified there; the
+infrastructure above depends on them.
+
+1. **`SaveScummer.Host --autostart on|off [--data-dir <dir>]`** sets the
+   launch-at-login preference, writes or removes the platform's entry
+   (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and exits.
+   `off` removes the entry only if it points at this host. The in-app
+   setting uses the same code, so there is exactly one writer.
+2. **With autostart enabled, the host refreshes its entry to its own
+   current path on every start** (needed for AppImages, harmless
+   elsewhere).
+3. **Data directories:** Windows `%LOCALAPPDATA%\SaveScummer`, macOS
+   `~/Library/Application Support/SaveScummer`, Linux
+   `~/.local/share/SaveScummer`, exposed by the `savescummer-platform`
+   crate as the single source every component uses.
+
+---
+
+## 12. Non-goals
+
+- **No code signing** on any platform (§5.4, §6.3, §7.2).
+- **No update checks or auto-update.** The app never phones home; users
+  install the next release.
+- **No Intel Mac, 32-bit, or ARM Linux builds.**
+- **No distro packages, Flatpak, Microsoft Store, or Mac App Store.**
+- **No shell integration outside Windows.**
+- **Never auto-publish; never rename the canonical executables; never clean
+  `.runtime/`.**
+
+---
+
+## Appendix — decision index
+
+| # | Decision | Where |
+|---|---|---|
+| D1 | Four disk roots; `dist/` holds only release files; `.runtime/` never cleaned. | §2 |
+| D2 | Version only in `Cargo.toml`; tag = `v<version>`. | §3.1, §9 |
+| D3 | All build automation is `cargo xtask`; no shell scripts, no task runners. | §3 |
+| D4 | One release file per platform: Inno installer / DMG / AppImage. | §1, §9 |
+| D5 | App package assembled under `build/`, staged, swapped atomically. | §2, §3.1 |
+| D6 | Processes stopped politely; PID reuse guarded; other hosts left alone by default. | §3.2 |
+| D7 | Qt tracks the latest minor (6.11 now); Rust pinned in `rust-toolchain.toml`. | §4 |
+| D8 | Windows: CMake picks the newest Visual Studio; no generator logic, no MSVC shim. | §3.3 |
+| D9 | Explorer identity only in `identity.h`; classic menu; bridge uses the platform crate. | §5.3 |
+| D10 | Per-user Inno installer; integrations checked on first install only. | §5.4 |
+| D11 | The host is the only writer of launch-at-login entries on every OS. | §5.4, §11 |
+| D12 | macOS: Apple Silicon, macOS 13+, ad-hoc signed, DMG, LaunchAgent, no Finder integration. | §6 |
+| D13 | Linux: AppImage built on Ubuntu 22.04, AppRun dispatch, XDG autostart, no file-manager integration. | §7 |
+| D14 | Unsigned everywhere; Inno keeps an off-by-default signing block. | §12 |
+| D15 | Third-party notices via cargo-about; unlisted licenses fail packaging. | §3.1 |
+| D16 | CI: one required job per platform; release builds three files into one draft. | §8 |
+| D17 | Draft-first publishing; one `publish` implementation for local and CI. | §9 |
+| D18 | User data directories are never touched by install, upgrade, uninstall, or clean. | §1, §11 |
+| D19 | No update checks or auto-update. | §12 |

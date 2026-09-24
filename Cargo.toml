@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/host", "apps/cli", "crates/core", "crates/snapshots", "crates/storage", "crates/scanner", "crates/monitor", "crates/platform", "crates/ipc", "integrations/windows-explorer/bridge", "tests/fake-game", "tests/integration"]
+members = ["apps/host", "apps/cli", "crates/core", "crates/catalog", "crates/catalog-build", "crates/snapshots", "crates/storage", "crates/scanner", "crates/monitor", "crates/platform", "crates/ipc", "integrations/windows-explorer/bridge", "tests/fake-game", "tests/integration"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,6 +9,8 @@ rust-version = "1.98"
 
 [workspace.dependencies]
 savescummer-core = { path = "crates/core" }
+savescummer-catalog = { path = "crates/catalog" }
+savescummer-catalog-build = { path = "crates/catalog-build" }
 savescummer-snapshots = { path = "crates/snapshots" }
 savescummer-storage = { path = "crates/storage" }
 savescummer-scanner = { path = "crates/scanner" }

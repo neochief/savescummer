@@ -15,7 +15,7 @@ Status: design agreed for implementation. Supersedes `catalog/games/*.yaml` and
 - The catalog declares **facts**: who a game is, what proves it is installed, and
   where its saves may live. It never encodes detection mechanics (how to read
   Steam libraries, GOG registry, etc.) — that is code.
-- Humans maintain exactly two files: `catalog/games.xlsx` and `catalog/addendum.yaml`. Everything
+- Humans maintain exactly two files: `catalog/games.csv` and `catalog/addendum.yaml`. Everything
   else is generated from the pinned Ludusavi manifest by deterministic rules.
 - One game has exactly one save directory (DIR). Multiple candidate DIRs are
   allowed in the catalog; the runtime picks one, sticky, without asking the user.
@@ -27,43 +27,37 @@ Status: design agreed for implementation. Supersedes `catalog/games/*.yaml` and
 
 ## 2. Human inputs
 
-### 2.1 `catalog/games.xlsx`
+### 2.1 `catalog/games.csv`
 
-The single list of supported games plus per-game instructions. Sheet
-**Candidates**; first row is the header.
+The single list of supported games plus per-game instructions. One row per
+game; the first row is the header.
 
-| Column | Read by builder | Meaning |
-|---|---|---|
-| `Name` | yes | display name in the app; default lookup key |
-| `Manifest name` (optional) | yes | exact Ludusavi key when it differs from `Name` |
-| `Product fit` | yes | `Keep` or `Remove`; only `Keep` rows are built |
-| `Info` | yes | markdown instructions, copied verbatim into the bundle |
-| `PCGamingWiki`, `Category`, `Actionable feedback` | no | human review metadata |
-| Sheet `Product Fit Review` | no | review summary; other sheets are ignored |
+| Column | Meaning |
+|---|---|
+| `Name` | display name in the app; exact Ludusavi lookup key |
+| `Product fit` | `Keep` or `Remove`; only `Keep` rows are built |
+| `Info` | markdown instructions, copied verbatim into the bundle |
 
-- Lookup order: `Manifest name` when present, then exact `Name`, then
-  case-insensitive `Name` (warning). No match anywhere → build error with
-  closest-name suggestions.
+- Lookup is an exact `Name` match against the pinned manifest. No match →
+  build error with closest-name suggestions.
 - Duplicate names (case-insensitive) → build error.
 - Unknown `Product fit` values → build error.
 - `Info` holds markdown and may contain commas, quotes and newlines as normal
-  cell content. It is the only source of game instructions.
-- The builder consumes the generated, committed `catalog/games.csv`; the export
-  from `games.xlsx` is produced by the builder toolchain and CI fails when the
-  CSV is stale. Git diffs, agents and scripts read the CSV; the spreadsheet
-  stays the only editing surface.
+  quoted CSV content. It is the only source of game instructions.
+- The file may contain extra columns; the builder ignores any column beyond
+  `Name`, `Product fit` and `Info`.
+- `catalog/games.csv` is committed and is the only editing surface; the builder
+  reads it directly. Git diffs, agents and scripts read the same file.
 
-Current list: 96 `Keep`, 10 `Remove`. Known name mismatches that need the
-`Manifest name` column (or a rename): `ADOM (Ancient Domains Of Mystery)` →
-`ADOM: Ancient Domains of Mystery`; `Total War: ROME II - Emperor Edition` →
-`Total War: Rome II`; `A Total War Saga: THRONES OF BRITANNIA` →
-`Total War Saga: Thrones of Britannia`. `Six Ages 2: Lights Going Out` has no
-manifest entry and needs an addendum entry.
+Current list: 97 `Keep`, 10 `Remove`. `Name` must match the manifest key
+exactly. `Six Ages 2: Lights Going Out` has no manifest entry and needs an
+addendum entry.
 
 ### 2.2 `catalog/addendum.yaml`
 
-Entries for games the manifest does not have, keyed by the sheet `Name`. Same
-shape as generated entries (Section 3.4), so one validator covers both.
+Entries for games the manifest does not have, keyed by the `Name` column in
+`games.csv`. Same shape as generated entries (Section 3.4), so one validator
+covers both.
 
 ```yaml
 Void War:
@@ -77,7 +71,7 @@ Void War:
 ```
 
 - An addendum key with no matching `Keep` row is a warning and is ignored.
-- The addendum **cannot introduce games**; the sheet remains the only game list.
+- The addendum **cannot introduce games**; `games.csv` remains the only game list.
 - Manifest precedence: when the name exists in the manifest, manifest data wins
   per field; the addendum fills only fields the manifest did not produce
   (Section 3.2). A shadowed addendum entry produces a warning so it can be
@@ -100,8 +94,8 @@ commit).
 ## 3. Builder (build pipeline)
 
 The builder is a standalone, offline, deterministic tool (`crates/catalog-build`).
-Inputs: `games.xlsx`, `addendum.yaml`, pinned manifest. Output:
-`catalog/catalog-v1.json` (committed, reviewable diff) plus a build report.
+Inputs: `games.csv`, `addendum.yaml`, pinned manifest. Output:
+`catalog/catalog.json` (committed, reviewable diff) plus a build report.
 
 For each `Keep` row, in order:
 
@@ -110,7 +104,7 @@ For each `Keep` row, in order:
    directory, the game is a build error.
 3. Not found → take the addendum entry (which must exist, or error).
 4. Apply the addendum overlay when both exist (3.2).
-5. Derive identity (3.3), inject `Info` from the sheet, validate the result.
+5. Derive identity (3.3), inject `Info` from `games.csv`, validate the result.
 
 ### 3.1 Translation rules (manifest → entry)
 
@@ -118,7 +112,7 @@ Used fields:
 
 | Manifest | Entry |
 |---|---|
-| key | lookup only; bundle `name` comes from the sheet |
+| key | lookup only; bundle `name` comes from `games.csv` |
 | `steam.id` + `id.steamExtra` | `detect.steam` (array if extras) |
 | `gog.id` + `id.gogExtra` | `detect.gog` |
 | `installDir` keys | loose-install candidates (see below) |
@@ -152,7 +146,7 @@ Used fields:
    - `<base>` occurring anywhere except as the leading path root (example:
      NEO Scavenger's Flash shared-object path);
    - GOG Galaxy-managed storage
-     (`.../GOG.com/Galaxy/Applications/.../Storage/...`, example: BATTLETECH).
+     (`.../GOG.com/Galaxy/Applications/.../Storage/...`, example: BattleTech).
    A game whose candidates all drop out fails as "no usable save directory".
    If a `Keep` game depends on one of these forms, the rule is revisited
    deliberately rather than guessed.
@@ -184,7 +178,7 @@ When a name exists in both:
 - `executables`: per OS; manifest wins when it produced a non-empty list for that OS.
 - `save`: per OS; manifest candidates replace addendum candidates for every OS the
   manifest covers; addendum keeps only OSes the manifest produced nothing for.
-- `info`: always from the sheet.
+- `info`: always from `games.csv`.
 - `id`: derived (3.3); an addendum-declared id is used only when no store id exists.
 
 ### 3.3 Identity
@@ -197,7 +191,7 @@ When a name exists in both:
 
 ### 3.4 Output bundle
 
-`catalog/catalog-v1.json`:
+`catalog/catalog.json`:
 
 ```json
 {
@@ -236,7 +230,7 @@ section, config-only, userdata-only, MS-Store-only, unsupported path form);
 duplicate names; invalid `Product fit`; addendum schema errors; manifest hash
 mismatch.
 
-Warnings: case-insensitive name match; addendum shadowed by the manifest;
+Warnings: addendum shadowed by the manifest;
 addendum with no `Keep` row; multi-target games with no name/ancestor signal
 (listed for future review, not failures).
 
@@ -257,10 +251,10 @@ entry in Section 3.4.
 
 ### 3.8 Worked example: Void War (addendum lifecycle)
 
-Today: sheet row + addendum entry as in Section 2.2; bundle uses the addendum.
+Today: `games.csv` row + addendum entry as in Section 2.2; bundle uses the addendum.
 
 Later: the manifest gains `Void War`. The generator uses manifest data, warns
-that the addendum is shadowed, and keeps injecting the sheet's `Info`. Deleting
+that the addendum is shadowed, and keeps injecting `games.csv`'s `Info`. Deleting
 the addendum entry changes nothing in the output.
 
 ## 4. Resolver (runtime decisions)
@@ -411,11 +405,11 @@ Run on first detection, then keep the result while the chosen directory exists:
 15. **Upstream rename**: store-id identity keeps the same `id`, so history and
     overrides survive.
 16. **Addendum game lands upstream** (Void War): manifest data wins, warning is
-    emitted, sheet `Info` still applied.
+    emitted, `games.csv` `Info` still applied.
 
 ## 6. Bundle delivery and updates
 
-- The host embeds `catalog/catalog-v1.json` at build time as the fallback.
+- The host embeds `catalog/catalog.json` at build time as the fallback.
 - A bundle may be fetched at runtime (release asset or raw URL) with ETag /
   SHA-256 verification, size cap, schema validation (same parser as build-time),
   atomic replacement in `%LOCALAPPDATA%\SaveScummer\catalog`, and last-good
@@ -432,7 +426,7 @@ The feature is two independently testable units plus thin host wiring.
 
 ### 7.1 Builder — `crates/catalog-build`
 
-Offline, deterministic, no host or OS dependencies. Inputs are files (sheet,
+Offline, deterministic, no host or OS dependencies. Inputs are files (`games.csv`,
 addendum, manifest path); outputs are the bundle and the report. Library plus a
 `catalog-gen` binary. It depends on `crates/catalog` for the bundle model and
 validator, so builder output and resolver input cannot drift.
@@ -444,7 +438,6 @@ Tests (no network, golden files under `tests/fixtures/catalog/`):
 - addendum overlay precedence, gap filling and shadow warnings;
 - identity derivation and name matching/normalization;
 - every hard failure and warning in Section 3.5;
-- `games.csv` export matches `games.xlsx` (freshness check in CI);
 - byte-identical regeneration from the same lock and inputs.
 
 ### 7.2 Resolver — `crates/catalog`
@@ -524,13 +517,13 @@ temporary directories, never real game libraries or the network.
 - Backing up registry-stored saves.
 - Non-Steam/non-GOG launcher detection (Heroic, Lutris, Flatpak) beyond
   placeholder support.
-- Authoring instructions anywhere except `games.xlsx`.
+- Authoring instructions anywhere except `games.csv`.
 
 ## 9. Decision log
 
 | Decision | Choice |
 |---|---|
-| Manual inputs | `games.xlsx` + `addendum.yaml` only |
+| Manual inputs | `games.csv` + `addendum.yaml` only |
 | Manifest precedence | manifest wins per field; addendum fills gaps; shadow warning |
 | Multi-target storage | candidate list; no flags |
 | Multi-target pick | sticky ladder: existence → newest activity → name → ancestor |

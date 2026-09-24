@@ -1,0 +1,14 @@
+"Void War":
+  detect:
+    steam: 2853590
+  executables:
+    windows: ["Void War.exe"]
+  save:
+    - when: { os: windows }
+      dir: "{APPDATA}/Void_War"
+# Shadowed by the manifest entry; the manifest's save wins and a warning is
+# emitted. Kept in the fixture to exercise the overlay rules.
+"Shadow Game":
+  save:
+    - when: { os: windows }
+      dir: "{APPDATA}/Shadow"

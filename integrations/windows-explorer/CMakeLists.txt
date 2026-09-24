@@ -6,9 +6,11 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 get_filename_component(REPO "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 # The application version has a single source of truth: the Cargo workspace
-# manifest ([workspace.package] version); the first three-part version field.
+# manifest ([workspace.package] version); the first line that starts with a
+# three-part version = "...". "\n" pins the match to a line start because
+# CMake's ^ only means start-of-file.
 file(READ "${REPO}/Cargo.toml" _savescummer_manifest)
-string(REGEX MATCH "version = \"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _savescummer_version "${_savescummer_manifest}")
+string(REGEX MATCH "\n[ \t]*version[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _savescummer_version "${_savescummer_manifest}")
 if(NOT _savescummer_version)
     message(FATAL_ERROR "Cannot read the SaveScummer version from Cargo.toml.")
 endif()

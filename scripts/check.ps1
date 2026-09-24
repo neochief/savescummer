@@ -1,8 +1,11 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
-    if (Test-Path -LiteralPath (Join-Path $cargoBin 'cargo.exe')) { $env:PATH = "$cargoBin;$env:PATH" }
+    $cargoBin = Join-Path $HOME '.cargo' 'bin'
+    $cargoExe = if ($IsWindows) { 'cargo.exe' } else { 'cargo' }
+    if (Test-Path -LiteralPath (Join-Path $cargoBin $cargoExe)) {
+        $env:PATH = $cargoBin + [IO.Path]::PathSeparator + $env:PATH
+    }
 }
 cargo fmt --all --check
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -11,4 +14,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cargo test --workspace --locked
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cargo build --workspace --locked
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& (Join-Path $PSScriptRoot 'catalog.ps1') -Check
 exit $LASTEXITCODE

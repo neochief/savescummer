@@ -1,0 +1,22 @@
+[package]
+name = "savescummer-catalog-build"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "catalog-gen"
+path = "src/main.rs"
+
+[dependencies]
+savescummer-catalog.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml = "0.9"
+csv = "1"
+sha2 = "0.10"
+thiserror.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

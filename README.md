@@ -301,6 +301,13 @@ All YAML definitions under `catalog/games` are embedded when the host is built.
 `--catalog-dir <directory>` selects an external catalog for development or local
 definitions; each rescan rereads it without recursively walking other directories.
 
+> The next-generation catalog pipeline described in
+> [`PLAN-CATALOG.md`](PLAN-CATALOG.md) is implemented as the standalone
+> `savescummer-catalog` (resolver) and `savescummer-catalog-build` (builder)
+> crates and is not yet wired into the host. Regenerate or verify the bundle
+> with `./scripts/catalog.ps1` (`scripts/fetch-catalog-manifest.ps1` fetches the
+> pinned manifest).
+
 Steam app IDs also match exact `Steam App <id>` uninstall keys in current-user and
 machine-wide 32/64-bit registry views. Non-Steam catalog definitions can omit
 `stores` and declare `registry_keys` (exact uninstall subkey names),

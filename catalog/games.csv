@@ -9,7 +9,7 @@
 **How progress is saved:** Classic autosaves and supports Save & Quit, but it does not provide unrestricted rollback slots.
 
 **SaveScummer value:** Checkpoint before a dangerous historic site, deep cave, hostile settlement, or irreversible build experiment. Restore after a death or bad mutation/cybernetic choice without rerolling the character.","Keep",""
-"ADOM (Ancient Domains Of Mystery)","yes","Permadeath roguelike/roguelite runs","**Context:** Traditional-mode characters accumulate artifacts, intrinsics, skills, corruption management, and quest progress that disappear with permadeath.
+"ADOM: Ancient Domains of Mystery","yes","Permadeath roguelike/roguelite runs","**Context:** Traditional-mode characters accumulate artifacts, intrinsics, skills, corruption management, and quest progress that disappear with permadeath.
 
 **How progress is saved:** Traditional mode uses a suspend-style save; Story mode already offers normal save/load and is not the main use case.
 
@@ -84,6 +84,11 @@
 **How progress is saved:** The run can be resumed around level transitions, giving SaveScummer a stable state to version.
 
 **SaveScummer value:** Checkpoint before a boss or difficult biome when the build is unusually strong. Restore after death instead of depending on another procedural run to recreate it.","Keep",""
+"Void War","no","Permadeath roguelike/roguelite runs","**Context:** A promising run can hinge on a specific starship build (weapons, modules, reactor power, crew, wargear and artifacts) that is expensive to recreate after one lost fight.
+
+**How progress is saved:** The active run is autosaved and persistent progression is stored separately; permadeath still ends a run rather than leaving reusable rollback points.
+
+**SaveScummer value:** Checkpoint before a dangerous encounter, boss, or boarding action. Restore the same ship, crew and build after a fatal fight instead of starting a new galaxy.","Keep",""
 "Caveblazers","yes","Permadeath roguelike/roguelite runs","**Context:** The useful case would be protecting a strong perk/equipment build before a late cave or boss.
 
 **How progress is saved:** The released game does not normally save and resume an active run.
@@ -134,7 +139,7 @@
 **How progress is saved:** The campaign is saved on the world map; combat is not normally serialized turn-by-turn and usually restarts as a whole.
 
 **SaveScummer value:** Checkpoint before a merchant, banner, artifact choice, or difficult ring. Restore to compare build decisions or retry from the pre-combat state, not individual combat turns.","Keep",""
-"One Step From Eden","yes","Permadeath roguelike/roguelite runs","**Context:** A late run can have a rare spell/artifact synergy and route that is difficult to rebuild after one failed fight.
+"One Step from Eden","yes","Permadeath roguelike/roguelite runs","**Context:** A late run can have a rare spell/artifact synergy and route that is difficult to rebuild after one failed fight.
 
 **How progress is saved:** The game can save an active run while out of battle, giving SaveScummer a documented between-battle state.
 
@@ -264,7 +269,7 @@
 **How progress is saved:** Ironman disables manual and multiple saves, committing tactical casualties and campaign state to one history.
 
 **SaveScummer value:** Checkpoint before a terror mission, base assault, or difficult UFO operation. Restore after a squad wipe or veteran loss instead of restarting the No Looking Back run.","Keep","Keep specifically for Ironman achievement runs."
-"BATTLETECH","yes","Ironman / single-save campaigns","**Context:** The **I Am Iron Man!** achievement requires completing a campaign with Iron Man enabled, where rare Mechs, weapons, pilots, and company finances are all at risk.
+"BattleTech","yes","Ironman / single-save campaigns","**Context:** The **I Am Iron Man!** achievement requires completing a campaign with Iron Man enabled, where rare Mechs, weapons, pilots, and company finances are all at risk.
 
 **How progress is saved:** Iron Man uses a single campaign save and disables the normal pre/post-mission save history.
 
@@ -274,32 +279,32 @@
 **How progress is saved:** Carved in Stone keeps one save and removes the normal Load option.
 
 **SaveScummer value:** Checkpoint before a chapter climax, risky transformation, or battle involving a key legacy hero. Restore after a permanent loss instead of replaying the whole Carved in Stone campaign.","Keep","Keep specifically for Carved in Stone runs."
-"Total War: SHOGUN 2","yes","Ironman / single-save campaigns","**Context:** Legendary turns every bad siege, agent loss, or Realm Divide misstep into a committed campaign result after many turns of buildup.
+"Total War: Shogun 2","yes","Ironman / single-save campaigns","**Context:** Legendary turns every bad siege, agent loss, or Realm Divide misstep into a committed campaign result after many turns of buildup.
 
 **How progress is saved:** Legendary only exposes the latest automatic campaign state instead of normal manual saves.
 
 **SaveScummer value:** Checkpoint before Realm Divide, a decisive siege, or a risky war declaration. Restore after a campaign-breaking loss instead of replaying dozens of turns.","Keep",""
-"Total War: ROME II - Emperor Edition","yes","Ironman / single-save campaigns","**Context:** A Legendary campaign can lose veteran armies, provinces, and political stability to one bad war or civil conflict.
+"Total War: Rome II","yes","Ironman / single-save campaigns","**Context:** A Legendary campaign can lose veteran armies, provinces, and political stability to one bad war or civil conflict.
 
 **How progress is saved:** Legendary restricts loading to the current/latest autosave rather than normal manual saves.
 
 **SaveScummer value:** Checkpoint before a decisive siege, civil-war risk, or major declaration. Restore the pre-war campaign instead of rebuilding armies and provinces over many turns.","Keep",""
-"Total War: ATTILA","yes","Ironman / single-save campaigns","**Context:** ATTILA campaigns can collapse quickly when one lost army or settlement triggers food, public-order, invasion, and migration problems.
+"Total War: Attila","yes","Ironman / single-save campaigns","**Context:** ATTILA campaigns can collapse quickly when one lost army or settlement triggers food, public-order, invasion, and migration problems.
 
 **How progress is saved:** Legendary relies on an evolving autosave history rather than free manual rollback.
 
 **SaveScummer value:** Checkpoint before a Hun battle, exposed-settlement defense, migration, or dangerous End Turn. Restore before the collapse instead of trying to recover from several cascading losses.","Keep",""
-"A Total War Saga: THRONES OF BRITANNIA","yes","Ironman / single-save campaigns","**Context:** Small kingdoms can be crippled by one lost army, succession problem, or declaration that opens multiple fronts.
+"Total War Saga: Thrones of Britannia","yes","Ironman / single-save campaigns","**Context:** Small kingdoms can be crippled by one lost army, succession problem, or declaration that opens multiple fronts.
 
 **How progress is saved:** Legendary commits progress through automatic saves and disables normal manual rollback.
 
 **SaveScummer value:** Checkpoint before an invasion, decisive siege, succession issue, or risky declaration. Restore the kingdom before one bad turn snowballs into a lost campaign.","Keep",""
-"Total War: WARHAMMER II","yes","Ironman / single-save campaigns","**Context:** A Legendary campaign can invest dozens of turns into legendary lords, elite armies, settlements, and campaign objectives before one battle or End Turn cascade destroys them.
+"Total War: Warhammer II","yes","Ironman / single-save campaigns","**Context:** A Legendary campaign can invest dozens of turns into legendary lords, elite armies, settlements, and campaign objectives before one battle or End Turn cascade destroys them.
 
 **How progress is saved:** Legendary restricts manual saving and maintains the campaign through automatic saves.
 
 **SaveScummer value:** Checkpoint before a risky siege, confederation, war declaration, or dangerous End Turn. Restore before losing a key lord/army and the turns invested in building it.","Keep",""
-"Total War: THREE KINGDOMS","yes","Ironman / single-save campaigns","**Context:** A Legendary campaign ties military progress to named characters, relationships, court positions, coalitions, and territory, so one death or diplomatic break can have long consequences.
+"Total War: Three Kingdoms","yes","Ironman / single-save campaigns","**Context:** A Legendary campaign ties military progress to named characters, relationships, court positions, coalitions, and territory, so one death or diplomatic break can have long consequences.
 
 **How progress is saved:** Legendary relies on automatic campaign saves instead of unrestricted manual rollback.
 
@@ -449,7 +454,7 @@
 **How progress is saved:** The game does not normally save an active run for later continuation.
 
 **SaveScummer value:** A file-only SaveScummer cannot preserve that live build, so the core use case is unsupported without runtime capture or a mod-created run save.","Keep",""
-"SYNTHETIK: Legion Rising","yes","Run-based games needing serialization validation","**Context:** The desired value is protecting a high-roll weapon/module build before a late stage or boss.
+"Synthetik: Legion Rising","yes","Run-based games needing serialization validation","**Context:** The desired value is protecting a high-roll weapon/module build before a late stage or boss.
 
 **How progress is saved:** The game does not support saving and resuming an active run.
 

@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
 # The application version has a single source of truth: the Cargo workspace
-# manifest ([workspace.package] version). It is the first three-part version
-# field in Cargo.toml; dependency versions like "1" or "0.37" do not match.
+# manifest ([workspace.package] version). It is the first line in Cargo.toml
+# that starts with a three-part version = "..."; inline dependency versions
+# such as foo = { version = "1.2.3" } never match. "\n" pins the match to a
+# line start because CMake's ^ only means start-of-file.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml" _savescummer_manifest)
-string(REGEX MATCH "version = \"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _savescummer_version "${_savescummer_manifest}")
+string(REGEX MATCH "\n[ \t]*version[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _savescummer_version "${_savescummer_manifest}")
 if(NOT _savescummer_version)
     message(FATAL_ERROR "Cannot read the SaveScummer version from Cargo.toml.")
 endif()

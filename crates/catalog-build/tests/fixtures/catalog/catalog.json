@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "mtkennerly/ludusavi-manifest",
+    "revision": "fixture"
+  },
+  "games": [
+    {
+      "id": "steam-1434950",
+      "name": "HighFleet",
+      "info": "Exit to main menu before saving.",
+      "detect": {
+        "steam": 1434950,
+        "gog": 1589167087
+      },
+      "executables": {
+        "windows": [
+          "Highfleet.exe"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "dir": "{INSTALL_DIR}/Saves"
+        }
+      ]
+    },
+    {
+      "id": "steam-2853590",
+      "name": "Void War",
+      "info": "Void War info.",
+      "detect": {
+        "steam": 2853590
+      },
+      "executables": {
+        "windows": [
+          "Void War.exe"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "dir": "{APPDATA}/Void_War"
+        }
+      ]
+    },
+    {
+      "id": "steam-333300",
+      "name": "ADOM: Ancient Domains of Mystery",
+      "info": "Traditional-mode info.",
+      "detect": {
+        "steam": 333300
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "dir": "{DOCUMENTS}/ADOM/savedg"
+        }
+      ]
+    },
+    {
+      "id": "steam-999",
+      "name": "Shadow Game",
+      "info": "Shadow info.",
+      "detect": {
+        "steam": 999
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "dir": "{INSTALL_DIR}/save"
+        }
+      ]
+    }
+  ]
+}

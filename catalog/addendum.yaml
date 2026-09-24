@@ -1,0 +1,16 @@
+# Addendum: games the pinned Ludusavi manifest does not know.
+# See PLAN-CATALOG.md §2.2. The manifest always wins per field; an entry here
+# is only consulted for the fields the manifest did not produce.
+#
+# NOTE: several Keep games still need verified `save` directories before the
+# strict build can pass (see build/catalog/build-report.json). They are
+# intentionally absent rather than guessed.
+
+"Void War":
+  detect:
+    steam: 2853590
+  executables:
+    windows: ["Void War.exe"]
+  save:
+    - when: { os: windows }
+      dir: "{APPDATA}/Void_War"
