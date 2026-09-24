@@ -124,7 +124,7 @@
 **How progress is saved:** Continue resumes from a floor-start state rather than the exact room where you quit.
 
 **SaveScummer value:** Checkpoint at the start of a late floor before a boss or difficult section. Restore the same build after death instead of starting from the first area.","Keep",""
-"Slasher's Keep","yes","Permadeath roguelike/roguelite runs","no","**Context:** A developed character can carry strong weapons, traits, stats, and inventory into floors where one failed push can undo hours of progress.
+"Slasher's Keep","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A developed character can carry strong weapons, traits, stats, and inventory into floors where one failed push can undo hours of progress.
 
 **How progress is saved:** The save pedestal / Save & Exit state is mainly for continuation and must be captured before the loss is committed.
 
@@ -134,7 +134,7 @@
 **How progress is saved:** The game autosaves the current run and Save & Quit resumes it, but earlier deck/path states are normally overwritten.
 
 **SaveScummer value:** Checkpoint before an Act boss, Elite path, event, shop, or build-defining reward. Restore to retry or compare the decision without rerolling the entire deck.","Keep",""
-"Monster Train","yes","Permadeath roguelike/roguelite runs","no","**Context:** A late deck may depend on a very specific clan, unit-upgrade, artifact, removal, and spell package.
+"Monster Train","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A late deck may depend on a very specific clan, unit-upgrade, artifact, removal, and spell package.
 
 **How progress is saved:** The campaign is saved on the world map; combat is not normally serialized turn-by-turn and usually restarts as a whole.
 
@@ -414,7 +414,7 @@
 **How progress is saved:** The game autosaves at checkpoints rather than offering unrestricted branch saves.
 
 **SaveScummer value:** Checkpoint before a battle with possible hero loss or a major caravan/story decision. Restore to preserve a different import state for later games without replaying the whole journey.","Keep",""
-"Yes, Your Grace","yes","Committed narrative/autosave choices","yes","**Context:** A choice made many days earlier can decide alliances, family outcomes, resources, or the war, but the game only keeps a short rolling history.
+"Yes, Your Grace","yes","Committed narrative/autosave choices","no","**Context:** A choice made many days earlier can decide alliances, family outcomes, resources, or the war, but the game only keeps a short rolling history.
 
 **How progress is saved:** Only the most recent eight day-end saves are retained.
 
@@ -439,7 +439,7 @@
 **How progress is saved:** The game relies on autosaves/checkpoints rather than unrestricted manual saves.
 
 **SaveScummer value:** Checkpoint before a major confrontation, expensive skill use, or investigation conclusion. Restore to try another dialogue path without replaying the episode.","Keep",""
-"Road 96","yes","Committed narrative/autosave choices","yes","**Context:** A single road trip can change recurring-character relationships, resources, border outcomes, and the wider campaign state.
+"Road 96","yes","Committed narrative/autosave choices","no","**Context:** A single road trip can change recurring-character relationships, resources, border outcomes, and the wider campaign state.
 
 **How progress is saved:** Campaign progress is autosaved rather than exposed as manual branch slots.
 

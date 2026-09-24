@@ -169,7 +169,8 @@ Loose installs (for stores without an ID, mainly Epic and standalone):
 for each `installDir` key emit candidates such as
 `{PROGRAMFILES}/Epic Games/<dir>`, `{PROGRAMFILES}/<dir>` and
 `{LOCALAPPDATA}/Programs/<dir>`, validated at runtime by executable existence.
-These are probed only for games with no detected store install (Section 4.1).
+These are probed for every game that has them, even when a store install was
+found (Section 4.1).
 
 Ignored manifest data: `cloud`, `registry` save keys, `notes`, `alias`, launch
 `arguments`/`workingDir`, `bit`, `id.*` except `steamExtra`/`gogExtra`.
@@ -276,23 +277,37 @@ Given a `Game` catalog entry, the scanner finds installs:
 
 - **Steam**: app id → `appmanifest_<id>.acf` in every library → install dir.
 - **GOG**: gog id → Galaxy registry install path.
-- **Epic**: no product id in the manifest; probe loose candidates
-  (`{PROGRAMFILES}/Epic Games/<dir>`, …) and accept the first with an existing
-  executable.
+- **Epic**: no product id in the manifest, but the launcher keeps one manifest
+  per installed game (`Epic/EpicGamesLauncher/Data/Manifests/*.item`, JSON
+  with the install location, on Windows and macOS). Read them once per scan and
+  match an install by its folder name against the game's `installDir` keys
+  and an existing executable. Loose candidates
+  (`{PROGRAMFILES}/Epic Games/<dir>`, …) remain the fallback when the
+  launcher's manifests are unavailable.
 - **Standalone**: loose candidates plus Windows uninstall-registry keys where an
   addendum supplies them; executable must exist.
 - **MS Store / Game Pass**: not supported in v1.
 
-Cost control: enumerate Steam app manifests and GOG registry once per scan and
-look up catalog entries by id; probe loose directories only for games with no
-store install found.
+Cost control: list each Steam library's `steamapps` folder, the GOG registry
+and the Epic manifests once per scan and look up catalog entries by id or
+folder name, never one file check per catalog game per library. Loose
+directories are probed for **every** game that has loose candidates, even when
+a store install was found. Why: skipping them hid a second copy of a game
+(Steam plus a standalone or Epic copy), which 4.2 promises to show as its own
+record. A loose candidate that is the same directory as a store install is that
+install, not a second one. Probing is a few file checks per such game.
 
 ### 4.2 Installs as separate games
 
 Each detected install becomes its own game record:
 
-- Key: store + install directory identity (volume/file id, not the path string),
-  so a moved or reinstalled directory stays the same install and history.
+- Key: store + product id. Why: Steam's "Move install folder", a reinstall
+  and a library on a new drive all change the directory's volume/file id, and
+  each must stay the same install with the same history. The directory's
+  volume/file id (not the path string) only tells apart two installs of the
+  same product that exist **at the same time** (two Steam libraries). An
+  install that disappears while another copy of the same product appears is a
+  move, not a new game.
 - Two installs of the same game → two records, each with its own DIR,
   checkpoints and history. The host gives them an install tag so they can be
   told apart ("Dead Cells — Steam", "Dead Cells — GOG"; see PLAN-HOST.md).
@@ -318,8 +333,20 @@ would match the native Linux rows instead.
 2. For each possible build, keep candidates where `when.os` is absent or equals
    that build, and `when.store` is absent or equals the store.
 3. Resolve placeholders to concrete paths for that build (4.4).
-4. Apply the sticky ladder (4.5) once, over the candidates of all possible
+4. Deduplicate candidates by the real directory they name, following the
+   filesystem's case rules, junctions, symlinks and redirected known folders
+   (`AppData` and `appdata` on Windows are one candidate; on Linux they are
+   two). Why: the same folder counted twice skews the ladder and can produce
+   two records for one save folder.
+5. Apply the sticky ladder (4.5) once, over the candidates of all possible
    builds together.
+
+Every existence check reports one of three answers: **present**, **missing**
+(confirmed: the nearest existing parent can be read and the folder isn't in
+it), or **unknown** (an unplugged drive, an unreachable share, an access
+error). Only *missing* counts as gone anywhere in the resolver. Why: a save
+folder on an unplugged USB library isn't deleted, and treating it as deleted
+would move the game to another folder and orphan its checkpoints.
 
 **Which build an install runs.** Only Linux has a choice: a Steam game there
 can be the native Linux build or the Windows build through Proton. Windows
@@ -406,7 +433,7 @@ with a warning.
 
 ### 4.5 Sticky resolution ladder
 
-Run on first detection, then keep the result while the chosen directory exists:
+Run on first detection, then keep the result as described in rules 6–9:
 
 1. Drop candidates that do not exist. Exactly one left → pick it.
 2. Several exist → pick the one with the newest **save activity**: newest
@@ -425,17 +452,34 @@ Run on first detection, then keep the result while the chosen directory exists:
    segment below a known-folder/install root (never a bare `%APPDATA%`, install
    dir or volume root), it may stand in for the whole set.
 6. Ambiguity never blocks the game. The chosen DIR is persisted as the game's
-   `data_dir`; checkpoints are bound to it. Later scans do not re-rank while it
-   exists and is still one of the install's candidates; otherwise the ladder
-   runs again. Configure lets the user override at any time.
-7. **A build switch counts as the pick disappearing.** When the files show the
-   install changed build (native → Proton or back), candidates of the old build
-   are no longer the install's candidates, so a pick among them is dropped even
-   though its folder still exists, and the ladder runs again. Why: the old
-   folder usually survives the switch, and keeping it would back up and restore
-   a folder the game no longer uses. Old checkpoints stay bound to the old
-   folder and become usable again if the user switches back (PLAN-HOST.md,
-   vanished DIR).
+   `data_dir`, together with the **context** it was chosen in: the build and
+   the store account (the Steam user behind `{STEAM_USERDATA}` and
+   `{STORE_USER_ID}`), and when the folder was last seen present.
+   Checkpoints are bound to the DIR. Configure lets the user override at any
+   time; an overridden DIR is never re-picked and the resolver is not consulted
+   for it.
+7. **The pick is kept while it isn't missing and its context is unchanged.**
+   Later scans don't re-rank. An *unknown* folder (4.3) is kept. A catalog
+   update that edits or removes the candidate the pick came from doesn't drop
+   it either. Why: a catalog update never touches the folder of a game with
+   history (Section 6); only a change on the user's machine may move it.
+8. **A changed context drops the pick even though its folder exists**, and the
+   ladder runs again:
+   - a build switch (native → Proton or back). Why: the old build's folder
+     usually survives the switch, and keeping it would back up and restore a
+     folder the game no longer uses;
+   - a different store account. Why: the old account's folder is still there,
+     and Load would restore into someone else's saves.
+
+   Old checkpoints stay bound to the old folder and become usable again when
+   the context returns (PLAN-HOST.md, vanished DIR).
+9. **A missing pick moves only to newer saves.** When the pick is missing, the
+   ladder considers only candidates with save activity newer than when the
+   pick was last seen. None → keep the missing pick (Save shows no game data
+   until the game recreates it). Why: a game update that moves its saves writes
+   new ones elsewhere and is followed; a user who deleted their saves to start
+   over would otherwise be moved to an old, frozen legacy folder that merely
+   still exists.
 
 ## 5. Cases
 
@@ -491,6 +535,45 @@ Run on first detection, then keep the result while the chosen directory exists:
     overrides survive.
 21. **Addendum game lands upstream** (Void War): manifest data wins, warning is
     emitted, `games.csv` `Info` still applied.
+22. **Catalog update changes the picked candidate** (an update rewrites or
+    removes the path the pick came from): the existing pick stays; only a fresh
+    pick uses the new candidates.
+23. **Save folder on an unplugged drive** (`{INSTALL_DIR}/save` on a USB
+    library that is disconnected): the folder is unknown, not missing; the pick
+    stays and nothing is re-picked. When the drive returns, everything works as
+    before.
+24. **User deleted their saves to start over** (RimWorld: the new `Saves`
+    folder deleted, the old frozen folder still present): no candidate has save
+    activity newer than when the pick was last seen, so the pick stays; the
+    game recreates the folder on its next save.
+25. **Game update moved its saves** (the old folder deleted, the game now
+    writes to a new candidate): the new folder has newer activity and is
+    picked; old checkpoints stay bound to the old folder.
+26. **Steam account switch** (`{STEAM_USERDATA}` or `{STORE_USER_ID}` now
+    names another user whose old folder still exists): the account in the
+    pick's context changed, so the pick is dropped and the ladder runs for the
+    new account; switching back picks the old folder again with its
+    checkpoints.
+27. **Steam copy plus a standalone or Epic copy**: both are found, the second
+    through loose candidates or Epic's launcher manifests; two records, as in
+    case 7.
+28. **Install moved to another library** (Steam "Move install folder", new
+    drive, new volume/file id): same store and product id with only one copy
+    present, so it's the same install, record and history.
+29. **User override** (a DIR set in Configure): never re-picked; the resolver
+    isn't consulted for it, even when the folder is missing.
+30. **No applicable candidate** (a native Linux install whose catalog entry
+    only has Windows rows): Unsupported; the game stays visible so the user
+    can set its DIR in Configure.
+31. **Store user id unavailable** (Steam never logged in, so
+    `{STORE_USER_ID}` can't resolve): that candidate is dropped with a
+    warning; the ladder continues with the rest.
+32. **Custom Proton profile** (the prefix has exactly one other
+    `drive_c/users/*` folder besides `steamuser`): that profile is used for
+    every Windows placeholder.
+33. **One folder spelled two ways** (`AppData` and `appdata`, or Documents
+    reached through a redirected or junctioned path on Windows): one candidate,
+    not two; on Linux, case-different folders stay distinct.
 
 ## 6. Bundle delivery and updates
 
@@ -536,8 +619,9 @@ tests never touch a real filesystem.
 
 ```rust
 pub trait Probe {
-    fn is_dir(&self, path: &Path) -> bool;
+    fn dir(&self, path: &Path) -> Presence;   // present | missing | unknown
     fn is_file(&self, path: &Path) -> bool;   // which build's executables exist
+    fn same_dir(&self, a: &Path, b: &Path) -> bool; // real-directory equality
     fn install_identity(&self, install_dir: &Path) -> Option<String>;
     /// Newest modification among files matching `globs`, or all files when empty.
     fn newest_activity(&self, dir: &Path, globs: &[String]) -> Option<u64>;
@@ -555,7 +639,14 @@ pub struct Install {                    // produced by the scanner, passed in
 
 pub struct Environment {
     pub steam_userdata: Option<PathBuf>, // resolved current Steam user
-    pub current_pick: Option<PathBuf>,   // sticky value persisted by the host
+    pub current_pick: Option<Pick>,      // sticky value persisted by the host
+}
+
+pub struct Pick {                       // persisted with the game's DIR
+    pub dir: PathBuf,
+    pub build: Platform,
+    pub store_user: Option<String>,
+    pub last_seen: u64,
 }
 
 pub enum Decision {
@@ -577,9 +668,8 @@ pub fn assign_games(decisions: &[Decision]) -> Vec<GameRecord>;
 - `game_id` is install-level (`steam-588650`, `steam-588650#<identity>`,
   `gog-...`). `candidates` exists for diagnostics (logs and the CLI); it is
   never a blocking prompt.
-- Stickiness is explicit: the host passes the persisted `current_pick`;
-  `resolve` keeps it while it exists and is still a candidate of the install's
-  possible builds, and re-runs the ladder otherwise.
+- Stickiness is explicit: the host passes the persisted `current_pick` with its
+  context; `resolve` applies rules 7–9 of 4.5 and returns the pick to persist.
 - The build decision (4.3) lives here, not in the scanner, because it reads
   catalog data (per-OS executables). The scanner only reports where the install
   and its would-be prefix are. `Chosen` carries the executables of every
@@ -601,7 +691,14 @@ missing case is visible in the test list. Beyond the cases:
 - build switches: native → Proton → native with both folders present returns
   to the original folder;
 - one record per install even with two possible builds, with both builds'
-  executables.
+  executables;
+- presence: present, missing and unknown each drive the ladder as in 4.3, with
+  an unknown pick never re-picked;
+- pick context: build, store account and last-seen time round-trip through
+  `resolve`; a catalog-only change never alters the pick;
+- discovery inputs: an Epic launcher manifest matched by folder name, loose
+  probing alongside a store install, a moved install keeping its record, two
+  simultaneous copies splitting by directory identity.
 
 ### 7.3 Host wiring (not a third testable unit)
 
@@ -637,6 +734,12 @@ temporary directories, never real game libraries or the network.
 | Build on Linux | the install's executables decide; undecided → both builds' candidates, one ladder; prefix existence is never evidence |
 | Fresh-install pick | provisional until a candidate exists |
 | Build switch | drops the old build's pick even if its folder exists |
+| Store account switch | drops the old account's pick even if its folder exists |
+| Catalog update | never moves an existing pick |
+| Unreadable location | unknown, not missing; never causes a re-pick |
+| Missing pick | moves only to a candidate with newer save activity |
+| Install identity | store + product id; directory identity only separates simultaneous copies |
+| Loose installs | probed for every game with loose candidates; Epic from launcher manifests |
 | Ambiguity UX | auto-pick silently; Configure as correction; never block |
 | Steam userdata saves | resolved via current Steam user; included as candidates |
 | Untagged file entries | included as candidates |
