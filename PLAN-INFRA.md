@@ -1,707 +1,504 @@
-# PLAN-INFRA.md — Build, Distribution & Release Infrastructure
+# Save Scummer — Build & Release
 
-Status: **target design** — the final state. Where the code disagrees, the
-code changes.
-Date: 2026-09-24
+I want building, packaging and releasing the app to be boring: one command to build, one command to cut a release, and one file per platform for users to download.
 
-## 0. How to read this
+This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
 
-This document covers everything between "source code" and "a person has the
-app installed": builds, packaging, installers, CI, and releases. `PLAN.md`
-is authoritative for the application itself; this document never changes
-application behavior, only the machinery around it. The few things this
-infrastructure needs from the application are listed in §11.
+This is the target design: where the code disagrees, the code changes.
 
-Every decision here is final. There are no open questions: where a choice
-had alternatives, the alternative was weighed and the choice is written
-down with its reason.
+Windows should already work. macOS and Linux aren't implemented yet, but everything is built with them in mind, so adding a platform means adding a module, not reworking the shared parts:
 
-Windows is the platform that should already work. macOS and Linux are
-planned but not implemented yet. Even so, every piece of the
-infrastructure is built with them in mind: shared code stays
-platform-neutral, platform logic goes in its own module, and nothing
-assumes Windows paths, tools or file names.
+- shared code stays platform-neutral
+- platform logic lives in its own module
+- nothing assumes Windows paths, tools or file names
 
-Build order when implementing: the shared foundations (§1–§4), then Windows
-(§5) end to end, then macOS (§6) and Linux (§7). CI (§8) grows a job per
-platform as it lands. The work is done when all three acceptance checklists
-pass.
+Build order:
 
-Whenever the infrastructure changes, this document and `docs/building.md`
-change with it.
+1. The shared parts: XTASK, VERSION, DISK, APP PACKAGE, TOOLCHAINS.
+2. Windows, end to end.
+3. macOS and Linux.
 
----
+CI gets a job for each platform as it lands. The work is done when every platform's DONE WHEN list passes.
 
-## 1. The system at a glance
 
-SaveScummer is three cooperating programs plus, on Windows, a shell
-extension:
+## PRINCIPLES
 
-| Component | What it is |
-|---|---|
-| Desktop | C++/Qt 6 desktop client |
-| Host | Rust background host (SQLite, monitoring, operations) |
-| CLI | Rust command-line client |
-| Explorer extension | Windows Explorer context-menu handler (Windows only) |
+- **One build tool, in Rust.** All automation is `cargo xtask`: no PowerShell, bash or Python scripts, no just/make. It runs the same on every OS. Besides Rust, it needs only what the build itself needs: the desktop frontend's toolchain (see TOOLCHAINS) and `gh` for publishing.
+- **CI runs what developers run.** Workflows only call `cargo xtask`, so a CI failure can always be reproduced locally.
+- **One version, in `Cargo.toml`.** Every binary, the installer, the bundle and the git tag read it, so they can't drift apart.
+- **One file per platform per release,** in the friendliest format that platform has. Users never have to pick, and nothing else is uploaded.
+- **Fixed executable names.** Platforms change how the programs are packaged, never what they're called.
+- **Nothing is downloaded silently.** Tools come only from `cargo xtask setup …`, at pinned versions, so developers and CI build with the same tools.
+- **User data is sacred.** No install, upgrade, uninstall or clean ever touches the app's data directory.
+- **Only a human publishes.** Tooling makes draft releases; I look at them and press publish.
+- **Every failure says what to run next,** e.g. "Qt kit not found — run `cargo xtask setup qt`".
 
-How they're packaged differs per platform. One release file each, and what
-the user actually ends up with:
 
-**Windows 10/11 x64**
-- Release file: `SaveScummer-windows-x64-<ver>-setup.exe`, made with Inno Setup.
-- Installs a folder, `%LOCALAPPDATA%\Programs\SaveScummer\`, containing:
-  - `bin\SaveScummer.exe` — desktop
-  - `bin\SaveScummer.Host.exe` — host
-  - `bin\SaveScummer.CLI.exe` — CLI
-  - `bin\savescummer-explorer.dll` — Explorer extension
+## WHAT USERS GET
 
-**macOS 13+ Apple Silicon**
-- Release file: `SaveScummer-macos-arm64-<ver>.dmg`, made with `hdiutil`.
-- The user drags `SaveScummer.app` to Applications. Inside the bundle:
-  - `Contents/MacOS/SaveScummer` — desktop
-  - `Contents/MacOS/SaveScummer.Host` — host
-  - `Contents/MacOS/SaveScummer.CLI` — CLI
-- No Explorer-extension equivalent.
+The app is three programs, plus a shell extension on Windows:
 
-**Linux x86_64 (glibc ≥ 2.35)**
-- Release file: `SaveScummer-linux-x86_64-<ver>.AppImage`, made with
-  `linuxdeploy` + `appimagetool`.
-- That single file *is* the install; it acts as all three programs:
-  - `<file>.AppImage` — desktop
-  - `<file>.AppImage host …` — host
-  - `<file>.AppImage cli …` — CLI
-- No Explorer-extension equivalent.
+- **Desktop** — C++/Qt 6 client
+- **Host** — Rust background host (SQLite, monitoring, operations)
+- **CLI** — Rust command-line client
+- **Explorer extension** — context menu (Windows only)
 
-The executable names are the build's contract: the Cargo and CMake targets
-always produce `SaveScummer`, `SaveScummer.Host`, and `SaveScummer.CLI`
-(plus `.exe` on Windows). Each platform chapter (§5–§7) owns how they're
-laid out and reached; on Linux the AppImage's `AppRun` dispatches to them
-(§7.2).
+The build always produces `SaveScummer`, `SaveScummer.Host` and `SaveScummer.CLI` (`.exe` on Windows).
 
-All build, package, and release automation is **one Rust program**,
-`cargo xtask`, living in the workspace. It runs the same on every OS and
-needs nothing beyond the Rust toolchain the project already requires; it
-calls out to CMake, Qt's deploy tools, and each platform's packaging tool.
+| Platform | Release file | Why this format |
+| --- | --- | --- |
+| Windows 10/11 x64 | `SaveScummer-windows-x64-<ver>-setup.exe` | What Windows users expect; installs per-user, no admin |
+| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<ver>.dmg` | The standard drag-to-Applications install |
+| Linux x86_64, glibc 2.35+ (Ubuntu 22.04) | `SaveScummer-linux-x86_64-<ver>.AppImage` | One file runs on every distro, no root, nothing to install |
 
-```
-                ┌──────────────── cargo xtask ────────────────┐
-   repo ──────▶ │ version · cargo build/test · cmake build/test│
-                │ app package (build/<mode>/package/)          │
-                └──────┬───────────────┬───────────────┬──────┘
-                Windows│          macOS│          Linux│
-             Qt DLLs + VC runtime  macdeployqt     linuxdeploy
-             Explorer DLL          ad-hoc sign     AppRun dispatch
-             Inno Setup            hdiutil         appimagetool
-                       ▼               ▼               ▼
-                dist/…-setup.exe   dist/….dmg    dist/….AppImage
-                       └───────────────┼───────────────┘
-                                       ▼
-                     one DRAFT GitHub release ──▶ a human publishes
+These minimums are written down only here and as xtask constants next to the Qt pin. Everything else follows them: build flags, `Info.plist`, the Linux build system, CI runners and test machines. The rest of this plan says "the minimum macOS" and "the oldest supported Ubuntu" instead of repeating numbers.
+
+What ends up on the user's machine:
+
+**Windows** — `%LOCALAPPDATA%\Programs\SaveScummer\`:
+
+```text
+bin\SaveScummer.exe              desktop
+bin\SaveScummer.Host.exe         host
+bin\SaveScummer.CLI.exe          CLI
+bin\savescummer-explorer.dll     Explorer extension
 ```
 
-### The rules that don't bend
+**macOS** — `SaveScummer.app` in Applications:
 
-1. **Executable names are fixed.** The build always produces
-   `SaveScummer`, `SaveScummer.Host`, and `SaveScummer.CLI`; platforms
-   change how they're packaged, never what they're called.
-2. **One version source.** `Cargo.toml` → `[workspace.package] version`.
-   Everything reads it; the git tag must equal `v<version>`.
-3. **Draft-first, always.** Tooling may create or update a *draft* release;
-   only a human publishes.
-4. **Four roots.** `target/` is Cargo's; `build/` is regenerable; `dist/`
-   holds only release files; `.runtime/` is long-lived machine state and is
-   never cleaned.
-5. **CI runs what developers run.** Workflows call `cargo xtask`; they never
-   reimplement build logic.
-6. **One build language: Rust.** No PowerShell, bash, or Python build
-   scripts, and no task runners (just/make). Platform-specific code lives in
-   platform modules of `xtask`, compiled only on their OS.
-7. **One file per platform per release.** The most user-friendly format the
-   platform has; nothing else is uploaded.
-8. **No silent downloads.** Anything fetched from the internet (Qt, Inno
-   Setup, AppImage tools, cargo-about) is fetched only by an explicit
-   `cargo xtask setup …`, at a pinned version.
-9. **User data is sacred.** No install, upgrade, uninstall, or clean ever
-   touches the application's data directory.
-10. **Every failure says what to run next.**
-
----
-
-## 2. Repository layout and disk tiers
-
+```text
+Contents/MacOS/SaveScummer       desktop
+Contents/MacOS/SaveScummer.Host  host
+Contents/MacOS/SaveScummer.CLI   CLI
 ```
+
+**Linux** — the AppImage itself is the install and acts as all three programs:
+
+```text
+<file>.AppImage                  desktop
+<file>.AppImage host …           host
+<file>.AppImage cli …            CLI
+```
+
+All release files are named `SaveScummer-<os>-<arch>-<version>[-<suffix>].<ext>`, built by one function in xtask. Arch tags follow each OS's habit (`x64` on Windows, `arm64`/`x86_64` elsewhere) and are never unified.
+
+
+## XTASK
+
+`xtask/` is a workspace crate (`publish = false`), run as `cargo xtask` through the alias in `.cargo/config.toml` (`xtask = "run --package xtask --"`). Platform code lives in `windows.rs`, `macos.rs` and `linux.rs`, each compiled only on its OS; shared modules never contain platform logic.
+
+Commands:
+
+- `check` — the quality gate (see CHECK).
+- `build [--release] [--test] [--package]` — build Rust and the desktop. `--test` runs Rust and desktop tests. `--package` assembles the APP PACKAGE; `--release` always does.
+- `run [--demo] [--stop-other-hosts]` — dev build, then the dev host and a desktop connected to it. `--demo` uses simulated operations.
+- `host start [--demo]` / `host stop` — just the dev host; used by `run` and by VS Code debugging.
+- `dist` — `build --release --test`, then the platform's release file in `dist/`.
+- `clean [--deep]` — stop output processes, remove `build/` and `dist/` (`--deep` also `target/`). Works without Qt or any other tool, so a broken setup can always be cleaned.
+- `release <version>` — cut a release (see RELEASING).
+- `publish` — upload `dist/` to a draft GitHub release (see RELEASING).
+- `setup qt|inno|linux-tools|cargo-about` — install a pinned tool (see TOOLCHAINS).
+- `explorer build|register|unregister|check [--dev]` — Windows only (see Windows).
+- `catalog [--check] [--strict]` — the game catalog; owned by PLAN-CATALOG.md.
+
+Every command validates its inputs up front.
+
+`cargo xtask run`:
+
+1. Does a dev build.
+2. Starts the dev host hidden, with `--data-dir .runtime/dev`, and records it in `build/dev/session.json`.
+3. Waits for the host's `"ready":true` line.
+4. Starts the desktop connected to that host.
+
+The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
+
+## VERSION
+
+The version lives in `Cargo.toml` → `[workspace.package] version`. The git tag is always `v<version>`. Only `cargo xtask release` changes it.
+
+Everything else reads it:
+
+- **xtask** parses `Cargo.toml` with the `toml` crate — no pattern matching.
+- **CMake** gets it from xtask as `-DSAVESCUMMER_VERSION=<ver>` and fails to configure without it. It never parses `Cargo.toml` itself, so there's only one parser.
+- **Windows version resources** come from `winresource` in `build.rs` for the host and CLI (using the version Cargo passes to the build), and from CMake-filled `.rc.in` templates for the desktop and Explorer DLL.
+- **macOS `Info.plist`** is filled from it.
+
+
+## DISK
+
+Four roots, each with one rule, so it's always obvious what's safe to delete:
+
+| Root | Holds | `clean` |
+| --- | --- | --- |
+| `target/` | Cargo's cache; never written directly | only with `--deep` |
+| `build/` | everything regenerable | always |
+| `dist/` | release files and nothing else, so CI can upload whatever is there | always |
+| `.runtime/` | SDKs, tools, dev data — slow to rebuild, and holds data | never |
+
+```text
 savescummer/
-├── .cargo/config.toml   alias: xtask = "run --package xtask --"
-├── rust-toolchain.toml  pinned Rust (§4)
-├── about.toml           accepted licenses for cargo-about (§4)
-├── xtask/               the build program (§3)
-├── packaging/
-│   ├── licenses/        Qt license texts, shipped on every platform
-│   ├── windows/         savescummer.iss
-│   ├── macos/           Info.plist.in
-│   └── linux/           SaveScummer.desktop, AppRun
-├── assets/              icons, sounds (+ generate-sounds.mjs, asset tooling)
-├── target/              Cargo's. Never written directly.
-├── build/               Everything regenerable:
-│   ├── dev/               desktop tree, app package, session.json, logs,
-│   │                      build-report.json
-│   ├── release/           desktop + explorer trees, app package,
-│   │                      build-report.json
-│   └── tmp/               scratch; the test temp is emptied each run
-├── dist/                The release file(s), nothing else
-└── .runtime/            Never cleaned:
-    ├── Qt/<version>/<kit>   Qt SDK
-    ├── tools/               aqtinstall venv, linuxdeploy, appimagetool
-    └── dev/                 dev app data (the dev host's --data-dir)
+|-- .cargo/config.toml   the xtask alias
+|-- rust-toolchain.toml  pinned Rust
+|-- about.toml           licenses cargo-about accepts
+|-- xtask/               the build program
+|-- packaging/
+|   |-- licenses/        Qt license texts, shipped on every platform
+|   |-- windows/         savescummer.iss
+|   |-- macos/           Info.plist.in
+|   `-- linux/           AppRun, SaveScummer.desktop
+|-- assets/              icons, sounds, asset tooling
+|-- target/
+|-- build/
+|   |-- dev/             desktop build, APP PACKAGE, session.json, logs
+|   |-- release/         desktop and Explorer builds, APP PACKAGE
+|   `-- tmp/             scratch
+|-- dist/
+`-- .runtime/
+    |-- Qt/<ver>/<kit>/  Qt SDK
+    |-- tools/           aqtinstall venv, Inno Setup, linuxdeploy, appimagetool
+    `-- dev/             dev app data (the dev host's --data-dir)
 ```
 
-There is no `scripts/` directory.
+There is no `scripts/` directory. `.gitignore` covers the four roots.
 
-| Root | Contents | Removed by `cargo xtask clean`? |
-|---|---|---|
-| `target/` | Cargo cache | only with `--deep` |
-| `build/` | trees, app packages, logs, reports, scratch | yes |
-| `dist/` | release files | yes |
-| `.runtime/` | SDKs, tools, dev data | **never** |
 
-`.gitignore` covers the four roots plus `*.db`, `*.db-shm`, `*.db-wal`.
+## APP PACKAGE
 
-**Artifact names** are always
-`SaveScummer-<os>-<arch>-<version>[-<suffix>].<ext>`. Arch tags follow each
-OS's idiom — `x64` on Windows, `arm64`/`x86_64` elsewhere — and are never
-normalized across platforms.
+The APP PACKAGE is the assembled, runnable app under `build/<mode>/package/`: a folder on Windows, a `.app` on macOS, an AppDir on Linux. It's what the release file wraps, so what I test locally is exactly what ships.
 
-**The app package** is the assembled, runnable app under
-`build/<mode>/package/`: a folder on Windows (the installer's payload), a
-`.app` bundle on macOS, an AppDir on Linux. Release packages carry no debug
-symbols; dev packages keep them.
+Every package contains:
 
----
+- the three executables and the Qt libraries they need
+- the Qt license texts from `packaging/licenses/`
+- `THIRD-PARTY-LICENSES.html`
+- `.savescummer-package.json` (mode, version, platform, Qt version, configuration, creation time), which marks it as generated output
+- `SHA256SUMS.txt`
 
-## 3. `cargo xtask`
+`THIRD-PARTY-LICENSES.html` is generated by cargo-about from the crates the host and CLI link. A crate under a license not in `about.toml` fails packaging, so licensing is checked on every build rather than at release time.
 
-`xtask/` is a binary crate in the workspace (`publish = false`), invoked as
-`cargo xtask <command>` through the alias in `.cargo/config.toml`. It is
-organized as shared modules plus `windows.rs`, `macos.rs`, `linux.rs`
-compiled under `cfg(target_os = …)`. Shared code never contains
-platform-specific logic.
+Each platform module declares what its package must contain (the three executables, plus the Explorer DLL on Windows), and packaging fails if anything is missing.
 
-### Commands
+Release packages have no debug symbols; dev packages keep them.
 
-| Command | What it does |
-|---|---|
-| `check` | The quality gate (§4). |
-| `build [--release] [--test] [--package]` | Build the Rust workspace and the desktop. `--test` runs Rust and desktop tests. `--package` assembles the app package (always on with `--release`). |
-| `run [--demo] [--stop-other-hosts]` | Dev build, then start the dev host against `.runtime/dev` and the desktop connected to it (§3.2). `--demo` uses simulated operations. |
-| `host start [--demo]` / `host stop` | Start or stop just the dev host; used by `run` and by VS Code debugging tasks. |
-| `dist` | `build --release --test`, then the platform's release file into `dist/`. |
-| `clean [--deep]` | Stop dev/output processes, remove `build/` and `dist/` (and `target/` with `--deep`). Never needs a toolchain. |
-| `release <version>` | Cut a release (§9). |
-| `publish` | Create or update the draft GitHub release from `dist/` (§9). |
-| `setup <qt\|inno\|linux-tools\|cargo-about>` | Explicit, pinned bootstraps (§4). |
-| `explorer <build\|register\|unregister\|check> [--dev]` | Windows only: the Explorer extension (§5.3). |
-| `catalog [--check] [--strict]` | The game catalog build; its behavior is owned by `PLAN-CATALOG.md`. |
+A package is assembled in a fresh `.staging-<uuid>` sibling and swapped into place only when complete, after stopping anything running from the old one. A failed build never damages the existing package.
 
-Every command validates its inputs up front and fails with a plain message
-naming the command to run next (e.g. "Qt 6.11.2 not found — run `cargo xtask
-setup qt`").
 
-### 3.1 Shared building blocks
+## STOPPING PROCESSES
 
-- **Version:** read by parsing `Cargo.toml` with the `toml` crate and taking
-  `workspace.package.version` — no pattern matching.
-- **Artifact names:** one function builds every name from os, arch,
-  version, suffix, extension.
-- **Staging and atomic swap:** a package is assembled in a fresh
-  `.staging-<uuid>` sibling, then swapped into place after stopping anything
-  running from the old one. A failed run never damages the existing package.
-- **Package manifest:** `.savescummer-package.json` in every package (mode,
-  version, platform, Qt version, configuration, creation time) marks it as
-  generated output.
-- **Checksums:** `SHA256SUMS.txt` in every package.
-- **Third-party notices:** `THIRD-PARTY-LICENSES.html` in every package,
-  generated by `cargo about` from the crates the host and CLI link; a
-  dependency under a license not in `about.toml` fails packaging.
-- **Build report:** `build/<mode>/build-report.json` — steps, timings,
-  binary paths and sizes.
+A running host may be in the middle of a save, and Windows can't replace a running executable. So xtask stops processes politely, always with the same routine:
 
-### 3.2 Process handling
+1. Ask desktops to close.
+2. Ask hosts to shut down through their sibling CLI (`--data-dir <dir> shutdown`, up to 30 s), so an accepted operation finishes.
+3. Terminate whatever is still running.
 
-A running host may be mid-save, and Windows cannot replace a running
-executable, so xtask stops processes politely, in this order: desktops are
-asked to close; hosts are asked to shut down through their sibling CLI
-(`--data-dir <dir> shutdown`, up to 30 s) so an accepted operation
-finishes; only then are stragglers terminated. This one routine is used
-everywhere:
+It's used for:
 
-- **The recorded dev host.** `run`/`host start` record the host in
-  `build/dev/session.json` (PID, start time, path). Stopping verifies all
-  three still match before acting, so a reused PID is never killed. The
-  session file is deleted last.
-- **Output processes.** Before rebuilding or cleaning, anything running
-  from `build/` or `dist/` is stopped — never anything under `target/` or
-  `.runtime/`.
-- **Other hosts.** A dev `run` leaves the user's installed host alone; if
-  one is running, xtask warns that the dev instance won't own the tray icon
-  or global shortcuts. `--stop-other-hosts` stops it (gracefully) instead.
-- **Stale dev autostart.** Any launch-at-login entry that points into
-  `target/` or `build/` is removed on every dev build, so sign-in never
-  starts a debug host. Entries pointing elsewhere are the user's and stay.
+- **Output processes.** Before rebuilding or cleaning, anything running from `build/` or `dist/` is stopped. Never anything from `target/` or `.runtime/`.
+- **The dev host.** `build/dev/session.json` records its PID, start time and path. It's stopped only if all three still match, so a reused PID is never killed. The session file is deleted last.
+- **Other hosts,** only with `run --stop-other-hosts`.
 
-`run` starts the host hidden, waits for its `"ready":true` line (30 s),
-then launches the desktop with the host's endpoint.
+## TOOLCHAINS
 
-### 3.3 The desktop build
+The toolchains come in two layers, so the desktop frontend can be replaced without touching anything else:
 
-xtask drives CMake: configure `build/<mode>/desktop` with
-`-DCMAKE_PREFIX_PATH=<Qt kit>` and the configuration `RelWithDebInfo` (dev)
-or `Release` (release); build `savescummer-desktop` and, with `--test`,
-`desktop-tests`; run ctest with `SAVESCUMMER_TEST_HOST` set to the freshly
-built host (Linux CI adds `QT_QPA_PLATFORM=offscreen`). On failure it prints
-the JUnit XML. On Windows no generator is passed, so CMake picks the newest
-installed Visual Studio (2022 or later).
+- **Core** — Rust and the packaging tools. The host, CLI, xtask, packaging and releases depend only on these.
+- **Desktop frontend** — whatever the desktop is built with. Today that's Qt and C++; nothing outside the frontend assumes either.
 
-The CMake project reads the version from `Cargo.toml` before `project()`,
-matching only a line that starts with `version = "x.y.z"`:
+Every tool, in either layer, is installed only by its setup command, into `.runtime/`, and xtask uses it from there.
 
-```cmake
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml" _savescummer_manifest)
-# "\n" pins the match to a line start (CMake's ^ means start-of-file), so an
-# inline dependency such as foo = { version = "1.2.3" } never matches.
-string(REGEX MATCH "\n[ \t]*version[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _v "${_savescummer_manifest}")
-if(NOT _v)
-    message(FATAL_ERROR "Cannot read the SaveScummer version from Cargo.toml.")
-endif()
-project(SaveScummer VERSION ${CMAKE_MATCH_1} LANGUAGES CXX)
-```
+### Core
 
-This requires `[workspace.package]` to stay above any dependency written as
-its own table (`[dependencies.foo]` with `version = …` on its own line). It
-also sets C++17, `AUTOMOC`/`AUTORCC`,
-`find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets Network Svg)`, the
-`SaveScummer` output name, `install()` rules, and
-`qt_generate_deploy_app_script` for the Qt deploy step. Tests write
-screenshots to `build/<mode>/desktop/screenshots`, never the source tree.
+**Rust** is pinned in `rust-toolchain.toml`: channel, `minimal` profile, rustfmt and clippy. rustup applies it everywhere. Bumping it is a deliberate one-line commit.
 
----
+**Packaging tools:**
 
-## 4. Toolchains
+- `setup inno` — the pinned Inno Setup 6 installer from jrsoftware.org, checked by SHA-256, installed silently per-user into `.runtime/tools/inno-setup/`. Not winget or Chocolatey: they aren't reliably on CI runners and don't pin versions.
+- `setup linux-tools` — linuxdeploy and appimagetool, plus the linuxdeploy plugin for the current frontend (today its Qt plugin); pinned release, checked by SHA-256.
+- `setup cargo-about` — pinned version.
 
-**Rust** is pinned in `rust-toolchain.toml` (channel, `minimal` profile,
-`rustfmt` + `clippy`, and the `aarch64-apple-darwin` target). rustup applies
-it automatically everywhere. Bumping Rust is a deliberate one-line commit.
+### What a desktop frontend provides
 
-**Qt tracks the latest minor release**, currently **6.11**, with the exact
-patch pinned in one constant in `xtask`. Open-source Qt gets patch releases
-only for the newest minor, so staying current is the only way to get fixes:
-patch releases are taken promptly, and a new minor is adopted within about
-two months of its release, in its own commit, once all three platforms
-build and pass tests. The app uses only Widgets, Network, and Svg — the
-most stable parts of Qt — so a minor bump is normally a rebuild.
-`cargo xtask setup qt` installs the pinned kit with aqtinstall (in a venv
-under `.runtime/tools/`; it needs Python 3.9+) to `.runtime/Qt/<version>/`.
-It's idempotent, and CI caches `.runtime/Qt` keyed on the pin.
+Whatever the frontend is built with, it plugs into xtask the same way:
 
-**C++ compilers:** MSVC from Visual Studio 2022 or later on Windows, Apple
-Clang from Xcode 15+ on macOS, GCC 11+ on Linux. **CMake** ≥ 3.21 from
-PATH (Visual Studio, Xcode's command-line tools, or the distro provide it).
+- **a setup command** for its pinned SDK, following the same rules as every other tool
+- **a build step** that takes the mode and the version and produces the `SaveScummer` executable, plus the runtime files it needs, for the APP PACKAGE
+- **a test step** that runs headless against the freshly built host, so tests run the same locally and in CI
+- **its license texts,** shipped in every package
 
-**Platform tools**, each installed only by its explicit setup command:
-Inno Setup 6 (`setup inno`: the pinned installer from jrsoftware.org,
-verified by SHA-256, installed silently per-user into
-`.runtime/tools/inno-setup/`; no winget or Chocolatey, which aren't
-reliably present on CI runners and don't pin versions), linuxdeploy with
-its Qt plugin and appimagetool (`setup linux-tools`, pinned release +
-SHA-256, into `.runtime/tools/`), and cargo-about (`setup cargo-about`,
-pinned version). xtask uses the tools from `.runtime/tools/`, so developers
-and CI run the same versions.
+Replacing the frontend means replacing this layer: its setup command, its build step, and the platform packaging steps that deploy its runtime (e.g. `macdeployqt`, linuxdeploy's Qt plugin). The core, the release files and the executable names stay the same.
 
-### The quality gate — `cargo xtask check`
+### The current frontend: Qt
 
-`cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked
--- -D warnings`, `cargo test --workspace --locked`, `cargo build --workspace
---locked`, then `cargo xtask catalog --check`. First failure stops it.
+**Qt follows the latest minor release,** with the exact version pinned in one xtask constant, the only place it's written down. Open-source Qt only patches its newest minor, so staying current is the only way to get fixes:
+
+- patches are taken promptly
+- a new minor is adopted within about two months, in its own commit, once every supported platform builds and passes tests
+- a minor that raises a platform's minimum OS is adopted only as a deliberate decision to drop that OS version
+- the app uses only Widgets, Network and Svg, the most stable parts of Qt, so a bump is normally just a rebuild
+
+`setup qt` installs the pinned Qt kit via aqtinstall (in a venv under `.runtime/tools/`; needs Python 3.9+) into `.runtime/Qt/<version>/`. Safe to re-run. CI caches it keyed on the pin.
+
+**C++,** needed only for the Qt frontend (and the Windows Explorer extension):
+
+- Windows: MSVC from Visual Studio 2022+. No CMake generator is passed, so CMake picks the newest Visual Studio.
+- macOS: Apple Clang from Xcode 15+
+- Linux: GCC 11+
+- CMake 3.21+, from PATH (Visual Studio, Xcode command-line tools or the distro provide it)
+
+**The build.** xtask drives CMake:
+
+- Configures `build/<mode>/desktop` with the Qt kit as `CMAKE_PREFIX_PATH`, `RelWithDebInfo` for dev and `Release` for release.
+- Builds `savescummer-desktop`, and `desktop-tests` with `--test`.
+- Runs ctest with `SAVESCUMMER_TEST_HOST` set to the freshly built host and `QT_QPA_PLATFORM=offscreen` on every platform, so tests never need a display and run the same locally and in CI.
+
+The CMake project sets C++17, `AUTOMOC`/`AUTORCC`, `find_package(Qt6 REQUIRED COMPONENTS Widgets Network Svg)` (xtask points it at the pinned kit), the `SaveScummer` output name, `install()` rules, and `qt_generate_deploy_app_script` for deploying Qt. Test screenshots go to `build/<mode>/desktop/screenshots`, never the source tree.
+
+
+## CHECK
+
+`cargo xtask check` runs, stopping at the first failure:
+
+1. `cargo fmt --all --check`
+2. `cargo clippy --workspace --all-targets --locked -- -D warnings`
+3. `cargo test --workspace --locked`
+4. `cargo build --workspace --locked`
+5. `cargo xtask catalog --check`
+
 Desktop tests are not part of `check`; they run with `build --test`.
 
----
 
-## 5. Windows
+## Windows
 
-### 5.1 The app package
+### App package
 
-`build/<mode>/package/SaveScummer-windows-x64/`: the `cmake --install`
-deploy (Qt DLLs into `bin/`), `SaveScummer.Host.exe` and
-`SaveScummer.CLI.exe`, the VC runtime DLLs copied app-locally from the
-newest installed Visual Studio (found with vswhere), the Explorer DLL
-(release only), the Qt license texts, `README.txt` (LGPL attribution,
-source links, and the note that the Qt DLLs may be replaced with
-interface-compatible builds), `THIRD-PARTY-LICENSES.html`, the package
-manifest, and `SHA256SUMS.txt`. Dev packages add the PDBs.
+`build/<mode>/package/SaveScummer-windows-x64/`, containing:
 
-### 5.2 Identity
+- the `cmake --install` deploy, with Qt DLLs in `bin/`
+- `SaveScummer.Host.exe` and `SaveScummer.CLI.exe`
+- the Visual C++ runtime DLLs, copied next to the app from the newest Visual Studio (found with vswhere), so users don't need to install a redistributable
+- the Explorer DLL (release only)
+- `README.txt` with the LGPL attribution, source links, and the note that the Qt DLLs may be replaced with interface-compatible builds
+- dev only: the PDBs
 
-Every binary carries a version resource from the single version: host and
-CLI via `winresource` in `build.rs` (which **must** print
-`cargo:rerun-if-changed=Cargo.toml`, or a version bump ships a stale
-resource), desktop and Explorer DLL via `.rc.in` templates filled by CMake.
-The icon is `assets/icon.ico`.
+Every binary gets a version resource (see VERSION) and `assets/icon.ico`.
 
-### 5.3 The Explorer extension
+### Explorer extension
 
-A classic COM `IContextMenu` handler, registered per-user under
-`HKCU\Software\Classes` (no admin). On Windows 11 it appears under *Show
-more options*; the modern `IExplorerCommand` menu requires package identity
-(MSIX) and code signing, which this project doesn't have, so the classic
-handler is the design.
+A classic COM `IContextMenu` handler, registered per-user under `HKCU\Software\Classes`, so no admin is needed. On Windows 11 it shows under *Show more options*: the modern `IExplorerCommand` menu needs MSIX and code signing, which we don't have.
 
-Its identity lives in exactly **one** file,
-`integrations/windows-explorer/identity.h`. xtask parses it and passes the
-values to Inno Setup (`/D` defines) and to its own registration code:
+Its identity (a CLSID and a name) lives only in `integrations/windows-explorer/identity.h`. xtask parses it and passes it to Inno Setup (`/D` defines) and to its own registration code. There are two:
 
-| | Release | Development |
-|---|---|---|
-| CLSID | `{3F8F42CE-463F-41B6-98D1-8C8D16B88931}` | `{43BFBA41-D0AB-44D3-A5D6-600EB5C74D18}` |
-| Handler name | `SaveScummer` | `SaveScummerDev` |
+- **Release:** name `SaveScummer`, with its own fixed CLSID
+- **Dev:** name `SaveScummerDev`, with a different CLSID, so a dev registration never shadows the installed one
 
-The dev identity means a dev registration never shadows the installed one.
-`cargo xtask explorer build` builds the DLL and runs its COM tests;
-`register`/`unregister [--dev]` write or remove the per-user registration
-(`InprocServer32` with `ThreadingModel=Apartment`, plus
-`Directory\shellex\ContextMenuHandlers\<name>`); `check` exercises the real
-handler without registering anything.
+- `explorer build` builds the DLL and runs its COM tests.
+- `explorer register|unregister [--dev]` writes or removes the per-user registration: `InprocServer32` with `ThreadingModel=Apartment`, plus `Directory\shellex\ContextMenuHandlers\<name>`.
+- `explorer check` exercises the real handler without registering anything.
+Explorer keeps the DLL loaded, so it can't be overwritten in place: the installer replaces it on restart, and a fresh Explorer process picks up the change.
 
-The extension's Rust bridge finds the host's data directory through the
-`savescummer-platform` crate's default-data-directory function — the same
-code the host uses — never by joining a folder name itself.
+### Installer
 
-`explorer.exe` keeps the DLL loaded, so it can't be overwritten in place;
-the installer replaces it on restart, and a fresh Explorer process picks up
-changes.
+`packaging/windows/savescummer.iss`, a per-user Inno Setup installer to `%LOCALAPPDATA%\Programs\SaveScummer`. Per-user means no admin prompt. Its payload is exactly the release APP PACKAGE. Only `cargo xtask dist` compiles it, passing the version, payload, output and Explorer identity as `/D` defines.
 
-### 5.4 The installer
-
-`packaging/windows/savescummer.iss`, compiled by `cargo xtask dist` with
-`/D` defines for version, payload, output, and the Explorer identity — the
-`.iss` is never compiled by hand. It is a **per-user** installer to
-`%LOCALAPPDATA%\Programs\SaveScummer` (no admin), and its payload is exactly
-the release app package.
-
-- **Stable `AppId`**, so upgrades replace in place; `PrivilegesRequired=lowest`.
-- **Two tasks — Explorer menu and launch at sign-in — both `checkedonce`
-  with `UsePreviousTasks=yes`:** checked on a first install, unchecked on
-  upgrades, so a user who turned either off is never opted back in.
-- **Launch at sign-in** is set by running the installed
-  `SaveScummer.Host.exe --autostart on` (§11) — the host is the only writer
-  of that entry. The uninstaller runs `--autostart off`, which removes the
-  entry only if it points at this installation.
+- **Stable `AppId`** and `PrivilegesRequired=lowest`, so upgrades replace in place without admin.
+- **Two tasks, "Explorer menu" and "Launch at sign-in",** with `UsePreviousTasks=yes` and `checkedonce`: checked on first install; on upgrade the user's previous choice is kept, and a task added in that version starts unchecked. A user who turned one off is never opted back in.
+- **Launch at sign-in** is set by running the installed `SaveScummer.Host.exe --autostart on`, so the host stays the only writer of that entry. The uninstaller runs `--autostart off`, which removes the entry only if it points at this install.
+- **Before replacing files,** `PrepareToInstall` runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes. Inno's Restart Manager (`CloseApplications=yes`) closes the desktop.
 - **The Explorer DLL** is its own `[Files]` entry with `restartreplace`.
-- **Registry writes are HKCU-only**, and the CLSID subtree uses
-  `uninsdeletekey`.
-- **Before replacing files**, `PrepareToInstall` runs the installed
-  `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes;
-  the desktop is closed by Inno's Restart Manager (`CloseApplications=yes`).
-- **Data safety:** `%LOCALAPPDATA%\SaveScummer` is never touched.
-- **Unsigned.** SmartScreen shows "More info → Run anyway" on first run;
-  the README and release notes say so. The script has an off-by-default
-  `SignedBuild` block (`SignTool`, `SignedUninstaller`) so signing can be
-  switched on without other changes.
+- **Registry writes are HKCU only;** the CLSID subtree uses `uninsdeletekey`.
+- **`%LOCALAPPDATA%\SaveScummer` is never touched.**
+- **Unsigned.** SmartScreen shows "More info → Run anyway"; the README and release notes say so.
 
-`dist` fails if Inno Setup is missing (there's nothing to ship without it)
-or if the payload lacks `bin/SaveScummer.exe` or the Explorer DLL.
+`dist` fails if Inno Setup is missing: there's nothing to ship without it.
 
-### 5.5 Windows acceptance checklist
+### Done when
 
-1. `cargo xtask clean` stops recorded and output processes, removes `build/`
-   and `dist/`; `--deep` also `target/`; `.runtime/` untouched.
-2. `cargo xtask run` builds and runs against `.runtime/dev`, recording
-   `build/dev/session.json`; an installed host keeps running unless
-   `--stop-other-hosts`.
-3. `cargo xtask dist` leaves exactly one file in `dist/`, the `-setup.exe`,
-   and a release package under `build/release/package/` with
-   `SHA256SUMS.txt`, `THIRD-PARTY-LICENSES.html`, and no PDBs.
-4. CMake configure shows the Cargo version; screenshots land in
-   `build/<mode>/desktop/screenshots`.
-5. Installing needs no admin, puts the binaries under
-   `%LOCALAPPDATA%\Programs\SaveScummer\bin`, and the Explorer task adds the
-   menu (under *Show more options* on Windows 11).
-6. The sign-in task is checked on first install and unchecked on upgrade;
-   when checked, sign-in starts the host minimized.
-7. Installing over a running host shuts it down gracefully first; a DLL
-   update completes after restart.
-8. Uninstalling removes the app, its registrations, and its own sign-in
-   entry — never `%LOCALAPPDATA%\SaveScummer`.
+1. `clean` stops recorded and output processes and removes `build/` and `dist/`; `--deep` also removes `target/`; `.runtime/` is untouched.
+2. `run` builds and runs against `.runtime/dev`, recording `build/dev/session.json`; an installed host keeps running unless `--stop-other-hosts` is passed.
+3. `dist` leaves exactly one file in `dist/`, the `-setup.exe`. The release package under `build/release/package/` has `SHA256SUMS.txt` and `THIRD-PARTY-LICENSES.html`, and no PDBs.
+4. Every binary's version resource (file properties → Details) shows the Cargo version.
+5. Installing needs no admin, puts the binaries under `%LOCALAPPDATA%\Programs\SaveScummer\bin`, and the Explorer task adds the menu (under *Show more options* on Windows 11).
+6. The sign-in task is checked on first install and keeps the user's choice on upgrade. When it's checked, sign-in starts the host minimized.
+7. Installing over a running host shuts it down gracefully first. A DLL update completes after restart.
+8. Uninstalling removes the app, its registrations and its own sign-in entry, never `%LOCALAPPDATA%\SaveScummer`.
 
----
 
-## 6. macOS
+## macOS
 
-Apple Silicon only (M1 or later), macOS 13 or newer (Qt 6.11's minimum).
-Intel Macs are not supported.
+Apple Silicon (M1 or later) only, on the minimum macOS or later, which must never be below what the pinned Qt supports. Intel Macs aren't supported, and xtask refuses to build on one.
 
-### 6.1 Build
+### Build
 
-Built on an Apple Silicon Mac. Rust builds with
-`--target aarch64-apple-darwin`; CMake with
-`-DCMAKE_OSX_ARCHITECTURES=arm64` and
-`-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0`, and Rust with
-`MACOSX_DEPLOYMENT_TARGET=13.0`, so the whole app agrees on its minimum OS.
-xtask refuses to run the macOS build on an Intel Mac.
+Built on an Apple Silicon Mac. The whole app agrees on its minimum OS:
 
-### 6.2 The app package
+- Rust: `MACOSX_DEPLOYMENT_TARGET` (the build machine is Apple Silicon, so the native target is already arm64)
+- CMake: `CMAKE_OSX_ARCHITECTURES=arm64`, `CMAKE_OSX_DEPLOYMENT_TARGET`
+- `Info.plist`: `LSMinimumSystemVersion`
 
-`build/<mode>/package/SaveScummer.app`, bundle identifier
-`com.savescummer.SaveScummer` (fixed forever — macOS keys permissions and
-settings on it):
+All three are set to the minimum macOS.
 
-- `Contents/MacOS/SaveScummer` (desktop), `SaveScummer.Host`,
-  `SaveScummer.CLI` side by side.
-- `Contents/Info.plist` from `packaging/macos/Info.plist.in`:
-  `CFBundleShortVersionString`/`CFBundleVersion` from the Cargo version,
-  `LSMinimumSystemVersion` 13.0, the icon.
-- Qt frameworks deployed by `macdeployqt`; licenses, notices, manifest, and
-  checksums in `Contents/Resources/`.
-- **Ad-hoc signed** (`codesign --force --deep --sign -`) as the last step:
-  Apple Silicon refuses to run binaries without a valid signature, and
-  `macdeployqt` invalidates the linker's ad-hoc signatures when it rewrites
-  library paths.
+### App package
 
-### 6.3 The release file
+`build/<mode>/package/SaveScummer.app`:
 
-A DMG made with `hdiutil create -format UDZO` from a folder holding the
-`.app` and an `Applications` link, so installing is drag-and-drop. Never a
-zip: PowerShell- or .NET-style zips break the symlinks inside Qt's
-frameworks.
+- Bundle ID `com.savescummer.SaveScummer`, fixed forever, because macOS keys permissions and settings on it.
+- The three executables side by side in `Contents/MacOS/`.
+- `Contents/Info.plist` from `packaging/macos/Info.plist.in`: `CFBundleShortVersionString` and `CFBundleVersion` from the Cargo version, the minimum macOS, the icon.
+- Qt frameworks deployed by `macdeployqt`; licenses, notices, manifest and checksums in `Contents/Resources/`.
+- Ad-hoc signed (`codesign --force --deep --sign -`) as the last step, because Apple Silicon won't run binaries without a valid signature and `macdeployqt` breaks the linker's signatures when it rewrites library paths.
 
-**Unsigned and not notarized.** On first launch macOS blocks the app; the
-user opens it via *System Settings → Privacy & Security → Open Anyway*. The
-README and release notes show this step with screenshots.
+### Release file
 
-### 6.4 Launch at login
+- A DMG made with `hdiutil create -format UDZO` from a folder holding the app and an `Applications` link, so installing is drag-and-drop.
+- Unsigned and not notarized, so macOS blocks the first launch; the user opens it via *System Settings → Privacy & Security → Open Anyway*. The README and release notes show this with screenshots.
 
-The host writes and removes `~/Library/LaunchAgents/com.savescummer.host.plist`
-(pointing at the host inside the bundle, with `--minimized` and the data
-directory) and loads or unloads it with `launchctl`. It's driven by the
-in-app setting through the same `--autostart on|off` code as every
-platform (§11). macOS shows its standard "Background item added" notice.
+### Integration
 
-### 6.5 Integration, upgrade, removal
+- **Launch at login:** the host writes and removes `~/Library/LaunchAgents/com.savescummer.host.plist` (pointing at the host inside the bundle, with `--minimized --data-dir <data>`) and loads or unloads it with `launchctl`, through the shared `--autostart on|off` code. macOS shows its "Background item added" notice.
+- **No Finder integration:** the only sanctioned route is a FinderSync extension, which needs proper signing.
 
-- **No Finder integration.** The only sanctioned route is a FinderSync app
-  extension, which requires proper code signing.
-- **Upgrade:** quit SaveScummer (menu-bar icon → Quit), drag the new app
-  over the old one. Replacing a running app is safe on macOS — running
-  processes keep the old files — and the next launch runs the new version.
-  The README gives these two steps.
-- **Removal:** turn off *Launch at login*, quit, drag the app to the Trash.
-  The README says this and gives the data location
-  (`~/Library/Application Support/SaveScummer`), which removal never
-  touches.
+### Upgrade and removal
 
-### 6.6 macOS acceptance checklist
+The README gives both:
 
-1. `cargo xtask dist` on an Apple Silicon Mac leaves exactly
-   `SaveScummer-macos-arm64-<ver>.dmg` in `dist/`; on an Intel Mac it
-   refuses with a clear message.
-2. Every binary in the bundle is arm64 (`lipo -archs`) and
-   `codesign --verify --deep --strict` passes on the ad-hoc signature.
-3. The DMG shows the app and an Applications link; dragging installs it;
-   after *Open Anyway* it runs on a clean macOS 13+ machine.
-4. `Info.plist` carries the Cargo version and minimum OS 13.0.
-5. Enabling launch at login writes the LaunchAgent and the host starts at
-   login; disabling removes it.
-6. Replacing the app while it runs does not corrupt data; the next launch
-   runs the new version.
+- **Upgrade:** quit (menu-bar icon → Quit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
+- **Remove:** turn off launch at login, quit, drag to Trash. `~/Library/Application Support/SaveScummer` is never touched.
+
+### Done when
+
+1. `dist` on an Apple Silicon Mac leaves exactly `SaveScummer-macos-arm64-<ver>.dmg` in `dist/`; on an Intel Mac it refuses with a clear message.
+2. Every binary in the bundle is arm64 (`lipo -archs`), and `codesign --verify --deep --strict` passes.
+3. The DMG shows the app and an Applications link; dragging installs it; after *Open Anyway* it runs on a clean machine with the minimum macOS.
+4. `Info.plist` has the Cargo version and the minimum macOS.
+5. Enabling launch at login writes the LaunchAgent and the host starts at login; disabling removes it.
+6. Replacing the app while it runs doesn't corrupt data, and the next launch runs the new version.
 7. Nothing ever touches `~/Library/Application Support/SaveScummer`.
 
----
 
-## 7. Linux
+## Linux
 
-x86_64, any mainstream distribution with glibc 2.35 or newer (Ubuntu 22.04
-and later, Fedora, Arch, SteamOS, …). No distro packages (`.deb`/`.rpm`):
-one AppImage runs on all of them without installation or root.
+x86_64, any mainstream distro with the minimum glibc or newer (Ubuntu, Fedora, Arch, SteamOS…). No `.deb` or `.rpm`: one AppImage runs on all of them, without installing or root.
 
-### 7.1 Build
+### Build
 
-Built on **Ubuntu 22.04** (locally or `ubuntu-22.04` in CI). A binary only
-runs on systems whose glibc is at least as new as the one it was built
-against, so the oldest supported base is the build base.
+Built on the oldest supported Ubuntu, locally or on the matching `ubuntu-*` runner in CI. A binary only runs on a glibc at least as new as the one it was built against, so the oldest supported system has to be the build system.
 
-### 7.2 The app package and release file
+### App package and release file
 
-The app package is an AppDir, `build/<mode>/package/SaveScummer.AppDir`,
-produced by `linuxdeploy` with its Qt plugin. It contains the three
-executables, Qt and every library not guaranteed on a base system (per the
-AppImage exclude list), both the `xcb` and `wayland` Qt platform plugins,
-`packaging/linux/SaveScummer.desktop` and the icon, licenses, notices,
-manifest, and checksums.
+The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`, made by `linuxdeploy` with its Qt plugin. It contains:
 
-`packaging/linux/AppRun` is the entry point and dispatches on its first
-argument: `host …` runs `SaveScummer.Host`, `cli …` runs `SaveScummer.CLI`,
-anything else runs the desktop. So the single file serves as all three
-executables.
+- the three executables
+- Qt and every library not guaranteed on a base system (per the AppImage exclude list)
+- both the `xcb` and `wayland` Qt platform plugins, so it runs under X11 and Wayland
+- `packaging/linux/SaveScummer.desktop` and the icon
+- licenses, notices, manifest and checksums
 
-`appimagetool` turns the AppDir into
-`SaveScummer-linux-x86_64-<ver>.AppImage`, using the static AppImage
-runtime so it doesn't need `libfuse2` on the user's system. **Unsigned.**
+`packaging/linux/AppRun` is the entry point and dispatches on its first argument, so one file serves as all three programs:
 
-### 7.3 Launch at login
+- `host …` runs `SaveScummer.Host`
+- `cli …` runs `SaveScummer.CLI`
+- anything else runs the desktop
 
-The XDG convention: the host writes and removes
-`~/.config/autostart/SaveScummer.desktop` with
-`Exec="<AppImage path>" host --minimized --data-dir "<data>"`, through the
-same `--autostart on|off` code (§11). The AppImage path comes from the
-`APPIMAGE` variable the AppImage runtime sets. Because users download each
-version under a new file name, the host refreshes the entry to its own
-current path whenever it starts with autostart enabled (§11).
+`appimagetool` turns the AppDir into `SaveScummer-linux-x86_64-<ver>.AppImage` using the static AppImage runtime, so users don't need `libfuse2`. Unsigned.
 
-### 7.4 Integration, upgrade, removal
+### Integration
 
-- **No file-manager integration.** There's no cross-desktop mechanism for
-  it on Linux. Adding the app to the application menu is left to the
-  user's AppImage tool (e.g. Gear Lever, AppImageLauncher), which reads the
-  embedded `.desktop` file.
-- **Upgrade:** download the new AppImage, quit the old one, start the new
-  one; delete the old file. The README gives these steps.
-- **Removal:** turn off *Launch at login*, quit, delete the file. The README
-  gives the data location (`~/.local/share/SaveScummer`), which removal
-  never touches.
+- **Launch at login:** the host writes and removes `~/.config/autostart/SaveScummer.desktop` with `Exec="<AppImage path>" host --minimized --data-dir "<data>"`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE).
+- **No file-manager integration:** there's no cross-desktop way to do it. Adding the app to the menu is left to the user's AppImage tool (Gear Lever, AppImageLauncher…), which reads the embedded `.desktop` file.
 
-### 7.5 Linux acceptance checklist
+### Upgrade and removal
 
-1. `cargo xtask dist` on Ubuntu 22.04 leaves exactly
-   `SaveScummer-linux-x86_64-<ver>.AppImage` in `dist/`.
-2. The AppImage runs after `chmod +x` on a stock Ubuntu 22.04 desktop and
-   on current Fedora, without `libfuse2`, under both X11 and Wayland.
-3. `SaveScummer-….AppImage host --version` and `… cli --version` print the
-   Cargo version.
-4. Enabling launch at login writes the XDG entry pointing at the AppImage
-   and the host starts at login; running a newer AppImage re-points it;
-   disabling removes it.
+The README gives both:
+
+- **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
+- **Remove:** turn off launch at login, quit, delete the file. `~/.local/share/SaveScummer` is never touched.
+
+### Done when
+
+1. `dist` on the oldest supported Ubuntu leaves exactly `SaveScummer-linux-x86_64-<ver>.AppImage` in `dist/`.
+2. After `chmod +x`, it runs on the oldest supported Ubuntu and current Fedora, both stock, without `libfuse2`, under both X11 and Wayland.
+3. `….AppImage host --version` and `….AppImage cli --version` print the Cargo version.
+4. Enabling launch at login writes the XDG entry pointing at the AppImage and the host starts at login. Running a newer AppImage re-points the entry, and disabling removes it.
 5. Nothing ever touches `~/.local/share/SaveScummer`.
 
----
 
-## 8. Continuous integration
+## CI
 
-Two workflows in `.github/workflows/`. Every step is a `cargo xtask`
-command.
+Two workflows in `.github/workflows/`, every step a `cargo xtask` command.
 
-**`ci.yml`** — branch pushes, pull requests, manual dispatch; not tags. A
-concurrency group cancels superseded runs per ref. One required job per
-platform — `windows-latest`, `macos-latest` (Apple Silicon),
-`ubuntu-22.04` — each: checkout, Rust cache, Qt cache → `cargo xtask setup
-qt` (Linux also `setup linux-tools`), `cargo xtask check`,
-`cargo xtask build --test`.
+**ci.yml** — so nothing merges that breaks a platform:
 
-**`release.yml`** — `v*` tags only, with a concurrency group that never
-cancels. One build job per platform: checkout with full history, caches,
-setup commands (all `setup qt` and `setup cargo-about`; Windows also
-`setup inno`, Linux also `setup linux-tools`), `cargo xtask dist`, upload the one file from `dist/`
-(`if-no-files-found: error`). Then one **publish** job (`needs:` all three,
-`contents: write`) downloads all three files into `dist/`, fetches the tag,
-and runs `cargo xtask publish` with `GH_TOKEN`: one draft release carrying
-all platforms.
+- Runs on branch pushes, pull requests and manual runs; not tags.
+- A concurrency group per ref cancels superseded runs.
+- One required job each on `windows-latest`, `macos-latest` (Apple Silicon) and the oldest supported Ubuntu: checkout, Rust cache, Qt cache, `setup qt` (Linux also `setup linux-tools`), `check`, `build --test`.
 
----
+**release.yml** — builds every platform's file into one draft release:
 
-## 9. Versioning and releases
+- Runs on `v*` tags only, with a concurrency group that never cancels, so a release is never half-built.
+- One build job per platform: checkout with full history, caches, `setup qt` and `setup cargo-about` (plus `setup inno` on Windows, `setup linux-tools` on Linux), `dist`, upload its one file from `dist/` (`if-no-files-found: error`).
+- A final publish job (`needs:` every build job, `contents: write`) downloads their files into `dist/`, fetches the tag and runs `cargo xtask publish` with `GH_TOKEN`.
 
-**Cutting a release** — `cargo xtask release <version>` is the only writer
-of the version:
 
-1. Validates: three-part version (a leading `v` is accepted), on a branch,
-   clean working tree, version differs from the current one, tag
-   `v<version>` exists neither locally nor on origin.
-2. Rewrites `workspace.package.version` with `toml_edit` (formatting
-   preserved) and refreshes `Cargo.lock` (`cargo update --workspace`).
-3. Runs `cargo xtask check` (skippable with `--skip-checks` for
-   emergencies). On failure the bump is reverted and the tree ends clean.
-4. Commits `Release <version>`, creates the annotated tag `v<version>`, and
-   pushes branch and tag (`--no-push` stops and prints the two commands).
+## RELEASING
 
-The tag triggers `release.yml` (§8).
+### Cutting a release
 
-**Publishing** — `cargo xtask publish`, identical locally and in CI. It
-checks that `gh` is installed and authenticated, `origin` exists, and tag
-`v<version>` exists and points at `HEAD`. It uploads exactly the three
-release files for that version from `dist/` and fails if any is missing.
-If the release is already published it refuses; if a draft exists it
-re-uploads with `--clobber`; otherwise it creates the draft with
-`--generate-notes`. It prints the draft URL. A human publishes.
+`cargo xtask release <version>`:
 
-To rebuild a draft from a different commit, delete the tag locally and on
-origin and push it again. A published release is never changed; that's
-what a new version is for.
+1. Checks that the version has three parts (a leading `v` is fine), I'm on a branch, the tree is clean, the version differs from the current one, and tag `v<version>` exists neither locally nor on origin.
+2. Writes the version into `Cargo.toml` with `toml_edit` (formatting preserved) and refreshes `Cargo.lock` (`cargo update --workspace`).
+3. Runs `cargo xtask check` (`--skip-checks` for emergencies). If it fails, the bump is undone and the tree is left clean.
+4. Commits "Release <version>", creates the annotated tag `v<version>`, and pushes both (`--no-push` prints the two commands instead).
 
----
+The tag starts release.yml.
 
-## 10. Documentation
+### Publishing
 
-- **`docs/building.md`** — the how-to, organized per OS: prerequisites, every
-  `cargo xtask` command and flag, outputs, the release runbook, CI, dev
-  data locations, VS Code tasks. It's the only place flags are listed.
-- **`README.md`** — the short version: install instructions per platform
-  (including the SmartScreen, *Open Anyway*, and `chmod +x` steps, upgrade
-  and removal, and where data lives), the quickest build commands, and a
-  link to the guide.
-- **This document** — decisions and reasons, not flag lists.
+`cargo xtask publish` works the same locally and in CI:
 
----
+1. Checks that `gh` is installed and logged in, `origin` exists, and tag `v<version>` exists and points at `HEAD`.
+2. Checks that `dist/` holds exactly one release file for that version per supported platform, and nothing else.
+3. If the release is already published, refuses. If a draft exists, re-uploads the files (`--clobber`). Otherwise creates a draft with `--generate-notes`.
+4. Prints the draft URL.
 
-## 11. What this plan needs from the application
+Tooling only ever makes drafts; I publish by hand. A published release is never changed — that's what a new version is for. To rebuild a draft from a different commit, delete the tag locally and on origin and push it again.
 
-These behaviors belong to `PLAN.md` and must be specified there; the
-infrastructure above depends on them.
 
-1. **`SaveScummer.Host --autostart on|off [--data-dir <dir>]`** sets the
-   launch-at-login preference, writes or removes the platform's entry
-   (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and exits.
-   `off` removes the entry only if it points at this host. The in-app
-   setting uses the same code, so there is exactly one writer.
-2. **With autostart enabled, the host refreshes its entry to its own
-   current path on every start** (needed for AppImages, harmless
-   elsewhere).
-3. **Data directories:** Windows `%LOCALAPPDATA%\SaveScummer`, macOS
-   `~/Library/Application Support/SaveScummer`, Linux
-   `~/.local/share/SaveScummer`, exposed by the `savescummer-platform`
-   crate as the single source every component uses.
+## WHAT THE APP MUST PROVIDE
 
----
+These belong in PLAN.md, but this plan depends on them:
 
-## 12. Non-goals
+- **`SaveScummer.Host --autostart on|off [--data-dir <dir>]`** sets the launch-at-login preference, writes or removes the platform's entry, and exits:
+  - Windows: a `Run` value
+  - macOS: the LaunchAgent
+  - Linux: the XDG autostart entry
 
-- **No code signing** on any platform (§5.4, §6.3, §7.2).
-- **No update checks or auto-update.** The app never phones home; users
-  install the next release.
-- **No Intel Mac, 32-bit, or ARM Linux builds.**
-- **No distro packages, Flatpak, Microsoft Store, or Mac App Store.**
-- **No shell integration outside Windows.**
-- **Never auto-publish; never rename the canonical executables; never clean
-  `.runtime/`.**
+  `off` only removes an entry pointing at this host. The in-app checkbox uses the same code, so the host is the only writer and the entry can't get out of sync.
+- **When running as an AppImage with autostart on, the host re-points its entry to its own path on every start,** because each version is a new file. Other platforms install to a fixed path, so the host never rewrites the entry on its own there.
+- **Dev hosts never create a launch-at-login entry,** so signing in never starts a debug host and a dev host can't touch the installed app's entry. xtask marks dev builds with a compile-time flag; in them `--autostart on` refuses with a clear message and the in-app checkbox is disabled.
+- **Data directories come from the `savescummer-platform` crate,** the single source every component uses:
+  - Windows: `%LOCALAPPDATA%\SaveScummer`
+  - macOS: `~/Library/Application Support/SaveScummer`
+  - Linux: `~/.local/share/SaveScummer`
 
----
 
-## Appendix — decision index
+## DOCS
 
-| # | Decision | Where |
-|---|---|---|
-| D1 | Four disk roots; `dist/` holds only release files; `.runtime/` never cleaned. | §2 |
-| D2 | Version only in `Cargo.toml`; tag = `v<version>`. | §3.1, §9 |
-| D3 | All build automation is `cargo xtask`; no shell scripts, no task runners. | §3 |
-| D4 | One release file per platform: Inno installer / DMG / AppImage. | §1, §9 |
-| D5 | App package assembled under `build/`, staged, swapped atomically. | §2, §3.1 |
-| D6 | Processes stopped politely; PID reuse guarded; other hosts left alone by default. | §3.2 |
-| D7 | Qt tracks the latest minor (6.11 now); Rust pinned in `rust-toolchain.toml`. | §4 |
-| D8 | Windows: CMake picks the newest Visual Studio; no generator logic, no MSVC shim. | §3.3 |
-| D9 | Explorer identity only in `identity.h`; classic menu; bridge uses the platform crate. | §5.3 |
-| D10 | Per-user Inno installer; integrations checked on first install only. | §5.4 |
-| D11 | The host is the only writer of launch-at-login entries on every OS. | §5.4, §11 |
-| D12 | macOS: Apple Silicon, macOS 13+, ad-hoc signed, DMG, LaunchAgent, no Finder integration. | §6 |
-| D13 | Linux: AppImage built on Ubuntu 22.04, AppRun dispatch, XDG autostart, no file-manager integration. | §7 |
-| D14 | Unsigned everywhere; Inno keeps an off-by-default signing block. | §12 |
-| D15 | Third-party notices via cargo-about; unlisted licenses fail packaging. | §3.1 |
-| D16 | CI: one required job per platform; release builds three files into one draft. | §8 |
-| D17 | Draft-first publishing; one `publish` implementation for local and CI. | §9 |
-| D18 | User data directories are never touched by install, upgrade, uninstall, or clean. | §1, §11 |
-| D19 | No update checks or auto-update. | §12 |
+- `docs/building.md` — the how-to per OS: prerequisites, every `cargo xtask` command and flag, outputs, the release runbook, CI, dev data locations, VS Code tasks.
+- `README.md` — the short version, linking to the guide:
+  - install, upgrade and removal per platform, including the SmartScreen, *Open Anyway* and `chmod +x` steps
+  - where data lives
+  - the quickest build commands
+
+Whenever the build changes, this plan and `docs/building.md` change with it.
+
+
+## NOT DOING
+
+- Code signing on any platform — it costs money and yearly upkeep; the workarounds above are documented instead.
+- Update checks or auto-update — the app never phones home; users install the next release.
+- Intel Mac, 32-bit or ARM Linux builds.
+- Distro packages, Flatpak, Microsoft Store, Mac App Store — the three release files cover everyone.
+- Shell integration outside Windows — see macOS and Linux above.
+- Auto-publishing releases — a human always publishes.
+- Renaming the executables, or cleaning `.runtime/`.

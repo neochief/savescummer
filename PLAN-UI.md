@@ -26,19 +26,19 @@ The main preferences are:
 - **Action feedback stays local.** Whenever practical, the control that initiates an action should also communicate its temporary result.
 - **Running games get priority.** A running game should naturally become the focus of the application.
 
-The application has three important states:
+The application has three important visible states:
 
-1. **No games configured**
-2. **Games configured, but no known game is running**
+1. **No games are eligible to appear in the sidebar**
+2. **One or more games are visible, but no known game is running**
 3. **At least one known game is running**
 
-The UI should transition naturally between these states without feeling like separate applications.
+These are presentation states, not database-record states. Hidden confirmed-uninstalled records do not keep an otherwise empty sidebar visible. The UI should transition naturally between these states without feeling like separate applications.
 
 ---
 
 ## 2. Normal operational layout
 
-When at least one game is configured, the application uses three major regions:
+When at least one game is eligible to appear in the sidebar, the application uses three major regions:
 
 1. **Game sidebar** on the left
 2. **Selected game / main content** on the right
@@ -174,8 +174,10 @@ GAMES
 
 Games that are confirmed uninstalled are not shown in the sidebar at all — neither known
 nor custom. A custom game whose executable disappears is hidden until it is installed
-again. Games that are installed but have not produced save data yet stay listed and
-carry the `Not run yet` status.
+again. Games that are installed but have not produced save data yet stay listed.
+Their running state and action availability follow section 8.
+
+If no games remain eligible to appear in the sidebar after those visibility rules are applied, use the full-width zero-games layout from section 22 even if hidden game records still exist internally. The main-window presentation is based on visible games, not record count.
 
 There is no reason to label every item `INSTALLED` when that is the only possible group visible.
 
@@ -208,9 +210,9 @@ The UI should never render an empty `RUNNING` or `INSTALLED` section.
 
 ## 5. Selection, active stack, and automatic focus
 
-SaveScummer maintains an **active stack of running games**, ordered by most recent game-window focus.
+SaveScummer maintains an **active stack of running games**, ordered by most recent external game-window focus.
 
-The top of that stack is the active running game. It is shown at the top of the `RUNNING` group and is automatically selected in the main view.
+The top of that stack is the active running game. It is shown at the top of the `RUNNING` group and is the default target for global hotkeys while SaveScummer itself is not focused. The selected game shown in the main pane may temporarily differ when the user is manually browsing another game inside SaveScummer.
 
 ### Application startup
 
@@ -232,17 +234,21 @@ This selection change follows an actual external game-window focus change. The u
 
 ### Background lifecycle events do not steal the view
 
-A game starting or closing in the background is not by itself a reason to replace what the user is looking at. The main view changes automatically only when:
+A game starting or closing in the background is not by itself a reason to replace what the user is looking at. Starting/stopping changes running state and sidebar grouping; external game-window focus changes active-stack order and automatic selection.
 
-- an external focus change promotes a running game (above),
-- the game currently displayed in the main view closes, or
+The main view changes automatically only when:
+
+- an external focus change promotes a running game,
+- the game currently displayed in the main view closes and a fallback selection is needed, or
 - nothing is selected yet.
 
-Otherwise the sidebar, the running group and the active stack update, but the displayed game stays selected.
+Otherwise the sidebar and running-state information update while the manually displayed game remains selected. A newly started game that has not yet received external focus may appear in `RUNNING`, but it must not jump ahead of games with a more recent established focus order merely because its process started.
 
 ### A game starts while no known game is running
 
-If no known game is currently running and a configured game starts, that game becomes the active game and moves to the running position in the sidebar. It is selected automatically only when nothing is currently selected.
+If no known game is currently running and a configured game starts, it moves into the running portion of the sidebar. It becomes selected automatically only when nothing is currently selected.
+
+If the user is already browsing another installed/stopped game's history in SaveScummer, that manual selection is preserved. When the user later focuses the newly running game's window, the normal external-focus rule promotes and selects it.
 
 ### Active game closes
 
@@ -250,25 +256,27 @@ If the active running game closes, the next-most-recently-focused running game i
 
 That game moves to the top of the running list. If the closed game was the one displayed in the main view, the newly active game becomes selected and its details replace the previous content. A manual selection of a different game is preserved.
 
-If no known running games remain, the main pane returns to:
+If no known running games remain and the closed game was the displayed game, the main pane returns to:
 
 ```text
 No known games are running.
 ```
 
+If the user was manually browsing some other visible game, that selection stays in place even when the last running game closes.
+
 ### Manual selection
 
-Users can manually select any configured game from the sidebar, including a game that is not currently running.
+Users can manually select any visible configured game from the sidebar, including a game that is not currently running.
 
-Manual selection changes what is displayed in the main content, but it does **not** redefine the active running-game stack used by global hotkeys.
+Manual selection changes what is displayed in the main content, but it does **not** redefine the active running-game stack used by global hotkeys while SaveScummer is unfocused.
 
 A later external focus change to a running game promotes that game to the top of the active stack and selects it automatically.
 
 ---
 
-## 6. Configured games, but nothing is running
+## 6. Visible games, but nothing is running
 
-If games are configured but none are running, the sidebar remains visible so the user can browse and select them.
+If games are visible but none are running, the sidebar remains visible so the user can browse and select them.
 
 However, **no game should be preselected by default solely because it is installed**.
 
@@ -282,7 +290,7 @@ This should be visually quiet and should not become another onboarding screen.
 
 The user can still select any game in the sidebar to inspect its details and history.
 
-If a configured game subsequently starts, it becomes selected automatically.
+If a configured game subsequently starts, follow the section 5 rules: update the sidebar, but do not steal a current manual selection merely because the process started.
 
 ---
 
@@ -375,7 +383,9 @@ The status goes **directly underneath the game name**.
 
 Avoid badges or extra status cards unless a visual theme strongly benefits from them.
 
-A game's status is one of `Running`, `Stopped`, or `Not run yet` (installed, but no save data has appeared yet). Confirmed-uninstalled games are not shown in the sidebar at all (section 4).
+A game's status is either `Running` or `Stopped`. Confirmed-uninstalled games are not shown in the sidebar at all (section 4).
+
+The host determines Create Checkpoint and Load availability independently of the displayed running state. When no source game data is available, Create is disabled and may expose a concise tooltip/accessibility description such as `No game data yet`. Load follows its normal availability rules (section 10). Do not add a separate readiness status or indicator.
 
 The game's icon precedes its name in the header, matching the sidebar entry (section 3).
 
@@ -399,7 +409,9 @@ Directly below the action row, in order:
 1. A compact error block, when the game has an active error. It stays pinned there until the next action or game selection and never opens a generic modal dialog. Its contents and button set are specified in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 2. The game's instructions block, when the game has instructions (section 37).
 
-While a save or restore is in progress for the displayed game, every main-content control that could start another operation for that game is disabled: Create Checkpoint, Load, the history row actions and the game's More-menu commands. The sidebar and other games remain fully usable. The control that started the operation shows a spinner; no progress bar and no status caption are added.
+While a save, restore, deletion or Flush is executing for the displayed game, every main-content control that could start another operation for that game is disabled: Create Checkpoint, Load, the history row actions and the game's More-menu commands. The sidebar and other games remain fully usable. A pending deletion countdown does not make the game busy. Cancel remains usable for any deletion that has not started executing, even while another operation is running.
+
+For Save, Load and Revert, the exact control that started the operation shows a spinner; no progress bar and no status caption are added. Historical Load and Revert actions follow the same in-progress pattern on their row buttons. Deletion uses the row states in section 17.
 
 ---
 
@@ -418,6 +430,10 @@ This reflects the common workflow:
 > reach an important moment → create checkpoint → continue playing
 
 Creating the checkpoint produces a new history entry.
+
+### Disabled state
+
+Create Checkpoint is disabled when the host reports that no source save/game data is available. Once valid source data exists, the control becomes available under the normal rules. This does not change the displayed `Running` or `Stopped` status.
 
 ### In-progress state
 
@@ -442,7 +458,7 @@ If the history is currently scrolled away from the top, adding the entry must no
 
 ## 10. Load
 
-The main Load button restores the latest saved checkpoint.
+The main Load button restores the latest retained checkpoint. A checkpoint imported from a pre-existing backup is normalized into the same retained-checkpoint model as one created by SaveScummer; provenance is not distinguished in the main-window UI.
 
 Its context belongs **inside the button itself**:
 
@@ -468,9 +484,11 @@ The secondary line should be smaller and visually quieter.
 
 ### Disabled state
 
-If no saved checkpoint exists, Load is disabled and its secondary line reads `No checkpoints saved`.
+If no retained checkpoint exists, Load is disabled and its secondary line reads `No checkpoints saved`.
 
-While either Save or Load is in progress, the main-content operation controls for this game are disabled (section 8).
+While an operation is executing for this game, the main-content operation controls are disabled (section 8).
+
+A pending deletion does not otherwise change the main Load button. It continues to target the latest retained checkpoint, including one whose deletion is pending; do not disable Load or select an older checkpoint merely because deletion is pending. Loading does not cancel the deletion. The host serializes Load and deletion, so a deletion waits for an already-running Load to finish. After deletion succeeds, recompute the latest checkpoint normally.
 
 ### Successful load
 
@@ -506,9 +524,9 @@ It opens a compact game-specific dropdown menu. The menu contains these commands
 [trash can]  Flush checkpoints…
 ```
 
-`Open in File Explorer` opens the relevant location directly.
+`Open in File Explorer` opens the location containing the game's original save data. When the configured source is a file, open its containing parent directory; when the configured source is already a directory, open that directory directly.
 
-Commands with trailing ellipses open separate dialogs. The contents, behavior, validation, and confirmation flows inside those dialogs are **out of scope for this main-window UI document**.
+Commands with trailing ellipses open separate dialogs. Their contents, behavior, validation, and confirmation flows are specified in section 38.
 
 There is no global Settings screen or global gear icon.
 
@@ -572,7 +590,7 @@ The history should read as a chronological run/activity log rather than a set of
 
 The visual hierarchy should be:
 
-**saved checkpoints, imported backups, loads, and reverts = significant state events**
+**checkpoints, loads, and reverts = significant state events**
 
 **game started/closed = lightweight context**
 
@@ -650,6 +668,8 @@ Time text must never be abbreviated or ellipsized merely to fit the column.
 
 Relative labels should update automatically while the window is open so, for example, `59 seconds ago` eventually becomes `1 minute ago`. The exact `HH:mm:ss` line never changes.
 
+At local midnight, recompute day-group headings and row date labels so today's entries become yesterday's entries, while preserving the user's current scroll anchor. This structural refresh must not jump the viewport to a different history position.
+
 ---
 
 ## 15. Game started
@@ -693,7 +713,7 @@ Example row content:
    Before entering the station
 ```
 
-Saved checkpoints have more visual weight than lifecycle events.
+Saved checkpoints have more visual weight than lifecycle events. Checkpoints imported from pre-existing backups use this exact same row type and presentation; the main window does not label or icon them differently.
 
 A checkpoint can optionally contain a user-facing label/note, for example:
 
@@ -709,7 +729,7 @@ Every retained saved-checkpoint row has a compact restore/load action.
 
 It should use the same button treatment/icon family as the Revert action shown on loaded-checkpoint rows. Its tooltip/accessible label should make the row-specific meaning clear, for example `Load this checkpoint`.
 
-Activating it loads that historical checkpoint rather than the latest checkpoint.
+Activating it loads that historical checkpoint rather than the latest checkpoint. The row action shows the same spinner while the restore is in progress and briefly shows a success icon/state on completion before returning to its normal appearance.
 
 ### Delete
 
@@ -717,19 +737,28 @@ Every retained saved-checkpoint row also has a trash action.
 
 The trash icon should be visually restrained, particularly in long histories, and become clearer on hover/focus/selection.
 
-Deleting is intentionally not immediate. Pressing trash transforms the row into an inline countdown state such as:
+Deleting is intentionally not immediate. Pressing trash submits a deletion request to the host and transforms the row into an inline five-second countdown:
 
 ```text
-Checkpoint will be deleted in 5…   [Cancel]
-Checkpoint will be deleted in 4…   [Cancel]
-Checkpoint will be deleted in 3…   [Cancel]
-Checkpoint will be deleted in 2…   [Cancel]
-Checkpoint will be deleted in 1…   [Cancel]
+Deleting in 5 [Cancel]
 ```
 
-If `Cancel` is pressed, the normal checkpoint row is restored and nothing is deleted.
+The number updates in place: `5 → 4 → 3 → 2 → 1`. Use this same wording for saved-checkpoint and Load-entry deletions.
 
-When the countdown completes, the checkpoint is deleted from disk and the entire history entry is removed. If the deletion fails (a lock, a disconnected drive), the sticky error block appears and the row returns.
+When the host accepts cancellation, the normal row is restored and nothing is deleted. Remove the history entry only after the host confirms successful deletion from disk. If deletion fails, restore the normal row and show the existing sticky error block while the UI is open. Other pending deletions continue; the failed deletion is not retried automatically. The user may press Delete again.
+
+#### Shared pending-deletion behavior
+
+These rules also apply to Load-entry deletion in section 18.
+
+- **Host ownership.** Use a small in-memory pending-deletion collection in the host application layer. Each accepted request identifies the game and entry and has its own deadline. The UI submits deletion/cancellation requests and presents host-supplied state; its locally displayed countdown never triggers the deletion. Existing core deletion operations remain unaware of UI countdowns. No generic job framework or persistent queue is needed.
+- **Independent countdowns.** Each entry has its own five-second grace period and Cancel control. Starting or cancelling one deletion does not change any other countdown. Do not enqueue a duplicate deletion for the same entry.
+- **Per-game coordination.** When a countdown expires, the deletion becomes ready. Execute ready deletions in request order, one at a time per game, through the same host coordination used for Save, Load, Revert and Flush. A countdown does not hold the game's execution slot. Other games remain independent. Save/Load keep their normal busy rejection behavior; repeated clicks or hotkeys are not stored for later replay.
+- **Waiting and cancellation.** If the game is still busy when the countdown expires, show `Waiting to delete… [Cancel]`. Cancellation remains available until the host starts that deletion. The host resolves cancellation versus starting execution as one serialized decision; an accepted cancellation guarantees no deletion. Once execution starts, show `Deleting…` with a spinner and no Cancel. A late cancellation reflects the actual host state rather than falsely restoring the row.
+- **UI lifetime.** Switching games, scrolling a row out of view, hiding the window or disconnecting the UI does not cancel or restart accepted deletions. Rebuild row presentation from host state when the user returns. Closing and shutdown behavior is specified in section 35.
+- **Flush interaction.** If Flush successfully removes an entry, discard that entry's pending deletion as well. Do not attempt to delete it again or report an entry-not-found error. Other pending deletions continue normally.
+
+Pending deletion does not introduce a queue screen, batch confirmation, extra history events or special main Load behavior (section 10).
 
 ---
 
@@ -750,27 +779,19 @@ A loaded-checkpoint history row therefore has two controls:
 
 Revert restores the immediate undo checkpoint and returns the game to the state that existed immediately before that Load.
 
-The Revert control should use the same compact action-button treatment/icon family as the load action on saved-checkpoint rows. Its tooltip/accessible label should say what it does, for example `Revert this load`.
+The Revert control should use the same compact action-button treatment/icon family as the load action on saved-checkpoint rows. Its tooltip/accessible label should say what it does, for example `Revert this load`. While the operation is in progress, that row action shows a spinner; on success it briefly shows a success icon/state before returning to its normal appearance.
 
-A successful revert is represented in history as its own semantic `Load reverted` event.
+A successful revert is represented in history as its own semantic `Load reverted` event. `Load reverted` is informational only: it has no row actions and does not create another user-revertible recovery point. After a Load has been successfully reverted, that original loaded-checkpoint row no longer offers its Revert action.
 
 ### Delete
 
-The trash action removes the Load's retained undo state/history item using the same inline grace-period pattern as checkpoint deletion.
-
-For example:
+The trash action removes the Load's retained undo state/history item using the same inline countdown and host-owned pending-deletion behavior as checkpoint deletion (section 17):
 
 ```text
-Load will be deleted in 5…   [Cancel]
-Load will be deleted in 4…   [Cancel]
-Load will be deleted in 3…   [Cancel]
-Load will be deleted in 2…   [Cancel]
-Load will be deleted in 1…   [Cancel]
+Deleting in 5 [Cancel]
 ```
 
-If canceled, the normal row returns unchanged.
-
-After the countdown completes and the retained undo state is deleted from disk, the entire Load entry is removed from the history. If the deletion fails, the sticky error block appears and the row returns.
+The number updates in place from 5 to 1. If cancelled, the normal row returns unchanged. After the host confirms successful deletion of the retained undo state from disk, the entire Load entry is removed from history. If deletion fails, restore the row and use the same error and manual-retry behavior as checkpoint deletion.
 
 `Revert` is operational; `Delete` is destructive. They should not receive identical visual emphasis.
 
@@ -780,16 +801,17 @@ After the countdown completes and the retained undo state is deleted from disk, 
 
 Every history description has a small semantic icon identifying its entry kind.
 
-The required event kinds are:
+The required visible event kinds are:
 
 ```text
 ◆  Checkpoint saved
-⇩  Imported backup
 ↶  Checkpoint loaded
 ↷  Load reverted
 ●  Game started
 ■  Game closed
 ```
+
+Imported backups are normalized into `Checkpoint saved` entries and are not presented as a separate event kind.
 
 The exact glyphs may change between visual themes, but each event kind must have a stable and clearly distinguishable semantic icon within a theme.
 
@@ -823,7 +845,7 @@ Possible future additions such as filtering/search are reasonable, but they shou
 
 ## 21. Bottom control bar when games exist
 
-When at least one game is configured, the bottom bar spans the full application width:
+When at least one game is visible in the sidebar, the bottom bar spans the full application width:
 
 ```text
 Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load      ☑ Play sounds                    ☑ Launch on startup
@@ -844,13 +866,13 @@ The key combinations should visually resemble keyboard keycaps:
 
 The shortcut itself should be slightly more prominent than `Save` or `Load`.
 
-While the SaveScummer window is focused, the hotkeys act on the selected game's Create Checkpoint and Load controls — including a stopped game.
+While the SaveScummer window is focused, the hotkeys act on the selected game's Create Checkpoint and Load controls — including a stopped game. The visible/manual selection therefore takes precedence over the active running-game stack while the user is working inside SaveScummer.
 
-When the window is not focused, they target the most recently focused running game, meaning the game at the top of the active running-game stack.
+When the window is not focused, the hotkeys target the most recently focused running game, meaning the game at the top of the active running-game stack.
 
-When the focused window has no game selected and no known game is running, the hotkeys have no target and are presented as unavailable.
+When SaveScummer is focused and no game is selected, or when it is unfocused and no known game is running, the hotkeys have no target and are presented as unavailable.
 
-While Save or Load is already in progress, the corresponding state-changing operations are unavailable until that operation finishes.
+While an operation is executing for the target game, conflicting state-changing operations are unavailable until it finishes. A pending deletion countdown alone does not make Save/Load hotkeys unavailable or change their target.
 
 ### Play sounds
 
@@ -874,7 +896,7 @@ That spatial separation helps distinguish an application behavior from immediate
 
 ## 22. Zero-games state
 
-If SaveScummer has no configured games, **do not show an empty sidebar**.
+If SaveScummer has no games eligible to appear in the sidebar, **do not show an empty sidebar**. This includes both a fresh state with no records and a state where all known/custom records are hidden because they are confirmed uninstalled.
 
 The main content occupies the full width.
 
@@ -918,7 +940,7 @@ The controls already explain the available paths.
 
 ## 23. Zero-games bottom bar
 
-When there are no configured games, the Save/Load hotkeys and `Play sounds` control are not useful yet and should not be shown.
+When there are no visible games eligible for the sidebar, the Save/Load hotkeys and `Play sounds` control are not useful yet and should not be shown.
 
 The bottom bar should contain only:
 
@@ -928,7 +950,7 @@ The bottom bar should contain only:
 
 This should remain aligned toward the right, in the same position it occupies once games exist.
 
-As soon as at least one game becomes configured, the normal bottom-bar controls appear:
+As soon as at least one game becomes visible in the sidebar, the normal bottom-bar controls appear:
 
 ```text
 Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load      ☑ Play sounds                    ☑ Launch on startup
@@ -1003,7 +1025,7 @@ appears briefly.
 
 The discovered games are added immediately.
 
-As soon as at least one game exists, the application transitions to the standard sidebar layout.
+As soon as at least one discovered or custom game is eligible to appear in the sidebar, the application transitions to the standard sidebar layout.
 
 There is no intermediate results screen.
 
@@ -1216,7 +1238,7 @@ Examples:
 - new history entries do not pull a scrolled user back to the top
 - live relative-time updates do not resize or reorder rows
 - the error block stays directly under the action row, above the instructions block (section 8)
-- a pending checkpoint deletion shows its countdown inside the same row
+- a pending checkpoint or Load-entry deletion shows its countdown inside the same row
 
 Avoid layouts where successful actions cause unrelated blocks of UI to jump around.
 
@@ -1240,7 +1262,7 @@ If the system requests reduced motion, transitions should become immediate or us
 
 ### Empty screen → sidebar mode
 
-When SaveScummer transitions from zero configured games to at least one configured game, the layout changes from the full-width empty state to sidebar mode.
+When SaveScummer transitions from zero visible games to at least one game eligible for the sidebar, the layout changes from the full-width empty state to sidebar mode.
 
 When motion is allowed, the sidebar should animate in from the left while the main content settles into its new width.
 
@@ -1266,9 +1288,13 @@ No essential status or feedback should be communicated only through animation.
 
 Closing the main window minimizes/hides SaveScummer to the system tray rather than terminating the application.
 
-This preserves background game detection and global hotkeys.
+This preserves background game detection, global hotkeys and host-owned pending deletions. Hiding the window does not shorten their countdowns.
 
-The behavior of tray-menu commands and any explicit full-application exit flow is outside the scope of this main-window document.
+The UI may close or disconnect without waiting for deletion work. The host continues processing accepted deletions independently. A failed deletion does not block closing, reopen the UI or trigger an automatic retry; the undeleted entry remains in history for the user to retry later.
+
+If the host itself shuts down normally, it ends the remaining grace periods and processes accepted deletions through the same per-game coordination before stopping, without keeping the UI open. Failures do not prevent shutdown. Pending countdowns are not persisted across a crash or forced host termination; unstarted deletions are abandoned, while already-started work follows the core's existing interruption rules.
+
+The presentation of tray-menu commands and any explicit full-application exit flow is outside the scope of this main-window document.
 
 ### Resizing
 
@@ -1313,10 +1339,12 @@ The information architecture and interaction behavior described here should rema
 The selected game's catalog instructions (`info`) appear between the error block and the
 history feed.
 
-- **Collapsed presentation:** about 100 px tall, fading to transparent at the bottom,
-  text still selectable, and the whole block clickable to expand.
+- **Collapsed presentation:** about 100 px tall, fading to transparent at the bottom.
+  Instruction text remains ordinarily selectable. A dedicated expand/collapse affordance
+  (for example a small chevron at the edge of the block) toggles the presentation; arbitrary
+  clicks or text-selection gestures inside the body do not toggle it.
 - **Expanded presentation:** the block grows in place to show the full text with compact
-  paragraph and numbered-list spacing; clicking again collapses it. The expanded or
+  paragraph and numbered-list spacing; the same dedicated affordance collapses it. The expanded or
   collapsed choice is remembered per game for the session.
 - The block is omitted entirely when a game has no instructions.
 - Instructions are read-only and come from the host's game read model.
@@ -1329,15 +1357,18 @@ HISTORY
   1. Exit to Main Menu (the game saves data here).
   2. Press CREATE CHECKPOINT.
   3. Choose Continue in game.
-  ░░░░░░░░░ (fades to transparent; click to expand)
+  ░░░░░░░░░ (fades to transparent)                      [⌄]
 ```
 
 ## 38. Dialogs
 
 Three dialogs remain. They were previously specified in `PLAN.md`; they now live with
-the rest of the UI. Every dialog action row uses text-only buttons with no icons, sizes
-to its content, is non-resizable, and keeps a fixed, violet-accented default button that
-Enter activates regardless of where keyboard focus is.
+the rest of the UI. Dialogs size to their content and are non-resizable. Their action
+rows use text-only buttons with no icons.
+
+Use the UI framework's standard platform dialog behavior for keyboard navigation,
+focus, default-button activation and cancellation. Do not add custom keyboard
+handling that overrides normal focused-control behavior.
 
 ### Add custom game
 
@@ -1358,7 +1389,7 @@ Name:            [................................]
   final extension when Name is blank; never overwrite a nonblank Name.
 - Show validation errors in the dialog, preserve entered values after rejection, create
   no partial entry. The host generates the stable ID.
-- **Add** is the fixed, violet-accented default.
+- **Add** is the default button.
 
 ### Configure
 
@@ -1374,7 +1405,7 @@ Game data dir (DIR): [...prefilled path...] [open] [Reset]
 - Changing and saving configuration updates the resolved game only after core validation
   succeeds. Show field and path errors in the dialog and preserve the previous committed
   configuration when validation fails, keeping entered values for correction.
-- **Save** is the fixed, violet-accented default.
+- **Save** is the default button.
 
 ### Flush checkpoints
 
@@ -1389,11 +1420,14 @@ Game data dir (DIR): [...prefilled path...] [open] [Reset]
 - Refresh backup discovery before accepting the preview revision. External deletion,
   replacement, modification or discovery of a backup invalidates the confirmation and
   requires a new preview.
-- On acceptance, remove the game's saved and recovery snapshots, including imported
-  existing backups, and clear its history. Leave the current DIR untouched. Only clear
+- On acceptance, remove the game's saved and recovery snapshots, including checkpoints
+  that originated from imported existing backups, and clear its history. Imported provenance
+  is not surfaced in the main-window UI. Leave the current DIR untouched. Only clear
   records whose deletion succeeded; report failures.
-- **Cancel** is the fixed, violet-accented default. Delete backups and Cancel are
-  text-only, and focusing Delete backups does not promote it.
+- Pending individual deletions do not change the confirmation flow. Discard pending
+  deletions for entries that Flush successfully removes, as specified in section 17.
+- **Cancel** is the default button. Delete backups and Cancel use standard dialog
+  button behavior.
 
 Per-checkpoint deletion is not a dialog; it uses the inline countdown described in
 sections 17 and 18.
@@ -1401,19 +1435,38 @@ sections 17 and 18.
 ## 39. Testing
 
 UI behavior tests run against a fake service that can produce busy, failure,
-unavailable-snapshot and disconnected states:
+unavailable-snapshot, pending-deletion and disconnected states:
 
-- sidebar groups and conditional headings, including hidden uninstalled games;
-- focus-driven selection, manual selection pinning, and close/start behavior;
+- sidebar groups and conditional headings, including hidden uninstalled games and the zero-visible-games full-width state;
+- focus-driven selection, manual selection pinning, lifecycle changes that do not steal focus, active-stack fallback, and close/start behavior;
 - scan progress and zero/singular/plural post-scan feedback based only on newly found
   known games;
 - custom-game validation and the custom-game dialog defaults;
 - collapsed and expanded instructions, including games with no instructions;
 - the sticky error block's content and buttons (catalog in `PLAN-ERRORS.md`);
-- delete countdown cancel and confirm;
-- fixed Enter/default actions in every dialog, unaffected by focus movement;
+- imported backups normalized to ordinary checkpoints, including main Load eligibility and row actions;
+- historical Load/Revert spinner and success states;
+- `Load reverted` informational rows with no actions;
+- `Running`/`Stopped` presentation independent of host-provided action availability,
+  including no source game data and no retained checkpoints;
+- independent `Deleting in 5` through `Deleting in 1` countdowns, cancellation,
+  waiting and executing deletion states;
+- unchanged main Load behavior during countdowns and Cancel remaining available for
+  pending deletions while the game is busy;
+- restoring host-supplied pending-deletion presentation after navigation or UI reconnection;
+- successful deletion removing its row and failed deletion restoring its normal row
+  without an automatic retry;
+- midnight date regrouping with scroll-anchor preservation;
+- standard dialog keyboard, focus, default-button and cancellation behavior,
+  including keyboard activation of a deliberately focused button;
 - keyboard reachability of destructive actions, tooltips and accessible names for
   icon-only controls.
+
+Host coordination tests use a controllable clock and core operations to verify
+cancellation versus execution, same-game serialization, independent countdowns and
+continued processing after a deletion fails. Also cover Flush discarding successfully
+removed targets, UI closure not interrupting accepted work, and normal host shutdown
+draining accepted work without reopening the UI or retrying failures.
 
 ## 40. Recorded decisions
 
@@ -1421,3 +1474,12 @@ unavailable-snapshot and disconnected states:
   artwork with an initials placeholder, as before; the host artwork service stays in use.
 - **Confirmed-uninstalled games are hidden**, and the `Uninstalled` status is removed.
 - **`Flush checkpoints…`** is the operation name everywhere.
+- **Imported backups are not distinguished in the main window.** Once retained, they behave exactly like ordinary checkpoints and can become the latest checkpoint used by the main Load button.
+- **Lifecycle changes do not steal a manual selection.** External game-window focus, not process start, is what promotes a running game in the active stack and selects it while the user is away from SaveScummer.
+- **Focused SaveScummer gives manual selection precedence for hotkeys.** When SaveScummer is unfocused, hotkeys target the active running game instead.
+- **Open in File Explorer targets the original save-data location.** It opens the containing directory for a configured save file, or the configured directory itself when the source is a directory.
+- **Only `Running` and `Stopped` are displayed as game status.** Action availability remains host-provided; no separate readiness indicator is added.
+- **Individual deletion countdowns are independent and host-owned.** The UI shows `Deleting in 5` through `Deleting in 1` with Cancel, and the host coordinates execution with other operations for the same game.
+- **Pending deletion does not change main Load behavior.** The normal latest-retained-checkpoint rule remains in effect until deletion succeeds.
+- **Closing the UI does not interrupt accepted deletions.** The host continues; failures leave undeleted entries for a later manual retry without blocking or reopening the UI.
+- **Dialogs use standard platform behavior.** Add, Save and Cancel remain the respective default buttons, without bespoke Enter or focus overrides.
