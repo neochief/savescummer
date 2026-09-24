@@ -2,224 +2,200 @@
 # games it gets wrong. See PLAN-CATALOG.md §2.2. The manifest wins per field;
 # an entry here fills only fields the manifest did not produce, except fields
 # under `override`, which replace the manifest's.
-#
-# NOTE: several Keep games still need verified `save` directories before the
-# strict build can pass (see build/catalog/build-report.json). They are
-# intentionally absent rather than guessed.
 
-# Pending until the builder supports `override`, `path` targets and
-# {STEAM_ID64} (PLAN-CATALOG.md §2.2, §3.1): the current schema rejects these
-# keys, and the current builder would widen the file path back to the whole
-# folder. Uncomment when the save-set builder lands.
-#
 # Risk of Rain Returns: the manifest's `*_localsave.json` matches every Steam
 # account's save on the machine (the `*` is the SteamID64, verified 2026-09-24:
 # `76561198004523847_localsave.json` next to config folder `user_44258119`),
 # so a Load would roll back the other accounts too. Pin it to the current one.
-#
-# "Risk of Rain Returns":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{APPDATA}/Risk_of_Rain_Returns/{STEAM_ID64}_localsave.json"
-#       - when: { store: steam }
-#         path: "{STEAM_USERDATA}/1337520/remote"
-#
+"Risk of Rain Returns":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{APPDATA}/Risk_of_Rain_Returns/{STEAM_ID64}_localsave.json"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/1337520/remote"
+
 # Paradox games below: the manifest lists the whole user folder (tagged config
 # and save), which also holds mods, settings and `logs/game.log`. The log is
 # held open while the game runs, so a Load at the main menu would always be
 # refused, every Save would copy the mods, and a Load would roll back mods and
 # settings. Narrow each to its `save games` folder. EU5, HOI4 and Imperator
 # already point there in the manifest.
-#
-# "Crusader Kings II":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/Paradox Interactive/Crusader Kings II/save games"
-#       - when: { os: macos }
-#         path: "{HOME}/Paradox Interactive/Crusader Kings II/save games"
-#       - when: { os: linux }
-#         path: "{HOME}/.paradoxinteractive/Crusader Kings II/save games"
-#
-# "Europa Universalis IV":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/Paradox Interactive/Europa Universalis IV/save games"
-#       - when: { os: macos }
-#         path: "{HOME}/Documents/Paradox Interactive/Europa Universalis IV/save games"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/Paradox Interactive/Europa Universalis IV/save games"
-#
-# "Stellaris":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/Paradox Interactive/Stellaris/save games"
-#       - when: { os: macos }
-#         path: "{HOME}/Documents/Paradox Interactive/Stellaris/save games"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/Paradox Interactive/Stellaris/save games"
-#
+"Crusader Kings II":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/Paradox Interactive/Crusader Kings II/save games"
+      - when: { os: macos }
+        path: "{HOME}/Paradox Interactive/Crusader Kings II/save games"
+      - when: { os: linux }
+        path: "{HOME}/.paradoxinteractive/Crusader Kings II/save games"
+"Europa Universalis IV":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/Paradox Interactive/Europa Universalis IV/save games"
+      - when: { os: macos }
+        path: "{HOME}/Documents/Paradox Interactive/Europa Universalis IV/save games"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/Paradox Interactive/Europa Universalis IV/save games"
+"Stellaris":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/Paradox Interactive/Stellaris/save games"
+      - when: { os: macos }
+        path: "{HOME}/Documents/Paradox Interactive/Stellaris/save games"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/Paradox Interactive/Stellaris/save games"
+
 # Terraria: on Windows and macOS the manifest lists the whole Terraria folder,
 # which also holds tModLoader (mods, often hundreds of MB) and captures. Use
 # the same player and world patterns the manifest already gives for Linux and
 # Steam Cloud.
-#
-# "Terraria":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Terraria/Players/*.plr"
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Terraria/Worlds/*.wld"
-#       - when: { os: macos }
-#         path: "{HOME}/Library/Application Support/Terraria/Players/*.plr"
-#       - when: { os: macos }
-#         path: "{HOME}/Library/Application Support/Terraria/Worlds/*.wld"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/Terraria/Players/*.plr"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/Terraria/Worlds/*.wld"
-#       - when: { store: steam }
-#         path: "{STEAM_USERDATA}/105600/remote/players/*.plr"
-#       - when: { store: steam }
-#         path: "{STEAM_USERDATA}/105600/remote/worlds/*.wld"
-#       - when: { store: steam }
-#         path: "{STEAM_USERDATA}/105600/remote/achievements-steam.dat"
-#
+"Terraria":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Terraria/Players/*.plr"
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Terraria/Worlds/*.wld"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/Terraria/Players/*.plr"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/Terraria/Worlds/*.wld"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/Terraria/Players/*.plr"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/Terraria/Worlds/*.wld"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/105600/remote/players/*.plr"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/105600/remote/worlds/*.wld"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/105600/remote/achievements-steam.dat"
+
 # Unreal games: the manifest lists `Saved` or the whole project folder, which
 # also holds `Saved/Config`, `Saved/Crashes` and logs. Narrow to the standard
 # `Saved/SaveGames` folder.
-#
-# "State of Decay 2":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{LOCALAPPDATA}/StateOfDecay2/Saved/SaveGames"
-#
-# "Roboquest":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{LOCALAPPDATA}/RoboQuest/Saved/SaveGames"
-#
+"State of Decay 2":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{LOCALAPPDATA}/StateOfDecay2/Saved/SaveGames"
+"Roboquest":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{LOCALAPPDATA}/RoboQuest/Saved/SaveGames"
+
 # Total War: Shogun 2: the manifest lists the whole `Shogun2` folder on
 # Windows (battle replays and more besides `save_games`). Its Linux path,
 # `<xdgData>/feral-interactive/SaveData`, doesn't name the game and may be a
 # folder shared by Feral's ports, so Linux is left out until it's checked on a
 # real machine (TEST-REAL-GAMES.md, section 1).
-#
-# "Total War: Shogun 2":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{APPDATA}/The Creative Assembly/Shogun2/save_games"
-#
+"Total War: Shogun 2":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{APPDATA}/The Creative Assembly/Shogun2/save_games"
+
 # Don't Starve: Windows already points at `DoNotStarve/save`; Linux and macOS
 # list the whole folder, which also holds `client_log.txt` and settings.
-#
-# "Don't Starve":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/Klei/DoNotStarve/save"
-#       - when: { os: macos }
-#         path: "{HOME}/Documents/Klei/DoNotStarve/save"
-#       - when: { os: linux }
-#         path: "{HOME}/.klei/DoNotStarve/save"
-#       - when: { store: steam }
-#         path: "{STEAM_USERDATA}/219740/remote"
-#
+"Don't Starve":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/Klei/DoNotStarve/save"
+      - when: { os: macos }
+        path: "{HOME}/Documents/Klei/DoNotStarve/save"
+      - when: { os: linux }
+        path: "{HOME}/.klei/DoNotStarve/save"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/219740/remote"
+
 # Entries below were checked against real folders (Windows, 2026-09-24).
-#
+
 # Enter the Gungeon: the Unity folder also holds `Unity/` (engine cache),
 # `Crashes/` and `output_log.txt`. The saves are `SlotA.save`, `SlotB.save`,
 # `SlotC.save`; `Slot*.options` are settings. The Steam userdata folder held
 # only Steam's `remotecache.vdf`, which is always excluded.
-#
-# "Enter the Gungeon":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{HOME}/AppData/LocalLow/Dodge Roll/Enter the Gungeon/Slot*.save"
-#       - when: { os: macos }
-#         path: "{HOME}/Library/Application Support/Dodge Roll/Enter the Gungeon/Slot*.save"
-#       - when: { os: linux }
-#         path: "{HOME}/.config/unity3d/Dodge Roll/Enter the Gungeon/Slot*.save"
-#       - when: { store: steam }
-#         path: "{STEAM_USERDATA}/311690"
-#
+"Enter the Gungeon":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{HOME}/AppData/LocalLow/Dodge Roll/Enter the Gungeon/Slot*.save"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/Dodge Roll/Enter the Gungeon/Slot*.save"
+      - when: { os: linux }
+        path: "{HOME}/.config/unity3d/Dodge Roll/Enter the Gungeon/Slot*.save"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/311690"
+
 # Into the Breach: the folder holds one `profile_<name>` folder per profile
 # (`profile.lua`, `saveData.lua`, `undoSave.lua` and their `.backup` copies)
 # next to `settings.lua`, `settings.lua.backup`, `log.txt`, `error.txt` and
 # `io_test.txt`. Only the profile folders are saves.
-#
-# "Into the Breach":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Into The Breach/profile_*"
-#       - when: { os: macos }
-#         path: "{HOME}/Library/Application Support/IntoTheBreach/profile_*"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/IntoTheBreach/profile_*"
-#
+"Into the Breach":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Into The Breach/profile_*"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/IntoTheBreach/profile_*"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/IntoTheBreach/profile_*"
+
 # Dome Keeper: the Godot folder also holds `shader_cache/`, `logs/`, mod
 # loader files, `playfab_client_config.cfg` and `options.txt`. The saves are
 # `savegame_<n>.json`, `savegame_<n>_map.scn`, `savegame_<n>_map_replay.scn`
 # and `savegame<n>_full.json`.
-#
-# "Dome Keeper":
-#   override:
-#     save:
-#       - when: { os: windows }
-#         path: "{APPDATA}/Godot/app_userdata/Dome Keeper/savegame*"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/godot/app_userdata/Dome Keeper/savegame*"
-#
+"Dome Keeper":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{APPDATA}/Godot/app_userdata/Dome Keeper/savegame*"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/godot/app_userdata/Dome Keeper/savegame*"
+
 # The Binding of Isaac: Rebirth: with Steam Cloud on, the local
 # `My Games/Binding of Isaac …` folders hold only `log.txt` (always excluded)
 # and `options.ini`. Keep the manifest's targets, which hold the saves when
 # Steam Cloud is off, and exclude the settings file.
-#
-# "The Binding of Isaac: Rebirth":
-#   override:
-#     exclude:
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Binding of Isaac Rebirth/options.ini"
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Binding of Isaac Afterbirth/options.ini"
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Binding of Isaac Afterbirth+/options.ini"
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Binding of Isaac Repentance/options.ini"
-#       - when: { os: windows }
-#         path: "{DOCUMENTS}/My Games/Binding of Isaac Repentance+/options.ini"
-#       - when: { os: windows, store: gog }
-#         path: "{DOCUMENTS}/My Games/Binding of Isaac Repentance (Galaxy)/options.ini"
-#       - when: { os: macos }
-#         path: "{HOME}/Library/Application Support/Binding of Isaac Rebirth/options.ini"
-#       - when: { os: linux }
-#         path: "{XDG_DATA_HOME}/binding of isaac rebirth/options.ini"
-#
+"The Binding of Isaac: Rebirth":
+  override:
+    exclude:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Binding of Isaac Rebirth/options.ini"
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Binding of Isaac Afterbirth/options.ini"
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Binding of Isaac Afterbirth+/options.ini"
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Binding of Isaac Repentance/options.ini"
+      - when: { os: windows }
+        path: "{DOCUMENTS}/My Games/Binding of Isaac Repentance+/options.ini"
+      - when: { os: windows, store: gog }
+        path: "{DOCUMENTS}/My Games/Binding of Isaac Repentance (Galaxy)/options.ini"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/Binding of Isaac Rebirth/options.ini"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/binding of isaac rebirth/options.ini"
+
 # Six Ages: Ride Like the Wind: `<install>/Documents` holds the save folder
 # `StormAge` and, on the machine checked, four hand-made copies
 # (`StormAge - Copy`, …). Copies would bloat every checkpoint, and a Load
 # would delete copies made after it. The macOS group container is the game's
 # own and stays whole.
-#
-# "Six Ages: Ride Like the Wind":
-#   override:
-#     save:
-#       - when: { store: steam }
-#         path: "{INSTALL_DIR}/Documents/StormAge"
-#       - when: { os: macos, store: steam }
-#         path: "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages"
+"Six Ages: Ride Like the Wind":
+  override:
+    save:
+      - when: { store: steam }
+        path: "{INSTALL_DIR}/Documents/StormAge"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages"
 
-# Void War: when the save-set builder lands, narrow its `save` below to
-# `{APPDATA}/Void_War/*.sav` (`autosave.sav`, `profile.sav`, `score.sav`).
+# Void War: the saves are `autosave.sav`, `profile.sav` and `score.sav`.
 # The folder also holds `crewnames.txt`, `enemynames.txt`, `gm_exports/`, a
 # `bkk/` folder and another backup tool's `_gbm_backup_metadata.xml`.
 "Void War":
@@ -229,4 +205,4 @@
     windows: ["Void War.exe"]
   save:
     - when: { os: windows }
-      dir: "{APPDATA}/Void_War"
+      path: "{APPDATA}/Void_War/*.sav"

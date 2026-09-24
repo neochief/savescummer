@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "mtkennerly/ludusavi-manifest",
+    "revision": "fixture0000000000000000000000000000000000"
+  },
+  "games": [
+    {
+      "id": "steam-1084160",
+      "name": "Jagged Alliance 3",
+      "info": "Ironman campaigns.",
+      "detect": {
+        "steam": 1084160
+      },
+      "installDirs": [
+        "Jagged Alliance 3"
+      ],
+      "executables": {
+        "windows": [
+          "JA3.exe"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{HOME}/Saved Games/Jagged Alliance 3/{STEAM_ID64}/*.sav"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{HOME}/Saved Games/Jagged Alliance 3/{STEAM_ACCOUNT_ID}/*.sav"
+        }
+      ],
+      "exclude": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{HOME}/Saved Games/Jagged Alliance 3/{STEAM_ID64}/LocalStorage.lua"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{HOME}/Saved Games/Jagged Alliance 3/{STEAM_ACCOUNT_ID}/LocalStorage.lua"
+        }
+      ]
+    },
+    {
+      "id": "steam-1337520",
+      "name": "Risk of Rain Returns",
+      "detect": {
+        "steam": [
+          1337520,
+          2673200
+        ]
+      },
+      "installDirs": [
+        "Risk of Rain Returns"
+      ],
+      "executables": {
+        "windows": [
+          "Risk of Rain Returns.exe"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Risk_of_Rain_Returns/{STEAM_ID64}_localsave.json"
+        },
+        {
+          "when": {
+            "store": "steam"
+          },
+          "path": "{STEAM_USERDATA}/1337520/remote"
+        }
+      ],
+      "exclude": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Risk_of_Rain_Returns/user_{STEAM_ID64}"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Risk_of_Rain_Returns/user_{STEAM_ACCOUNT_ID}"
+        }
+      ]
+    },
+    {
+      "id": "steam-1434950",
+      "name": "HighFleet",
+      "info": "Exit to main menu before saving...",
+      "detect": {
+        "steam": 1434950,
+        "gog": 1589167087
+      },
+      "installDirs": [
+        "HighFleet"
+      ],
+      "executables": {
+        "windows": [
+          "Highfleet.exe"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{INSTALL_DIR}/Saves"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{INSTALL_DIR}/SavesSkirmish"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{INSTALL_DIR}/Ships"
+        }
+      ]
+    },
+    {
+      "id": "steam-242680",
+      "name": "Nuclear Throne",
+      "detect": {
+        "steam": 242680
+      },
+      "installDirs": [
+        "Nuclear Throne"
+      ],
+      "save": [
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/com.vlambeer.nuclearthrone"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{LOCALAPPDATA}/nuclearthrone"
+        },
+        {
+          "when": {
+            "os": "linux"
+          },
+          "path": "{HOME}/.config/nuclearthrone"
+        }
+      ]
+    },
+    {
+      "id": "steam-2853590",
+      "name": "Void War",
+      "info": "Addendum-only game.",
+      "detect": {
+        "steam": 2853590
+      },
+      "executables": {
+        "windows": [
+          "Void War.exe"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Void_War/*.sav"
+        }
+      ]
+    },
+    {
+      "id": "steam-588650",
+      "name": "Dead Cells",
+      "info": "**Context:** runs are long.\n\n**SaveScummer value:** checkpoint before a boss, \"just in case\".",
+      "detect": {
+        "steam": 588650,
+        "gog": 1237807960
+      },
+      "installDirs": [
+        "Dead Cells"
+      ],
+      "executables": {
+        "windows": [
+          "deadcells.exe"
+        ],
+        "linux": [
+          "deadcells.sh"
+        ]
+      },
+      "save": [
+        {
+          "path": "{INSTALL_DIR}/save/customGameData_*.json"
+        },
+        {
+          "path": "{INSTALL_DIR}/save/user_*.dat"
+        },
+        {
+          "when": {
+            "store": "steam"
+          },
+          "path": "{STEAM_USERDATA}/588650/remote/user_*.dat"
+        }
+      ],
+      "exclude": [
+        {
+          "path": "{INSTALL_DIR}/save/dc_options.json"
+        }
+      ]
+    }
+  ]
+}

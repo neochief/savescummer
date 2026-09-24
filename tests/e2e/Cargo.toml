@@ -1,0 +1,31 @@
+[package]
+name = "savescummer-e2e"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+# The real host and CLI, built as this package's binaries so tests can find
+# them with CARGO_BIN_EXE_*, plus the fake game.
+[[bin]]
+name = "e2e-host"
+path = "src/bin/e2e-host.rs"
+
+[[bin]]
+name = "e2e-cli"
+path = "src/bin/e2e-cli.rs"
+
+[[bin]]
+name = "fake-game"
+path = "src/bin/fake-game.rs"
+
+[dependencies]
+savescummer-host.workspace = true
+savescummer-cli.workspace = true
+savescummer-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+dunce.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

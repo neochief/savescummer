@@ -15,12 +15,16 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/platform/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/scanner/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/snapshots/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/snapshots/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/storage/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/integrations/windows-explorer/bridge/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests/e2e/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests/e2e/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/tests/fake-game/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests/fake-game/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/tests/integration/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests/integration/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/xtask/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

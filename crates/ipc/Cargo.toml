@@ -1,0 +1,10 @@
+[package]
+name = "savescummer-ipc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+savescummer-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

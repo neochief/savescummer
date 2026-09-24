@@ -72,6 +72,22 @@ One per-user data folder holds the database, settings and the downloaded catalog
 
 Resolve these through the OS (folder redirection, the real home directory), never from a hardcoded username or drive. A `--data-dir` option points the host elsewhere for development and tests.
 
+### The host log
+
+The host keeps a plain-text log, `host.log` in the data folder, and writes the same lines to its error output. Why: the host usually starts at sign-in or from the UI, where nobody reads its output, and "the game never showed up" or "it didn't notice I quit" can only be answered by what the host saw and when.
+
+Each line has a UTC timestamp. The log records:
+
+- startup and shutdown steps, and a clean stop;
+- games installed, installed again and uninstalled, with each game's name, ID, store and folder, and the reason the scan ran (startup, a store folder or registry key changed, the window gained focus, the periodic scan, a catalog update, a user request);
+- games started and closed, and a game found already running when the host started (its start time is unknown, so none is claimed).
+
+Rules:
+
+- **Only what the host noticed on its own.** Operations are already in the history, so the log doesn't repeat them.
+- **Bounded.** Past 1 MB the file becomes `host.log.1`, replacing the previous one, and a new file starts. Why: a host that runs for months must not grow a file forever.
+- **Never in the way.** A log that can't be written is skipped; it never fails or delays anything.
+
 ### The checkpoint store
 
 Checkpoints live in a `checkpoints` folder inside the data folder by default. Why one central place instead of next to the saves: a save set can span several folders, even several drives, so there is no single "next to" location.
@@ -153,6 +169,7 @@ How scans run:
 
 Rules the host enforces around scanning:
 
+- **Only finished installs count.** A Steam game is installed once Steam marks the install finished, not when its app manifest first appears (the catalog's rule, PLAN-CATALOG.md 4.1). Why: Steam writes the manifest, the folder and even the executable at the start of a download; counting that would show the game for the whole download. The watched `steamapps` folder sees the manifest rewritten when the download completes, so the game appears then.
 - **Installed is not the same as having saves.** An installed game whose save set matches nothing yet stays visible; Save is unavailable until there is data.
 - **Unsure is not uninstalled.** A disconnected drive or unreadable store folder keeps the previous state. A game is uninstalled only when its absence is confirmed.
 - **Uninstalled games are hidden, never forgotten.** Their configuration, checkpoints and history stay, and come back if the game does.
@@ -229,7 +246,16 @@ For example: FTL is running, so the stack is just FTL. Void War starts and gets 
 
 Processes are matched to games by the full executable path, so an unrelated program with the same file name elsewhere doesn't count. When two installs of one game exist, each install's executables map to its own game record, so hotkeys target the copy that's actually running.
 
-Game starts and exits add **Game started** and **Game closed** history markers. They create no checkpoints and have no actions. Relaunching continues the same history. Keep track of when the host was running, so time the host didn't observe never joins two unrelated sessions and no exact start or exit time is invented.
+Game starts and exits add **Game started** and **Game closed** history markers. They create no checkpoints and have no actions. Relaunching continues the same history.
+
+The host keeps a record of when it was running, so time it didn't observe never joins two unrelated sessions and no exact start or exit time is invented:
+
+- **Each run is recorded:** when it started, when it was last known to be alive, and when it ended cleanly. A heartbeat every 5 minutes moves "last seen". A run without an end crashed or lost power somewhere after it was last seen.
+- **A session belongs to one run.** A restart always starts new sessions, even for a game that kept running.
+- **A game already running when the host starts** gets no Game started marker: its start wasn't seen.
+- **A game that exits while the host is down** gets no Game closed marker: its exit wasn't seen. Its session simply ends there.
+
+Why record runs at all, when sessions already stop at a restart: "last seen" bounds how long the host was blind after a crash, and the runs can be listed (CLI `host-runs`) to answer "was SaveScummer even running when I played?".
 
 When a Steam game starts, the host asks the catalog resolver for the current Steam account again and re-resolves that game if the account changed since the last scan. Why: the user can switch Steam accounts between two sessions, and the game runs under whoever is logged in at launch. Without this, the first Save after a switch would back up the other account's folder. The account order and the context rule are the catalog's (PLAN-CATALOG.md, 4.4 and 4.5).
 
@@ -477,7 +503,7 @@ A client can also ask for the resolved folder without opening anything. Why: ope
 
 ## STORAGE
 
-One SQLite database holds game configuration, settings, checkpoint records (including labels), history and the operation journal. Game files never go into it.
+One SQLite database holds game configuration, settings, checkpoint records (including labels), history, the operation journal and the host's runs (the newest 500). Game files never go into it.
 
 - **Write only what changed.** Saving for one game doesn't rewrite that game's old records or any other game's. Why: histories grow to tens of thousands of rows, and a Save must stay instant.
 - **Each change is one transaction,** and in-memory state updates only after it commits. A failed commit leaves the old state everywhere.
@@ -596,6 +622,7 @@ Queries:
 - An operation's outcome by ID
 - A game's save set: the catalog's resolved targets and any override, with each target's presence
 - The active catalog revision
+- When the host was running: its runs, newest first, each with its start, last-seen time, clean end (if any) and whether it's the current one
 
 ### Commands are safe to repeat
 
@@ -639,12 +666,15 @@ Rules must be provable without a desktop, and the OS parts must be proven for re
 
 ### What must be proven
 
-- **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the stack after a host restart; exactly one start and one close marker per session; a Steam account switched between two sessions re-resolves the game at its start, before any Save.
+- **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the stack after a host restart; exactly one start and one close marker per session; a Steam account switched between two sessions re-resolves the game at its start, before any Save; a host killed mid-session while the game then exits unseen: no Game closed for that session, the next launch is a separate session, and the killed run has no end while a clean exit records one; starts, closes and "already running" appear in the host log.
 - **Library:** scans don't duplicate games; installs and uninstalls are noticed; unavailable drives aren't uninstalls; overrides and custom games survive scans; every save set safety rule, including exact names allowed in broad folders and wildcards rejected there, patterns in custom locations, overlaps between games, aliases, case rules, redirected folders, Proton equivalents and targets that don't exist yet; a target of unknown presence makes operations unavailable; no test ever copies or replaces a real system folder.
 - **Scanning:**
   - the periodic scan's handler (without waiting 15 minutes);
   - a focus report runs an install scan, and a second one within 20 seconds doesn't;
   - a fake Steam library gaining an app manifest and executable is found within a few seconds with no request; a burst of changes causes one scan; a library added through `libraryfolders.vdf` is watched from then on;
+  - a Steam download in progress (manifest, folder and executable there, not yet marked finished) isn't installed until Steam marks it finished; an installed game that is updating stays;
+  - a standalone install is found through the uninstall key its catalog entry names, and its install and uninstall are noticed through registry change notifications with no request (tests use a scratch key under the user's registry, never the real installed-programs list); the real machine-wide keys can be watched without admin rights;
+  - installs, reinstalls and uninstalls appear in the host log, in order, with the scan's reason;
   - install scans never re-check checkpoints, full scans do;
   - a scan blocked on a slow probe delays neither requests nor monitor markers;
   - a request during a scan joins it and gets its result; a full-scan request during an install scan runs after it;

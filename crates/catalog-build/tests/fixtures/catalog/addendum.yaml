@@ -1,0 +1,24 @@
+# Fixture addendum: an addendum-only game, an override, and a gap fill.
+
+"Void War":
+  detect:
+    steam: 2853590
+  executables:
+    windows: ["Void War.exe"]
+  save:
+    - when: { os: windows }
+      path: "{APPDATA}/Void_War/*.sav"
+
+"Risk of Rain Returns":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{APPDATA}/Risk_of_Rain_Returns/{STEAM_ID64}_localsave.json"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/1337520/remote"
+
+# The manifest has no Linux path for Nuclear Throne here; fill it.
+"Nuclear Throne":
+  save:
+    - when: { os: linux }
+      path: "{HOME}/.config/nuclearthrone"

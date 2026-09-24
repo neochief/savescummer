@@ -1,0 +1,72 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/host",
+    "apps/cli",
+    "crates/catalog",
+    "crates/catalog-build",
+    "crates/core",
+    "crates/snapshots",
+    "crates/storage",
+    "crates/scanner",
+    "crates/monitor",
+    "crates/platform",
+    "crates/ipc",
+    "tests/e2e",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.98"
+
+[workspace.dependencies]
+savescummer-catalog = { path = "crates/catalog" }
+savescummer-catalog-build = { path = "crates/catalog-build" }
+savescummer-core = { path = "crates/core" }
+savescummer-snapshots = { path = "crates/snapshots" }
+savescummer-storage = { path = "crates/storage" }
+savescummer-scanner = { path = "crates/scanner" }
+savescummer-monitor = { path = "crates/monitor" }
+savescummer-platform = { path = "crates/platform" }
+savescummer-ipc = { path = "crates/ipc" }
+savescummer-host = { path = "apps/host" }
+savescummer-cli = { path = "apps/cli" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+csv = "1"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+tempfile = "3"
+dunce = "1"
+notify = { version = "8", default-features = false }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Media_Audio",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+lto = "thin"
+strip = true

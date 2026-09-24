@@ -1,0 +1,16 @@
+[package]
+name = "savescummer-platform"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+notify.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+notify = { workspace = true, features = ["macos_fsevent"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

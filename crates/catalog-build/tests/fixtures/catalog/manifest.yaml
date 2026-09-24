@@ -1,0 +1,181 @@
+---
+Dead Cells:
+  cloud:
+    steam: true
+  files:
+    "<base>/save/customGameData_*.json":
+      tags:
+        - save
+      when:
+        - os: windows
+        - os: mac
+        - os: linux
+    "<base>/save/dc_options.json":
+      tags:
+        - config
+      when:
+        - os: windows
+        - os: mac
+        - os: linux
+    "<base>/save/user_*.dat":
+      tags:
+        - save
+      when:
+        - os: windows
+        - os: mac
+        - os: linux
+    "<root>/userdata/<storeUserId>/588650/remote/user_*.dat":
+      tags:
+        - save
+      when:
+        - store: steam
+    "<winLocalAppData>/MotionTwin/DeadCells/user_*.dat":
+      tags:
+        - save
+      when:
+        - os: windows
+          store: microsoft
+  gog:
+    id: 1237807960
+  installDir:
+    Dead Cells: {}
+  launch:
+    "<base>/deadcells.exe":
+      - when:
+          - os: windows
+            store: steam
+    "<base>/deadcells.sh":
+      - when:
+          - os: linux
+    "<base>/manual.html":
+      - when:
+          - os: windows
+  steam:
+    id: 588650
+HighFleet:
+  files:
+    "<base>/Config.ini":
+      tags:
+        - config
+      when:
+        - os: windows
+    "<base>/Saves":
+      tags:
+        - save
+      when:
+        - os: windows
+    "<base>/SavesSkirmish":
+      tags:
+        - save
+      when:
+        - os: windows
+    "<base>/Ships":
+      tags:
+        - save
+      when:
+        - os: windows
+    "<root>/steamapps/common/HighFleet/Config.ini":
+      tags:
+        - config
+      when:
+        - store: steam
+    "<root>/steamapps/common/HighFleet/Saves":
+      tags:
+        - save
+      when:
+        - store: steam
+    "<root>/steamapps/common/HighFleet/SavesSkirmish":
+      tags:
+        - save
+      when:
+        - store: steam
+    "<root>/steamapps/common/HighFleet/Ships":
+      tags:
+        - save
+      when:
+        - store: steam
+  gog:
+    id: 1589167087
+  installDir:
+    HighFleet: {}
+  launch:
+    "<base>/Highfleet.exe":
+      - when:
+          - os: windows
+            store: steam
+  steam:
+    id: 1434950
+Jagged Alliance 3:
+  files:
+    "<home>/Saved Games/Jagged Alliance 3/<storeUserId>/*.sav":
+      tags:
+        - save
+      when:
+        - os: windows
+    "<home>/Saved Games/Jagged Alliance 3/<storeUserId>/LocalStorage.lua":
+      tags:
+        - config
+      when:
+        - os: windows
+  installDir:
+    Jagged Alliance 3: {}
+  launch:
+    "<base>/JA3.exe":
+      - when:
+          - os: windows
+            store: steam
+  steam:
+    id: 1084160
+Nuclear Throne:
+  files:
+    "<home>/Library/Application Support/com.vlambeer.nuclearthrone":
+      tags:
+        - save
+      when:
+        - os: mac
+    "<home>/Library/Application Support/*":
+      tags:
+        - save
+      when:
+        - os: mac
+    "<winLocalAppData>/nuclearthrone":
+      tags:
+        - save
+      when:
+        - os: windows
+  installDir:
+    Nuclear Throne: {}
+  steam:
+    id: 242680
+Removed Game:
+  files:
+    "<base>/save": {}
+Risk of Rain Returns:
+  files:
+    "<root>/userdata/<storeUserId>/1337520/remote":
+      tags:
+        - save
+      when:
+        - store: steam
+    "<winAppData>/Risk_of_Rain_Returns/*_localsave.json":
+      tags:
+        - save
+      when:
+        - os: windows
+    "<winAppData>/Risk_of_Rain_Returns/user_<storeUserId>":
+      tags:
+        - config
+      when:
+        - os: windows
+  id:
+    steamExtra:
+      - 2673200
+  installDir:
+    Risk of Rain Returns: {}
+  launch:
+    "<base>/Risk of Rain Returns.exe":
+      - when:
+          - os: windows
+            store: steam
+  steam:
+    id: 1337520

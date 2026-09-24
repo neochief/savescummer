@@ -96,6 +96,20 @@ Risk of Rain Returns:
   account. Every override is listed in the build report, so fixes upstream has
   since made can be removed.
 
+- **Standalone installers are named by their uninstall keys.** A game sold
+  outside the stores (its own installer, a direct download) has no store id,
+  and its installer may put it in any folder under any name, so loose
+  candidates can't find it. Most installers register the game in Windows'
+  installed-programs list, so an addendum entry may list the key names its
+  installer writes there, under `detect.uninstall` (for example
+  `{5A1E-...}_is1`). Only the addendum supplies them; the manifest has none.
+
+  ```yaml
+  Indie Quest:
+    detect:
+      uninstall: ["{5A1E-QUEST}_is1"]
+  ```
+
 - An addendum key with no matching `Keep` row is a warning and is ignored.
 - The addendum **cannot introduce games**; `games.csv` remains the only game list.
 - Manifest precedence: when the name exists in the manifest, manifest data wins
@@ -293,6 +307,9 @@ When a name exists in both:
 Rules:
 
 - Only present keys are emitted; empty lists/maps are omitted.
+- `detect` holds store ids (`steam`, `gog`) and, from the addendum only,
+  uninstall-registry key names (`uninstall`). A key name is one subkey name,
+  never a path.
 - `save` entries are targets, all of them used, not candidates to pick from.
   No `primary`, `legacy` or `version` flags exist.
 - A `path` is a literal path or a glob (`*`, `?`, `[...]`, `**`), with
@@ -359,6 +376,14 @@ it has no OS APIs, database or host types.
 Given a `Game` catalog entry, the scanner finds installs:
 
 - **Steam**: app id → `appmanifest_<id>.acf` in every library → install dir.
+  An install counts only once Steam has finished it and one of the game's
+  executables exists (any platform's, since a Proton install runs the Windows
+  build; a game with no listed executables is taken on the manifest alone).
+  Why: Steam writes the manifest, the folder and even the executable while a
+  download is still running; counting that would show the game for the whole
+  download. "Finished" is the fully-installed flag (bit 4) of the manifest's
+  `StateFlags`. Steam keeps that flag set while an installed game updates, so
+  an update never makes a game disappear.
 - **GOG**: gog id → Galaxy registry install path.
 - **Epic**: no product id in the manifest, but the launcher keeps one manifest
   per installed game (`Epic/EpicGamesLauncher/Data/Manifests/*.item`, JSON
@@ -368,7 +393,17 @@ Given a `Game` catalog entry, the scanner finds installs:
   (`{PROGRAMFILES}/Epic Games/<dir>`, …) remain the fallback when the
   launcher's manifests are unavailable.
 - **Standalone**: loose candidates plus Windows uninstall-registry keys where an
-  addendum supplies them; executable must exist.
+  addendum supplies them (Section 2.2); executable must exist. For each key a
+  game names:
+  - look under the installed-programs list machine-wide in both registry views
+    (64-bit and 32-bit), then the user's own;
+  - take the install folder from `InstallLocation`, or from Inno Setup's
+    `Inno Setup: App Path` when that is empty (Inno installers don't always
+    fill it);
+  - count it only when that folder holds one of the game's executables.
+
+  Only games that name a key cost a lookup; the whole list is never walked. A
+  folder a loose candidate also finds is the same install, not a second one.
 - **MS Store / Game Pass**: not supported in v1.
 
 Cost control: list each Steam library's `steamapps` folder, the GOG registry
@@ -711,6 +746,14 @@ resolver isn't consulted for it, and it never changes on its own.
     targets, one per form; the one that doesn't exist is simply absent.
 40. **A target covered by another** (a folder target and a pattern inside it):
     the pattern is dropped; the folder covers it.
+41. **A standalone installer's own folder** (installed to
+    `D:\Games\IQ v1.2`, a name no loose candidate has): found through the
+    uninstall key the addendum names; gone again when the key and folder
+    are.
+42. **A Steam download in progress** (manifest, folder and executable already
+    there, `StateFlags` without the fully-installed bit): not installed yet;
+    the game appears when Steam finishes. An installed game that is updating
+    keeps the bit and stays.
 
 ## 6. Bundle delivery and updates
 
@@ -842,7 +885,7 @@ missing case is visible in the test list. Beyond the cases:
 ### 7.3 Host wiring (not a third testable unit)
 
 - `crates/scanner` — store discovery only: Steam libraries and app manifests, GOG
-  registry, loose install probing, install identity. Produces `Install` records;
+  registry, uninstall-registry keys, loose install probing, install identity. Produces `Install` records;
   contains no save policy.
 - `apps/host` — embeds the bundle, runs discovery, calls `resolve` per install,
   stores game records with their save sets, publishes state. No decision logic.

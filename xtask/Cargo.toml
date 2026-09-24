@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+savescummer-catalog-build.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+ureq = "3"

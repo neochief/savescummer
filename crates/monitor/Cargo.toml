@@ -1,0 +1,9 @@
+[package]
+name = "savescummer-monitor"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
