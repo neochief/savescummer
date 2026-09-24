@@ -1,3 +1,5 @@
+THIS IS A TEMPLATE FOR THE PLAN STYLE, THE CONTENT ITSELF IS OBSOLETE
+
 # Save Scummer
 
 I want to create a Windows app that would help me save and load backups of game save files or data, mainly for roguelike games.

@@ -171,6 +171,18 @@ fn build_game(
         let (executables, mut warnings) = translate::executables(entry);
         report.warnings.append(&mut warnings);
         let (save, drops) = translate::save(entry);
+        for reason in &drops {
+            if matches!(
+                reason,
+                translate::DropReason::BareRoot | translate::DropReason::SharedFolder
+            ) {
+                report.warn(format!(
+                    "{}: a save path was dropped ({})",
+                    row.name,
+                    reason.describe()
+                ));
+            }
+        }
         (detect, executables, save, drops)
     } else {
         let Some(addendum) = addendum else {

@@ -14,6 +14,7 @@ pub enum DropReason {
     UnsupportedStore,
     GalaxyStorage,
     BareRoot,
+    SharedFolder,
     Empty,
 }
 
@@ -28,6 +29,7 @@ impl DropReason {
             Self::UnsupportedStore => "unsupported store condition",
             Self::GalaxyStorage => "GOG Galaxy-managed storage",
             Self::BareRoot => "path resolves to a bare root",
+            Self::SharedFolder => "path resolves to a folder shared by all apps",
             Self::Empty => "path resolves to nothing",
         }
     }
@@ -236,6 +238,9 @@ pub fn normalize_path(path: &str) -> Result<String, DropReason> {
     if is_bare_root(&dir) {
         return Err(DropReason::BareRoot);
     }
+    if is_shared_folder(&dir) {
+        return Err(DropReason::SharedFolder);
+    }
     if dir.to_ascii_lowercase().contains("gog.com/galaxy") {
         return Err(DropReason::GalaxyStorage);
     }
@@ -276,7 +281,7 @@ fn collapse_glob(path: &str) -> String {
 /// File-looking leaf paths resolve to their parent directory.
 fn to_directory(path: &str) -> String {
     let last = path.rsplit('/').next().unwrap_or(path);
-    if last.contains('.') && last != "." && last != ".." {
+    if is_file_name(last) {
         match path.rfind('/') {
             Some(slash) => path[..slash].to_string(),
             None => String::new(),
@@ -284,6 +289,48 @@ fn to_directory(path: &str) -> String {
     } else {
         path.to_string()
     }
+}
+
+/// The manifest doesn't say whether a path is a file or a folder, so only a
+/// name with a short extension counts as a file. A folder misread as a file
+/// widens DIR to its parent, so doubt falls on the folder side: bundle ids
+/// (`com.vlambeer.nuclearthrone`), versions (`3.6`) and hidden folders
+/// (`.This War of Mine`) stay folders.
+fn is_file_name(name: &str) -> bool {
+    let Some((stem, extension)) = name.rsplit_once('.') else {
+        return false;
+    };
+    !stem.is_empty()
+        && (1..=5).contains(&extension.len())
+        && extension.chars().all(|c| c.is_ascii_alphanumeric())
+        && extension.chars().any(|c| c.is_ascii_alphabetic())
+}
+
+/// Folders every app shares. Backing one up would copy, and restoring it would
+/// roll back, other programs' data, so such a DIR is never emitted.
+fn is_shared_folder(dir: &str) -> bool {
+    let lower = dir.to_ascii_lowercase();
+    if lower == "{home}/library" {
+        return true;
+    }
+    if let Some(rest) = lower.strip_prefix("{home}/library/") {
+        // Direct children: `Application Support`, `Group Containers`, ...
+        return !rest.contains('/');
+    }
+    matches!(
+        lower.as_str(),
+        "{home}/appdata"
+            | "{home}/appdata/local"
+            | "{home}/appdata/locallow"
+            | "{home}/appdata/roaming"
+            | "{home}/documents"
+            | "{home}/documents/my games"
+            | "{home}/saved games"
+            | "{home}/.config"
+            | "{home}/.local"
+            | "{home}/.local/share"
+            | "{documents}/my games"
+    )
 }
 
 fn is_bare_root(dir: &str) -> bool {
@@ -510,6 +557,55 @@ mod tests {
                 "<winLocalAppData>/GOG.com/Galaxy/Applications/50593543263669699/Storage/Shared/Files/C*/SGS*"
             ),
             Err(DropReason::GalaxyStorage)
+        );
+    }
+
+    #[test]
+    fn dotted_folder_names_stay_folders() {
+        assert_eq!(
+            normalize_path("<home>/Library/Application Support/com.vlambeer.nuclearthrone")
+                .unwrap(),
+            "{HOME}/Library/Application Support/com.vlambeer.nuclearthrone"
+        );
+        assert_eq!(
+            normalize_path("<home>/Library/Group Containers/group.com.a-sharp.Six-Ages").unwrap(),
+            "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages"
+        );
+        assert_eq!(
+            normalize_path("<winLocalAppData>/NetHack/3.6").unwrap(),
+            "{LOCALAPPDATA}/NetHack/3.6"
+        );
+        assert_eq!(
+            normalize_path("<home>/.This War of Mine").unwrap(),
+            "{HOME}/.This War of Mine"
+        );
+        assert_eq!(
+            normalize_path("<base>/data/save_data.xml").unwrap(),
+            "{INSTALL_DIR}/data"
+        );
+        assert_eq!(
+            normalize_path("<winAppData>/Monolith/GameData.gd").unwrap(),
+            "{APPDATA}/Monolith"
+        );
+    }
+
+    #[test]
+    fn shared_folders_are_never_a_save_dir() {
+        for path in [
+            "<home>/Library/Application Support/save.dat",
+            "<home>/Library/Group Containers/*.sav",
+            "<home>/Library/Preferences/unity.Studio.Game.plist",
+            "<home>/AppData/LocalLow/*.sav",
+            "<winDocuments>/My Games/*.sav",
+            "<home>/Saved Games/save.sav",
+            "<home>/.config/game.ini",
+            "<home>/.local/share/*.sav",
+        ] {
+            assert_eq!(normalize_path(path), Err(DropReason::SharedFolder), "{path}");
+        }
+        assert_eq!(
+            normalize_path("<home>/Library/Application Support/Game/save.dat").unwrap(),
+            "{HOME}/Library/Application Support/Game"
         );
     }
 

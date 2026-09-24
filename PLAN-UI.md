@@ -41,24 +41,24 @@ The layout depends on **visible games**, not on database records. Games confirme
 The main area takes the full width and there is no sidebar. It shows one compact, centered block:
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ SaveScummer                                                                       ─  □  × │
-├───────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                           │
-│                                                                                           │
-│                                                                                           │
-│                                             ◇                                             │
-│                                                                                           │
-│                                 No supported games found                                  │
-│                                                                                           │
-│                                     [ ⟳ Scan games ]                                      │
-│                                     + Add custom game                                     │
-│                                                                                           │
-│                                                                                           │
-│                                                                                           │
-├───────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                       ☑ Launch on startup │
-└───────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SaveScummer                                                                                 ─  □  × │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                     │
+│                                                                                                     │
+│                                                                                                     │
+│                                                  ◇                                                  │
+│                                                                                                     │
+│                                      No supported games found                                       │
+│                                                                                                     │
+│                                          [ ⟳ Scan games ]                                           │
+│                                          + Add custom game                                          │
+│                                                                                                     │
+│                                                                                                     │
+│                                                                                                     │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 ☑ Launch on startup │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 There's no explanatory paragraph and no illustration; the two controls are the explanation. The bottom bar contains only `☑ Launch on startup`, in the same right-aligned position it has in the other states.
@@ -74,27 +74,27 @@ When the first game becomes visible:
 Nothing is preselected. The sidebar is a flat list, and the main area stays quiet:
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ SaveScummer                                                                       ─  □  × │
-├────────────────────────┬──────────────────────────────────────────────────────────────────┤
-│ ┌────────────────────┐ │                                                                  │
-│ │ XCOM 2             │ │                                                                  │
-│ └────────────────────┘ │                                                                  │
-│ ┌────────────────────┐ │                                                                  │
-│ │ NOITA              │ │                   No known games are running.                    │
-│ └────────────────────┘ │                                                                  │
-│ ┌────────────────────┐ │                                                                  │
-│ │ BATTLE BROTHERS    │ │                                                                  │
-│ └────────────────────┘ │                                                                  │
-│ ┌────────────────────┐ │                                                                  │
-│ │ VOID WAR           │ │                                                                  │
-│ └────────────────────┘ │                                                                  │
-│                        │                                                                  │
-│ + Add custom game      │                                                                  │
-│ ⟳ Scan games           │                                                                  │
-├────────────────────────┴──────────────────────────────────────────────────────────────────┤
-│ Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load     ☑ Play sounds           ☑ Launch on startup │
-└───────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SaveScummer                                                                                 ─  □  × │
+├────────────────────────┬────────────────────────────────────────────────────────────────────────────┤
+│ ┌────────────────────┐ │                                                                            │
+│ │ XCOM 2             │ │                                                                            │
+│ └────────────────────┘ │                                                                            │
+│ ┌────────────────────┐ │                                                                            │
+│ │ NOITA              │ │                        No known games are running.                         │
+│ └────────────────────┘ │                                                                            │
+│ ┌────────────────────┐ │                                                                            │
+│ │ BATTLE BROTHERS    │ │                                                                            │
+│ └────────────────────┘ │                                                                            │
+│ ┌────────────────────┐ │                                                                            │
+│ │ VOID WAR           │ │                                                                            │
+│ └────────────────────┘ │                                                                            │
+│                        │                                                                            │
+│ + Add custom game      │                                                                            │
+│ ⟳ Scan games           │                                                                            │
+├────────────────────────┴────────────────────────────────────────────────────────────────────────────┤
+│ Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load  ☑ Play sounds  ▤ Checkpoint folder…  ☑ Launch on startup │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 3. A game is running
@@ -102,34 +102,34 @@ Nothing is preselected. The sidebar is a flat list, and the main area stays quie
 The running game gets its own group at the top of the sidebar. It is selected when nothing else is, or when the user switches to its window (see ACTIVE STACK). The main area shows its header, actions and history:
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ SaveScummer                                                                       ─  □  × │
-├────────────────────────┬──────────────────────────────────────────────────────────────────┤
-│ RUNNING                │ ▣ VOID WAR                                                       │
-│ ┏━━━━━━━━━━━━━━━━━━━━┓ │   Running                                                        │
-│ ┃ VOID WAR         ● ┃ │                                                                  │
-│ ┗━━━━━━━━━━━━━━━━━━━━┛ │ [ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]                         │
-│ INSTALLED              │             [  3 seconds ago  ]                                  │
-│ ┌────────────────────┐ │                                                                  │
-│ │ XCOM 2             │ ├──────────────────────────────────────────────────────────────────┤
-│ └────────────────────┘ │ HISTORY                                                          │
-│ ┌────────────────────┐ │                                                                  │
-│ │ NOITA              │ │ TODAY                                                            │
-│ └────────────────────┘ │ 3 seconds ago              ◆ Saved                       [↶] [✕] │
-│ ┌────────────────────┐ │ 12:24:03                     Before entering the station         │
-│ │ BATTLE BROTHERS    │ │ 1 hour and 12 minutes ago  ↶ Loaded · 10:47:10           [↶] [✕] │
-│ └────────────────────┘ │ 11:18:44                                                         │
-│                        │ 2 hours ago                ● Game started                        │
-│                        │ 10:04:12                                                         │
-│                        │ YESTERDAY                                                        │
-│                        │ Yesterday                  ◆ Saved                       [↶] [✕] │
-│                        │ 23:20:12                     Add label…                          │
-│                        │ Yesterday                  ■ Game closed                         │
-│ + Add custom game      │ 22:58:40                                                         │
-│ ⟳ Scan games           │                                                                  │
-├────────────────────────┴──────────────────────────────────────────────────────────────────┤
-│ Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load     ☑ Play sounds           ☑ Launch on startup │
-└───────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SaveScummer                                                                                 ─  □  × │
+├────────────────────────┬────────────────────────────────────────────────────────────────────────────┤
+│ RUNNING                │ ▣ VOID WAR                                                                 │
+│ ┏━━━━━━━━━━━━━━━━━━━━┓ │   Running                                                                  │
+│ ┃ VOID WAR         ● ┃ │                                                                            │
+│ ┗━━━━━━━━━━━━━━━━━━━━┛ │ [ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]                                   │
+│ INSTALLED              │             [  3 seconds ago  ]                                            │
+│ ┌────────────────────┐ │                                                                            │
+│ │ XCOM 2             │ ├────────────────────────────────────────────────────────────────────────────┤
+│ └────────────────────┘ │ HISTORY                                                                    │
+│ ┌────────────────────┐ │                                                                            │
+│ │ NOITA              │ │ TODAY                                                                      │
+│ └────────────────────┘ │ 3 seconds ago              ◆ Saved                                 [↶] [✕] │
+│ ┌────────────────────┐ │ 12:24:03                     Before entering the station                   │
+│ │ BATTLE BROTHERS    │ │ 1 hour and 12 minutes ago  ↶ Loaded · 10:47:10                     [↶] [✕] │
+│ └────────────────────┘ │ 11:18:44                                                                   │
+│                        │ 2 hours ago                ● Game started                                  │
+│                        │ 10:04:12                                                                   │
+│                        │ YESTERDAY                                                                  │
+│                        │ Yesterday                  ◆ Saved                                 [↶] [✕] │
+│                        │ 23:20:12                     Add label…                                    │
+│                        │ Yesterday                  ■ Game closed                                   │
+│ + Add custom game      │ 22:58:40                                                                   │
+│ ⟳ Scan games           │                                                                            │
+├────────────────────────┴────────────────────────────────────────────────────────────────────────────┤
+│ Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load  ☑ Play sounds  ▤ Checkpoint folder…  ☑ Launch on startup │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 `✕` stands for the trash icon. Each sidebar box is an art card (see SIDEBAR): the capitalized name stands for the game's logo, the heavy border marks the selected card and `●` marks a running game. The error and instructions blocks, when present, sit between the action row and HISTORY.
@@ -231,9 +231,9 @@ This is the main action and has the strongest emphasis. It supports the core loo
 
 ### Load
 
-The main Load button restores the **latest retained checkpoint**. Manual copies the user made in Explorer are treated like any other checkpoint and are never marked differently in this window.
+The main Load button restores the **latest retained checkpoint**. Only checkpoints the app made count; copies the user makes by hand are not checkpoints.
 
-What Load will restore is shown *inside the button*, on a smaller, quieter second line: `3 seconds ago`, `Yesterday`, `2012-12-12`. This line uses the same age wording as the history, updates live, and replaces any separate "Last save" line. With no checkpoints, the button is disabled and its second line reads `No saves yet`. When the game's save folder doesn't exist, Load is disabled too, with the same `No game data yet` tooltip as Save; the second line still shows what it would restore. The history's Load and Revert buttons follow the same rule.
+What Load will restore is shown *inside the button*, on a smaller, quieter second line: `3 seconds ago`, `Yesterday`, `2012-12-12`. This line uses the same age wording as the history, updates live, and replaces any separate "Last save" line. With no checkpoints, the button is disabled and its second line reads `No saves yet`. When the host reports no game data on disk, Load is disabled too, with the same `No game data yet` tooltip as Save; the second line still shows what it would restore. The history's Load and Revert buttons follow the same rule.
 
 If that save has a label, the label comes first: `Before boss fight · 3 seconds ago`. The button keeps its width, so a long label is shortened with `…` and the age always stays visible. The full label is in the tooltip. Why: a label says *which* save far better than a time, and Load is where the user needs to know that.
 
@@ -241,22 +241,27 @@ A pending deletion doesn't change Load. It still targets the latest checkpoint, 
 
 Every successful Load, and every Revert, also creates a **recovery point** holding the state just before it. That is what the row's Revert restores. Load errors go to the error block.
 
+Load always restores the whole checkpoint, every save location in it, exactly as it was: saves made after the checkpoint are removed. Why: many games continue from their newest file, so a Load that left newer saves behind would silently not restore. The removed saves are in the recovery point, and the Loaded row says how many were removed. Revert works the same way, so it is a true undo.
+
 ### `···` menu
 
 Each command has its own icon:
 
 ```text
 [ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]
-            [  3 seconds ago  ]  ┌──────────────────────────┐
-                                 │ ▤  Open in File Explorer │
-                                 │ ✎  Configure paths…      │
-                                 │ ✕  Flush checkpoints…    │
-                                 └──────────────────────────┘
+            [  3 seconds ago  ]  ┌──────────────────────────────────┐
+                                 │ ▤  Open checkpoints folder       │
+                                 │ ✎  Configure paths…              │
+                                 │ ✕  Flush checkpoints (2.4 GB)…   │
+                                 └──────────────────────────────────┘
 ```
 
-- **Open in File Explorer** opens the game's save folder (DIR), which is always a folder. If the game hasn't created it yet, it opens the nearest folder above it that exists.
+- **Open checkpoints folder** opens this game's folder in the checkpoint store, where each checkpoint is an ordinary folder named by its time and kind. Why here and not on history rows: rows already carry Load, Revert and Delete, and a fourth icon on thousands of rows is noise; the folder names make a checkpoint easy to find.
+- There is no command to open the save location. Why: a save set can span several folders, so it would need a submenu and rules for patterns and shared folders, for little gain. Configure paths shows every location's path.
 - **Configure paths…**
-- **Flush checkpoints…**, the name used for this action everywhere.
+- **Flush checkpoints…**, the name used for this action everywhere. The menu item shows the size of what Flush would delete, as the host reports it: `Flush checkpoints (23 MB)…`. Why: the size is often the reason to flush. With nothing to flush the item is disabled and shows no size; when the size is unknown (the store isn't connected) it shows none either.
+
+Sizes are rounded: one decimal under 10, whole numbers from 10 up (`840 KB`, `23 MB`, `2.4 GB`, `12 GB`), with a space before the unit. Units follow the OS file manager: 1024-based on Windows, 1000-based on macOS and Linux. Why: the number matches what the user sees when they check the folder.
 
 There is no global Settings screen or gear icon. The few app-wide preferences are in the bottom bar.
 
@@ -310,8 +315,13 @@ Details that are easy to get wrong:
 
 The glyphs above are placeholders, but each event kind needs a stable icon that is easy to tell apart. Started and closed rows make play sessions visible without a separate session UI.
 
-- **Saved** can carry a label (see below). Manual copies use this same row with no special marking. Their real save time is unknown, so their time column shows the folder's last-modified time, and the exact-time line's tooltip says so (`Folder last changed`).
+- **Saved** can carry a label (see below).
 - **Loaded** names the save it loaded by that save's label, or by its exact `HH:mm:ss` when it has none: `Loaded · Before boss fight`, `Loaded · 10:47:10`. It follows the label live, so renaming a save renames its loads too, and it keeps the label even after that save is deleted. A long label is shortened with `…`, and the full label is in the tooltip.
+- **A Loaded row's second line** carries short notes when the host reports them. The host owns these facts; the UI only shows them:
+    - what the Load removed: `Removed 2 newer saves, kept in the recovery point`;
+    - that Steam Cloud undid part of it: `Steam Cloud replaced the restored save`. The host can only tell at the next game launch after the Load, so this note appears later, in place. Why: without it the user would think Load failed, or not notice that the game started from a different save.
+
+  Two notes share the line, separated by ` · `. The line is always there, so a note arriving later never resizes the row.
 - **Load this save** loads *that* save instead of the latest one. It uses the same button style and icon family as Revert.
 - **Revert this load** restores that load's recovery point, which is the state just before the load. Like a Load, it first keeps the current state as a new recovery point, so a revert never loses progress. The result is a `Reverted` row with its own Revert, which undoes the revert. Nothing is used up: the loaded row keeps its Revert too. Why: one rule for every restore is easy to trust, and any state the user leaves can be brought back.
 - Revert changes game data; Delete destroys a checkpoint, so they must not get equal emphasis. Delete stays quiet until the row is hovered, focused or selected.
@@ -344,11 +354,11 @@ Clearing the text removes the label, and the line goes back to `Add label…`. A
 
 - **One line, up to 100 characters.** The field stops accepting text at the limit, and pasted line breaks become spaces. Leading and trailing spaces are dropped, so a label of only spaces is the same as none.
 - **Editing works while the game is busy** and while the save is counting down to deletion, because it touches no files.
-- **The label belongs to the save, not to the row.** Every place that names the save shows it: this row, the Loaded rows that loaded it, the Load button, the Flush dialog's Details and the Explorer menu's Load item.
+- **The label belongs to the save, not to the row.** Every place that names the save shows it: this row, the Loaded rows that loaded it, the Load button and the Flush dialog's Details.
 - **Escape cancels the edit.** It puts back the label from before editing started and closes the field, undoing anything autosave already stored during this edit. Why: autosave is there so the user never has to confirm, not so a slip can't be taken back.
 - **If the save disappears while its label is being edited** (deleted, flushed or changed outside the app), the edit is dropped along with the row, with no error.
 
-Only saved checkpoints have labels. Recovery points don't: a Loaded or Reverted row's second line stays empty.
+Only saved checkpoints have labels. Recovery points don't: a Reverted row's second line stays empty, and a Loaded row's shows only the host's notes described above.
 
 ### Deleting a single entry
 
@@ -403,10 +413,17 @@ There is no queue screen, no batch confirmation and no extra history event for d
 ## BOTTOM BAR
 
 ```text
-Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load      ☑ Play sounds          ☑ Launch on startup
+Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load     ☑ Play sounds     ▤ Checkpoint folder…  ☑ Launch on startup
 ```
 
-The bar should look like a compact game status strip, not a settings form. The shortcuts are styled as keycaps and stand out slightly more than their `Save`/`Load` labels. `Play sounds` sits next to the hotkeys. `Launch on startup` sits at the far right, apart from the others, because it controls how the app starts, not Save and Load.
+The bar should look like a compact game status strip, not a settings form. The shortcuts are styled as keycaps and stand out slightly more than their `Save`/`Load` labels. `Play sounds` sits next to the hotkeys. `Checkpoint folder…` and `Launch on startup` sit at the far right, apart from the others, because they set up the app itself, not Save and Load.
+
+**Checkpoint folder** is where every game's checkpoints are kept: one central folder in the user's app data by default (`%LOCALAPPDATA%\SaveScummer\checkpoints` on Windows, `~/Library/Application Support/SaveScummer/checkpoints` on macOS, `~/.local/share/SaveScummer/checkpoints` on Linux). The user can move it, for example to a bigger drive. Why it's here: it is the one app-wide setting that isn't a checkbox, and it's rarely changed, so it gets a quiet control rather than a settings screen.
+
+- The control's tooltip shows the current location.
+- Clicking it opens the system folder picker. Picking a different folder asks the host to move the checkpoints there.
+- Like Scan, the control reports the move itself: `Moving…` while it runs, then back to normal, or a short failure state with the reason in its tooltip. The host owns the move; while it runs, games are busy.
+- The control appears only in the full bottom bar, not in the zero-games layout.
 
 **Which game the hotkeys act on:**
 
@@ -418,7 +435,7 @@ The bar should look like a compact game status strip, not a settings form. The s
 
 ## DIALOGS
 
-There are only three dialogs. All of them:
+There are only three dialogs: Add custom game, Configure paths and Flush checkpoints. All of them:
 
 - size to their content and can't be resized;
 - use text-only buttons;
@@ -428,40 +445,62 @@ The title of a per-game dialog includes the game's name (`Configure paths · Voi
 
 Deleting a single checkpoint is not a dialog; it uses the row countdown above.
 
+### The save location field
+
+Both dialogs below share one **Save location** field, for known games too. A save can be a whole folder, one file, or a set of files in a folder, so the field takes any of the three:
+
+- **Browse** picks a folder, the most common case.
+- The text stays editable, so the user can turn it into a file path or a pattern in the catalog's pattern syntax: `D:\Game\saves\*.sav`, `D:\Game\Profiles\C*\SGS*`.
+- A muted hint is always shown under the field, not as a tooltip: `A folder, a file, or a pattern such as D:\Game\saves\*.sav`. Why: most users never guess that a field with a folder picker also takes a pattern, and a tooltip is found only by those who already suspect it.
+- Errors about the save location appear below the hint, which stays visible.
+- A path that doesn't exist yet is fine, such as a save folder the game hasn't created. Checking a path never creates anything.
+
+A custom game has exactly one save location. Two separate locations for one custom game are not supported for now.
+
+The host validates the save location and owns the rules. What the user can run into:
+
+- the path isn't absolute;
+- the location is too broad: a whole broad folder (a drive or home folder, Documents, Saved Games, AppData, Program Files, a Steam library and the like), or a pattern directly inside one, is rejected, while an exact file or folder name inside one is fine (`Documents\mygame.sav`), because Load only ever touches that name;
+- the pattern is known to be dangerous: a wildcard directly in the game's install folder or another broad folder, a pattern that matches the game's executable, or names ending in the app's reserved `.ssnew` / `.ssold` suffixes;
+- the location overlaps another game's. Two games may share a folder only when both name exact, different files in it.
+
+Why so strict: Load can remove files inside the save location, so a location that is too broad or overlaps another game could delete saves that aren't this game's.
+
 ### Add custom game
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ Add custom game                                                      × │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  Game executable  [                                 ] [Browse…]        │
-│  Save location    [                                 ] [Browse…]        │
-│  Name             [                                 ]                  │
-│                                                                        │
-│                                                   [ Add ]  [ Cancel ]  │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│ Add custom game                                                                  × │
+├────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                    │
+│  Game executable  [                                        ] [Browse…]             │
+│  Save location    [                                        ] [Browse…]             │
+│                   A folder, a file, or a pattern such as D:\Game\saves\*.sav       │
+│  Name             [                                        ]                       │
+│                                                                                    │
+│                                                               [ Add ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 After Browse filled in Name, with a validation error:
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ Add custom game                                                      × │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  Game executable  [D:\Starsector\starsector.exe     ] [Browse…]        │
-│  Save location    [saves                            ] [Browse…]        │
-│  Name             [starsector                       ]                  │
-│                                                                        │
-│  ⚠ Save location must be an absolute path.                             │
-│                                                                        │
-│                                                   [ Add ]  [ Cancel ]  │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│ Add custom game                                                                  × │
+├────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                    │
+│  Game executable  [D:\Starsector\starsector.exe            ] [Browse…]             │
+│  Save location    [saves                                   ] [Browse…]             │
+│                   A folder, a file, or a pattern such as D:\Game\saves\*.sav       │
+│                   ⚠ Save location must be an absolute path.                        │
+│  Name             [starsector                              ]                       │
+│                                                                                    │
+│                                                               [ Add ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- The fields stay in this order. The name must be non-blank after trimming, and both paths must be non-blank absolute paths.
-- Browse opens a file picker for the executable and a folder picker for the save location. The fields stay editable, so the user can type a path that doesn't exist yet, such as a save folder the game hasn't created.
+- The fields stay in this order. The name must be non-blank after trimming, and both paths must be non-blank.
+- Browse opens a file picker for the executable and a folder picker for the save location. Both fields stay editable.
 - When the user picks an executable with Browse and Name is blank, Name is filled with the file name minus its final extension. A name that's already filled in is never overwritten.
 - Errors appear in the dialog and the entered values stay. Nothing partial is created. The host generates the stable ID.
 - **Add** is the default button.
@@ -471,34 +510,44 @@ After Browse filled in Name, with a validation error:
 Known game:
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ Configure paths · Void War                                           × │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  Game executable  [C:\…\Void War\VoidWar.exe      ] [Open] [Reset]     │
-│  Game data dir    [C:\Users\…\LocalLow\Void War   ] [Open] [Reset]     │
-│                                                                        │
-│                                                  [ Save ]  [ Cancel ]  │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│ Configure paths · Slay the Spire                                                 × │
+├────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                    │
+│  Game executable  [C:\…\common\SlayTheSpire\SlayTheSpire.exe] [Open] [Reset]       │
+│  Save location    C:\…\common\SlayTheSpire\saves                                   │
+│                   C:\…\common\SlayTheSpire\preferences                             │
+│                   C:\…\common\SlayTheSpire\runs                                    │
+│                   C:\…\common\SlayTheSpire\betaPreferences                         │
+│                   [                                        ] [Browse…] [Reset]     │
+│                   A folder, a file, or a pattern such as D:\Game\saves\*.sav       │
+│                                                                                    │
+│                                                              [ Save ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Custom game:
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ Configure paths · Starsector                                         × │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  Name             [Starsector                     ]                    │
-│  Game executable  [D:\Starsector\starsector.exe   ] [Open]             │
-│  Save location    [D:\Starsector\saves            ] [Open]             │
-│                                                                        │
-│                                                  [ Save ]  [ Cancel ]  │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│ Configure paths · Starsector                                                     × │
+├────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                    │
+│  Name             [Starsector                              ]                       │
+│  Game executable  [D:\Starsector\starsector.exe            ] [Open]                │
+│  Save location    [D:\Starsector\saves                     ] [Browse…]             │
+│                   A folder, a file, or a pattern such as D:\Game\saves\*.sav       │
+│                                                                                    │
+│                                                              [ Save ]  [ Cancel ]  │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- For custom games, Name is editable, the data field is labelled "Save location" (as in the Add dialog) and there's no Reset.
-- Changes are applied only after the core validates them. If validation fails, the error appears in the dialog like in Add custom game, the saved configuration doesn't change, and the entered values stay for the user to fix.
+- **Known games** list the catalog's save locations, as the host resolved them on this machine, read-only: one line or several. Why several: a game's save can be split across folders, or kept both locally and in Steam's cloud folder, and all of them are backed up together.
+- The editable field under the list is empty by default. Typing a location there replaces *all* the catalog's locations with that one, and the list is dimmed to show it no longer applies. **Reset** clears the field and returns to the catalog's locations.
+- **Custom games** have an editable Name, the save location field directly (no catalog list) and no Reset.
+- **Open** next to the executable opens the folder holding the saved executable, through the host like every other folder. Why: it's the quickest way to check which install the app watches (Steam's or GOG's) or to reach the game's files. While the field differs from the saved value, Open is disabled with the tooltip `Save to open this folder`. Why not open the typed path: clients never pass the host a path to act on, and opening the old folder instead would look like a bug.
+- Changing the save location changes which checkpoints apply. Checkpoints made with the old location stay on disk but can't be loaded until the game uses that location again.
+- Changes are applied only after the host validates them. If validation fails, the error appears in the dialog like in Add custom game, the saved configuration doesn't change, and the entered values stay for the user to fix.
 - **Save** is the default button.
 
 ### Flush checkpoints
@@ -516,6 +565,7 @@ This is the only bulk delete, so it shows the user what will go before they conf
 │    Saved backups        42                                             │
 │    Recovery points       2                                             │
 │    Incomplete copies     1                                             │
+│    Total                 2.4 GB                                        │
 │                                                                        │
 │  ▸ Details                                                             │
 │                                                                        │
@@ -529,23 +579,23 @@ With Details expanded:
 │  ▾ Details                                                             │
 │  ┌────────────────────────────────────────────────────────────┐        │
 │  │ SAVED BACKUPS                                              │        │
-│  │   …\Void_War - Copy (42)     Before entering the station   │        │
-│  │   …\Void_War - Copy (41)     Boss fight                    │        │
-│  │   …\Void_War - Copy (40)                                   │        │
+│  │   …\2026-09-24 19.25.03 saved  Before entering the station │        │
+│  │   …\2026-09-24 18.02.47 saved  Boss fight                  │        │
+│  │   …\2026-09-23 22.40.10 saved                              │        │
 │  │   Show more (39)                                           │        │
 │  │ RECOVERY POINTS                                            │        │
-│  │   …\Void_War.recovery-000002                               │        │
-│  │   …\Void_War.recovery-000001                               │        │
+│  │   …\2026-09-24 19.31.10 recovery                           │        │
+│  │   …\2026-09-24 19.02.55 recovery                           │        │
 │  │ INCOMPLETE COPIES                                          │        │
-│  │   …\Void_War.partial-000001                                │        │
+│  │   …\2026-09-24 19.40.02 partial                            │        │
 │  └────────────────────────────────────────────────────────────┘        │
 ```
 
 - **When it's available:** there are saved checkpoints, recovery checkpoints or history entries, and the game is neither busy nor waiting for recovery. Recovery data left by an interrupted operation is included only after that interruption is resolved.
 - **The dialog is only a preview.** Before opening it, the app checks which files would be affected and shows them. Nothing from the preview is passed back to the host. Why: simplicity. The dialog tells the user what the action does; it isn't a contract.
 - **Text:** "Permanently delete all backups and clear this game's history?" followed by "Your current game data will be kept."
-- **Counts:** separate counts for saved backups, recovery points and incomplete copies, with zero counts left out. The paths go under **Details**, loaded in pages. A labeled saved backup shows its label after the path, shortened with `…` when needed, so the user can recognize saves they'd miss.
-- **On confirm:** the dialog closes and the UI sends a plain Flush request for the game. The host does the whole job again from scratch: it deletes every saved and recovery checkpoint, manual copies included, and clears the history. DIR is not touched. Only the records whose files were actually deleted are cleared. While it runs, the game is in the normal busy state, and any failures go to the error block.
+- **Counts:** separate counts for saved backups, recovery points and incomplete copies, with zero counts left out, then the total size, the same number as the menu item, rounded the same way. One total, not a size per kind: the menu brought the user in with the size, and the dialog confirms it. Left out when the size is unknown. The paths, all inside the checkpoint folder, go under **Details**, loaded in pages. The host names checkpoint folders by time and kind, inside a folder per game. A labeled saved backup shows its label after the path, shortened with `…` when needed, so the user can recognize saves they'd miss.
+- **On confirm:** the dialog closes and the UI sends a plain Flush request for the game. The host does the whole job again from scratch: it deletes every saved and recovery checkpoint of the game and clears the history. The game's save locations are not touched. Only the records whose files were actually deleted are cleared. While it runs, the game is in the normal busy state, and any failures go to the error block.
 - **Cancel** is the default button.
 
 
@@ -600,8 +650,11 @@ UI tests run against a fake service that can simulate being busy, failing, missi
     - a manual selection is kept when games start or close;
     - the fallback when the active game closes.
 - **Scan:** the zero, singular and plural messages, counting only newly found known games; background scans leave the button idle while their games appear; pressing Scan during a background scan shows `Scanning…` until the requested scan finishes; showing or focusing the window sends the focus report.
-- **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Manual copies count as ordinary checkpoints for Load, and show the `Folder last changed` tooltip on their time.
-- **History rows:** spinner and success states on the Load and Revert buttons, and Reverted rows that can themselves be reverted and deleted.
+- **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Open next to the executable is disabled while the field is edited. The Flush item's size: rounding at each boundary, the OS's units, and no size when there's nothing to flush or the size is unknown; the dialog's total matching it.
+- **History rows:**
+    - spinner and success states on the Load and Revert buttons;
+    - Reverted rows that can themselves be reverted and deleted;
+    - a Loaded row's notes: removed newer saves, Steam Cloud replacing a restored save, both together, and the Steam Cloud note arriving later without resizing the row.
 - **Labels:**
     - the `Add label…` placeholder;
     - the autosave pause restarting on every keypress, and saving on focus loss, on the check button and on Enter;
@@ -618,7 +671,14 @@ UI tests run against a fake service that can simulate being busy, failing, missi
     - rows are rebuilt after navigating away or reconnecting;
     - a failure restores the row with no retry.
 - **Midnight:** rows regroup without moving the scroll position.
-- **Dialogs:** standard keyboard, focus, default-button and cancel behavior; the custom-game dialog's validation and name autofill.
+- **Dialogs:**
+    - standard keyboard, focus, default-button and cancel behavior;
+    - the custom-game dialog's validation and name autofill;
+    - the save location hint always visible in both dialogs, with errors below it and the hint kept;
+    - a folder, a file and a pattern all accepted in the save location field, and Browse still picking a folder;
+    - host rejections shown in place: a relative path, a broad folder, a dangerous pattern, an overlap with another game;
+    - known games: one and several read-only catalog locations, the list dimmed while the field overrides it, and Reset returning to the catalog.
+- **Checkpoint folder:** the current location in the tooltip, the `Moving…` state and a failed move keeping the old location.
 - **Other blocks:** collapsed and expanded instructions, including games with none, and the error block's content.
 - **Accessibility:** accessible names and keyboard access for icon-only and destructive controls.
 

@@ -17,8 +17,18 @@ Status: design agreed for implementation. Supersedes `catalog/games/*.yaml` and
   Steam libraries, GOG registry, etc.) — that is code.
 - Humans maintain exactly two files: `catalog/games.csv` and `catalog/addendum.yaml`. Everything
   else is generated from the pinned Ludusavi manifest by deterministic rules.
-- One game has exactly one save directory (DIR). Multiple candidate DIRs are
-  allowed in the catalog; the runtime picks one, sticky, without asking the user.
+- A game's saves are a **save set**: one or more **targets**, each a root
+  folder plus a filter (everything, one exact name, or a glob pattern) minus
+  excludes. The runtime takes **every** applicable target, never picks one.
+  Why: the old "one save directory" forced globs and file paths to be widened
+  to a folder, which went wrong in both directions. Nuclear Throne on macOS
+  became all of `~/Library/Application Support`; NecroDancer's
+  `data/save_data.xml` became the game's asset folder; Slay the Spire's four
+  save folders and Terraria's players and worlds have no safe common folder,
+  so one was picked and every checkpoint was half a save.
+- Only saves, never configuration or logs: entries the manifest tags only as
+  config are never backed up or restored, and neither are logs or crash dumps
+  inside a save folder.
 - The catalog is data: shipped embedded as a fallback and updatable at runtime
   without reinstalling the app.
 - The feature has exactly two independently testable units: the **builder**
@@ -55,9 +65,9 @@ addendum entry.
 
 ### 2.2 `catalog/addendum.yaml`
 
-Entries for games the manifest does not have, keyed by the `Name` column in
-`games.csv`. Same shape as generated entries (Section 3.4), so one validator
-covers both.
+Entries for games the manifest does not have, and fixes for games it gets
+wrong, keyed by the `Name` column in `games.csv`. Same shape as generated
+entries (Section 3.4), so one validator covers both.
 
 ```yaml
 Void War:
@@ -67,13 +77,30 @@ Void War:
     windows: ["Void War.exe"]
   save:
     - when: { os: windows }
-      dir: "{APPDATA}/Void_War"
+      path: "{APPDATA}/Void_War"
+
+Risk of Rain Returns:
+  override:
+    save:
+      - when: { os: windows }
+        path: "{APPDATA}/Risk_of_Rain_Returns/{STEAM_ID64}_localsave.json"
+      - when: { store: steam }
+        path: "{STEAM_USERDATA}/1337520/remote"
 ```
+
+- **Fixes go under `override`**, and a field there replaces the manifest's
+  field for that game. Why: the manifest is right for most games, but some
+  need a human fix. Risk of Rain Returns' `*_localsave.json` matches every
+  Steam account's save on the machine (the `*` is the SteamID64), so a Load
+  would roll back the other accounts too; the override pins it to the current
+  account. Every override is listed in the build report, so fixes upstream has
+  since made can be removed.
 
 - An addendum key with no matching `Keep` row is a warning and is ignored.
 - The addendum **cannot introduce games**; `games.csv` remains the only game list.
 - Manifest precedence: when the name exists in the manifest, manifest data wins
-  per field; the addendum fills only fields the manifest did not produce
+  per field and the addendum fills only fields the manifest did not produce,
+  except for fields under `override`, which replace the manifest's
   (Section 3.2). A shadowed addendum entry produces a warning so it can be
   deleted, but nothing breaks if it is left in place.
 
@@ -101,9 +128,9 @@ For each `Keep` row, in order:
 
 1. Find the name in the manifest.
 2. Found → translate the manifest entry (3.1); if it yields no usable save
-   directory, the game is a build error.
+   target, the game is a build error.
 3. Not found → take the addendum entry (which must exist, or error).
-4. Apply the addendum overlay when both exist (3.2).
+4. Merge the addendum when both exist (3.2).
 5. Derive identity (3.3), inject `Info` from `games.csv`, validate the result.
 
 ### 3.1 Translation rules (manifest → entry)
@@ -117,28 +144,47 @@ Used fields:
 | `gog.id` + `id.gogExtra` | `detect.gog` |
 | `installDir` keys | loose-install candidates (see below) |
 | `launch` | `executables` per OS |
-| `files` | `save` candidates |
+| `files` | `save` targets and `exclude` paths |
 
 `files` filtering and normalization:
 
-1. Keep entries tagged `save`; keep untagged entries; drop `config`-only entries.
-2. Drop entries whose only applicable conditions are `store: microsoft`
+1. Entries tagged `save` and untagged entries become `save` targets. Entries
+   tagged both `config` and `save` are saves too. Why: some games keep
+   progress in what they also call config (NecroDancer's `save_data.xml`, Slay
+   the Spire's `preferences` folder, which holds profile progress).
+2. Entries tagged only `config` are never saves. When one falls inside a save
+   target (after placeholder mapping, its path starts with the target's fixed
+   part), it becomes an `exclude` of the game, so a Load never resets
+   settings: Dome Keeper's `options.txt` inside its save folder, Slay the
+   Spire's `preferences/STSGameplaySettings`. Otherwise it's dropped. A wrong
+   tag in the manifest is accepted as a risk; the addendum fixes that game.
+3. Drop entries whose only applicable conditions are `store: microsoft`
    (MS Store saves are out of scope, Section 8).
-3. Deduplicate equivalent paths:
-   - `<base>/X` ≡ `<root>/steamapps/common/<installDir>/X`
-   - trailing slashes are insignificant
-   - globs collapse to their static directory: cut at the first `*`, `?` or `[`,
-     then drop the trailing partial path segment
-     (`<base>/save/user_*.dat` → `<base>/save`)
-4. File-looking paths resolve to their parent directory: if the final segment
-   contains a dot and the path points to a file-like leaf, use the parent.
-5. `<storeUserId>` is rewritten to `{STORE_USER_ID}` wherever it appears
-   (resolved at runtime to the detected store's user ID, Steam first). This
+4. Deduplicate equivalent paths: `<base>/X` ≡
+   `<root>/steamapps/common/<installDir>/X`; trailing slashes are
+   insignificant.
+5. **Paths are kept exactly as the manifest gives them.** A literal path is a
+   target matched by its exact last name, whatever is on disk there, file or
+   folder. A glob stays a glob. The runtime splits each into root and filter
+   (4.3). Why: the builder never has to guess whether `save_data.xml` or
+   `com.vlambeer.nuclearthrone` is a file or a folder, and never widens a path
+   to its parent. Companion files the manifest doesn't list (a `.bak` next to
+   a save) are not guessed at either; a real problem gets an addendum fix.
+6. `<storeUserId>` names the current Steam account, but games spell it in
+   one of two forms (Section 4.4): the 64-bit SteamID (`76561198004523847`) or
+   the 32-bit account id (`44258119`). Risk of Rain Returns uses both, one per
+   file. The manifest doesn't say which, so each path with `<storeUserId>`
+   becomes two targets, one with `{STEAM_ID64}` and one with
+   `{STEAM_ACCOUNT_ID}`; at runtime the one that doesn't exist is simply
+   absent. A `*` that stands for an account (Risk of Rain Returns'
+   `*_localsave.json`) can't be recognized from the text; the addendum pins
+   it (2.2). This
    covers per-user save folders such as
-   `<home>/Saved Games/Jagged Alliance 3/<storeUserId>/*.sav`. Steam userdata
-   remains special: `<root>/userdata/<appId>/...` becomes
+   `<home>/Saved Games/Jagged Alliance 3/<storeUserId>/*.sav`. The addendum
+   may pin one form for a game. Steam userdata remains special:
+   `<root>/userdata/<storeUserId>/<appId>/...` becomes
    `{STEAM_USERDATA}/<appId>/...` (Section 4.4).
-6. Drop candidates that still carry unresolved placeholders or launcher-managed
+7. Drop targets that still carry unresolved placeholders or launcher-managed
    storage, with a warning:
    - unknown `<root>/...` paths (examples from the current list:
      `<root>/savegames/<storeUserId>/3353` in Watch Dogs: Legion,
@@ -146,12 +192,23 @@ Used fields:
    - `<base>` occurring anywhere except as the leading path root (example:
      NEO Scavenger's Flash shared-object path);
    - GOG Galaxy-managed storage
-     (`.../GOG.com/Galaxy/Applications/.../Storage/...`, example: BattleTech).
-   A game whose candidates all drop out fails as "no usable save directory".
-   If a `Keep` game depends on one of these forms, the rule is revisited
-   deliberately rather than guessed.
-7. Conditions are preserved per candidate: `when.os` (`mac` → `macos`) and
-   `when.store`; `bit` is dropped. No `when` means any OS/store.
+     (`.../GOG.com/Galaxy/Applications/.../Storage/...`, example: BattleTech);
+   - a target that would take a whole bare root (`{INSTALL_DIR}`, `{HOME}`,
+     `{APPDATA}`, ...) or a folder every app shares (`~/Library` and its direct
+     children such as `Application Support` and `Group Containers`,
+     `AppData/*`, `Documents`, `My Games`, `Saved Games`, `~/.config`,
+     `~/.local/share`), or a wildcard directly inside one (`<base>/save*`,
+     `<home>/Library/Application Support/*`). Why: a Load makes everything a
+     target matches identical to the checkpoint, so it would roll back other programs' data. An exact name
+     inside such a folder is fine: `Application Support/com.vlambeer.nuclearthrone`
+     touches only that entry. This is the same rule the host applies to every
+     target (PLAN-HOST.md, Save set safety).
+   Every dropped broad target is a build warning, even when other targets
+   remain, so a lost OS never goes unnoticed. A game whose targets all drop out
+   fails as "no usable save location". If a `Keep` game depends on one of
+   these forms, the rule is revisited deliberately rather than guessed.
+8. Conditions are preserved per target and exclude: `when.os` (`mac` →
+   `macos`) and `when.store`; `bit` is dropped. No `when` means any OS/store.
 
 `launch` → `executables`:
 
@@ -175,14 +232,16 @@ found (Section 4.1).
 Ignored manifest data: `cloud`, `registry` save keys, `notes`, `alias`, launch
 `arguments`/`workingDir`, `bit`, `id.*` except `steamExtra`/`gogExtra`.
 
-### 3.2 Addendum merge (base + manifest overlay)
+### 3.2 Addendum merge
 
 When a name exists in both:
 
 - `detect`: merged per store key; manifest value wins, addendum fills missing keys.
 - `executables`: per OS; manifest wins when it produced a non-empty list for that OS.
-- `save`: per OS; manifest candidates replace addendum candidates for every OS the
-  manifest covers; addendum keeps only OSes the manifest produced nothing for.
+- `save` and `exclude`: per OS; manifest entries replace addendum entries for
+  every OS the manifest covers; addendum keeps only OSes the manifest produced
+  nothing for.
+- `override`: any field under it replaces the manifest's field outright.
 - `info`: always from `games.csv`.
 - `id`: derived (3.3); an addendum-declared id is used only when no store id exists.
 
@@ -210,9 +269,21 @@ When a name exists in both:
       "detect": { "steam": 1434950, "gog": 1589167087 },
       "executables": { "windows": ["Highfleet.exe"] },
       "save": [
-        { "when": { "os": "windows" }, "dir": "{INSTALL_DIR}/Saves" },
-        { "when": { "os": "windows" }, "dir": "{INSTALL_DIR}/SavesSkirmish" },
-        { "when": { "os": "windows" }, "dir": "{INSTALL_DIR}/Ships" }
+        { "when": { "os": "windows" }, "path": "{INSTALL_DIR}/Saves" },
+        { "when": { "os": "windows" }, "path": "{INSTALL_DIR}/SavesSkirmish" },
+        { "when": { "os": "windows" }, "path": "{INSTALL_DIR}/Ships" }
+      ]
+    },
+    {
+      "id": "steam-588650",
+      "name": "Dead Cells",
+      "save": [
+        { "path": "{INSTALL_DIR}/save/user_*.dat" },
+        { "path": "{INSTALL_DIR}/save/customGameData_*.json" },
+        { "when": { "store": "steam" }, "path": "{STEAM_USERDATA}/588650/remote/user_*.dat" }
+      ],
+      "exclude": [
+        { "path": "{INSTALL_DIR}/save/dc_options.json" }
       ]
     }
   ]
@@ -222,22 +293,33 @@ When a name exists in both:
 Rules:
 
 - Only present keys are emitted; empty lists/maps are omitted.
-- `save` entries are candidates, not priorities. No `primary`, `legacy` or
-  `version` flags exist.
+- `save` entries are targets, all of them used, not candidates to pick from.
+  No `primary`, `legacy` or `version` flags exist.
+- A `path` is a literal path or a glob (`*`, `?`, `[...]`, `**`), with
+  placeholders. It's never rewritten into a folder.
 - `schema` increments only on incompatible changes; a host refuses bundles with
   an unsupported major schema and keeps its current catalog.
 
 ### 3.5 Build report and failures
 
 Hard failures (build stops): unresolved `Keep` name; `Keep` game with no usable
-save candidate, reported with its reason category (name unresolved, no `files`
-section, config-only, userdata-only, MS-Store-only, unsupported path form);
-duplicate names; invalid `Product fit`; addendum schema errors; manifest hash
-mismatch.
+save target, reported with its reason category (name unresolved, no `files`
+section, config-only, userdata-only, MS-Store-only, unsupported path form, broad
+folder only); duplicate names; invalid `Product fit`; addendum
+schema errors; manifest hash mismatch.
 
-Warnings: addendum shadowed by the manifest;
-addendum with no `Keep` row; multi-target games with no name/ancestor signal
-(listed for future review, not failures).
+Warnings: addendum shadowed by the manifest; addendum with no `Keep` row;
+every dropped broad target. Listed for review, not failures: every addendum
+override, every game whose save set spans more than one target, and every
+save target that is a whole folder tagged both config and save. Why the last:
+the manifest is written for backups, where taking too much is harmless, so it
+sometimes lists a game's whole user folder (Crusader Kings II, Europa
+Universalis IV and Stellaris list all of `Documents/Paradox Interactive/<game>`;
+Terraria lists all of `My Games/Terraria`). For us that folder holds mods, logs
+and settings too: every Save copies them, a Load rolls them back, and a log the
+running game holds open refuses every Load. Each listed game gets an addendum
+`override` pointing at its real save folders (`save games/`; Terraria's
+`Players/` and `Worlds/`).
 
 ### 3.6 Determinism and CI
 
@@ -250,12 +332,13 @@ addendum with no `Keep` row; multi-target games with no name/ancestor signal
 
 ### 3.7 Worked example: HighFleet (manifest → bundle)
 
-Manifest has six `files` entries: `Config.ini` (config, dropped), `Saves`,
-`SavesSkirmish`, `Ships` under `<base>` with `when: os: windows`, and the same
-four under `<root>/steamapps/common/HighFleet/` with `when: store: steam`.
-Step 3 deduplicates the two spellings; `Saves`/`SavesSkirmish`/`Ships` remain as
-three windows candidates. `launch` gives `Highfleet.exe`. Result is the bundle
-entry in Section 3.4.
+Manifest has six `files` entries: `Config.ini` (config, not inside a save
+target, dropped), `Saves`, `SavesSkirmish`, `Ships` under `<base>` with
+`when: os: windows`, and the same four under
+`<root>/steamapps/common/HighFleet/` with `when: store: steam`. Step 4
+deduplicates the two spellings; `Saves`/`SavesSkirmish`/`Ships` remain as three
+windows targets, and all three are backed up and restored together. `launch`
+gives `Highfleet.exe`. Result is the bundle entry in Section 3.4.
 
 ### 3.8 Worked example: Void War (addendum lifecycle)
 
@@ -308,11 +391,13 @@ Each detected install becomes its own game record:
   same product that exist **at the same time** (two Steam libraries). An
   install that disappears while another copy of the same product appears is a
   move, not a new game.
-- Two installs of the same game → two records, each with its own DIR,
+- Two installs of the same game → two records, each with its own save set,
   checkpoints and history. The host gives them an install tag so they can be
   told apart ("Dead Cells — Steam", "Dead Cells — GOG"; see PLAN-HOST.md).
-- If two installs resolve to the **same** save DIR, they merge into one record;
-  a directory carries one checkpoint history.
+- If two installs' save sets **share a target** (both use `{APPDATA}/Game`),
+  they merge into one record whose save set is the union of both; a folder
+  carries one checkpoint history. Why the union: two records restoring the same
+  folder would overwrite each other's saves.
 - Install-level catalog ids: the first install for a catalog id keeps
   `steam-<id>`; additional installs get `steam-<id>#<install-identity>`.
 - The monitor maps each install's executable paths to its record, so Save/Load
@@ -321,7 +406,7 @@ Each detected install becomes its own game record:
 - No discovery error and no prompt is ever produced because a game has several
   installs.
 
-### 4.3 Candidate filtering and resolution
+### 4.3 Building the save set
 
 For one install, with platform = the game build being run (not the runtime OS),
 store = discovery source. Why: `when.os` in the manifest describes the build a
@@ -330,23 +415,52 @@ where it would on Windows, so it has platform `windows`; with the runtime OS it
 would match the native Linux rows instead.
 
 1. Decide the possible builds (below).
-2. For each possible build, keep candidates where `when.os` is absent or equals
-   that build, and `when.store` is absent or equals the store.
-3. Resolve placeholders to concrete paths for that build (4.4).
-4. Deduplicate candidates by the real directory they name, following the
-   filesystem's case rules, junctions, symlinks and redirected known folders
-   (`AppData` and `appdata` on Windows are one candidate; on Linux they are
-   two). Why: the same folder counted twice skews the ladder and can produce
-   two records for one save folder.
-5. Apply the sticky ladder (4.5) once, over the candidates of all possible
-   builds together.
+2. For each possible build, keep `save` and `exclude` entries where `when.os`
+   is absent or equals that build, and `when.store` is absent or equals the
+   store.
+3. Resolve placeholders to concrete paths for that build (4.4). A path whose
+   placeholder can't resolve (Steam account unknown) is dropped with a warning.
+4. Split each path into a **root** and a **filter**. The root is everything
+   before the first segment with a wildcard; for a literal path, it's the
+   parent folder and the filter is the exact last name. Exact names match
+   whatever is on disk, file or folder.
+5. Deduplicate targets by real root and filter, following the filesystem's
+   case rules, junctions, symlinks and redirected known folders (`AppData` and
+   `appdata` on Windows are one target; on Linux they are two). A target whose
+   files another target of the same game already covers entirely (a folder
+   target containing a pattern target) is dropped. Why: the same file counted
+   twice would be copied twice and restored in a conflicting order.
+6. Attach each exclude to the target it falls inside. The host adds its own
+   built-in excludes to every target (Steam's files, logs and crash dumps; see
+   PLAN-HOST.md, What a checkpoint holds), so the catalog never lists those.
+7. **The save set is every remaining target of every possible build**, whether
+   or not it exists yet. Nothing is ranked or picked. Why: a folder that doesn't
+   exist now can appear later (the game creates it, Steam Cloud is switched on),
+   and a set that changed every time would make checkpoints come and go.
+
+**Why every target, not one pick.** Candidates are sometimes parts of one save
+and sometimes alternatives, and the manifest doesn't say which. Taking all of
+them is right for both:
+
+- **Parts** (Slay the Spire's `saves`, `preferences`, `runs`; Terraria's
+  players and worlds) are all backed up together, so a checkpoint is never half
+  a save.
+- **Alternatives** are harmless together. A local copy and a Steam `remote`
+  copy of the same save are both restored, so whichever the game reads is
+  right: Risk of Rain Returns writes both, Isaac only `remote`, Slay the Spire
+  only its install folder, and the manifest can't tell them apart. An old,
+  frozen folder from before a game update restores to exactly what it already
+  holds. Native and Proton folders for a build that can't be decided are both
+  covered.
+- The cost is space: checkpoints are larger than with a single folder.
 
 Every existence check reports one of three answers: **present**, **missing**
-(confirmed: the nearest existing parent can be read and the folder isn't in
+(confirmed: the nearest existing parent can be read and the entry isn't in
 it), or **unknown** (an unplugged drive, an unreachable share, an access
-error). Only *missing* counts as gone anywhere in the resolver. Why: a save
-folder on an unplugged USB library isn't deleted, and treating it as deleted
-would move the game to another folder and orphan its checkpoints.
+error). The resolver reports each target's presence with the save set. Only
+*missing* counts as absent. Why: a save folder on an unplugged USB library
+isn't deleted, and treating it as absent would make a checkpoint that silently
+skips it; the host makes operations unavailable instead.
 
 **Which build an install runs.** Only Linux has a choice: a Steam game there
 can be the native Linux build or the Windows build through Proton. Windows
@@ -361,8 +475,8 @@ support in v1). On Linux the resolver decides from the game's own files:
 - The files can't tell when both builds' executables exist, the catalog lists
   executables for one build or none (Europa Universalis IV, Stellaris), or both
   builds list the same file (Vampire Survivors). Then **both builds are
-  possible**: the ladder sees both candidate sets and existing saves decide.
-  Why: guessing picks the wrong folder for roughly one in ten affected games.
+  possible**, and the save set holds both builds' targets. Why: guessing picks
+  the wrong folder for roughly one in ten affected games.
 - The Proton prefix is always `<library>/steamapps/compatdata/<appid>/pfx`,
   computed whether or not it exists. Its existence is never evidence of a
   build. Why: it doesn't exist on a fresh install before the first launch, and
@@ -372,13 +486,13 @@ support in v1). On Linux the resolver decides from the game's own files:
   executables are both builds' executables, so the monitor recognizes whichever
   one runs.
 
-If filtering leaves no candidate, the game has no save dir for that install and
-is reported as unsupported (no operations).
+If filtering leaves no target, the game has no save location for that install
+and is reported as unsupported (no operations).
 
 ### 4.4 Placeholders and Proton
 
 Template placeholders (bundle → resolved), by the build being run. `—` means
-the placeholder does not resolve for that build and the candidate is dropped.
+the placeholder does not resolve for that build and the target is dropped.
 
 | Bundle | Windows build | Windows build via Proton | macOS build | Linux build |
 |---|---|---|---|---|
@@ -394,11 +508,12 @@ the placeholder does not resolve for that build and the candidate is dropped.
 | `{WINDIR}` | Windows folder | prefix | — | — |
 | `{XDG_DATA_HOME}` | — | — | — | XDG data home |
 | `{XDG_CONFIG_HOME}` | — | — | — | XDG config home |
-| `{STORE_USER_ID}` | current Steam id | same | same | same |
-| `{STEAM_USERDATA}` | `<root>/userdata/<current steam user>` | same | same | same |
+| `{STEAM_ACCOUNT_ID}` | current Steam account id (32-bit) | same | same | same |
+| `{STEAM_ID64}` | current SteamID64 | same | same | same |
+| `{STEAM_USERDATA}` | `<root>/userdata/<account id>` | same | same | same |
 
 Proton (Steam, Linux, Windows build): the game is the Windows build, so
-`os: windows` candidates apply when the install is a Proton install (compatdata
+`os: windows` targets apply when the install is a Proton install (compatdata
 prefix exists and no native build is in use). The prefix is a private Windows
 drive at `<library>/steamapps/compatdata/<appid>/pfx`; every Windows location,
 including the user's home, resolves inside it:
@@ -425,155 +540,177 @@ Linux home would point Proton saves at `~/AppData/...`, which never exists.
 other `drive_c/users/*` profile, that one is used instead. The bundle contains
 no Proton-specific data; translation is runtime policy.
 
-`{STEAM_USERDATA}` resolves through the most recently logged-in entry in
-`loginusers.vdf`, falling back to the only `userdata/<id>` directory.
-`{STORE_USER_ID}` resolves to the same Steam id when the detected store is
-Steam; when the store's user id cannot be resolved, that candidate is dropped
-with a warning.
+**The current Steam account.** `{STEAM_ACCOUNT_ID}`, `{STEAM_ID64}` and
+`{STEAM_USERDATA}` all name one account, found in this order:
 
-### 4.5 Sticky resolution ladder
+1. **`ActiveUser`**, the account logged into the running Steam client, when it
+   is not 0. Windows keeps it in
+   `HKCU\Software\Valve\Steam\ActiveProcess`; Linux in `~/.steam/registry.vdf`
+   (to verify on macOS). Why first: it is who a game started now runs under,
+   not who logged in last.
+2. The entry marked `MostRecent` in `loginusers.vdf` (older Steam versions).
+3. The entry with the newest `Timestamp` in `loginusers.vdf`. Why: current
+   Steam versions no longer write `MostRecent`.
+4. The only `userdata/<id>` directory.
 
-Run on first detection, then keep the result as described in rules 6–9:
+Otherwise the account is unknown, and targets that need it are dropped with
+a warning. Why no "only folder" shortcut earlier: `userdata` keeps a folder for
+every account that ever logged in on the machine, so several are normal (a
+machine with three accounts in `loginusers.vdf` had six).
 
-1. Drop candidates that do not exist. Exactly one left → pick it.
-2. Several exist → pick the one with the newest **save activity**: newest
-   modification among files inside the candidate tree, restricted to files
-   matching the original manifest save globs when those were captured, otherwise
-   all files. Traversal is bounded.
-3. Tie-break by exact save-directory name (`save`, `saves`, `savegame`,
-   `savegames`, `saved games`, `save data`).
-4. Fresh install, nothing exists → exact-name rule first, then first candidate.
-   This pick is **provisional**: every scan runs the ladder again until some
-   candidate exists, and only then does the pick stick. Why: with no saves yet
-   the choice is a guess (native or Proton folder, old or new layout); nothing
-   is lost by revising it, because there can be no checkpoints before the
-   first save.
-5. If one candidate is an ancestor of the others and sits at least one named
-   segment below a known-folder/install root (never a bare `%APPDATA%`, install
-   dir or volume root), it may stand in for the whole set.
-6. Ambiguity never blocks the game. The chosen DIR is persisted as the game's
-   `data_dir`, together with the **context** it was chosen in: the build and
-   the store account (the Steam user behind `{STEAM_USERDATA}` and
-   `{STORE_USER_ID}`), and when the folder was last seen present.
-   Checkpoints are bound to the DIR. Configure lets the user override at any
-   time; an overridden DIR is never re-picked and the resolver is not consulted
-   for it.
-7. **The pick is kept while it isn't missing and its context is unchanged.**
-   Later scans don't re-rank. An *unknown* folder (4.3) is kept. A catalog
-   update that edits or removes the candidate the pick came from doesn't drop
-   it either. Why: a catalog update never touches the folder of a game with
-   history (Section 6); only a change on the user's machine may move it.
-8. **A changed context drops the pick even though its folder exists**, and the
-   ladder runs again:
-   - a build switch (native → Proton or back). Why: the old build's folder
-     usually survives the switch, and keeping it would back up and restore a
-     folder the game no longer uses;
-   - a different store account. Why: the old account's folder is still there,
-     and Load would restore into someone else's saves.
+Both forms come from one number: `SteamID64 = 76561197960265728 + account id`.
+Steam's own folders and files use the account id (`userdata/44258119`,
+`steam_autocloud.vdf`); its APIs and the web use the SteamID64, so games use
+either, and some use both.
 
-   Old checkpoints stay bound to the old folder and become usable again when
-   the context returns (PLAN-HOST.md, vanished DIR).
-9. **A missing pick moves only to newer saves.** When the pick is missing, the
-   ladder considers only candidates with save activity newer than when the
-   pick was last seen. None → keep the missing pick (Save shows no game data
-   until the game recreates it). Why: a game update that moves its saves writes
-   new ones elsewhere and is followed; a user who deleted their saves to start
-   over would otherwise be moved to an old, frozen legacy folder that merely
-   still exists.
+The account is read at every scan and again whenever a game starts. Why at
+start: the user can switch Steam accounts between two sessions, and a game
+runs under whoever is logged in when it launches. A different account at
+start is a changed context (4.5).
+
+### 4.5 The save set over time
+
+Nothing is sticky. Given the same install, build, Steam account and catalog, the
+resolver always returns the same save set, and it's asked again at every scan
+and whenever a Steam game starts. Why no stickiness: it existed to keep one
+pick from flip-flopping between candidates, and with every target in the set
+there's no pick to keep stable.
+
+The save set comes with its **context**: the build and the Steam account (the
+account behind `{STEAM_USERDATA}`, `{STEAM_ACCOUNT_ID}` and `{STEAM_ID64}`).
+The set changes when:
+
+- **the build changes** (native → Proton or back): its targets now name the
+  other build's folders. Why this matters: the old build's folder usually
+  survives the switch, and backing it up would back up a folder the game no
+  longer uses;
+- **the Steam account changes**: its targets now name the new account's
+  folders. Why: the old account's folder is still there, and a Load would
+  restore into someone else's saves;
+- **a catalog update edits the game's paths.**
+
+Old checkpoints are never moved or rewritten. The host restores a checkpoint
+only into targets it has in common with the current save set, so after a build
+or account switch old checkpoints are unavailable, and they become usable again
+when the context returns (PLAN-HOST.md, Checkpoints belong to their targets).
+
+A user override (Configure) replaces the whole save set with one location. The
+resolver isn't consulted for it, and it never changes on its own.
 
 ## 5. Cases
 
-1. **Single candidate** (Hades, one Steam install): one candidate exists →
-   chosen. No prompt.
-2. **Multi-target with an obvious name** (HighFleet): `Saves`, `SavesSkirmish`,
-   `Ships` exist → exact-name tie-break picks `Saves`.
-3. **Multi-target without a signal** (Battle vs. Chess: `profiles`,
-   `live_profiles`): newest activity decides; sticky keeps it stable; Configure
-   is the correction path.
-4. **Old/new paths, both exist** (RimWorld, Subnautica): the old directory is
-   frozen, newest activity picks the new one; sticky prevents churn.
-5. **Old/new, only one exists**: existence picks it. Common case.
-6. **Store-scoped dirs** (Returnal): Steam install → Steam candidate only;
-   Epic install → Epic candidate only.
-7. **Two installs, distinct dirs** (Dead Cells Steam + GOG): two game records,
-   each with its own `{INSTALL_DIR}/save`; hotkeys follow the running install.
-8. **Two installs, shared dir** (`{APPDATA}/Game` both): one record; both exe
-   sets map to it.
+1. **Single target** (Hades, one Steam install): the save set is that one
+   folder. No prompt.
+2. **Several folders, one save** (Slay the Spire: `saves`, `preferences`,
+   `runs`, `betaPreferences` in the install folder, no safe common parent):
+   four targets; every checkpoint holds all four. Formerly one was picked by
+   activity, and after a finished run that could stick to `runs` forever.
+3. **Several folders of different kinds** (HighFleet: `Saves`,
+   `SavesSkirmish`, `Ships`): all three are backed up and restored together.
+4. **Old and new paths, both exist** (RimWorld, Subnautica): both are targets;
+   the frozen old folder restores to exactly what it already holds.
+5. **Old and new, only one exists**: the other is absent; a Load leaves an
+   absent target alone.
+6. **Store-scoped paths** (Returnal): Steam install → Steam targets only;
+   Epic install → Epic targets only.
+7. **Two installs, distinct folders** (Dead Cells Steam + GOG): two game
+   records, each with its own `{INSTALL_DIR}/save`; hotkeys follow the running
+   install.
+8. **Two installs, shared folder** (`{APPDATA}/Game` both): one record whose
+   save set is the union; both executable sets map to it.
 9. **Same store twice** (two Steam libraries): install identity splits records;
    the first keeps `steam-<id>`, the second `steam-<id>#<identity>`.
 10. **Linux native** (Caves of Qud, only `CoQ.x86_64` present): Linux build;
-    linux candidates and XDG placeholders
+    linux targets and XDG placeholders
     (`{XDG_CONFIG_HOME}/unity3d/Freehold Games/CavesOfQud/Saves`).
 11. **Linux + Proton** (Caves of Qud, only `CoQ.exe` present): Windows build;
-    windows candidates translated into the compatdata prefix, `{HOME}` included
+    windows targets translated into the compatdata prefix, `{HOME}` included
     (`<pfx>/drive_c/users/steamuser/AppData/LocalLow/Freehold Games/CavesOfQud/Saves`);
     same bundle entry as Windows.
 12. **Proton before the first launch** (only `CoQ.exe`, no prefix yet): still
-    the Windows build; the prefix path is computed anyway; the pick is
-    provisional until a folder exists.
+    the Windows build; the prefix paths are computed anyway; the targets are
+    absent until the game writes them, and Save is unavailable until then.
 13. **Stale prefix** (only `CoQ.x86_64` present, a prefix left from an earlier
     Proton run): Linux build; the prefix is ignored.
 14. **Files can't tell the build** (Europa Universalis IV has no executables;
     Vampire Survivors lists the same `.exe` for both; both builds' files
-    present): both candidate sets go to one ladder; the folder with saves wins;
-    one game record whose executables cover both builds.
+    present): the save set holds both builds' targets; one game record whose
+    executables cover both builds.
 15. **Build switch, both folders exist** (played natively, then forced Proton):
-    the files now show the Windows build; the Linux pick is dropped although
-    its folder exists; the ladder picks the prefix folder. Old checkpoints stay
-    bound to the Linux folder.
-16. **Switching back** (Proton → native again): the Linux folder is picked
-    again and its old checkpoints are usable, with the same IDs and history.
-17. **Both folders hold the same saves** (Steam Cloud synced them across
-    builds, files can't tell the build): newest activity picks; sticky
-    prevents flip-flopping on later scans.
-18. **Fresh install, no save dir yet**: name rule / first candidate,
-    provisional; each scan re-runs the ladder until a candidate exists, then the
-    pick sticks.
-19. **Saves only in Steam userdata** (Risk of Rain 2): `{STEAM_USERDATA}`
-    candidate resolves and participates in the ladder normally.
+    the files now show the Windows build; the save set becomes the prefix
+    targets although the Linux folder exists. Old checkpoints have no target in
+    common and are unavailable.
+16. **Switching back** (Proton → native again): the Linux targets return and
+    their old checkpoints are usable, with the same IDs and history.
+17. **A local copy and a Steam Cloud copy** (Risk of Rain Returns writes both
+    `..._localsave.json` and `remote/save.json`; Dead Cells lists
+    `{INSTALL_DIR}/save` and `remote`): both are targets and both are restored,
+    so whichever the game reads is right.
+18. **Fresh install, no saves yet**: every target is absent; Save is
+    unavailable until one appears. Nothing is provisional, because nothing is
+    picked.
+19. **Saves only in Steam userdata** (Risk of Rain 2): the `{STEAM_USERDATA}`
+    target resolves like any other.
 20. **Upstream rename**: store-id identity keeps the same `id`, so history and
     overrides survive.
 21. **Addendum game lands upstream** (Void War): manifest data wins, warning is
     emitted, `games.csv` `Info` still applied.
-22. **Catalog update changes the picked candidate** (an update rewrites or
-    removes the path the pick came from): the existing pick stays; only a fresh
-    pick uses the new candidates.
+22. **Catalog update changes a path** (an update rewrites, adds or removes a
+    target): the save set follows the new catalog. Old checkpoints restore the
+    targets they have in common with it; new targets are left alone by them.
 23. **Save folder on an unplugged drive** (`{INSTALL_DIR}/save` on a USB
-    library that is disconnected): the folder is unknown, not missing; the pick
-    stays and nothing is re-picked. When the drive returns, everything works as
+    library that is disconnected): the target is unknown, not missing; the host
+    makes operations unavailable. When the drive returns, everything works as
     before.
 24. **User deleted their saves to start over** (RimWorld: the new `Saves`
-    folder deleted, the old frozen folder still present): no candidate has save
-    activity newer than when the pick was last seen, so the pick stays; the
-    game recreates the folder on its next save.
-25. **Game update moved its saves** (the old folder deleted, the game now
-    writes to a new candidate): the new folder has newer activity and is
-    picked; old checkpoints stay bound to the old folder.
-26. **Steam account switch** (`{STEAM_USERDATA}` or `{STORE_USER_ID}` now
-    names another user whose old folder still exists): the account in the
-    pick's context changed, so the pick is dropped and the ladder runs for the
-    new account; switching back picks the old folder again with its
-    checkpoints.
+    folder deleted): the target is missing. Save works again once the game
+    recreates it; until then a Load of a checkpoint with data there is refused,
+    because roots are never recreated.
+25. **Game update moved its saves** (the game now writes to another path the
+    catalog lists): both paths are targets; the new one simply starts having
+    files.
+26. **Steam account switch** (the Steam account placeholders now name another
+    account; detected at a scan or when the game starts): the save set changes
+    to the new account's targets; switching back makes the old checkpoints
+    usable again. Targets that don't depend on the account stay in common.
 27. **Steam copy plus a standalone or Epic copy**: both are found, the second
     through loose candidates or Epic's launcher manifests; two records, as in
     case 7.
 28. **Install moved to another library** (Steam "Move install folder", new
     drive, new volume/file id): same store and product id with only one copy
     present, so it's the same install, record and history.
-29. **User override** (a DIR set in Configure): never re-picked; the resolver
-    isn't consulted for it, even when the folder is missing.
-30. **No applicable candidate** (a native Linux install whose catalog entry
-    only has Windows rows): Unsupported; the game stays visible so the user
-    can set its DIR in Configure.
-31. **Store user id unavailable** (Steam never logged in, so
-    `{STORE_USER_ID}` can't resolve): that candidate is dropped with a
-    warning; the ladder continues with the rest.
+29. **User override** (a save location set in Configure): replaces the save
+    set; the resolver isn't consulted for it, even when the location is
+    missing.
+30. **No applicable target** (a native Linux install whose catalog entry only
+    has Windows rows): Unsupported; the game stays visible so the user can set
+    a save location in Configure.
+31. **Steam account unknown** (Steam never logged in, so the Steam account
+    placeholders can't resolve): those targets are dropped with a warning; the
+    rest of the save set stays.
 32. **Custom Proton profile** (the prefix has exactly one other
     `drive_c/users/*` folder besides `steamuser`): that profile is used for
     every Windows placeholder.
 33. **One folder spelled two ways** (`AppData` and `appdata`, or Documents
-    reached through a redirected or junctioned path on Windows): one candidate,
+    reached through a redirected or junctioned path on Windows): one target,
     not two; on Linux, case-different folders stay distinct.
+34. **A folder with a dot in a shared place** (Nuclear Throne on macOS:
+    `Application Support/com.vlambeer.nuclearthrone`): root `Application
+    Support`, filter the exact name; only that entry is ever touched.
+35. **A save file among game files** (NecroDancer:
+    `{INSTALL_DIR}/data/save_data.xml`): only that file is a target; the game's
+    assets next to it are never copied or restored.
+36. **Patterns** (Dead Cells `save/user_*.dat`, BattleTech `C*/SGS*`): only
+    matching entries are backed up; logs and settings next to them aren't.
+37. **Settings inside a save folder** (Dome Keeper `options.txt`): excluded;
+    a Load never resets them.
+38. **An account-standing wildcard** (Risk of Rain Returns
+    `*_localsave.json`): the addendum override pins it to `{STEAM_ID64}`, so a
+    Load never touches other accounts' saves.
+39. **Two spellings of the Steam id** (`<storeUserId>` in a path): two
+    targets, one per form; the one that doesn't exist is simply absent.
+40. **A target covered by another** (a folder target and a pattern inside it):
+    the pattern is dropped; the folder covers it.
 
 ## 6. Bundle delivery and updates
 
@@ -586,7 +723,9 @@ Run on first detection, then keep the result as described in rules 6–9:
   fetching for tests and isolated runs; a CLI command reports the active bundle
   revision and refreshes it on demand.
 - Catalog data only: a downloaded bundle can add or adjust games, but it never
-  touches user overrides, configured dirs of games with history, or checkpoints.
+  touches user overrides or checkpoints. A game whose paths changed gets a new
+  save set, and old checkpoints restore the targets they have in common with
+  it (4.5).
 
 ## 7. Architecture and testability
 
@@ -601,9 +740,14 @@ validator, so builder output and resolver input cannot drift.
 
 Tests (no network, golden files under `tests/fixtures/catalog/`):
 
-- translation rules: tags, untagged inclusion, glob collapsing, file-vs-dir,
-  `<base>`/`<root>` dedupe, placeholder mapping, launch → executables;
-- addendum overlay precedence, gap filling and shadow warnings;
+- translation rules: tags (save, untagged, config-and-save, config-only),
+  config-only entries inside a save target becoming excludes, paths kept
+  exactly (literal names with dots, globs), `<base>`/`<root>` dedupe,
+  placeholder mapping, both `<storeUserId>` forms, broad targets dropped with a
+  warning while exact names inside broad folders are kept, launch →
+  executables;
+- addendum merge precedence, gap filling, shadow warnings, and `override`
+  replacing a manifest field;
 - identity derivation and name matching/normalization;
 - every hard failure and warning in Section 3.5;
 - byte-identical regeneration from the same lock and inputs.
@@ -611,20 +755,20 @@ Tests (no network, golden files under `tests/fixtures/catalog/`):
 ### 7.2 Resolver — `crates/catalog`
 
 The decision module the host calls. Owns the bundle model, parsing and
-validation, placeholder and Proton translation, candidate filtering, the sticky
-ladder, and install-level assignment (separate records, merge on identical DIR).
+validation, placeholder and Proton translation, the Steam account, building the
+save set, and install-level assignment (separate records, merge when save sets
+share a target).
 
 Pure by construction: every environment observation goes through one trait, so
 tests never touch a real filesystem.
 
 ```rust
 pub trait Probe {
-    fn dir(&self, path: &Path) -> Presence;   // present | missing | unknown
-    fn is_file(&self, path: &Path) -> bool;   // which build's executables exist
+    fn presence(&self, path: &Path) -> Presence; // present | missing | unknown
+    fn is_file(&self, path: &Path) -> bool;      // which build's executables exist
     fn same_dir(&self, a: &Path, b: &Path) -> bool; // real-directory equality
     fn install_identity(&self, install_dir: &Path) -> Option<String>;
-    /// Newest modification among files matching `globs`, or all files when empty.
-    fn newest_activity(&self, dir: &Path, globs: &[String]) -> Option<u64>;
+    fn steam_account(&self) -> Option<SteamAccount>; // 4.4 order, both id forms
 }
 
 pub struct Install {                    // produced by the scanner, passed in
@@ -637,84 +781,81 @@ pub struct Install {                    // produced by the scanner, passed in
     pub proton_prefix: Option<PathBuf>,
 }
 
-pub struct Environment {
-    pub steam_userdata: Option<PathBuf>, // resolved current Steam user
-    pub current_pick: Option<Pick>,      // sticky value persisted by the host
-}
-
-pub struct Pick {                       // persisted with the game's DIR
-    pub dir: PathBuf,
-    pub build: Platform,
-    pub store_user: Option<String>,
-    pub last_seen: u64,
+pub struct Target {
+    pub root: PathBuf,                  // real folder, never a glob
+    pub filter: Filter,                 // everything | exact name | pattern
+    pub excludes: Vec<Filter>,
+    pub presence: Presence,
 }
 
 pub enum Decision {
-    Chosen { game_id: Id, data_dir: PathBuf, candidates: Vec<PathBuf>, reason: Reason },
+    Resolved { game_id: Id, save_set: Vec<Target>, context: Context },
     Unsupported { game_id: Id, reason: String },
 }
 
-pub fn resolve(
-    game: &Game,
-    install: &Install,
-    environment: &Environment,
-    probe: &dyn Probe,
-) -> Decision;
+pub fn resolve(game: &Game, install: &Install, probe: &dyn Probe) -> Decision;
 
-/// Merges decisions whose chosen DIR is identical and assigns install-level ids.
+/// Merges decisions whose save sets share a target and assigns install-level ids.
 pub fn assign_games(decisions: &[Decision]) -> Vec<GameRecord>;
 ```
 
 - `game_id` is install-level (`steam-588650`, `steam-588650#<identity>`,
-  `gog-...`). `candidates` exists for diagnostics (logs and the CLI); it is
-  never a blocking prompt.
-- Stickiness is explicit: the host passes the persisted `current_pick` with its
-  context; `resolve` applies rules 7–9 of 4.5 and returns the pick to persist.
+  `gog-...`).
+- Nothing is persisted between calls: the same inputs always give the same
+  save set. `context` (build, Steam account) is for the host's checkpoint
+  records and diagnostics.
 - The build decision (4.3) lives here, not in the scanner, because it reads
   catalog data (per-OS executables). The scanner only reports where the install
-  and its would-be prefix are. `Chosen` carries the executables of every
+  and its would-be prefix are. `Resolved` carries the executables of every
   possible build, for the monitor.
+- The resolver doesn't apply the host's safety rules for overrides and custom
+  games; it only drops broad catalog targets (3.1 rule 7) as a second line of
+  defence.
 
 Tests: in-memory `Probe` maps, **one named test per Section 5 case**, so a
 missing case is visible in the test list. Beyond the cases:
 
-- single and multiple candidates, activity ordering, sticky retention and
-  re-resolution after deletion, ancestor guard, store filtering, unsupported
-  games, rename stability;
+- one and several targets, root and filter splitting for literal paths and
+  globs, deduplication, a target covered by another, excludes attached to the
+  right target, store filtering, unsupported games, rename stability;
 - placeholders per build: every row of the 4.4 table, including `{HOME}` inside
   a Proton prefix and Windows placeholders dropped for a Linux build;
 - build decision: only Windows files, only Linux files, both, none in the
   catalog, the same file listed for both, a missing or stale prefix; Windows
   and macOS installs never consider another build;
-- provisional picks: a non-existent pick is revised on the next scan and sticks
-  once its folder exists;
-- build switches: native → Proton → native with both folders present returns
-  to the original folder;
+- build switches: native → Proton → native changes the save set and back;
 - one record per install even with two possible builds, with both builds'
-  executables;
-- presence: present, missing and unknown each drive the ladder as in 4.3, with
-  an unknown pick never re-picked;
-- pick context: build, store account and last-seen time round-trip through
-  `resolve`; a catalog-only change never alters the pick;
+  targets and executables;
+- presence: present, missing and unknown reported per target, a folder or a
+  file behind an exact name;
+- Steam account: each step of the 4.4 order wins over the ones below it
+  (`ActiveUser` over a newer `loginusers.vdf` entry, `MostRecent` over a newer
+  `Timestamp`); `ActiveUser` of 0 falls through; several `userdata` folders
+  with no other source leave the account unknown; both id forms come from one
+  account; a `<storeUserId>` path resolves through whichever form exists;
+- determinism: the same inputs give the same save set in the same order;
 - discovery inputs: an Epic launcher manifest matched by folder name, loose
   probing alongside a store install, a moved install keeping its record, two
-  simultaneous copies splitting by directory identity.
+  simultaneous copies splitting by directory identity, two installs sharing a
+  target merging.
 
 ### 7.3 Host wiring (not a third testable unit)
 
 - `crates/scanner` — store discovery only: Steam libraries and app manifests, GOG
   registry, loose install probing, install identity. Produces `Install` records;
-  contains no save-dir policy.
+  contains no save policy.
 - `apps/host` — embeds the bundle, runs discovery, calls `resolve` per install,
-  persists chosen dirs and game records, publishes state. No decision logic.
+  stores game records with their save sets, publishes state. No decision logic.
 
 Integration tests (`tests/integration/catalog.rs`) use fixture bundles and
 temporary directories, never real game libraries or the network.
 
 ## 8. Non-goals (v1)
 
-- Multiple save directories per game / multi-DIR checkpoints. Revisit only with
-  a concrete game in hand.
+- Restoring part of a checkpoint, or detecting a game's profiles or campaigns.
+  A Load always restores the whole save set. Why: which files belong to which
+  campaign can't be detected reliably, and a campaign can span targets.
+- Guessing companion files the manifest doesn't list (`.bak`, checksums).
 - MS Store / Game Pass saves (`wgs` containers are opaque and cloud-bound).
 - Backing up registry-stored saves.
 - Non-Steam/non-GOG launcher detection (Heroic, Lutris, Flatpak) beyond
@@ -726,21 +867,23 @@ temporary directories, never real game libraries or the network.
 | Decision | Choice |
 |---|---|
 | Manual inputs | `games.csv` + `addendum.yaml` only |
-| Manifest precedence | manifest wins per field; addendum fills gaps; shadow warning |
-| Multi-target storage | candidate list; no flags |
-| Multi-target pick | sticky ladder: existence → newest activity → name → ancestor |
-| New/legacy marking | none in manifest; runtime recency decides |
-| Installs | one game record per install; merge on identical save DIR |
-| Build on Linux | the install's executables decide; undecided → both builds' candidates, one ladder; prefix existence is never evidence |
-| Fresh-install pick | provisional until a candidate exists |
-| Build switch | drops the old build's pick even if its folder exists |
-| Store account switch | drops the old account's pick even if its folder exists |
-| Catalog update | never moves an existing pick |
-| Unreadable location | unknown, not missing; never causes a re-pick |
-| Missing pick | moves only to a candidate with newer save activity |
+| Manifest precedence | manifest wins per field; addendum fills gaps; `override` replaces; shadow warning |
+| Unit of backup | save set of targets (root + filter + excludes); never one picked folder |
+| Candidates | every applicable target, existing or not; nothing ranked, nothing sticky |
+| Manifest paths | kept exactly; literal = exact name, glob = pattern; no widening to a parent |
+| Config entries | never backed up; config-only inside a save target → exclude |
+| Broad folders | a whole broad folder or a wildcard in one is dropped; an exact name inside one is fine |
+| Steam id forms | `{STEAM_ACCOUNT_ID}` and `{STEAM_ID64}`; `<storeUserId>` → both, the existing one counts |
+| Steam account | `ActiveUser` → `MostRecent` → newest `Timestamp` → only `userdata` folder; read at scans and at game start |
+| Account wildcards | pinned per game in the addendum `override` |
+| Installs | one game record per install; merge when save sets share a target |
+| Build on Linux | the install's executables decide; undecided → both builds' targets; prefix existence is never evidence |
+| Build or account switch | the save set changes; old checkpoints unavailable until the context returns |
+| Catalog update | the save set follows it; checkpoints restore the targets in common |
+| Unreadable location | unknown, not missing; the host makes operations unavailable |
 | Install identity | store + product id; directory identity only separates simultaneous copies |
 | Loose installs | probed for every game with loose candidates; Epic from launcher manifests |
-| Ambiguity UX | auto-pick silently; Configure as correction; never block |
-| Steam userdata saves | resolved via current Steam user; included as candidates |
-| Untagged file entries | included as candidates |
+| Ambiguity UX | never a prompt; Configure as correction; never block |
+| Steam userdata saves | resolved via the current Steam account; ordinary targets |
+| Untagged file entries | save targets |
 | Bundle format | versioned JSON, embedded + optionally downloaded |

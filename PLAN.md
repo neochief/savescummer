@@ -2,7 +2,7 @@
 
 I want an app that saves and loads backups of game save data, mainly for roguelike games, so a bad run can be undone. It should feel like part of playing: press a hotkey to save, press another to load, and see every save, load and revert in a timeline.
 
-The app finds supported games on the computer by itself and lets the user add others. For each game it backs up one directory: the save folder, or the whole data folder when the game resists save tampering.
+The app finds supported games on the computer by itself and lets the user add others. For each game it backs up exactly its saves: one or more folders, files or file patterns, never its settings or other programs' data. Save and Load always cover all of them together, and a Load makes them exactly as they were at the checkpoint, removing saves made since.
 
 It should work on Windows, macOS and Linux. Windows comes first; the other two are planned from the start so they're new adapters, not a rewrite.
 
@@ -13,8 +13,9 @@ This document is the map. Each part of the app has its own plan, written so that
 
 ## TERMS
 
-- **DIR** — the one directory backed up for a game. The whole DIR is the unit of every backup.
-- **Checkpoint** — a copy of DIR, kept as an ordinary folder next to it. A **saved** checkpoint is one the user made: with Save, or by copying the folder in Explorer. A **recovery** checkpoint (the UI calls it a "recovery point") is the state captured automatically just before a Load or Revert.
+- **Target** — one place a game keeps saves: a root folder plus a filter (everything in it, one exact name, or a glob pattern), minus settings files.
+- **Save set** — all of a game's targets; the unit of every backup. Save copies all of it and Load restores all of it.
+- **Checkpoint** — a copy of what the save set matched at one moment, kept as an ordinary folder in the **checkpoint store** (the app's data folder by default; the user can move it). A **saved** checkpoint is one the user made with Save. A **recovery** checkpoint (the UI calls it a "recovery point") is the state captured automatically just before a Load or Revert.
 - **Label** — a short name the user gives a saved checkpoint ("Before boss fight").
 - **History** — the per-game timeline: saves, loads, reverts, game starts and closes. Rows point at checkpoints; they never own files.
 - **Load** restores a saved checkpoint. **Revert** restores the recovery checkpoint of a Load or Revert. Both keep the current state as a new recovery checkpoint first, so nothing is ever lost.
@@ -26,21 +27,21 @@ This document is the map. Each part of the app has its own plan, written so that
 
 ## HOW IT FITS TOGETHER
 
-The app is three programs, plus a shell extension on Windows:
+The app is three programs:
 
 | Program | Role |
 | --- | --- |
 | `SaveScummer` | The desktop UI (C++/Qt). The normal entry point. |
 | `SaveScummer.Host` | The background host (Rust). One per user. Owns every rule, all state and all file operations. |
-| `SaveScummer.CLI` | A console client (Rust) for scripts and diagnostics. |
-| Explorer extension | Adds Save and Load to the Windows Explorer right-click menu. |
+| `SaveScummer.CLI` | A console client (Rust) for scripts, testing and diagnostics. It can drive the host in nearly every way the UI can. |
 
 ```text
-            ┌──────────────┐   ┌──────────────┐   ┌────────────────────┐
-            │ SaveScummer  │   │ SaveScummer  │   │ Explorer extension │
-            │ (desktop UI) │   │ .CLI         │   │ (Windows)          │
-            └──────┬───────┘   └──────┬───────┘   └─────────┬──────────┘
-                   └──────── local protocol (per user) ─────┘
+                     ┌──────────────┐   ┌──────────────┐
+                     │ SaveScummer  │   │ SaveScummer  │
+                     │ (desktop UI) │   │ .CLI         │
+                     └──────┬───────┘   └──────┬───────┘
+                            └─────────┬────────┘
+                                      │ local protocol (per user)
                                       │
                             ┌─────────┴──────────┐
                             │  SaveScummer.Host  │── hotkeys, sounds, tray,
@@ -53,7 +54,8 @@ The app is three programs, plus a shell extension on Windows:
 ```
 
 - **The host works alone.** With no window open, scans, monitoring, hotkeys, operations, history and sounds all keep working. Closing or crashing the UI cancels nothing.
-- **Clients are thin.** The UI, CLI and Explorer extension only ask the host and show its answers. None of them touches game files, the database or the catalog. Why: four entry points must never disagree about what's safe.
+- **Clients are thin.** The UI and CLI only ask the host and show its answers. Neither touches game files, the database or the catalog. Why: every entry point (UI, CLI, hotkeys) must agree about what's safe.
+- **No file-manager integration.** There is no Explorer or Finder menu. Why: a game's saves can span several folders, so there is no single folder to right-click, and the app stays out of the user's file manager.
 - **Whoever needs the host starts it.** The UI and CLI start the host from their own install folder when it isn't running, and otherwise attach to the one that is. At sign-in the host starts in the tray.
 - **The catalog decides, the host acts.** Where a known game's saves are is decided by the catalog module; the host runs it and stores the result, but never adds rules of its own.
 
@@ -62,9 +64,9 @@ The app is three programs, plus a shell extension on Windows:
 
 | Plan | Covers | Depends on |
 | --- | --- | --- |
-| [PLAN-HOST.md](PLAN-HOST.md) | The host and CLI: library, monitoring, checkpoints, history, labels, operations, recovery, storage, hotkeys, sounds, tray, Explorer menu, artwork, and the **protocol** every client uses. Its own tests. | The catalog resolver |
+| [PLAN-HOST.md](PLAN-HOST.md) | The host and CLI: library, monitoring, checkpoints, history, labels, operations, recovery, storage, hotkeys, sounds, tray, artwork, and the **protocol** every client uses. Its own tests. | The catalog resolver |
 | [PLAN-UI.md](PLAN-UI.md) | The desktop main window: layouts, sidebar, actions, history, dialogs. Its own tests. | The protocol in PLAN-HOST |
-| [PLAN-CATALOG.md](PLAN-CATALOG.md) | The catalog: how it's authored and built, and the resolver that picks each game's DIR at runtime. Its own tests. | Nothing |
+| [PLAN-CATALOG.md](PLAN-CATALOG.md) | The catalog: how it's authored and built, and the resolver that builds each game's save set at runtime. Its own tests. | Nothing |
 | [PLAN-BUILD.md](PLAN-BUILD.md) | Builds, packaging, installers, CI and releases. | The few things the app must provide, listed there |
 | [PLAN-ERRORS.md](PLAN-ERRORS.md) | A catalog of failure and interruption scenarios: what the host detects, what the user sees, how to test it. Spans host and UI. | PLAN-HOST, PLAN-UI |
 
@@ -81,7 +83,8 @@ Rules for the plans:
 These hold across every part:
 
 - **The user's saves come first.** Only an explicit Delete or Flush removes a checkpoint. Installs, upgrades, uninstalls, restarts, scans and failures never touch the user's backups or the app's data.
-- **Files on disk are the truth.** Checkpoints are plain folders the user can see and copy in Explorer. The database only describes them.
+- **Files on disk are the truth.** Checkpoints are plain folders the user can open and copy in the file manager. The database only describes them.
+- **Only saves.** A Load restores a game's saves and never touches its settings, its logs, Steam's own files, or anything outside the game's save set.
 - **Change nothing you can't verify.** An uncertain state is left alone and explained, never "fixed" by guessing.
 - **One authority.** Every rule lives in one place, the host. Replacing the UI, a platform adapter or the storage never means reimplementing a rule.
 - **Portable core, thin platform adapters.** OS features (process watching, hotkeys, tray, sounds, file-manager menus, sign-in) are small replaceable adapters around a core that knows no OS.
@@ -94,7 +97,6 @@ These hold across every part:
 | Status | First target | Planned | Planned (SteamOS in mind) |
 | Game monitoring | Yes | To investigate | To investigate |
 | Global hotkeys | Yes | To investigate | To investigate |
-| File-manager menu | Explorer extension | Not planned | Not planned |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
 
 
@@ -117,7 +119,6 @@ This stack was chosen after a small Windows proof of concept showed host/UI comm
 | `crates/catalog`, `crates/catalog-build`, `catalog/` | The catalog resolver, builder and data | CATALOG |
 | `protocol/` | The protocol's schemas and shared example messages, tested by both Rust and C++ | HOST |
 | `apps/desktop` | The Qt desktop UI and its tests | UI |
-| `integrations/windows-explorer` | The Explorer extension | HOST |
 | `tests/` | Cross-module tests and the fake-game program | HOST |
 | `xtask/`, `packaging/`, `.github/` | Build, packaging, CI and release tooling | BUILD |
 | `assets/` | Icons and sounds | — |
