@@ -30,8 +30,8 @@ fn main() {
             .set_manifest(MANIFEST)
             .set("ProductName", "SaveScummer")
             .set("FileDescription", "SaveScummer background host")
-            .set("InternalName", "SaveScummer.Host")
-            .set("OriginalFilename", "SaveScummer.Host.exe")
+            .set("InternalName", "SaveScummer")
+            .set("OriginalFilename", "SaveScummer.exe")
             .compile()
             .expect("compiling the Windows resources");
     }

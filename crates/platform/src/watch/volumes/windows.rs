@@ -58,7 +58,7 @@ pub fn volume_of(path: &Path) -> Option<String> {
 }
 
 /// The window that receives device notifications; closed on drop.
-pub struct Drives {
+pub struct Volumes {
     remote: Remote,
 }
 
@@ -68,20 +68,20 @@ pub struct Remote {
     hwnd: isize,
 }
 
-impl Drives {
+impl Volumes {
     pub fn remote(&self) -> Remote {
         self.remote
     }
 
     /// `watch` receives [`Msg::Release`] and [`Msg::Restore`].
-    pub fn start(watch: Sender<Msg>) -> Option<Drives> {
+    pub fn start(watch: Sender<Msg>) -> Option<Volumes> {
         let (ready, hwnd) = mpsc::sync_channel(1);
         std::thread::Builder::new()
             .name("savescummer-watch-drives".into())
             .spawn(move || window_thread(watch, ready))
             .ok()?;
         let hwnd = hwnd.recv().ok().flatten()?;
-        Some(Drives { remote: Remote { hwnd } })
+        Some(Volumes { remote: Remote { hwnd } })
     }
 }
 
@@ -107,7 +107,7 @@ impl Remote {
     }
 }
 
-impl Drop for Drives {
+impl Drop for Volumes {
     fn drop(&mut self) {
         // SAFETY: the window thread ends its loop when the window is gone.
         unsafe { PostMessageW(self.remote.hwnd as HWND, WM_CLOSE, 0, 0) };

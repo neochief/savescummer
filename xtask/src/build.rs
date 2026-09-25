@@ -22,7 +22,6 @@ pub struct Built {
     pub version: String,
     /// The APP PACKAGE, when one was assembled.
     pub package: Option<PathBuf>,
-    pub has_desktop: bool,
 }
 
 fn cargo() -> Command {
@@ -55,23 +54,23 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
         cmd::run(cargo().args(["test", "--workspace"]).args(locked))?;
     }
 
-    let desktop = if frontend::present() {
+    let ui = if frontend::present() {
         let test_host = Mode::Dev.cargo_out().join(naming::exe(CARGO_HOST));
         if options.test && !test_host.is_file() {
             cmd::run(cargo().args(["build", "-p", CARGO_HOST]).args(locked))?;
         }
         Some(frontend::build(mode, &version, options.test, if options.test { &test_host } else { &host })?)
     } else {
-        println!("desktop: {} doesn't exist yet; building the host and CLI only", paths::show(&frontend::source()));
+        println!("UI: {} doesn't exist yet; building the host and CLI only", paths::show(&frontend::source()));
         None
     };
 
     let package = if options.package || options.release {
-        Some(package::assemble(&Inputs { mode, version: &version, host, cli, desktop: desktop.as_ref() })?)
+        Some(package::assemble(&Inputs { mode, version: &version, host, cli, ui: ui.as_ref() })?)
     } else {
         None
     };
-    Ok(Built { version, package, has_desktop: desktop.is_some() })
+    Ok(Built { version, package })
 }
 
 /// `build --release --test`, then the platform's one release file in `dist/`.
@@ -83,7 +82,7 @@ pub fn dist() -> anyhow::Result<()> {
         fs::remove_dir_all(&dist).with_context(|| format!("emptying {}", dist.display()))?;
     }
     fs::create_dir_all(&dist)?;
-    let file = platform::release_file(&package, &built.version, built.has_desktop)?;
+    let file = platform::release_file(&package, &built.version)?;
 
     let expected = platform::PLATFORM.release_file(&built.version);
     let found: Vec<String> =

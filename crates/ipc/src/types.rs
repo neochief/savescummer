@@ -138,7 +138,8 @@ pub enum Command {
         launch_on_startup: Option<bool>,
     },
     /// The UI's focus and selection, so hotkeys act on the selected game
-    /// while the window is focused.
+    /// while the window is focused. A connection that sends it and watches
+    /// is the UI's.
     UiReport {
         focused: bool,
         #[serde(default)]
@@ -153,6 +154,9 @@ pub enum Command {
         resolve_only: bool,
     },
     CatalogRefresh,
+    /// Show the UI: bring the connected one to the front, or start one.
+    /// What a second launch of the app and the tray's Main window send.
+    ShowUi,
     /// Runs exactly what a hotkey press runs, sounds included.
     Hotkey {
         action: HotkeyAction,
@@ -189,6 +193,7 @@ impl Command {
             Command::UiReport { .. } => "ui_report",
             Command::Open { .. } => "open",
             Command::CatalogRefresh => "catalog_refresh",
+            Command::ShowUi => "show_ui",
             Command::Hotkey { .. } => "hotkey",
             Command::Shutdown => "shutdown",
         }
@@ -233,6 +238,8 @@ pub enum EventBody {
     State { state: Box<State> },
     /// A game's labels changed: re-read shown history pages in place.
     Labels { game: String },
+    /// For the UI: the user asked to see the app, so come to the front.
+    ShowWindow,
     /// The last message before the host exits.
     Shutdown,
 }

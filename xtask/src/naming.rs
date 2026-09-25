@@ -20,9 +20,10 @@ pub const LINUX: Platform = Platform { os: "linux", arch: "x86_64", suffix: None
 
 pub const ALL: [Platform; 3] = [WINDOWS, MACOS, LINUX];
 
-/// The fixed executable names, whatever the platform packages them in.
-pub const DESKTOP: &str = "SaveScummer";
-pub const HOST: &str = "SaveScummer.Host";
+/// The fixed executable names, whatever the platform packages them in. The
+/// host is the app itself, so it carries the plain name.
+pub const HOST: &str = "SaveScummer";
+pub const UI: &str = "SaveScummer.UI";
 pub const CLI: &str = "SaveScummer.CLI";
 
 /// Cargo can't put dots in binary names, so packaging renames these.
@@ -47,9 +48,30 @@ pub fn exe(name: &str) -> String {
     format!("{name}{}", std::env::consts::EXE_SUFFIX)
 }
 
+/// An executable's file name without this OS's executable suffix. Not
+/// `file_stem`: `SaveScummer.UI` has no suffix off Windows, and its stem
+/// would be `SaveScummer`.
+pub fn program_name(exe: &std::path::Path) -> String {
+    let name = exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let suffix = std::env::consts::EXE_SUFFIX;
+    if !suffix.is_empty() && name.to_ascii_lowercase().ends_with(suffix) {
+        name[..name.len() - suffix.len()].to_string()
+    } else {
+        name
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn program_names_keep_their_dots() {
+        let exe = |name: &str| std::path::PathBuf::from("bin").join(super::exe(name));
+        assert_eq!(program_name(&exe(UI)), UI);
+        assert_eq!(program_name(&exe(HOST)), HOST);
+        assert_eq!(program_name(&exe(CLI)), CLI);
+    }
 
     #[test]
     fn release_file_names() {

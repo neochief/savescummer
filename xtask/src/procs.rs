@@ -3,14 +3,14 @@
 //! A running host may be in the middle of a save, and Windows can't replace
 //! a running executable, so every stop goes through the same routine:
 //!
-//! 1. ask desktops to close
+//! 1. ask UIs to close
 //! 2. ask hosts to shut down through their sibling CLI, so an accepted
 //!    operation finishes
 //! 3. terminate whatever is still running
 //!
 //! Every build, `check`, `dist` and `clean` starts by stopping everything
 //! running from the output folders (`target/`, `build/`, `dist/`): hosts,
-//! CLIs, desktops, test binaries. A rebuild is then always clean: nothing
+//! CLIs, UIs, test binaries. A rebuild is then always clean: nothing
 //! half-replaced, no stale host serving old code, no "access denied" on a
 //! locked executable. `.runtime/` and installed copies are never touched.
 
@@ -21,10 +21,10 @@ use std::time::{Duration, Instant};
 
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
-use crate::naming::{self, CARGO_CLI, CARGO_HOST, CLI, DESKTOP, HOST};
+use crate::naming::{self, CARGO_CLI, CARGO_HOST, CLI, HOST, UI};
 use crate::{paths, platform};
 
-const DESKTOP_GRACE: Duration = Duration::from_secs(10);
+const UI_GRACE: Duration = Duration::from_secs(10);
 const HOST_GRACE: Duration = Duration::from_secs(30);
 const KILL_GRACE: Duration = Duration::from_secs(5);
 
@@ -39,17 +39,17 @@ pub struct Proc {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Role {
-    Desktop,
+    Ui,
     Host,
     Other,
 }
 
 impl Proc {
     fn role(&self) -> Role {
-        let stem = self.exe.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        let is = |name: &str| stem.eq_ignore_ascii_case(name);
-        if is(DESKTOP) {
-            Role::Desktop
+        let name = naming::program_name(&self.exe);
+        let is = |program: &str| name.eq_ignore_ascii_case(program);
+        if is(UI) {
+            Role::Ui
         } else if is(HOST) || is(CARGO_HOST) {
             Role::Host
         } else {
@@ -155,25 +155,25 @@ pub fn stop_under(dir: &Path) -> anyhow::Result<()> {
     stop(under(dir))
 }
 
-/// The polite routine: desktops close, hosts shut down, the rest is terminated.
+/// The polite routine: UIs close, hosts shut down, the rest is terminated.
 pub fn stop(procs: Vec<Proc>) -> anyhow::Result<()> {
     if procs.is_empty() {
         return Ok(());
     }
-    let (desktops, rest): (Vec<_>, Vec<_>) = procs.into_iter().partition(|p| p.role() == Role::Desktop);
+    let (uis, rest): (Vec<_>, Vec<_>) = procs.into_iter().partition(|p| p.role() == Role::Ui);
     let (hosts, others): (Vec<_>, Vec<_>) = rest.into_iter().partition(|p| p.role() == Role::Host);
 
-    for desktop in &desktops {
-        println!("asking {} to close", desktop.describe());
-        platform::ask_to_close(desktop.pid);
+    for ui in &uis {
+        println!("asking {} to close", ui.describe());
+        platform::ask_to_close(ui.pid);
     }
-    wait_gone(&desktops, DESKTOP_GRACE);
+    wait_gone(&uis, UI_GRACE);
 
     for host in &hosts {
         shut_down_host(host);
     }
 
-    let leftovers: Vec<Proc> = desktops.into_iter().chain(hosts).chain(others).filter(alive).collect();
+    let leftovers: Vec<Proc> = uis.into_iter().chain(hosts).chain(others).filter(alive).collect();
     for proc in &leftovers {
         println!("terminating {}", proc.describe());
         terminate(proc.pid);
@@ -242,7 +242,7 @@ fn wait_gone(procs: &[Proc], timeout: Duration) -> bool {
 }
 
 fn is_named(exe: &Path, name: &str) -> bool {
-    exe.file_stem().is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(name))
+    naming::program_name(exe).eq_ignore_ascii_case(name)
 }
 
 fn normalized(path: &Path) -> String {
@@ -276,7 +276,7 @@ mod tests {
     fn reads_the_data_dir_argument() {
         let proc = |args: &[&str]| Proc {
             pid: 1,
-            exe: PathBuf::from("SaveScummer.Host"),
+            exe: PathBuf::from("SaveScummer"),
             cmd: args.iter().map(OsString::from).collect(),
             start_time: 0,
         };

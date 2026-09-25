@@ -1,6 +1,7 @@
-//! SaveScummer.Host: the background host. It finds games, watches them run,
-//! makes and restores backups, keeps the history, reacts to hotkeys, and
-//! serves the protocol the desktop UI and the CLI both use.
+//! SaveScummer, the host: the app itself. It finds games, watches them run,
+//! makes and restores backups, keeps the history, reacts to hotkeys, shows
+//! the UI when the user launches the app, and serves the protocol the UI and
+//! the CLI both use.
 //!
 //! Startup order: open the database, resolve interrupted operations, scan,
 //! start monitoring, then accept operations. Clients can connect earlier
@@ -98,6 +99,10 @@ pub fn main() -> ExitCode {
         }
     };
     if lock.try_lock().is_err() {
+        // The user launched the app again: the running host shows the UI.
+        if !opts.minimized {
+            hand_over(&data_dir);
+        }
         ready_line(false, "another host is already running for this data folder", None);
         return ExitCode::from(3);
     }
@@ -105,6 +110,19 @@ pub fn main() -> ExitCode {
     let code = run(opts, data_dir);
     drop(lock);
     code
+}
+
+/// Asks the host already running for this data folder to show the UI.
+fn hand_over(data_dir: &Path) {
+    let endpoint = savescummer_ipc::endpoint(data_dir);
+    let result = savescummer_ipc::Client::connect(&endpoint)
+        .map_err(|e| e.to_string())
+        .and_then(|mut client| client.request(None, savescummer_ipc::Command::ShowUi).map_err(|e| e.to_string()));
+    match result {
+        Ok(response) if response.ok => trace("asked the running host to show the UI"),
+        Ok(response) => trace(&format!("the running host didn't show the UI: {:?}", response.error)),
+        Err(e) => trace(&format!("can't reach the running host to show the UI: {e}")),
+    }
 }
 
 fn autostart(on: bool, opts: &Options) -> ExitCode {
@@ -238,7 +256,7 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     };
     let bound = {
         let _guard = runtime.enter();
-        server::bind(&endpoint)
+        savescummer_ipc::transport::Listener::bind(&endpoint)
     };
     let listener = match bound {
         Ok(listener) => listener,
@@ -303,12 +321,19 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         *host.watcher.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
     }
     ready_line(true, "", Some(&host));
+    if !opts.minimized {
+        feedback::show_ui(&host);
+    }
     if opts.demo {
         let demo_host = host.clone();
         std::thread::spawn(move || demo::drive(demo_host, demo_processes));
     }
 
-    let _ = shutdown_rx.recv();
+    // The main thread belongs to the OS's event loop where the OS needs one
+    // there (macOS); elsewhere it just waits for shutdown.
+    savescummer_platform::integration::run_main_loop(move || {
+        let _ = shutdown_rx.recv();
+    });
     shutdown(&host);
     runtime.shutdown_timeout(Duration::from_millis(500));
     ExitCode::SUCCESS

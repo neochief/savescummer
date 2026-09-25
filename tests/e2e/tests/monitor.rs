@@ -21,6 +21,7 @@ fn stack(world: &World) -> Vec<String> {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn the_active_stack_follows_starts_and_exits() {
     let world = World::new();
     let _host = world.host();
@@ -45,6 +46,7 @@ fn the_active_stack_follows_starts_and_exits() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn several_processes_are_one_game_until_the_last_exits() {
     let world = World::new();
     let _host = world.host();
@@ -63,6 +65,7 @@ fn several_processes_are_one_game_until_the_last_exits() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_launcher_that_starts_the_game_and_exits() {
     let world = World::new();
     let _host = world.host();
@@ -96,6 +99,7 @@ fn the_same_file_name_elsewhere_does_not_count() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_crash_is_an_exit() {
     let world = World::new();
     let _host = world.host();
@@ -113,6 +117,7 @@ fn a_crash_is_an_exit() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_game_running_before_the_host_starts_is_on_the_stack_without_an_invented_start() {
     let world = World::new();
     let ((a, exe), _) = {
@@ -140,6 +145,7 @@ fn a_game_running_before_the_host_starts_is_on_the_stack_without_an_invented_sta
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn hotkeys_act_on_the_selected_game_while_the_window_is_focused() {
     let world = World::new();
     let _host = world.host();
@@ -163,6 +169,7 @@ fn hotkeys_act_on_the_selected_game_while_the_window_is_focused() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_host_crash_mid_session_ends_that_session_without_an_invented_close() {
     let world = World::new();
     let mut host = world.host();

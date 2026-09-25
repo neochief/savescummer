@@ -1,8 +1,8 @@
 # Save Scummer UI
 
-This is the main window. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
+This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 
-The app should feel like a game-oriented desktop utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is a timeline listing every event, newest first.
+The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is a timeline listing every event, newest first.
 
 
 ## PRINCIPLES
@@ -178,7 +178,7 @@ The sidebar is the game library and the main way to navigate. It stays narrow, a
 
 - The host provides each game's hero art, logo, header image and icon, already scaled down and stored locally, and says when new art arrives (where it gets them is in PLAN-HOST). Drawing the sidebar is a small local read.
 - Steam's library places each logo at a position chosen per game, stored only in its binary `appinfo.vdf`. We don't use that; left-aligning the logo works on a small card.
-- The app's own icon (`assets/icon.svg`) stays the window, taskbar and tray icon.
+- The app's own icon (`assets/icon.svg`) stays the window and taskbar icon (the host uses it for the tray).
 
 Cards trade some density for recognition: about eight fit in a default-height window, and a large library scrolls.
 
@@ -609,9 +609,13 @@ Motion clarifies structural changes and confirms meaningful actions. It never ca
 - No looping or decorative motion, and nothing that competes with the history.
 
 
-## WINDOW AND TRAY
+## WINDOW
 
-Closing the window hides the app to the tray instead of quitting. Game detection, global hotkeys and pending deletions keep running, and hiding the window doesn't shorten any countdown.
+There is one window at a time, and the host decides when it's needed:
+
+- **Closing the window ends the UI.** The host stays in the tray, so game detection, global hotkeys and pending deletions keep running, and closing doesn't shorten any countdown.
+- **When the host asks the UI to come to the front** (the user launched the app again, or picked Main window in the tray), the UI restores and focuses its window.
+- **If the host goes away** (it crashed, or was stopped), the UI shows its reconnecting state and starts a new host the same way the CLI does, without a second window. A host that says it's shutting down is not restarted: the UI closes.
 
 Deletions on shutdown:
 
@@ -619,7 +623,7 @@ Deletions on shutdown:
 - **A normal host shutdown** ends the remaining countdowns early and runs the accepted deletions through the usual per-game coordination before stopping, without keeping the UI open. Failures don't block shutdown.
 - **After a crash or forced kill,** deletions that hadn't started are dropped, since countdowns aren't saved to disk. Deletions that had started follow the core rules for interrupted operations.
 
-The tray menu and the full-exit flow are outside the scope of this document.
+The tray, its menu and the full-exit flow belong to the host (PLAN-HOST.md, PROCESSES).
 
 The window can be resized down to a minimum size. At that size:
 

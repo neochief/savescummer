@@ -2,7 +2,7 @@
 
 All build automation is `cargo xtask`: one Rust program that runs the same on every OS, locally and in CI. There are no PowerShell, bash or Python build scripts. The design and the reasons behind it are in [PLAN-BUILD.md](../PLAN-BUILD.md); this guide is the how-to.
 
-Windows is implemented. macOS and Linux have their modules stubbed and fail with a clear message until they land.
+Windows is implemented. On macOS the host and CLI build and `cargo xtask check` passes, but packaging isn't implemented yet ([PLAN-MACOS.md](../PLAN-MACOS.md)); Linux packaging isn't either. Both fail with a clear message.
 
 
 ## Prerequisites
@@ -17,7 +17,7 @@ Windows:
 
 - **Visual Studio 2022+ or its Build Tools** with "Desktop development with C++". Rust links with it, and the Visual C++ runtime DLLs shipped in the package come from it.
 
-Desktop frontend (only once `apps/desktop` exists; until then builds contain the host and CLI only):
+UI frontend (only once `apps/ui` exists; until then builds contain the host and CLI only):
 
 - **CMake 3.21+** on `PATH` (Visual Studio, Xcode command-line tools or the distro provide it).
 - **Python 3.9+**, only to install Qt.
@@ -29,7 +29,7 @@ Pinned tools are installed into `.runtime/` by their setup commands. Nothing els
 | --- | --- | --- |
 | `cargo xtask setup cargo-about` | cargo-about (`THIRD-PARTY-LICENSES.html`) | any package: `build --package`, `run`, `dist` |
 | `cargo xtask setup inno` | Inno Setup, portable, into `.runtime/tools/inno-setup/` | `dist` on Windows |
-| `cargo xtask setup qt` | the Qt kit into `.runtime/Qt/<version>/<kit>/` | the desktop |
+| `cargo xtask setup qt` | the Qt kit into `.runtime/Qt/<version>/<kit>/` | the UI |
 | `cargo xtask setup linux-tools` | linuxdeploy and appimagetool | `dist` on Linux (not yet) |
 
 All versions and checksums are pinned in [`xtask/src/pins.rs`](../xtask/src/pins.rs). Setup commands are safe to re-run.
@@ -50,12 +50,12 @@ cargo xtask setup inno
 | Command | What it does |
 | --- | --- |
 | `cargo xtask check` | The quality gate: `cargo fmt --check`, clippy with `-D warnings`, tests, build, `catalog --check`. Stops at the first failure. |
-| `cargo xtask build` | Dev build of the host and CLI (and the desktop, once it exists). |
-| `cargo xtask build --test` | Also runs the Rust tests and the desktop's headless tests. |
+| `cargo xtask build` | Dev build of the host and CLI (and the UI, once it exists). |
+| `cargo xtask build --test` | Also runs the Rust tests and the UI's headless tests. |
 | `cargo xtask build --package` | Also assembles the APP PACKAGE under `build/dev/package/`. |
 | `cargo xtask build --release` | Optimized, stripped release build; always packages, into `build/release/package/`. |
-| `cargo xtask run [--demo] [--stop-other-hosts]` | Dev package, then the dev host, then a desktop connected to it. |
-| `cargo xtask host start [--demo]` | Dev package, then just the dev host. |
+| `cargo xtask run [--demo] [--stop-other-hosts]` | Dev package, then the dev host, started like a user launch, so it shows the UI. |
+| `cargo xtask host start [--demo]` | Dev package, then just the dev host, in the tray without the UI. |
 | `cargo xtask host stop` | Stops the dev host gracefully. |
 | `cargo xtask dist` | `build --release --test`, then the release file in `dist/`. |
 | `cargo xtask clean [--deep]` | Stops anything running from `target/`, `build/` or `dist/`, removes `build/` and `dist/`; `--deep` also removes `target/`. Never touches `.runtime/`. |
@@ -73,7 +73,7 @@ xtask honors `CARGO_TARGET_DIR` like Cargo does.
 | Folder | Holds | Removed by |
 | --- | --- | --- |
 | `target/` | Cargo's cache | `clean --deep` |
-| `build/` | everything regenerable: packages, desktop build trees, logs, `session.json` | `clean` |
+| `build/` | everything regenerable: packages, UI build trees, logs, `session.json` | `clean` |
 | `dist/` | the release file and nothing else | `clean`, and emptied by every `dist` |
 | `.runtime/` | pinned tools, the Qt SDK, dev data | never |
 
@@ -81,8 +81,8 @@ The APP PACKAGE is the runnable app, exactly what the release file wraps:
 
 ```text
 build/<mode>/package/SaveScummer-windows-x64/
-  bin/SaveScummer.exe             desktop (once it exists), with Qt DLLs
-  bin/SaveScummer.Host.exe        host
+  bin/SaveScummer.exe             host: the app, what the Start menu runs
+  bin/SaveScummer.UI.exe          UI (once it exists), with Qt DLLs
   bin/SaveScummer.CLI.exe         CLI
   bin/vcruntime140.dll …          Visual C++ runtime
   bin/*.pdb                       dev only
@@ -92,7 +92,7 @@ build/<mode>/package/SaveScummer-windows-x64/
   SHA256SUMS.txt
 ```
 
-Cargo builds `savescummer-host` and `savescummer-cli` (Cargo names can't contain dots); packaging renames them to the fixed names above.
+Cargo builds `savescummer-host` and `savescummer-cli` (Cargo names can't contain dots); packaging renames them to the fixed names above (`SaveScummer` and `SaveScummer.CLI`).
 
 A package is assembled in a `.staging-<uuid>` folder and swapped in only when complete, after stopping anything running from the old one, so a failed build never breaks the existing package.
 
@@ -101,7 +101,7 @@ A package is assembled in a `.staging-<uuid>` folder and swapped in only when co
 
 `THIRD-PARTY-LICENSES.html` lists every crate the host and CLI link, generated by cargo-about. [`about.toml`](../about.toml) lists the accepted licenses: a dependency under any other license fails packaging, so adding a license is a deliberate edit there. The app's own crates are `publish = false` and are left out.
 
-Once the desktop exists, Qt's license texts from `packaging/licenses/` ship in every package.
+Once the UI exists, Qt's license texts from `packaging/licenses/` ship in every package.
 
 
 ## Dev session
@@ -109,9 +109,10 @@ Once the desktop exists, Qt's license texts from `packaging/licenses/` ship in e
 `cargo xtask run` and `host start`:
 
 1. Build the dev package.
-2. Start its host hidden, with `--data-dir .runtime/dev`, logging to `build/dev/logs/host.log`.
+2. Start its host with `--data-dir .runtime/dev`, logging to `build/dev/logs/host.log`. `host start` adds `--minimized`; `run` doesn't, so the host shows the UI itself, as it does for a user.
 3. Wait for its `"ready":true` line and record it in `build/dev/session.json`.
-4. (`run` only) Start the desktop with the same `--data-dir`. Until the desktop exists, `run` prints the CLI command to drive the dev host instead.
+
+Until the UI exists, `run` prints the CLI command to drive the dev host instead.
 
 The dev host uses its own data, so development never touches the real app's data. It keeps running after `run` returns; `cargo xtask host stop` stops it (only if the recorded pid, start time and path all still match). Any build stops it too.
 
@@ -130,9 +131,9 @@ Data locations:
 
 ## Stopping processes
 
-Every build (so also `run`, `host start` and `dist`), `check` and `clean` first stops everything running from `target/`, `build/` and `dist/`: hosts and CLIs started from `target/`, the dev host, packaged copies, desktops, test binaries. A rebuild is always clean: no locked executable ("access denied") and no host left serving old code. Only xtask itself and Cargo's build scripts are exempt; nothing from `.runtime/` or an installed copy is ever stopped. It's always done the same way:
+Every build (so also `run`, `host start` and `dist`), `check` and `clean` first stops everything running from `target/`, `build/` and `dist/`: hosts and CLIs started from `target/`, the dev host, packaged copies, UIs, test binaries. A rebuild is always clean: no locked executable ("access denied") and no host left serving old code. Only xtask itself and Cargo's build scripts are exempt; nothing from `.runtime/` or an installed copy is ever stopped. It's always done the same way:
 
-1. Ask desktops to close.
+1. Ask UIs to close.
 2. Ask hosts to shut down through the CLI next to them (`--no-start [--data-dir <dir>] shutdown`), waiting up to 30 s so an accepted operation finishes.
 3. Terminate whatever is still running.
 
@@ -142,8 +143,9 @@ Every build (so also `run`, `host start` and `dist`), `check` and `clean` first 
 `cargo xtask dist` compiles [`packaging/windows/savescummer.iss`](../packaging/windows/savescummer.iss) with Inno Setup into `dist/SaveScummer-windows-x64-<version>-setup.exe`. The payload is exactly the release package.
 
 - Per-user install into `%LOCALAPPDATA%\Programs\SaveScummer`, no admin prompt; upgrades replace in place (stable `AppId`).
-- "Launch at sign-in" task: checked on first install, the user's choice kept on upgrade. It runs `SaveScummer.Host.exe --autostart on|off`, so the host stays the only writer of the sign-in entry. Uninstalling runs `--autostart off`.
+- "Launch at sign-in" task: checked on first install, the user's choice kept on upgrade. It runs `SaveScummer.exe --autostart on|off`, so the host stays the only writer of the sign-in entry. Uninstalling runs `--autostart off`.
 - Before replacing or removing files, it runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes.
+- The Start menu entry and the last page's "Launch SaveScummer" run `SaveScummer.exe`: the host starts, or the running one is reached, and shows the UI.
 - User data (`%LOCALAPPDATA%\SaveScummer` and a moved checkpoint store) is never touched.
 - Unsigned: SmartScreen shows "More info → Run anyway".
 
@@ -164,7 +166,7 @@ A published release never changes; fixes ship as a new version. To rebuild a dra
 
 ## CI
 
-- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. On Windows: `setup cargo-about` (and `setup qt` once the desktop exists), `check`, `build --test --package`. Superseded runs are cancelled.
+- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. On Windows: `setup cargo-about` (and `setup qt` once the UI exists), `check`, `build --test --package`. Superseded runs are cancelled.
 - [`release.yml`](../.github/workflows/release.yml): `v*` tags. Never cancelled.
 
 Qt and the pinned tools are cached, keyed on `xtask/src/pins.rs`. Every step is a `cargo xtask` command, so a CI failure reproduces locally with the same command.
@@ -172,4 +174,4 @@ Qt and the pinned tools are cached, keyed on `xtask/src/pins.rs`. Every step is 
 
 ## VS Code
 
-Tasks (`.vscode/tasks.json`) wrap the commands above: build dev (default build), test (default test), check, start/stop dev host, dist. The launch configurations debug the desktop from the dev package against the dev host: they start it before and stop it after.
+Tasks (`.vscode/tasks.json`) wrap the commands above: build dev (default build), test (default test), check, start/stop dev host, dist. The launch configurations debug the UI from the dev package against the dev host: they start the host before (in the tray) and stop it after.

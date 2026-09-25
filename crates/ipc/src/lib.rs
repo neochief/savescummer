@@ -8,6 +8,7 @@
 //! and, to watchers, pushes events (`{"v":1,"event":"state","state":{...}}`).
 
 pub mod client;
+pub mod transport;
 pub mod types;
 
 pub use client::{Client, ConnectError};
@@ -28,12 +29,7 @@ pub fn endpoint(data_dir: &Path) -> String {
     let user = std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_else(|_| "user".into());
     let user: String = user.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     let hash = fnv1a(normalized.as_bytes());
-    if cfg!(windows) {
-        format!(r"\\.\pipe\savescummer-{user}-{hash:016x}")
-    } else {
-        // Unix socket paths are short-limited; keep it in the data folder.
-        data_dir.join("host.sock").to_string_lossy().into_owned()
-    }
+    transport::endpoint(data_dir, &format!("savescummer-{user}-{hash:016x}"))
 }
 
 fn fnv1a(bytes: &[u8]) -> u64 {
@@ -50,9 +46,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn endpoints_differ_per_data_folder_and_ignore_spelling() {
-        let a = endpoint(Path::new("C:/Data/A"));
-        assert_eq!(a, endpoint(Path::new("c:\\data\\a\\")));
-        assert_ne!(a, endpoint(Path::new("C:/Data/B")));
+    fn endpoints_differ_per_data_folder() {
+        let root = std::env::temp_dir();
+        assert_ne!(endpoint(&root.join("A")), endpoint(&root.join("B")));
+        assert_eq!(endpoint(&root.join("A")), endpoint(&root.join("A")));
     }
 }

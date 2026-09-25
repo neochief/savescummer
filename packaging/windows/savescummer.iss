@@ -7,7 +7,6 @@
 ;   OutputBaseFilename  SaveScummer-windows-x64-<version>-setup
 ;   RepoRoot            the repository, for the icon
 ;   MinWindows          the minimum Windows version
-;   HasDesktop          1 once the package contains SaveScummer.exe
 ;
 ; Per-user, so no admin prompt. User data (%LOCALAPPDATA%\SaveScummer and a
 ; checkpoint store the user moved elsewhere) is never touched: nothing here
@@ -15,12 +14,6 @@
 
 #ifndef AppVersion
   #error Build the installer with `cargo xtask dist`.
-#endif
-
-#if HasDesktop == "1"
-  #define MainExe "SaveScummer.exe"
-#else
-  #define MainExe "SaveScummer.Host.exe"
 #endif
 
 [Setup]
@@ -45,12 +38,12 @@ MinVersion={#MinWindows}
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBaseFilename}
 SetupIconFile={#RepoRoot}\assets\icon.ico
-UninstallDisplayIcon={app}\bin\{#MainExe}
+UninstallDisplayIcon={app}\bin\SaveScummer.exe
 UninstallDisplayName=SaveScummer
 WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
-; The Restart Manager closes the desktop; the host is shut down gracefully
+; The Restart Manager closes the UI; the host is shut down gracefully
 ; first (see PrepareToInstall).
 CloseApplications=yes
 RestartApplications=no
@@ -70,24 +63,20 @@ Type: filesandordirs; Name: "{app}\bin"
 [Files]
 Source: "{#Payload}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-#if HasDesktop == "1"
 [Icons]
+; SaveScummer.exe is the host: it shows the UI, or reaches the one running.
 Name: "{userprograms}\SaveScummer"; Filename: "{app}\bin\SaveScummer.exe"
-#endif
 
 [Run]
 ; The host is the only writer of the sign-in entry.
-Filename: "{app}\bin\SaveScummer.Host.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: autostart; StatusMsg: "Setting up launch at sign-in..."
-Filename: "{app}\bin\SaveScummer.Host.exe"; Parameters: "--autostart off"; Flags: runhidden waituntilterminated; Tasks: not autostart
-#if HasDesktop == "1"
+Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: autostart; StatusMsg: "Setting up launch at sign-in..."
+Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart off"; Flags: runhidden waituntilterminated; Tasks: not autostart
+; The same as a user launch: the host starts and shows the UI.
 Filename: "{app}\bin\SaveScummer.exe"; Description: "Launch SaveScummer"; Flags: nowait postinstall skipifsilent
-#else
-Filename: "{app}\bin\SaveScummer.Host.exe"; Parameters: "--minimized"; Description: "Start SaveScummer"; Flags: nowait postinstall skipifsilent runhidden
-#endif
 
 [UninstallRun]
 ; Removes the entry only if it points at this install.
-Filename: "{app}\bin\SaveScummer.Host.exe"; Parameters: "--autostart off"; Flags: runhidden waituntilterminated; RunOnceId: "AutostartOff"
+Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart off"; Flags: runhidden waituntilterminated; RunOnceId: "AutostartOff"
 
 [Code]
 { Asks a running host to shut down, so an in-flight save finishes before its

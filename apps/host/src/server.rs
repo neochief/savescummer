@@ -12,52 +12,23 @@ use tokio::sync::mpsc;
 use savescummer_core::{ErrorKind, Failure};
 use savescummer_ipc::{
     Command, Event, EventBody, Hello, HotkeyTargetInfo, MAX_MESSAGE, OpStatus, PROTOCOL_VERSION, Request, Response,
+    transport,
 };
 
 use crate::host::Host;
 use crate::{library, ops, queries};
 
 /// Accepts connections until the process exits.
-#[cfg(windows)]
-pub async fn serve(host: Arc<Host>, first: tokio::net::windows::named_pipe::NamedPipeServer) {
-    use tokio::net::windows::named_pipe::ServerOptions;
-    let mut server = first;
+pub async fn serve(host: Arc<Host>, mut listener: transport::Listener) {
     loop {
-        if server.connect().await.is_err() {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        let connected = server;
-        server = match ServerOptions::new().reject_remote_clients(true).create(&host.endpoint) {
-            Ok(s) => s,
+        match listener.accept().await {
+            Ok(stream) => {
+                tokio::spawn(connection(host.clone(), stream));
+            }
             Err(e) => {
-                crate::trace(&format!("can't create another pipe instance: {e}"));
+                crate::trace(&format!("can't accept more clients: {e}"));
                 return;
             }
-        };
-        tokio::spawn(connection(host.clone(), connected));
-    }
-}
-
-/// Creates the first pipe instance; fails when another host owns the name.
-#[cfg(windows)]
-pub fn bind(endpoint: &str) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeServer> {
-    tokio::net::windows::named_pipe::ServerOptions::new()
-        .first_pipe_instance(true)
-        .reject_remote_clients(true)
-        .create(endpoint)
-}
-
-#[cfg(unix)]
-pub fn bind(endpoint: &str) -> std::io::Result<tokio::net::UnixListener> {
-    let _ = std::fs::remove_file(endpoint);
-    tokio::net::UnixListener::bind(endpoint)
-}
-
-#[cfg(unix)]
-pub async fn serve(host: Arc<Host>, listener: tokio::net::UnixListener) {
-    loop {
-        if let Ok((stream, _)) = listener.accept().await {
-            tokio::spawn(connection(host.clone(), stream));
         }
     }
 }
@@ -75,6 +46,12 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
     });
     let mut lines = BufReader::new(reader).lines();
     let mut watching = false;
+    let mut subscribed = false;
+    let mut reported = false;
+    // The UI is a connection that both watches and reports its focus. A
+    // one-off focus report (the CLI standing in for the UI) doesn't count,
+    // so its report outlives it.
+    let mut is_ui = false;
     loop {
         let line = match lines.next_line().await {
             Ok(Some(line)) => line,
@@ -117,10 +94,21 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
                 continue;
             }
         };
+        match request.command {
+            Command::UiReport { .. } => reported = true,
+            Command::Watch => watching = true,
+            _ => {}
+        }
+        if reported && watching && !is_ui {
+            is_ui = true;
+            let mut inner = host.lock();
+            inner.ui_connections += 1;
+            inner.ui_started = None;
+        }
         if matches!(request.command, Command::Watch) {
             send(&tx, &ok_response(&id, serde_json::json!({})));
-            if !watching {
-                watching = true;
+            if !subscribed {
+                subscribed = true;
                 // A UI attaching: art it may be missing is fetched now.
                 crate::artwork::request(&host);
                 tokio::spawn(watch(host.clone(), tx.clone()));
@@ -136,6 +124,17 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
             });
             send(&tx, &response);
         });
+    }
+    // The client is gone. Before waiting for the writer: a watch keeps it
+    // alive until the next state change, which may be a long time coming.
+    if is_ui {
+        let mut inner = host.lock();
+        inner.ui_connections -= 1;
+        if inner.ui_connections == 0 {
+            // No window any more: hotkeys go back to the ACTIVE STACK.
+            inner.ui = crate::host::UiReport::default();
+            host.publish(&mut inner);
+        }
     }
     drop(tx);
     let _ = writer_task.await;
@@ -327,6 +326,7 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
         }
         Command::Open { target, resolve_only } => json(queries::open(host, &target, resolve_only)?),
         Command::CatalogRefresh => queries::catalog_refresh(host),
+        Command::ShowUi => json(serde_json::json!({ "ui": crate::feedback::show_ui(host).as_str() })),
         Command::Hotkey { action } => {
             let op = crate::feedback::hotkey(host, request_id, action)?;
             json(op)

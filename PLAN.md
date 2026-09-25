@@ -31,21 +31,21 @@ The app is three programs:
 
 | Program | Role |
 | --- | --- |
-| `SaveScummer` | The desktop UI (C++/Qt). The normal entry point. |
-| `SaveScummer.Host` | The background host (Rust). One per user. Owns every rule, all state and all file operations. |
+| `SaveScummer` | The host (Rust): the app itself and what the user launches. One per user. Owns every rule, all state, all file operations, and everything that works without a window: the tray, hotkeys, sounds, game monitoring. |
+| `SaveScummer.UI` | The main window (C++/Qt). The host starts it when the user wants to see the app; closing it ends only the window. |
 | `SaveScummer.CLI` | A console client (Rust) for scripts, testing and diagnostics. It can drive the host in nearly every way the UI can. |
 
 ```text
                      ┌──────────────┐   ┌──────────────┐
                      │ SaveScummer  │   │ SaveScummer  │
-                     │ (desktop UI) │   │ .CLI         │
+                     │ .UI          │   │ .CLI         │
                      └──────┬───────┘   └──────┬───────┘
                             └─────────┬────────┘
                                       │ local protocol (per user)
                                       │
                             ┌─────────┴──────────┐
-                            │  SaveScummer.Host  │── hotkeys, sounds, tray,
-                            │  core + adapters   │   game monitoring, sign-in
+                            │    SaveScummer     │── hotkeys, sounds, tray,
+                            │  (host) + adapters │   game monitoring, sign-in
                             └─────────┬──────────┘
                                       │ uses
                             ┌─────────┴──────────┐
@@ -56,7 +56,8 @@ The app is three programs:
 - **The host works alone.** With no window open, scans, monitoring, hotkeys, operations, history and sounds all keep working. Closing or crashing the UI cancels nothing.
 - **Clients are thin.** The UI and CLI only ask the host and show its answers. Neither touches game files, the database or the catalog. Why: every entry point (UI, CLI, hotkeys) must agree about what's safe.
 - **No file-manager integration.** There is no Explorer or Finder menu. Why: a game's saves can span several folders, so there is no single folder to right-click, and the app stays out of the user's file manager.
-- **Whoever needs the host starts it.** The UI and CLI start the host from their own install folder when it isn't running, and otherwise attach to the one that is. At sign-in the host starts in the tray.
+- **The host is the app; the UI is its window.** Launching SaveScummer starts the host, or wakes the one already running, and the host shows the UI. At sign-in the host starts in the tray with no window. Why: the host is what runs all day, so it's the one program that knows whether a window is already open, and every OS agrees on one entry point.
+- **Clients never become a second host.** The CLI (and the UI, if the host has gone) starts a missing host from its own install folder, without a window, and otherwise attaches to the one that is running.
 - **The catalog decides, the host acts.** Where a known game's saves are is decided by the catalog module; the host runs it and stores the result, but never adds rules of its own.
 
 
@@ -64,10 +65,11 @@ The app is three programs:
 
 | Plan | Covers | Depends on |
 | --- | --- | --- |
-| [PLAN-HOST.md](PLAN-HOST.md) | The host and CLI: library, monitoring, checkpoints, history, labels, operations, recovery, storage, hotkeys, sounds, tray, artwork, and the **protocol** every client uses. Its own tests. | The catalog resolver |
-| [PLAN-UI.md](PLAN-UI.md) | The desktop main window: layouts, sidebar, actions, history, dialogs. Its own tests. | The protocol in PLAN-HOST |
+| [PLAN-HOST.md](PLAN-HOST.md) | The host (the app's entry point) and CLI: library, monitoring, checkpoints, history, labels, operations, recovery, storage, hotkeys, sounds, tray, artwork, and the **protocol** every client uses. Its own tests. | The catalog resolver |
+| [PLAN-UI.md](PLAN-UI.md) | The UI, the main window: layouts, sidebar, actions, history, dialogs. Its own tests. | The protocol in PLAN-HOST |
 | [PLAN-CATALOG.md](PLAN-CATALOG.md) | The catalog: how it's authored and built, and the resolver that builds each game's save set at runtime. Its own tests. | Nothing |
 | [PLAN-BUILD.md](PLAN-BUILD.md) | Builds, packaging, installers, CI and releases. | The few things the app must provide, listed there |
+| [PLAN-MACOS.md](PLAN-MACOS.md) | What macOS needs beyond the shared design: its adapters, its packaging and the decisions macOS forces. | PLAN-HOST, PLAN-BUILD |
 | [PLAN-ERRORS.md](PLAN-ERRORS.md) | A catalog of failure and interruption scenarios: what the host detects, what the user sees, how to test it. Spans host and UI. | PLAN-HOST, PLAN-UI |
 
 Rules for the plans:
@@ -87,7 +89,7 @@ These hold across every part:
 - **Only saves.** A Load restores a game's saves and never touches its settings, its logs, Steam's own files, or anything outside the game's save set.
 - **Change nothing you can't verify.** An uncertain state is left alone and explained, never "fixed" by guessing.
 - **One authority.** Every rule lives in one place, the host. Replacing the UI, a platform adapter or the storage never means reimplementing a rule.
-- **Portable core, thin platform adapters.** OS features (process watching, hotkeys, tray, sounds, file-manager menus, sign-in) are small replaceable adapters around a core that knows no OS.
+- **Portable core, thin platform adapters.** OS features (process watching, hotkeys, tray, sounds, sign-in, file watching, the local transport) are small replaceable adapters around a core that knows no OS. Each OS's version of an adapter lives in its own file, so adding an OS means adding files, not editing shared ones.
 
 
 ## PLATFORMS
@@ -95,15 +97,15 @@ These hold across every part:
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
 | Status | First target | Planned | Planned (SteamOS in mind) |
-| Game monitoring | Yes | To investigate | To investigate |
-| Global hotkeys | Yes | To investigate | To investigate |
+| Game monitoring | Yes | Planned (PLAN-MACOS) | To investigate |
+| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 (PLAN-MACOS) | To investigate |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
 
 
 ## TECHNOLOGY
 
 - **Rust** for the host, CLI and every backend module. Why: one safe, fast, portable language for the part that touches the user's files.
-- **Qt 6 Widgets (C++)** for the desktop UI, in its own process. Why: a native-feeling, lightweight desktop app, kept apart so it can be replaced without touching the rules.
+- **Qt 6 Widgets (C++)** for the UI, in its own process. Why: a native-feeling, lightweight window, kept apart so it can be replaced without touching the rules, and so it takes no memory while closed, which is most of the time.
 - **SQLite**, owned only by the host, for configuration, checkpoint records, history and the operation journal.
 - **A versioned local JSON protocol** over named pipes (Windows) and Unix sockets (macOS, Linux) between the host and its clients. No direct Rust/C++ bindings.
 
@@ -118,7 +120,7 @@ This stack was chosen after a small Windows proof of concept showed host/UI comm
 | `crates/` | Backend modules: core rules, snapshots, storage, scanner, monitor, platform adapters, IPC | HOST |
 | `crates/catalog`, `crates/catalog-build`, `catalog/` | The catalog resolver, builder and data | CATALOG |
 | `protocol/` | The protocol's schemas and shared example messages, tested by both Rust and C++ | HOST |
-| `apps/desktop` | The Qt desktop UI and its tests | UI |
+| `apps/ui` | The Qt UI and its tests | UI |
 | `tests/` | Cross-module tests and the fake-game program | HOST |
 | `xtask/`, `packaging/`, `.github/` | Build, packaging, CI and release tooling | BUILD |
 | `assets/` | Icons and sounds | — |
@@ -127,4 +129,4 @@ Module rules:
 
 - The core rules know nothing about Qt, SQLite, the protocol or the OS; the host wires in the real implementations.
 - Each backend module can be built and tested on its own. Dependencies between modules never form a cycle.
-- The desktop UI never links backend code, opens the database or touches game files.
+- The UI never links backend code, opens the database or touches game files.

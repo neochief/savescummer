@@ -12,6 +12,8 @@ use anyhow::{Context, bail};
 use crate::{cmd, frontend, naming, paths, pins, platform};
 
 /// Downloads `url` into `build/tmp/<name>` and checks its SHA-256.
+// Only the Windows setup downloads anything yet (`setup linux-tools` will).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn download(url: &str, sha256: &str, name: &str) -> anyhow::Result<PathBuf> {
     println!("downloading {url}");
     let mut bytes = Vec::new();

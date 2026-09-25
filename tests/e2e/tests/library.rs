@@ -123,6 +123,7 @@ fn a_user_scan_reports_newly_found_games_and_scans_never_duplicate() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn two_installs_of_one_game_are_two_records_with_install_tags() {
     let world = World::new();
     let steam_copy = world.steam_install(1004, "Twin Game", "TwinGame.exe");
@@ -154,6 +155,7 @@ fn two_installs_of_one_game_are_two_records_with_install_tags() {
 }
 
 /// A catalog game only found through its installer's uninstall key.
+#[cfg(windows)]
 fn with_indie_quest(world: &World) {
     let mut catalog = fixture_catalog();
     catalog["games"].as_array_mut().unwrap().push(json!({
@@ -167,6 +169,7 @@ fn with_indie_quest(world: &World) {
     world.set_catalog(&catalog);
 }
 
+#[cfg(windows)] // Uninstall entries are Windows registry data.
 #[test]
 fn a_standalone_install_is_found_through_its_uninstall_key() {
     // Installed by its own installer somewhere no loose probe looks, and
@@ -199,6 +202,7 @@ fn a_standalone_install_is_found_through_its_uninstall_key() {
     assert!(!world.history("indie-quest").is_empty());
 }
 
+#[cfg(windows)] // Uninstall entries are Windows registry data.
 #[test]
 fn a_standalone_install_and_uninstall_are_noticed_through_the_registry() {
     // Nobody asks for a scan: the uninstall key changing is the signal.
@@ -225,6 +229,7 @@ fn a_standalone_install_and_uninstall_are_noticed_through_the_registry() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_program_inside_the_install_folder_counts_as_the_game() {
     // Launchers: the catalog knows SlayTheSpire.exe, but the game runs as
     // jre/bin/javaw.exe inside the install folder.
@@ -248,28 +253,27 @@ fn custom_games_are_validated_whole_and_survive_scans() {
     copy_game(&exe);
     let exe = exe.to_str().unwrap().to_string();
     let add = |saves: &str| world.cli(&["add-game", "--name", "Indie", "--exe", &exe, "--saves", saves]);
+    // Locations are typed the way the OS writes them.
+    let sl = std::path::MAIN_SEPARATOR;
 
     // A relative path.
     assert_eq!(add("saves").error_kind(), "invalid_config");
     // A broad folder whole, or a wildcard directly in one.
     let docs = world.documents.to_str().unwrap().to_string();
     assert_eq!(add(&docs).error_kind(), "invalid_target");
-    assert_eq!(add(&format!("{docs}\\*.sav")).error_kind(), "invalid_target");
+    assert_eq!(add(&format!("{docs}{sl}*.sav")).error_kind(), "invalid_target");
     // A wildcard in the game's own folder could match the game's files.
     let game_dir = world.root.join("games").join("Indie");
-    assert_eq!(add(&format!("{}\\save*", game_dir.display())).error_kind(), "invalid_target");
+    assert_eq!(add(&format!("{}{sl}save*", game_dir.display())).error_kind(), "invalid_target");
     // A filter that matches the executable.
-    assert_eq!(
-        add(&format!("{}\\*.exe", game_dir.join("x").display()).replace("\\x\\", "\\")).error_kind(),
-        "invalid_target"
-    );
+    assert_eq!(add(&format!("{}{sl}*.exe", game_dir.display())).error_kind(), "invalid_target");
     // A reserved suffix on its own.
-    assert_eq!(add(&format!("{}\\saves\\*.ssnew", game_dir.display())).error_kind(), "invalid_target");
+    assert_eq!(add(&format!("{}{sl}saves{sl}*.ssnew", game_dir.display())).error_kind(), "invalid_target");
     assert!(world.state()["games"].as_array().unwrap().is_empty(), "nothing partial is left behind");
 
     // An exact name inside a broad folder is fine, and so is a path that
     // doesn't exist yet.
-    let ok = world.ok(&["add-game", "--name", "Indie", "--exe", &exe, "--saves", &format!("{docs}\\indie.sav")]);
+    let ok = world.ok(&["add-game", "--name", "Indie", "--exe", &exe, "--saves", &format!("{docs}{sl}indie.sav")]);
     let id = s(&ok["game"]);
     assert_eq!(world.game(&id)["save"]["reason"], "no_game_data");
     assert!(!world.documents.join("indie.sav").exists(), "validation never creates anything");
@@ -284,7 +288,7 @@ fn custom_games_are_validated_whole_and_survive_scans() {
         "--exe",
         other_exe.to_str().unwrap(),
         "--saves",
-        &format!("{docs}\\indie.sav"),
+        &format!("{docs}{sl}indie.sav"),
     ]);
     assert_eq!(overlap.error_kind(), "invalid_target");
     assert!(overlap.stdout.contains("Indie"), "the error names the other game: {}", overlap.stdout);
@@ -293,7 +297,7 @@ fn custom_games_are_validated_whole_and_survive_scans() {
     let saves = world.home.join("IndieSaves");
     write(&saves.join("slot1.sav"), "one");
     write(&saves.join("notes.txt"), "not a save");
-    world.ok(&["configure", &id, "--saves", &format!("{}\\*.sav", saves.display())]);
+    world.ok(&["configure", &id, "--saves", &format!("{}{sl}*.sav", saves.display())]);
     world.ok(&["scan", "--full"]);
     world.ok(&["save", &id]);
     write(&saves.join("slot1.sav"), "later");
@@ -346,12 +350,7 @@ fn a_linked_save_folder_is_resolved_and_a_repointed_link_is_refused() {
     let real = world.home.join("RealSaves");
     write(&real.join("a.sav"), "a");
     let link = world.home.join("LinkedSaves");
-    // A junction needs no admin rights.
-    let status = std::process::Command::new("cmd")
-        .args(["/C", "mklink", "/J", link.to_str().unwrap(), real.to_str().unwrap()])
-        .output()
-        .unwrap();
-    assert!(status.status.success(), "mklink /J failed");
+    link_dir(&link, &real);
     let _host = world.host();
     let exe = world.root.join("games").join("Linky").join("Linky.exe");
     copy_game(&exe);
@@ -375,11 +374,8 @@ fn a_linked_save_folder_is_resolved_and_a_repointed_link_is_refused() {
     // The link now points elsewhere: refused until configured again.
     let other = world.home.join("OtherSaves");
     std::fs::create_dir_all(&other).unwrap();
-    std::fs::remove_dir(&link).unwrap();
-    std::process::Command::new("cmd")
-        .args(["/C", "mklink", "/J", link.to_str().unwrap(), other.to_str().unwrap()])
-        .output()
-        .unwrap();
+    unlink_dir(&link);
+    link_dir(&link, &other);
     world.ok(&["scan"]);
     let game = world.game(&id);
     assert_eq!(game["config_error"]["kind"], "invalid_target", "{game}");

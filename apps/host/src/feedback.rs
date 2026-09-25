@@ -1,10 +1,14 @@
 //! Hotkeys, the tray and sounds: adapters the host owns, so they work with
-//! no window open.
+//! no window open. And showing the UI, which the tray, a second launch and
+//! a user launch all ask for.
 
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use savescummer_core::{ErrorKind, Failure};
-use savescummer_ipc::{HotkeyAction, Operation};
+use savescummer_ipc::{EventBody, HotkeyAction, Operation};
 use savescummer_platform::integration::{self, Signal};
 
 use crate::host::{Host, hotkey_target, new_id};
@@ -42,7 +46,9 @@ pub fn start(host: &Arc<Host>) {
                     let _ = hotkey(&host, &new_id("hotkey"), action);
                 });
             }
-            Signal::OpenMainWindow => open_main_window(),
+            Signal::OpenMainWindow => {
+                show_ui(&host);
+            }
             Signal::Exit => host.request_shutdown(),
         }
     }));
@@ -57,15 +63,89 @@ pub fn start(host: &Arc<Host>) {
     }
 }
 
-/// Opens or focuses the desktop UI from the same install folder.
-fn open_main_window() {
-    let Ok(exe) = std::env::current_exe() else { return };
-    let name = if cfg!(windows) { "SaveScummer.exe" } else { "SaveScummer" };
-    if let Some(ui) = exe.parent().map(|dir| dir.join(name))
-        && ui.exists()
-    {
-        let _ = std::process::Command::new(ui).spawn();
+/// How long a started UI has to connect before another show request may
+/// start a second one.
+const UI_START_GRACE: Duration = Duration::from_secs(15);
+
+/// What showing the UI did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shown {
+    /// The connected UI was told to come to the front.
+    Front,
+    /// A UI was started.
+    Started,
+    /// One was started moments ago and is still connecting.
+    Starting,
+    /// There is no UI in this install (or it couldn't start).
+    Unavailable,
+}
+
+impl Shown {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Shown::Front => "front",
+            Shown::Started => "started",
+            Shown::Starting => "starting",
+            Shown::Unavailable => "unavailable",
+        }
     }
+}
+
+/// Shows the UI (PLAN-HOST, PROCESSES): a connected UI comes to the front;
+/// otherwise one starts.
+pub fn show_ui(host: &Arc<Host>) -> Shown {
+    {
+        let mut inner = host.lock();
+        if inner.ui_connections > 0 {
+            drop(inner);
+            let _ = host.events_tx.send(EventBody::ShowWindow);
+            return Shown::Front;
+        }
+        if inner.ui_started.is_some_and(|t| t.elapsed() < UI_START_GRACE) {
+            return Shown::Starting;
+        }
+        inner.ui_started = Some(Instant::now());
+    }
+    let Some(mut command) = ui_command() else {
+        crate::trace("no UI to show next to the host");
+        host.lock().ui_started = None;
+        return Shown::Unavailable;
+    };
+    if let Some(dir) = &host.opts.data_dir {
+        command.arg("--data-dir").arg(dir);
+    }
+    command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    savescummer_platform::process::detach(&mut command);
+    match command.spawn() {
+        Ok(mut child) => {
+            // Reaped in the background, so it never lingers as a zombie.
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            Shown::Started
+        }
+        Err(e) => {
+            crate::trace(&format!("can't start the UI: {e}"));
+            host.lock().ui_started = None;
+            Shown::Unavailable
+        }
+    }
+}
+
+/// The UI from the same install: `SaveScummer.UI` next to the host, or the
+/// AppImage's `ui` mode. Tests name a stand-in with `SAVESCUMMER_UI_EXE`.
+fn ui_command() -> Option<Command> {
+    if let Some(exe) = std::env::var_os("SAVESCUMMER_UI_EXE") {
+        return Some(Command::new(exe));
+    }
+    if let Some(appimage) = std::env::var_os("APPIMAGE") {
+        let mut command = Command::new(appimage);
+        command.arg("ui");
+        return Some(command);
+    }
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let ui: PathBuf = dir.join(format!("SaveScummer.UI{}", std::env::consts::EXE_SUFFIX));
+    ui.is_file().then(|| Command::new(ui))
 }
 
 pub fn stop(host: &Host) {

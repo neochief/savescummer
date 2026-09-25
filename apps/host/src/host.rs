@@ -81,6 +81,10 @@ pub struct Inner {
     pub ops: HashMap<String, Operation>,
     pub scan: ScanInfo,
     pub ui: UiReport,
+    /// Open connections that identified themselves as the UI.
+    pub ui_connections: usize,
+    /// When the host last started a UI that hasn't connected yet.
+    pub ui_started: Option<Instant>,
     pub last_focus_scan: Option<Instant>,
     pub store: PathBuf,
     pub store_available: bool,
@@ -446,6 +450,8 @@ impl Inner {
             ops: HashMap::new(),
             scan: ScanInfo { running: None, running_full: None, last_user: None, scans: 0, full_scans: 0 },
             ui: UiReport::default(),
+            ui_connections: 0,
+            ui_started: None,
             last_focus_scan: None,
             store,
             store_available: false,
@@ -465,15 +471,7 @@ impl Inner {
 
 /// Ends the process at once, the way a crash or a kill would.
 pub fn hard_exit() -> ! {
-    #[cfg(windows)]
-    // SAFETY: terminating our own process.
-    unsafe {
-        windows_sys::Win32::System::Threading::TerminateProcess(
-            windows_sys::Win32::System::Threading::GetCurrentProcess(),
-            86,
-        );
-    }
-    std::process::exit(86)
+    savescummer_platform::process::hard_exit(86)
 }
 
 pub fn kind_name(kind: &GameKind) -> &'static str {

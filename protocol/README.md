@@ -2,7 +2,7 @@
 
 Shared example messages of the host protocol (PLAN-HOST.md, PROTOCOL). Both
 sides test against them: the Rust types in `crates/ipc` parse every file here
-(`cargo test -p savescummer-ipc`), and the desktop UI's tests should do the
+(`cargo test -p savescummer-ipc`), and the UI's tests should do the
 same. Change them together with the protocol.
 
 - `request-*.json` — client → host requests.

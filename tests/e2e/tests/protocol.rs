@@ -267,6 +267,7 @@ fn delete_and_flush_outcomes_survive_a_host_restart() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_repeated_hotkey_request_returns_the_same_operation() {
     let world = World::new();
     let _host = world.host();

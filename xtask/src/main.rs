@@ -51,19 +51,19 @@ struct Cli {
 enum Task {
     /// The quality gate: fmt, clippy, tests, build, catalog check.
     Check,
-    /// Build the host, CLI and desktop.
+    /// Build the host, CLI and UI.
     Build {
         /// Optimized release build; always assembles the app package.
         #[arg(long)]
         release: bool,
-        /// Also run the Rust and desktop tests.
+        /// Also run the Rust and UI tests.
         #[arg(long)]
         test: bool,
         /// Assemble the app package under build/<mode>/package/.
         #[arg(long)]
         package: bool,
     },
-    /// Dev build, then the dev host and a desktop connected to it.
+    /// Dev build, then the dev host, which shows the UI.
     Run {
         /// Simulated games and operations.
         #[arg(long)]

@@ -14,9 +14,19 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+// What the tests need from the OS, one file per OS.
+#[cfg_attr(windows, path = "windows.rs")]
+#[cfg_attr(not(windows), path = "unix.rs")]
+mod os;
+
+use os::registry;
+#[allow(unused_imports)] // Each test binary uses its own part of the harness.
+pub use os::{link_dir, unlink_dir};
+
 pub const HOST: &str = env!("CARGO_BIN_EXE_e2e-host");
 pub const CLI: &str = env!("CARGO_BIN_EXE_e2e-cli");
 pub const FAKE_GAME: &str = env!("CARGO_BIN_EXE_fake-game");
+pub const FAKE_UI: &str = env!("CARGO_BIN_EXE_fake-ui");
 
 /// Steam account ids used by the fixtures.
 pub const ACCOUNT_A: u32 = 44258119;
@@ -143,7 +153,7 @@ impl World {
                 "steam_root": self.steam,
             },
             "steam_active_user_file": self.root.join("steam-active-user"),
-            "use_registry": false,
+            "query_os": false,
             "gog_games": [],
             "epic_manifests": self.root.join("epic"),
             "loose_roots": [ { "path": self.programfiles, "store": "standalone" } ],
@@ -213,6 +223,17 @@ impl World {
         self.spawn_host(all, env)
     }
 
+    /// Starts the host the way a user launches the app: without
+    /// `--minimized`, so it shows the UI.
+    pub fn host_launched(&self, env: &[(&str, &str)]) -> HostProcess {
+        self.spawn_host(self.launch_args(), env)
+    }
+
+    /// The arguments of a user launch: the test host's, without `--minimized`.
+    pub fn launch_args(&self) -> Vec<String> {
+        self.host_args().into_iter().filter(|a| a != "--minimized").collect()
+    }
+
     /// Starts the host with catalog updates on, fetched from `url`.
     pub fn host_updating(&self, url: &str, args: &[&str]) -> HostProcess {
         let mut all: Vec<String> = self.host_args().into_iter().filter(|a| a != "--no-catalog-update").collect();
@@ -261,10 +282,13 @@ impl World {
         host
     }
 
+    /// A test host: its own world, no OS integrations, and started the way
+    /// clients start one (`--minimized`), so it never shows a UI.
     pub fn host_args(&self) -> Vec<String> {
         vec![
             "--data-dir".into(),
             self.data.to_string_lossy().into_owned(),
+            "--minimized".into(),
             "--no-integrations".into(),
             "--no-catalog-update".into(),
             "--catalog".into(),
@@ -566,93 +590,6 @@ pub fn s(value: &Value) -> String {
     value.as_str().unwrap_or_default().to_string()
 }
 
-/// A throwaway key under `HKCU\Software\SaveScummerTests` for one world's
-/// uninstall entries, deleted with the world.
-#[cfg(windows)]
-mod registry {
-    use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey, RegCreateKeyExW,
-        RegDeleteKeyW, RegDeleteTreeW, RegSetValueExW,
-    };
-
-    const PARENT: &str = r"Software\SaveScummerTests";
-
-    fn wide(s: &str) -> Vec<u16> {
-        s.encode_utf16().chain(Some(0)).collect()
-    }
-
-    pub struct Scratch {
-        pub path: String,
-    }
-
-    impl Scratch {
-        pub fn new() -> Scratch {
-            let path = format!(r"{PARENT}\e2e-{}-{}\Uninstall", std::process::id(), super::unique());
-            set_value(&path, "", "");
-            Scratch { path }
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let world = self.path.trim_end_matches(r"\Uninstall");
-            delete_tree(world);
-            // SAFETY: fails harmlessly while another world still has a key.
-            unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, wide(PARENT).as_ptr()) };
-        }
-    }
-
-    /// Creates `path` (and parents) under HKCU and sets a string value.
-    pub fn set_value(path: &str, name: &str, value: &str) {
-        let data = wide(value);
-        let mut key: HKEY = std::ptr::null_mut();
-        // SAFETY: registry calls on this test's own key.
-        unsafe {
-            let status = RegCreateKeyExW(
-                HKEY_CURRENT_USER,
-                wide(path).as_ptr(),
-                0,
-                std::ptr::null(),
-                REG_OPTION_NON_VOLATILE,
-                KEY_ALL_ACCESS,
-                std::ptr::null(),
-                &mut key,
-                std::ptr::null_mut(),
-            );
-            assert_eq!(status, 0, "create HKCU\\{path}");
-            RegSetValueExW(key, wide(name).as_ptr(), 0, REG_SZ, data.as_ptr() as *const u8, (data.len() * 2) as u32);
-            RegCloseKey(key);
-        }
-    }
-
-    pub fn delete_tree(path: &str) {
-        assert!(path.starts_with(PARENT), "only scratch keys are deleted");
-        // SAFETY: deletes only a scratch key.
-        unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, wide(path).as_ptr()) };
-        // RegDeleteTreeW leaves the key itself.
-        unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, wide(path).as_ptr()) };
-    }
-}
-
-/// No registry off Windows: uninstall entries are never seen there, so the
-/// tests that rely on them are Windows-only.
-#[cfg(not(windows))]
-mod registry {
-    pub struct Scratch {
-        pub path: String,
-    }
-
-    impl Scratch {
-        pub fn new() -> Scratch {
-            Scratch { path: String::new() }
-        }
-    }
-
-    pub fn set_value(_path: &str, _name: &str, _value: &str) {}
-
-    pub fn delete_tree(_path: &str) {}
-}
-
 /// The longest a CLI call may take. Operations on test saves take well
 /// under a second; a call still waiting after this is a hung host.
 pub const CLI_LIMIT: Duration = Duration::from_secs(120);
@@ -699,8 +636,7 @@ pub fn output_within(mut child: Child, limit: Duration, what: &str) -> std::proc
 fn guard() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        #[cfg(windows)]
-        kill_children_on_exit();
+        os::kill_children_on_exit();
         let limit = std::env::var("SAVESCUMMER_E2E_WATCHDOG_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -711,32 +647,4 @@ fn guard() {
             std::process::exit(99);
         });
     });
-}
-
-/// Puts this process in a job that kills everything in it when the last
-/// handle closes, which happens when this process exits, however it exits.
-#[cfg(windows)]
-fn kill_children_on_exit() {
-    use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject,
-    };
-    use windows_sys::Win32::System::Threading::GetCurrentProcess;
-    // SAFETY: a new unnamed job whose handle is deliberately kept open for
-    // the life of the process; the limit structure is zeroed with its flag set.
-    unsafe {
-        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-        if job.is_null() {
-            return;
-        }
-        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(
-            job,
-            JobObjectExtendedLimitInformation,
-            &limits as *const _ as *const _,
-            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        );
-        AssignProcessToJobObject(job, GetCurrentProcess());
-    }
 }

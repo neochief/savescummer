@@ -8,6 +8,11 @@ use std::path::{Path, PathBuf};
 
 use savescummer_core::{ErrorKind, Failure, Presence};
 
+// File identity, renames and what the OS's error codes mean, per OS.
+#[cfg_attr(windows, path = "windows.rs")]
+#[cfg_attr(unix, path = "unix.rs")]
+mod imp;
+
 /// Whether a path exists. `Missing` only when the nearest existing parent
 /// can be read and the entry isn't in it; an unplugged drive, an unreachable
 /// share or an access error is `Unknown`.
@@ -36,19 +41,14 @@ pub fn presence(path: &Path) -> Presence {
 }
 
 fn is_not_found(e: &io::Error) -> bool {
-    // A drive that isn't ready reports "not found" on some systems.
-    e.kind() == io::ErrorKind::NotFound && !is_unavailable(e)
+    // A drive that isn't ready reports "not found" on some systems. A path
+    // under a file ("not a directory") can't exist either.
+    matches!(e.kind(), io::ErrorKind::NotFound | io::ErrorKind::NotADirectory) && !is_unavailable(e)
 }
 
 /// Errors that mean the medium isn't there right now.
 pub fn is_unavailable(e: &io::Error) -> bool {
-    if cfg!(windows) {
-        // NOT_READY, BAD_NETPATH, NETNAME_DELETED, BAD_NET_NAME, UNEXP_NET_ERR,
-        // DEVICE_NOT_CONNECTED, NO_MEDIA_IN_DRIVE
-        matches!(e.raw_os_error(), Some(21 | 53 | 64 | 67 | 59 | 1167 | 1112))
-    } else {
-        matches!(e.raw_os_error(), Some(5 | 6 | 19 | 107 | 112 | 116 | 123))
-    }
+    imp::is_unavailable(e)
 }
 
 /// The real path: links, junctions and on-disk case resolved for the part
@@ -83,66 +83,13 @@ pub fn real_path(path: &Path) -> Result<PathBuf, String> {
 }
 
 /// A file's identity, stable across renames on one volume.
-#[cfg(windows)]
 pub fn identity(path: &Path) -> Option<String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-    use windows_sys::Win32::Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle, OPEN_EXISTING,
-    };
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    unsafe {
-        let handle = CreateFileW(
-            wide.as_ptr(),
-            0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            std::ptr::null(),
-            OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-            std::ptr::null_mut(),
-        );
-        if handle == INVALID_HANDLE_VALUE {
-            return None;
-        }
-        let mut info: BY_HANDLE_FILE_INFORMATION = std::mem::zeroed();
-        let ok = GetFileInformationByHandle(handle, &mut info);
-        CloseHandle(handle);
-        if ok == 0 {
-            return None;
-        }
-        let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
-        Some(format!("{:x}-{:x}", info.dwVolumeSerialNumber, index))
-    }
-}
-
-#[cfg(unix)]
-pub fn identity(path: &Path) -> Option<String> {
-    use std::os::unix::fs::MetadataExt;
-    let meta = fs::symlink_metadata(path).ok()?;
-    Some(format!("{:x}-{:x}", meta.dev(), meta.ino()))
+    imp::identity(path)
 }
 
 /// Renames without ever replacing an existing entry.
-#[cfg(windows)]
 pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
-    let a: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
-    let b: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
-    // No MOVEFILE_REPLACE_EXISTING: an existing destination fails the move.
-    if unsafe { MoveFileExW(a.as_ptr(), b.as_ptr(), 0) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
-    if fs::symlink_metadata(to).is_ok() {
-        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "destination exists"));
-    }
-    fs::rename(from, to)
+    imp::rename_noreplace(from, to)
 }
 
 /// Which side of a copy failed.
@@ -197,7 +144,7 @@ pub fn rename_kind(e: &io::Error) -> ErrorKind {
         ErrorKind::InUse
     } else if e.kind() == io::ErrorKind::PermissionDenied {
         // Windows reports a file held open by another program this way too.
-        if cfg!(windows) { ErrorKind::InUse } else { ErrorKind::AccessDenied }
+        if imp::DENIED_MAY_MEAN_IN_USE { ErrorKind::InUse } else { ErrorKind::AccessDenied }
     } else if is_unavailable(e) {
         ErrorKind::TargetUnavailable
     } else {
@@ -205,12 +152,13 @@ pub fn rename_kind(e: &io::Error) -> ErrorKind {
     }
 }
 
+/// Another program holds the file (Windows' sharing and lock violations).
 pub fn is_in_use(e: &io::Error) -> bool {
-    cfg!(windows) && matches!(e.raw_os_error(), Some(32 | 33))
+    imp::is_in_use(e)
 }
 
 pub fn is_disk_full(e: &io::Error) -> bool {
-    e.kind() == io::ErrorKind::StorageFull || (cfg!(windows) && matches!(e.raw_os_error(), Some(39 | 112)))
+    e.kind() == io::ErrorKind::StorageFull || imp::is_disk_full(e)
 }
 
 pub fn failure(kind: ErrorKind, e: &io::Error, path: &Path) -> Failure {
@@ -236,14 +184,6 @@ mod tests {
         let file = dir.path().join("f");
         fs::write(&file, b"x").unwrap();
         assert_eq!(presence(&file.join("inside")), Presence::Missing);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn an_absent_drive_is_unknown() {
-        // Find a drive letter that doesn't exist on this machine.
-        let free = ('D'..='Z').rev().find(|l| fs::metadata(format!("{l}:\\")).is_err()).unwrap();
-        assert_eq!(presence(Path::new(&format!("{free}:\\Games\\save"))), Presence::Unknown);
     }
 
     #[test]

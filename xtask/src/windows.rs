@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, bail};
 
-use crate::naming::{self, CLI, DESKTOP, HOST};
+use crate::naming::{self, CLI, HOST, UI};
 use crate::package::{self, Inputs, Layout};
 use crate::paths::{self, Mode};
 use crate::{cmd, pins};
@@ -178,8 +178,8 @@ pub fn ask_to_close(pid: u32) {
 }
 
 /// ```text
-/// bin\SaveScummer.exe        desktop, with Qt DLLs (once it exists)
-/// bin\SaveScummer.Host.exe   host
+/// bin\SaveScummer.exe        host: the app, what the Start menu runs
+/// bin\SaveScummer.UI.exe     UI, with Qt DLLs (once it exists)
 /// bin\SaveScummer.CLI.exe    CLI
 /// bin\vcruntime140.dll …     Visual C++ runtime, so no redistributable is needed
 /// README.txt
@@ -188,9 +188,9 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
     let bin = root.join("bin");
     let mut required = vec![PathBuf::from("bin").join(naming::exe(HOST)), PathBuf::from("bin").join(naming::exe(CLI))];
 
-    if let Some(desktop) = inputs.desktop {
-        package::copy_dir(&desktop.install, root)?;
-        required.push(PathBuf::from("bin").join(naming::exe(DESKTOP)));
+    if let Some(ui) = inputs.ui {
+        package::copy_dir(&ui.install, root)?;
+        required.push(PathBuf::from("bin").join(naming::exe(UI)));
     }
     package::copy_file(&inputs.host, &bin.join(naming::exe(HOST)))?;
     package::copy_file(&inputs.cli, &bin.join(naming::exe(CLI)))?;
@@ -233,12 +233,13 @@ fn readme(inputs: &Inputs) -> String {
     let template = paths::packaging().join("windows").join("README.txt");
     let qt = paths::packaging().join("windows").join("README-qt.txt");
     let mut text = fs::read_to_string(&template).unwrap_or_default();
-    if inputs.desktop.is_some() {
+    if inputs.ui.is_some() {
         text.push('\n');
         text.push_str(&fs::read_to_string(&qt).unwrap_or_default());
     }
-    let desktop = if inputs.desktop.is_some() { "  SaveScummer.exe        the desktop app\n" } else { "" };
-    text.replace("{desktop}", desktop)
+    let ui =
+        if inputs.ui.is_some() { "  SaveScummer.UI.exe     the main window, started by SaveScummer.exe\n" } else { "" };
+    text.replace("{ui}", ui)
         .replace("{version}", inputs.version)
         .replace("{qt_version}", pins::QT_VERSION)
         .replace('\n', "\r\n")
@@ -251,7 +252,7 @@ fn vc_runtime() -> anyhow::Result<PathBuf> {
     let newest = fs::read_dir(&redist)
         .with_context(|| {
             format!(
-                "no Visual C++ redistributables in {} — install the \"Desktop development with C++\" workload",
+                "no Visual C++ redistributables in {} — install the \"Ui development with C++\" workload",
                 redist.display()
             )
         })?
@@ -280,7 +281,7 @@ fn visual_studio() -> anyhow::Result<PathBuf> {
     let vswhere = program_files.join("Microsoft Visual Studio").join("Installer").join("vswhere.exe");
     if !vswhere.is_file() {
         bail!(
-            "Visual Studio not found — install Visual Studio 2022+ (or its Build Tools) with \"Desktop development with C++\""
+            "Visual Studio not found — install Visual Studio 2022+ (or its Build Tools) with \"Ui development with C++\""
         );
     }
     let path = cmd::output(Command::new(&vswhere).args([
@@ -294,7 +295,7 @@ fn visual_studio() -> anyhow::Result<PathBuf> {
     ]))?;
     if path.is_empty() {
         bail!(
-            "no Visual Studio with the C++ tools found — add \"Desktop development with C++\" in the Visual Studio Installer"
+            "no Visual Studio with the C++ tools found — add \"Ui development with C++\" in the Visual Studio Installer"
         );
     }
     Ok(PathBuf::from(path))
@@ -305,7 +306,7 @@ fn iscc() -> PathBuf {
 }
 
 /// Compiles the installer from the release package into `dist/`.
-pub fn release_file(package: &Path, version: &str, has_desktop: bool) -> anyhow::Result<PathBuf> {
+pub fn release_file(package: &Path, version: &str) -> anyhow::Result<PathBuf> {
     let iscc = cmd::tool(&iscc(), &format!("Inno Setup {}", pins::INNO_VERSION), "inno")?;
     let dist = paths::dist();
     let name = PLATFORM.release_file(version);
@@ -318,7 +319,6 @@ pub fn release_file(package: &Path, version: &str, has_desktop: bool) -> anyhow:
         .arg(format!("/DOutputBaseFilename={}", name.trim_end_matches(".exe")))
         .arg(format!("/DRepoRoot={}", paths::root().display()))
         .arg(format!("/DMinWindows={}", pins::MIN_WINDOWS))
-        .arg(format!("/DHasDesktop={}", u8::from(has_desktop)))
         .arg(paths::packaging().join("windows").join("savescummer.iss"));
     cmd::run(&mut command)?;
     Ok(dist.join(name))

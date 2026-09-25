@@ -23,10 +23,7 @@ impl std::fmt::Display for ConnectError {
     }
 }
 
-#[cfg(windows)]
-type Stream = std::fs::File;
-#[cfg(unix)]
-type Stream = std::os::unix::net::UnixStream;
+use crate::transport::{self, Stream};
 
 pub struct Client {
     reader: BufReader<Stream>,
@@ -40,7 +37,7 @@ impl Client {
     pub fn connect(endpoint: &str) -> Result<Client, ConnectError> {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            match open(endpoint) {
+            match transport::open(endpoint) {
                 Ok(stream) => {
                     let writer = stream.try_clone().map_err(ConnectError::Io)?;
                     let prefix = format!("c{}-{}", std::process::id(), nanos());
@@ -54,7 +51,9 @@ impl Client {
                 }
                 Err(e) if is_not_running(&e) => return Err(ConnectError::NotRunning),
                 // Every pipe instance is busy for a moment: try again shortly.
-                Err(e) if is_busy(&e) && Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+                Err(e) if transport::is_busy(&e) && Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(20))
+                }
                 Err(e) => return Err(ConnectError::Io(e)),
             }
         }
@@ -135,21 +134,6 @@ fn nanos() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
 }
 
-#[cfg(windows)]
-fn open(endpoint: &str) -> io::Result<Stream> {
-    std::fs::OpenOptions::new().read(true).write(true).open(endpoint)
-}
-
-#[cfg(unix)]
-fn open(endpoint: &str) -> io::Result<Stream> {
-    std::os::unix::net::UnixStream::connect(endpoint)
-}
-
 fn is_not_running(e: &io::Error) -> bool {
     e.kind() == io::ErrorKind::NotFound || e.kind() == io::ErrorKind::ConnectionRefused
-}
-
-fn is_busy(e: &io::Error) -> bool {
-    // ERROR_PIPE_BUSY
-    cfg!(windows) && e.raw_os_error() == Some(231)
 }

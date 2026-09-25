@@ -173,8 +173,8 @@ a locked folder is never partially deleted under its real name.
 | E-N2 | A target root that held data at Save time is missing at Load | Load of that checkpoint is refused: restoring only the other targets would be half a save, and roots are never recreated. Known game: the catalog resolves the save set again; if the set changes, old checkpoints are unavailable until it returns (E-C8). Override or custom game: unavailable until the folder returns or is reconfigured. |
 | E-N3 | A target root on an unplugged drive or unreachable share | Presence is unknown, not missing: the target is not treated as absent and no generation is retired. Save, Load and Revert are refused with E-C5, because a checkpoint recorded without that target would later leave it alone as "absent". Retry when accessible. |
 | E-N4 | Game uninstalled | Not shown in the sidebar (known and custom alike). History and checkpoints are retained. |
-| E-N5 | Desktop disconnected from the host | Reconnecting state; no operation errors are produced. |
-| E-N6 | Host/desktop version mismatch | Explicit "upgrade required" message; no operation starts. |
+| E-N5 | UI disconnected from the host | Reconnecting state; no operation errors are produced. |
+| E-N6 | Host/UI version mismatch | Explicit "upgrade required" message; no operation starts. |
 | E-N7 | A target absent at Save time exists at Load | Left alone. Why: a folder that appears later is usually a setup change (Steam Cloud switched on, Proton, a new save path), and deleting inside Steam's `remote` can delete from the cloud. Not an error. |
 | E-N8 | A target root existed at Save time but its filter matched nothing | A normal state, and it is restored: the Load deletes whatever the filter matches now. Those files are in the recovery checkpoint. |
 | E-N9 | Checkpoint store on a different drive than a target | Not an error. Copies cross drives; the Load renames still happen inside the target's own folder, so they stay same-drive and atomic. Free space on the target's drive matters for stage 1 (E-C13). |
@@ -241,7 +241,7 @@ real machine before relying on them (5.2).
   rollback, deleting newer matched files, disposal-delete and reparse rejection.
 - **Integration (Rust, Windows):** `tests/integration` with the `tests/fake-game`
   fixture and temp data. Covers real OS faults and durable phases.
-- **Qt (fake service):** `apps/desktop/tests/desktop_test.cpp`. Covers error block
+- **Qt (fake service):** `apps/ui/tests/ui_test.cpp`. Covers error block
   content, button wiring, sticky behavior, countdown, instructions block, the Loaded row
   notes and configuration validation messages.
 - **Manual (Windows compatibility):** antivirus interference, fullscreen focus,
@@ -265,7 +265,7 @@ real machine before relying on them (5.2).
 | Drive unavailable | Detach a VHD or use an unreachable UNC path, for a target root or the store. |
 | Store on another drive | Store on a VHD, targets on the system drive. |
 | Account switch | Two fixture Steam accounts; change the active one between game starts. |
-| Version mismatch | Run a desktop built for a different protocol revision against the host. |
+| Version mismatch | Run a UI built for a different protocol revision against the host. |
 | Steam Cloud | Real machine: Load with the game closed, then launch; a Load that deletes a file; a Load while the cloud has newer progress from another device. |
 
 ### 5.3 Coverage matrix

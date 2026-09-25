@@ -22,9 +22,14 @@ use std::time::{Duration, Instant};
 
 use notify::{EventKind, RecursiveMode, Watcher as _};
 
-#[cfg(windows)]
-mod drives;
-#[cfg(windows)]
+// Letting go of a volume's watches when it's about to be removed. Windows
+// needs it (a watch holds the folder open); FSEvents and inotify don't.
+#[cfg_attr(windows, path = "volumes/windows.rs")]
+#[cfg_attr(not(windows), path = "volumes/unsupported.rs")]
+mod volumes;
+// Registry keys, where Windows installers record installs.
+#[cfg_attr(windows, path = "registry/windows.rs")]
+#[cfg_attr(not(windows), path = "registry/unsupported.rs")]
 mod registry;
 
 /// Quiet time after the last change before `on_change` runs.
@@ -33,14 +38,14 @@ pub const DEBOUNCE: Duration = Duration::from_secs(2);
 enum Msg {
     SetPaths(Vec<PathBuf>),
     Changed,
-    /// Windows asked to remove this volume: drop its watches, then answer.
+    /// The OS asked to remove this volume: drop its watches, then answer.
+    /// Only a volumes adapter that needs it sends this (Windows).
     #[cfg_attr(not(windows), allow(dead_code))]
     Release(String, Sender<()>),
     /// The volume is back (or its removal failed): watch it again.
     #[cfg_attr(not(windows), allow(dead_code))]
     Restore(String),
-    /// Test only: acts as if Windows sent a device event for a volume.
-    #[cfg_attr(not(windows), allow(dead_code))]
+    /// Test only: acts as if the OS sent a device event for a volume.
     Simulate(u32, String),
     Stop,
 }
@@ -62,7 +67,6 @@ pub struct RegistryKey {
 /// Watches a set of paths; see the module docs.
 pub struct Watcher {
     tx: Sender<Msg>,
-    #[cfg(windows)]
     registry: Option<registry::KeyWatcher>,
 }
 
@@ -70,17 +74,12 @@ impl Watcher {
     pub fn new(on_change: Box<dyn Fn() + Send + 'static>) -> Watcher {
         let (tx, rx) = mpsc::channel();
         let events = tx.clone();
-        #[cfg(windows)]
         let registry = registry::KeyWatcher::new(tx.clone());
         let drive_events = tx.clone();
         let _ = std::thread::Builder::new()
             .name("savescummer-watch".into())
             .spawn(move || run(rx, events, drive_events, on_change));
-        Watcher {
-            tx,
-            #[cfg(windows)]
-            registry,
-        }
+        Watcher { tx, registry }
     }
 
     /// Replaces the watched set. Paths that don't exist are skipped; pass
@@ -92,12 +91,9 @@ impl Watcher {
     /// Replaces the watched registry keys. Keys that don't exist are skipped;
     /// pass them again later to pick them up. Other platforms ignore this.
     pub fn set_registry_keys(&self, keys: Vec<RegistryKey>) {
-        #[cfg(windows)]
         if let Some(registry) = &self.registry {
             registry.set_keys(keys);
         }
-        #[cfg(not(windows))]
-        let _ = keys;
     }
 
     /// Acts as if Windows sent `event` for the volume `path` lives on, the
@@ -187,13 +183,7 @@ impl Filter {
 
 /// The volume a folder lives on, for releasing a drive's watches.
 fn volume_of(dir: &Path) -> Option<String> {
-    #[cfg(windows)]
-    return drives::volume_of(dir);
-    #[cfg(not(windows))]
-    {
-        let _ = dir;
-        None
-    }
+    volumes::volume_of(dir)
 }
 
 /// File names compare case-insensitively where the file system does.
@@ -237,10 +227,7 @@ fn run(
     let Ok(mut os) = notify::recommended_watcher(handler) else {
         return;
     };
-    #[cfg(windows)]
-    let drives = drives::Drives::start(drive_events);
-    #[cfg(not(windows))]
-    let _ = drive_events;
+    let volumes = volumes::Volumes::start(drive_events);
     // The folders watched now, each with its volume.
     let mut watched: Vec<(PathBuf, Option<String>)> = Vec::new();
     // What the caller asked for, to watch again when a volume returns.
@@ -272,10 +259,9 @@ fn run(
                 }
                 *filter.lock().unwrap_or_else(|e| e.into_inner()) = next;
                 wanted = paths;
-                #[cfg(windows)]
-                if let Some(drives) = &drives {
-                    let volumes: HashSet<String> = watched.iter().filter_map(|(_, v)| v.clone()).collect();
-                    drives.remote().set_volumes(volumes.into_iter().collect());
+                if let Some(volumes) = &volumes {
+                    let on: HashSet<String> = watched.iter().filter_map(|(_, v)| v.clone()).collect();
+                    volumes.remote().set_volumes(on.into_iter().collect());
                 }
             }
             Ok(Msg::Release(volume, ack)) => {
@@ -297,13 +283,12 @@ fn run(
                     due = Some(Instant::now() + DEBOUNCE);
                 }
             }
-            Ok(Msg::Simulate(_event, _volume)) => {
-                #[cfg(windows)]
-                if let Some(drives) = &drives {
-                    let remote = drives.remote();
-                    // Sent from another thread: the window answers after it
+            Ok(Msg::Simulate(event, volume)) => {
+                if let Some(volumes) = &volumes {
+                    let remote = volumes.remote();
+                    // Sent from another thread: the adapter answers after it
                     // asked us to release, which this loop must be free for.
-                    std::thread::spawn(move || remote.simulate(_event, &_volume));
+                    std::thread::spawn(move || remote.simulate(event, &volume));
                 }
             }
             Ok(Msg::Stop) | Err(RecvTimeoutError::Disconnected) => return,
@@ -340,6 +325,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "FSEvents reports real paths (PLAN-MACOS.md, FILE WATCHING)")]
     fn a_burst_causes_one_callback_and_a_later_change_another() {
         let dir = tempfile::tempdir().unwrap();
         let (count, watcher) = counting();
@@ -360,6 +346,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "FSEvents reports real paths (PLAN-MACOS.md, FILE WATCHING)")]
     fn set_paths_moves_the_watch_and_missing_paths_are_ignored() {
         let old = tempfile::tempdir().unwrap();
         let new = tempfile::tempdir().unwrap();
@@ -383,6 +370,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "FSEvents reports real paths (PLAN-MACOS.md, FILE WATCHING)")]
     fn a_single_file_is_watched_through_its_parent() {
         let dir = tempfile::tempdir().unwrap();
         let vdf = dir.path().join("libraryfolders.vdf");

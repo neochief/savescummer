@@ -18,23 +18,25 @@ pub enum Cue {
     Busy,
 }
 
+#[cfg_attr(windows, path = "windows.rs")]
+#[cfg_attr(not(windows), path = "unsupported.rs")]
+mod imp;
+
 /// Silence between two cues, so back-to-back cues stay distinguishable.
-#[cfg_attr(not(windows), allow(dead_code))]
 const GAP: Duration = Duration::from_millis(40);
 /// At most one busy tick per this interval; extra ones are dropped.
 const BUSY_INTERVAL: Duration = Duration::from_millis(400);
 /// More pending cues than this means we're backed up: drop the oldest.
 const MAX_PENDING: usize = 4;
 
-#[cfg_attr(not(windows), allow(dead_code))]
 fn wav(cue: Cue) -> &'static [u8] {
     match cue {
-        Cue::SaveStart => include_bytes!("../../../assets/sounds/save-start.wav"),
-        Cue::SaveDone => include_bytes!("../../../assets/sounds/save-complete.wav"),
-        Cue::LoadStart => include_bytes!("../../../assets/sounds/load-start.wav"),
-        Cue::LoadDone => include_bytes!("../../../assets/sounds/load-complete.wav"),
-        Cue::Failed => include_bytes!("../../../assets/sounds/operation-failed.wav"),
-        Cue::Busy => include_bytes!("../../../assets/sounds/busy.wav"),
+        Cue::SaveStart => include_bytes!("../../../../assets/sounds/save-start.wav"),
+        Cue::SaveDone => include_bytes!("../../../../assets/sounds/save-complete.wav"),
+        Cue::LoadStart => include_bytes!("../../../../assets/sounds/load-start.wav"),
+        Cue::LoadDone => include_bytes!("../../../../assets/sounds/load-complete.wav"),
+        Cue::Failed => include_bytes!("../../../../assets/sounds/operation-failed.wav"),
+        Cue::Busy => include_bytes!("../../../../assets/sounds/busy.wav"),
     }
 }
 
@@ -139,21 +141,10 @@ fn run(shared: &Shared) {
 }
 
 /// Plays one cue to completion, then leaves the gap.
-#[cfg(windows)]
 fn play_now(cue: Cue) {
-    use windows_sys::Win32::Media::Audio::{PlaySoundW, SND_MEMORY, SND_NODEFAULT, SND_SYNC};
-    let bytes = wav(cue);
-    // SAFETY: with SND_MEMORY the "name" is a pointer to a complete in-memory
-    // WAV image; it is 'static, so it outlives the synchronous call. A failure
-    // (no audio device) is ignored: sound never fails an operation.
-    unsafe {
-        PlaySoundW(bytes.as_ptr().cast(), std::ptr::null_mut(), SND_MEMORY | SND_SYNC | SND_NODEFAULT);
-    }
+    imp::play(wav(cue));
     std::thread::sleep(GAP);
 }
-
-#[cfg(not(windows))]
-fn play_now(_cue: Cue) {}
 
 #[cfg(test)]
 mod tests {

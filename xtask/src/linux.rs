@@ -38,7 +38,7 @@ pub fn fill_package(_root: &Path, _inputs: &Inputs) -> anyhow::Result<Layout> {
     bail!(NOT_YET)
 }
 
-pub fn release_file(_package: &Path, _version: &str, _has_desktop: bool) -> anyhow::Result<PathBuf> {
+pub fn release_file(_package: &Path, _version: &str) -> anyhow::Result<PathBuf> {
     bail!(NOT_YET)
 }
 

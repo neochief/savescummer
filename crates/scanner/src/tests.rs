@@ -17,7 +17,7 @@ fn game(id: &str, steam: Option<u64>, gog: Option<u64>, dir: &str, exe: &str) ->
         info: None,
         detect: Detect { steam: steam.into_iter().collect(), gog: gog.into_iter().collect(), uninstall: vec![] },
         install_dirs: vec![dir.into()],
-        executables: Executables { windows: vec![exe.into()], linux: vec![exe.into()], macos: vec![] },
+        executables: Executables { windows: vec![exe.into()], linux: vec![exe.into()], macos: vec![exe.into()] },
         save: vec![PathRule::new("{INSTALL_DIR}/save")],
         exclude: vec![],
     }
@@ -42,7 +42,8 @@ fn machine() -> Machine {
         platform: Platform::current(),
         folders: KnownFolders { home: Some(root.join("home")), steam_root: Some(steam), ..Default::default() },
         steam_active_user_file: Some(root.join("active-user")),
-        use_registry: false,
+        query_os: false,
+        steam_registry_file: None,
         gog_games: vec![],
         uninstall: vec![],
         uninstall_keys: vec![],

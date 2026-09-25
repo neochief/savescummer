@@ -5,7 +5,7 @@ edition.workspace = true
 publish = false
 
 # The real host and CLI, built as this package's binaries so tests can find
-# them with CARGO_BIN_EXE_*, plus the fake game.
+# them with CARGO_BIN_EXE_*, plus the fake game and a stand-in UI.
 [[bin]]
 name = "e2e-host"
 path = "src/bin/e2e-host.rs"
@@ -17,6 +17,10 @@ path = "src/bin/e2e-cli.rs"
 [[bin]]
 name = "fake-game"
 path = "src/bin/fake-game.rs"
+
+[[bin]]
+name = "fake-ui"
+path = "src/bin/fake-ui.rs"
 
 [dependencies]
 savescummer-host.workspace = true

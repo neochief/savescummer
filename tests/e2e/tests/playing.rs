@@ -6,6 +6,7 @@ mod common;
 use common::*;
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_run_is_saved_loaded_and_reverted_while_playing() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Roguey");
@@ -91,6 +92,7 @@ fn load_this_save_restores_an_exact_older_checkpoint() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "an open file blocks a rename only on Windows (PLAN-MACOS.md, decision 3)")]
 fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Holder");
@@ -120,6 +122,7 @@ fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_session_without_saves_leaves_no_markers() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Quiet");

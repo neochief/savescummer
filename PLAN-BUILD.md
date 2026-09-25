@@ -23,7 +23,7 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 
 ## PRINCIPLES
 
-- **One build tool, in Rust.** All automation is `cargo xtask`: no PowerShell, bash or Python scripts, no just/make. It runs the same on every OS. Besides Rust, it needs only what the build itself needs: the desktop frontend's toolchain (see TOOLCHAINS) and `gh` for publishing.
+- **One build tool, in Rust.** All automation is `cargo xtask`: no PowerShell, bash or Python scripts, no just/make. It runs the same on every OS. Besides Rust, it needs only what the build itself needs: the UI frontend's toolchain (see TOOLCHAINS) and `gh` for publishing.
 - **CI runs what developers run.** Workflows only call `cargo xtask`, so a CI failure can always be reproduced locally.
 - **One version, in `Cargo.toml`.** Every binary, the installer, the bundle and the git tag read it, so they can't drift apart.
 - **One file per platform per release,** in the friendliest format that platform has. Users never have to pick, and nothing else is uploaded.
@@ -38,11 +38,11 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 
 The app is three programs:
 
-- **Desktop** — C++/Qt 6 client
-- **Host** — Rust background host (SQLite, monitoring, operations)
+- **Host** — Rust; the app itself and its entry point (SQLite, monitoring, operations, tray, hotkeys)
+- **UI** — C++/Qt 6 window, started by the host
 - **CLI** — Rust command-line client
 
-The build always produces `SaveScummer`, `SaveScummer.Host` and `SaveScummer.CLI` (`.exe` on Windows).
+The build always produces `SaveScummer` (the host), `SaveScummer.UI` and `SaveScummer.CLI` (`.exe` on Windows). Every launcher, shortcut and sign-in entry points at `SaveScummer`.
 
 | Platform | Release file | Why this format |
 | --- | --- | --- |
@@ -57,24 +57,24 @@ What ends up on the user's machine:
 **Windows** — `%LOCALAPPDATA%\Programs\SaveScummer\`:
 
 ```text
-bin\SaveScummer.exe              desktop
-bin\SaveScummer.Host.exe         host
+bin\SaveScummer.exe              host (what the Start menu runs)
+bin\SaveScummer.UI.exe           UI
 bin\SaveScummer.CLI.exe          CLI
 ```
 
 **macOS** — `SaveScummer.app` in Applications:
 
 ```text
-Contents/MacOS/SaveScummer       desktop
-Contents/MacOS/SaveScummer.Host  host
+Contents/MacOS/SaveScummer       host (the bundle's main executable)
+Contents/MacOS/SaveScummer.UI    UI
 Contents/MacOS/SaveScummer.CLI   CLI
 ```
 
 **Linux** — the AppImage itself is the install and acts as all three programs:
 
 ```text
-<file>.AppImage                  desktop
-<file>.AppImage host …           host
+<file>.AppImage                  host
+<file>.AppImage ui               UI (what the host runs)
 <file>.AppImage cli …            CLI
 ```
 
@@ -88,9 +88,9 @@ All release files are named `SaveScummer-<os>-<arch>-<version>[-<suffix>].<ext>`
 Commands:
 
 - `check` — the quality gate (see CHECK).
-- `build [--release] [--test] [--package]` — build Rust and the desktop. `--test` runs Rust and desktop tests. `--package` assembles the APP PACKAGE; `--release` always does.
-- `run [--demo] [--stop-other-hosts]` — dev build, then the dev host and a desktop connected to it. `--demo` uses simulated operations.
-- `host start [--demo]` / `host stop` — just the dev host; used by `run` and by VS Code debugging.
+- `build [--release] [--test] [--package]` — build Rust and the UI. `--test` runs Rust and UI tests. `--package` assembles the APP PACKAGE; `--release` always does.
+- `run [--demo] [--stop-other-hosts]` — dev build, then the dev host, launched the way a user launches the app, so it shows the UI. `--demo` uses simulated operations.
+- `host start [--demo]` / `host stop` — just the dev host, with `--minimized`; used by VS Code debugging.
 - `dist` — `build --release --test`, then the platform's release file in `dist/`.
 - `clean [--deep]` — stop output processes, remove `build/` and `dist/` (`--deep` also `target/`). Works without Qt or any other tool, so a broken setup can always be cleaned.
 - `release <version>` — cut a release (see RELEASING).
@@ -103,13 +103,12 @@ Every command validates its inputs up front.
 `cargo xtask run`:
 
 1. Does a dev build.
-2. Starts the dev host hidden, with `--data-dir .runtime/dev`, and records it in `build/dev/session.json`.
-3. Waits for the host's `"ready":true` line.
-4. Starts the desktop connected to that host.
+2. Starts the dev host with `--data-dir .runtime/dev`, and records it in `build/dev/session.json`.
+3. Waits for the host's `"ready":true` line. The host shows the UI itself, as it does for a user.
 
 The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
 
-The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. Until the desktop exists, `run` prints the CLI command for driving the dev host instead of starting a desktop.
+The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. Until the UI exists, the host has no window to show, and `run` prints the CLI command for driving the dev host.
 
 xtask honors `CARGO_TARGET_DIR` like Cargo, so it can build next to another checkout's running binaries.
 
@@ -121,7 +120,7 @@ Everything else reads it:
 
 - **xtask** parses `Cargo.toml` with the `toml` crate — no pattern matching.
 - **CMake** gets it from xtask as `-DSAVESCUMMER_VERSION=<ver>` and fails to configure without it. It never parses `Cargo.toml` itself, so there's only one parser.
-- **Windows version resources** come from `winresource` in `build.rs` for the host and CLI (using the version Cargo passes to the build), and from CMake-filled `.rc.in` templates for the desktop.
+- **Windows version resources** come from `winresource` in `build.rs` for the host and CLI (using the version Cargo passes to the build), and from CMake-filled `.rc.in` templates for the UI.
 - **The host's manifest** (also from `build.rs`) declares per-monitor DPI awareness, so the tray icon and its menu are drawn at the screen's real resolution instead of being stretched blurry on scaled displays.
 - **macOS `Info.plist`** is filled from it.
 
@@ -146,14 +145,14 @@ savescummer/
 |-- docs/building.md     the how-to
 |-- packaging/
 |   |-- licenses/        Qt license texts, shipped on every platform
-|   |-- windows/         savescummer.iss, README.txt (+ README-qt.txt once the desktop ships)
+|   |-- windows/         savescummer.iss, README.txt (+ README-qt.txt once the UI ships)
 |   |-- macos/           Info.plist.in
 |   `-- linux/           AppRun, SaveScummer.desktop
 |-- assets/              icons, sounds, asset tooling
 |-- target/
 |-- build/
-|   |-- dev/             desktop build, APP PACKAGE, session.json, logs
-|   |-- release/         desktop build, APP PACKAGE
+|   |-- dev/             UI build, APP PACKAGE, session.json, logs
+|   |-- release/         UI build, APP PACKAGE
 |   `-- tmp/             scratch
 |-- dist/
 `-- .runtime/
@@ -181,7 +180,7 @@ Every package contains:
 
 Each platform module declares what its package must contain (at least the three executables), and packaging fails if anything is missing.
 
-**Until the desktop exists** (`apps/desktop/CMakeLists.txt`), the frontend step is skipped with a note, and packages and installers carry only the host and CLI. Everything else, from licensing to the installer, already runs for real. Once the desktop exists it's required: packaging fails without `SaveScummer`.
+**Until the UI exists** (`apps/ui/CMakeLists.txt`), the frontend step is skipped with a note, and packages and installers carry only the host and CLI. Everything else, from licensing to the installer, already runs for real. Once the UI exists it's required: packaging fails without `SaveScummer.UI`.
 
 Cargo can't put dots in binary names, so Cargo builds `savescummer-host` and `savescummer-cli`, and packaging renames them to the fixed names.
 
@@ -194,22 +193,22 @@ A package is assembled in a fresh `.staging-<uuid>` sibling and swapped into pla
 
 A running host may be in the middle of a save, and Windows can't replace a running executable. So xtask stops processes politely, always with the same routine:
 
-1. Ask desktops to close.
+1. Ask UIs to close.
 2. Ask hosts to shut down through their sibling CLI (`--data-dir <dir> shutdown`, up to 30 s), so an accepted operation finishes.
 3. Terminate whatever is still running.
 
 It's used for:
 
-- **Output processes.** Every `build` (whatever its flags, so also `run`, `host start` and `dist`), `check` and `clean` starts by stopping everything running from this checkout's output folders: `target/`, `build/` and `dist/`. That covers hosts and CLIs started straight from `target/`, the dev host, packaged copies, desktops and test binaries. Why: a rebuild must be clean. A process left running either locks its executable (Windows can't replace it, so the build fails with "access denied") or keeps serving old code next to the new build. Exempt are xtask itself and Cargo's build scripts, which belong to a build in progress. Never stopped: anything from `.runtime/` or installed copies (see below).
+- **Output processes.** Every `build` (whatever its flags, so also `run`, `host start` and `dist`), `check` and `clean` starts by stopping everything running from this checkout's output folders: `target/`, `build/` and `dist/`. That covers hosts and CLIs started straight from `target/`, the dev host, packaged copies, UIs and test binaries. Why: a rebuild must be clean. A process left running either locks its executable (Windows can't replace it, so the build fails with "access denied") or keeps serving old code next to the new build. Exempt are xtask itself and Cargo's build scripts, which belong to a build in progress. Never stopped: anything from `.runtime/` or installed copies (see below).
 - **The dev host.** `build/dev/session.json` records its PID, start time and path. It's stopped only if all three still match, so a reused PID is never killed. The session file is deleted last.
 - **Other hosts,** only with `run --stop-other-hosts`.
 
 ## TOOLCHAINS
 
-The toolchains come in two layers, so the desktop frontend can be replaced without touching anything else:
+The toolchains come in two layers, so the UI frontend can be replaced without touching anything else:
 
 - **Core** — Rust and the packaging tools. The host, CLI, xtask, packaging and releases depend only on these.
-- **Desktop frontend** — whatever the desktop is built with. Today that's Qt and C++; nothing outside the frontend assumes either.
+- **UI frontend** — whatever the UI is built with. Today that's Qt and C++; nothing outside the frontend assumes either.
 
 Every tool, in either layer, is installed only by its setup command, into `.runtime/`, and xtask uses it from there.
 
@@ -225,12 +224,12 @@ Every tool, in either layer, is installed only by its setup command, into `.runt
 
 All pins, and the supported-platform minimums, live in `xtask/src/pins.rs`; CI caches are keyed on that file.
 
-### What a desktop frontend provides
+### What a UI frontend provides
 
 Whatever the frontend is built with, it plugs into xtask the same way:
 
 - **a setup command** for its pinned SDK, following the same rules as every other tool
-- **a build step** that takes the mode and the version and produces the `SaveScummer` executable, plus the runtime files it needs, for the APP PACKAGE
+- **a build step** that takes the mode and the version and produces the `SaveScummer.UI` executable, plus the runtime files it needs, for the APP PACKAGE
 - **a test step** that runs headless against the freshly built host, so tests run the same locally and in CI
 - **its license texts,** shipped in every package
 
@@ -256,11 +255,11 @@ Replacing the frontend means replacing this layer: its setup command, its build 
 
 **The build.** xtask drives CMake:
 
-- Configures `build/<mode>/desktop` with the Qt kit as `CMAKE_PREFIX_PATH`, `RelWithDebInfo` for dev and `Release` for release.
-- Builds `savescummer-desktop`, and `desktop-tests` with `--test`.
+- Configures `build/<mode>/ui` with the Qt kit as `CMAKE_PREFIX_PATH`, `RelWithDebInfo` for dev and `Release` for release.
+- Builds `savescummer-ui`, and `ui-tests` with `--test`.
 - Runs ctest with `SAVESCUMMER_TEST_HOST` set to the freshly built host and `QT_QPA_PLATFORM=offscreen` on every platform, so tests never need a display and run the same locally and in CI.
 
-The CMake project sets C++17, `AUTOMOC`/`AUTORCC`, `find_package(Qt6 REQUIRED COMPONENTS Widgets Network Svg)` (xtask points it at the pinned kit), the `SaveScummer` output name, `install()` rules, and `qt_generate_deploy_app_script` for deploying Qt. Test screenshots go to `build/<mode>/desktop/screenshots`, never the source tree.
+The CMake project sets C++17, `AUTOMOC`/`AUTORCC`, `find_package(Qt6 REQUIRED COMPONENTS Widgets Network Svg)` (xtask points it at the pinned kit), the `SaveScummer.UI` output name, `install()` rules, and `qt_generate_deploy_app_script` for deploying Qt. Test screenshots go to `build/<mode>/ui/screenshots`, never the source tree.
 
 
 ## CHECK
@@ -275,7 +274,7 @@ Tests always build as dev, even under `build --release --test`: they check dev-o
 4. `cargo build --workspace --exclude xtask --locked` (rebuilding xtask would relink the running `xtask.exe`, which Windows can't replace; clippy and the tests already cover it)
 5. `cargo xtask catalog --check`
 
-Desktop tests are not part of `check`; they run with `build --test`.
+UI tests are not part of `check`; they run with `build --test`.
 
 
 ## Windows
@@ -285,7 +284,7 @@ Desktop tests are not part of `check`; they run with `build --test`.
 `build/<mode>/package/SaveScummer-windows-x64/`, containing:
 
 - the `cmake --install` deploy, with Qt DLLs in `bin/`
-- `SaveScummer.Host.exe` and `SaveScummer.CLI.exe`
+- `SaveScummer.exe` (the host) and `SaveScummer.CLI.exe`
 - the Visual C++ runtime DLLs, copied next to the app from the newest Visual Studio (found with vswhere), so users don't need to install a redistributable
 - `README.txt` with the LGPL attribution, source links, and the note that the Qt DLLs may be replaced with interface-compatible builds
 - dev only: the PDBs
@@ -298,11 +297,11 @@ Every binary gets a version resource (see VERSION) and `assets/icon.ico`.
 
 - **Stable `AppId`** and `PrivilegesRequired=lowest`, so upgrades replace in place without admin.
 - **One task, "Launch at sign-in",** with `UsePreviousTasks=yes`: checked on first install; on upgrade the user's previous choice is kept, checked or not, so a user who turned it off is never opted back in. Not `checkedonce`: on an upgrade it unchecks the task, overriding the remembered choice, so an upgrade would silently turn sign-in off.
-- **Launch at sign-in** is set by running the installed `SaveScummer.Host.exe --autostart on`, so the host stays the only writer of that entry. The uninstaller runs `--autostart off`, which removes the entry only if it points at this install.
-- **Before replacing files,** `PrepareToInstall` runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes. Inno's Restart Manager (`CloseApplications=yes`) closes the desktop.
+- **Launch at sign-in** is set by running the installed `SaveScummer.exe --autostart on`, so the host stays the only writer of that entry. The uninstaller runs `--autostart off`, which removes the entry only if it points at this install.
+- **Before replacing files,** `PrepareToInstall` runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes. Inno's Restart Manager (`CloseApplications=yes`) closes the UI.
 - **User data is never touched:** `%LOCALAPPDATA%\SaveScummer`, and the checkpoint store if the user moved it elsewhere.
 - **Upgrades replace `bin\` wholesale,** so no file from an older version lingers. Only the app's own folder is cleared.
-- **A Start menu entry and a "Launch SaveScummer" finish-page checkbox** for the desktop. Until the desktop exists, the checkbox starts the host minimized instead, and there's no Start menu entry.
+- **A Start menu entry and a "Launch SaveScummer" finish-page checkbox,** both running `SaveScummer.exe`, the same as a user launch: the host starts, or the running one is reached, and the UI shows. Until the UI exists, that starts the host in the tray.
 - **Unsigned.** SmartScreen shows "More info → Run anyway"; the README and release notes say so.
 
 `dist` fails if Inno Setup is missing: there's nothing to ship without it.
@@ -310,12 +309,13 @@ Every binary gets a version resource (see VERSION) and `assets/icon.ico`.
 ### Done when
 
 1. `clean` stops recorded and output processes and removes `build/` and `dist/`; `--deep` also removes `target/`; `.runtime/` is untouched.
-2. Any build while a host, CLI, desktop or test binary runs from `target/`, `build/` or `dist/` first stops it (hosts gracefully), then succeeds; nothing is left running old code.
+2. Any build while a host, CLI, UI or test binary runs from `target/`, `build/` or `dist/` first stops it (hosts gracefully), then succeeds; nothing is left running old code.
 3. `run` builds and runs against `.runtime/dev`, recording `build/dev/session.json`; an installed host keeps running unless `--stop-other-hosts` is passed.
 4. `dist` leaves exactly one file in `dist/`, the `-setup.exe`. The release package under `build/release/package/` has `SHA256SUMS.txt` and `THIRD-PARTY-LICENSES.html`, and no PDBs.
 5. Every binary's version resource (file properties → Details) shows the Cargo version.
 6. Installing needs no admin, puts the binaries under `%LOCALAPPDATA%\Programs\SaveScummer\bin`.
-7. The sign-in task is checked on first install and keeps the user's choice on upgrade. When it's checked, sign-in starts the host minimized.
+7. The sign-in task is checked on first install and keeps the user's choice on upgrade. When it's checked, sign-in starts the host in the tray with no window.
+10. The Start menu entry shows the UI whether or not the host is already running, and never starts a second host.
 8. Installing over a running host shuts it down gracefully first.
 9. Uninstalling removes the app and its own sign-in entry, never `%LOCALAPPDATA%\SaveScummer` or a moved checkpoint store.
 
@@ -339,9 +339,9 @@ All three are set to the minimum macOS.
 `build/<mode>/package/SaveScummer.app`:
 
 - Bundle ID `com.savescummer.SaveScummer`, fixed forever, because macOS keys permissions and settings on it.
-- The three executables side by side in `Contents/MacOS/`.
-- `Contents/Info.plist` from `packaging/macos/Info.plist.in`: `CFBundleShortVersionString` and `CFBundleVersion` from the Cargo version, the minimum macOS, the icon.
-- Qt frameworks deployed by `macdeployqt`; licenses, notices, manifest and checksums in `Contents/Resources/`.
+- The three executables side by side in `Contents/MacOS/`. The host, `SaveScummer`, is the bundle's main executable, so opening the app starts the host, and opening it again while it runs reaches the running host. The bundle has no Dock icon of its own (`LSUIElement`): the host lives in the menu bar, and the UI turns its Dock icon on while its window is open.
+- `Contents/Info.plist` from `packaging/macos/Info.plist.in`: `CFBundleExecutable` `SaveScummer`, `LSUIElement`, `CFBundleShortVersionString` and `CFBundleVersion` from the Cargo version, the minimum macOS, the icon.
+- Qt frameworks deployed by `macdeployqt` for the UI only (the host and CLI don't link Qt); licenses, notices, manifest and checksums in `Contents/Resources/`.
 - Ad-hoc signed (`codesign --force --deep --sign -`) as the last step, because Apple Silicon won't run binaries without a valid signature and `macdeployqt` breaks the linker's signatures when it rewrites library paths.
 
 ### Release file
@@ -351,7 +351,7 @@ All three are set to the minimum macOS.
 
 ### Integration
 
-**Launch at login:** the host writes and removes `~/Library/LaunchAgents/com.savescummer.host.plist` (pointing at the host inside the bundle, with `--minimized --data-dir <data>`) and loads or unloads it with `launchctl`, through the shared `--autostart on|off` code. macOS shows its "Background item added" notice.
+**Launch at login:** the host writes and removes `~/Library/LaunchAgents/com.savescummer.host.plist` (pointing at `Contents/MacOS/SaveScummer` inside the bundle, with `--minimized` and any `--data-dir`) and loads or unloads it with `launchctl`, through the shared `--autostart on|off` code. macOS shows its "Background item added" notice.
 
 ### Upgrade and removal
 
@@ -391,15 +391,15 @@ The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`, made by `linuxdepl
 
 `packaging/linux/AppRun` is the entry point and dispatches on its first argument, so one file serves as all three programs:
 
-- `host …` runs `SaveScummer.Host`
+- `ui` runs `SaveScummer.UI` (the host runs this to show the window)
 - `cli …` runs `SaveScummer.CLI`
-- anything else runs the desktop
+- anything else runs the host, `SaveScummer`, with those arguments
 
 `appimagetool` turns the AppDir into `SaveScummer-linux-x86_64-<ver>.AppImage` using the static AppImage runtime, so users don't need `libfuse2`. Unsigned.
 
 ### Integration
 
-- **Launch at login:** the host writes and removes `~/.config/autostart/SaveScummer.desktop` with `Exec="<AppImage path>" host --minimized --data-dir "<data>"`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE).
+- **Launch at login:** the host writes and removes `~/.config/autostart/SaveScummer.desktop` with `Exec="<AppImage path>" --minimized --data-dir "<data>"`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE).
 - **App menu entry:** adding the app to the menu is left to the user's AppImage tool (Gear Lever, AppImageLauncher…), which reads the embedded `.desktop` file.
 
 ### Upgrade and removal
@@ -413,7 +413,7 @@ The README gives both:
 
 1. `dist` on the oldest supported Ubuntu leaves exactly `SaveScummer-linux-x86_64-<ver>.AppImage` in `dist/`.
 2. After `chmod +x`, it runs on the oldest supported Ubuntu and current Fedora, both stock, without `libfuse2`, under both X11 and Wayland.
-3. `….AppImage host --version` and `….AppImage cli --version` print the Cargo version.
+3. `….AppImage --version` and `….AppImage cli --version` print the Cargo version.
 4. Enabling launch at login writes the XDG entry pointing at the AppImage and the host starts at login. Running a newer AppImage re-points the entry, and disabling removes it.
 5. Nothing ever touches `~/.local/share/SaveScummer`.
 
@@ -426,7 +426,7 @@ Two workflows in `.github/workflows/`, every step a `cargo xtask` command.
 
 - Runs on branch pushes, pull requests and manual runs; not tags.
 - A concurrency group per ref cancels superseded runs.
-- One required job each on `windows-latest`, `macos-latest` (Apple Silicon) and the oldest supported Ubuntu: checkout, Rust cache, Qt and tool caches, `setup qt` (only once the desktop exists; Linux also `setup linux-tools`), `setup cargo-about`, `check`, `build --test --package`. Packaging in CI means a dependency with an unaccepted license fails the pull request, not the release.
+- One required job each on `windows-latest`, `macos-latest` (Apple Silicon) and the oldest supported Ubuntu: checkout, Rust cache, Qt and tool caches, `setup qt` (only once the UI exists; Linux also `setup linux-tools`), `setup cargo-about`, `check`, `build --test --package`. Packaging in CI means a dependency with an unaccepted license fails the pull request, not the release.
 
 **release.yml** — builds every platform's file into one draft release:
 
@@ -464,7 +464,7 @@ Tooling only ever makes drafts; I publish by hand. A published release is never 
 
 [PLAN-HOST.md](PLAN-HOST.md) owns these; they are repeated here because this plan depends on them:
 
-- **`SaveScummer.Host --autostart on|off [--data-dir <dir>]`** sets the launch-at-login preference, writes or removes the platform's entry, and exits:
+- **`SaveScummer --autostart on|off [--data-dir <dir>]`** sets the launch-at-login preference, writes or removes the platform's entry, and exits:
   - Windows: a `Run` value
   - macOS: the LaunchAgent
   - Linux: the XDG autostart entry

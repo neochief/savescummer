@@ -55,7 +55,7 @@ plays a Save/Load completion sound. Playback errors do not fail file operations.
 The app-wide Play sounds checkbox is enabled by default and persists through the
 host's settings. The CLI can also change it with `SaveScummer.CLI sounds on` or
 `SaveScummer.CLI sounds off`. Disabling it discards queued cues; an already playing
-short cue can finish. `SaveScummer.Host --no-audio` silences an isolated host run
+short cue can finish. `SaveScummer --no-audio` silences an isolated host run
 without changing the saved preference. Native audio on other platforms is not
 implemented yet.
 

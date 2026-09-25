@@ -6,9 +6,15 @@ use std::path::PathBuf;
 use clap::Parser;
 
 #[derive(Debug, Clone, Parser)]
-#[command(name = "SaveScummer.Host", version, about = "The SaveScummer background host", args_override_self = true)]
+#[command(
+    name = "SaveScummer",
+    version,
+    about = "SaveScummer: the host, which runs in the tray and shows the UI",
+    args_override_self = true
+)]
 pub struct Options {
-    /// Start in the tray without opening the window (the sign-in entry).
+    /// Start in the tray without showing the UI (the sign-in entry, and
+    /// clients that start a host).
     #[arg(long)]
     pub minimized: bool,
     /// Use another data folder (development and tests).

@@ -9,16 +9,15 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::build::{self, Options};
-use crate::naming::{self, DESKTOP, HOST};
+use crate::naming::{self, HOST, UI};
 use crate::paths::{self, Mode};
-use crate::{cmd, platform, procs};
+use crate::{platform, procs};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -35,10 +34,10 @@ fn session_file() -> PathBuf {
     Mode::Dev.dir().join("session.json")
 }
 
-/// `host start`: a dev build, then the dev host.
+/// `host start`: a dev build, then the dev host in the tray, without the UI.
 pub fn host_start(demo: bool) -> anyhow::Result<()> {
     let package = dev_package()?;
-    start_host(&package, demo)
+    start_host(&package, demo, true)
 }
 
 /// `host stop`.
@@ -46,7 +45,8 @@ pub fn host_stop() -> anyhow::Result<()> {
     stop_recorded()
 }
 
-/// `run`: a dev build, the dev host, then a desktop connected to it.
+/// `run`: a dev build, then the dev host, started the way a user starts the
+/// app, so the host shows the UI itself.
 pub fn run(demo: bool, stop_other_hosts: bool) -> anyhow::Result<()> {
     let package = dev_package()?;
     let others = procs::other_hosts();
@@ -59,23 +59,15 @@ pub fn run(demo: bool, stop_other_hosts: bool) -> anyhow::Result<()> {
             others.iter().map(|p| p.exe.display().to_string()).collect::<Vec<_>>().join(", ")
         );
     }
-    start_host(&package, demo)?;
+    start_host(&package, demo, false)?;
 
-    let desktop = package.join("bin").join(naming::exe(DESKTOP));
-    if !desktop.is_file() {
+    if !package.join("bin").join(naming::exe(UI)).is_file() {
         println!(
-            "no desktop yet: the dev host keeps running. Drive it with\n  {} --data-dir {} status\nand stop it with `cargo xtask host stop`.",
+            "no UI yet, so the dev host has no window to show. Drive it with\n  {} --data-dir {} status",
             paths::show(&package.join("bin").join(naming::exe(naming::CLI))),
             paths::show(&paths::dev_data()),
         );
-        return Ok(());
     }
-    let mut command = Command::new(&desktop);
-    command.arg("--data-dir").arg(paths::dev_data());
-    if demo {
-        command.arg("--demo");
-    }
-    cmd::run(&mut command)?;
     println!("the dev host keeps running; `cargo xtask host stop` stops it");
     Ok(())
 }
@@ -85,7 +77,7 @@ fn dev_package() -> anyhow::Result<PathBuf> {
     Ok(built.package.expect("packaged"))
 }
 
-fn start_host(package: &Path, demo: bool) -> anyhow::Result<()> {
+fn start_host(package: &Path, demo: bool, minimized: bool) -> anyhow::Result<()> {
     stop_recorded()?;
     let exe = package.join("bin").join(naming::exe(HOST));
     let data_dir = paths::dev_data();
@@ -98,6 +90,9 @@ fn start_host(package: &Path, demo: bool) -> anyhow::Result<()> {
     let mut args: Vec<OsString> = vec!["--data-dir".into(), data_dir.clone().into()];
     if demo {
         args.push("--demo".into());
+    }
+    if minimized {
+        args.push("--minimized".into());
     }
     println!("starting the dev host ({})", paths::show(&exe));
     let pid = platform::spawn_detached(&exe, &args, &out)?;

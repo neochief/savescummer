@@ -52,6 +52,7 @@ notify = { version = "8", default-features = false }
 ureq = "3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 winresource = "0.1"
+libc = "0.2"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",

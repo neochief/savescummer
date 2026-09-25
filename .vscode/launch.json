@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "SaveScummer: app",
+            "name": "SaveScummer: UI",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/package/SaveScummer-windows-x64/bin/SaveScummer.exe",
+            "program": "${workspaceFolder}/build/dev/package/SaveScummer-windows-x64/bin/SaveScummer.UI.exe",
             "args": ["--data-dir", "${workspaceFolder}/.runtime/dev"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
@@ -14,10 +14,10 @@
             "postDebugTask": "SaveScummer: stop dev host"
         },
         {
-            "name": "SaveScummer: demo",
+            "name": "SaveScummer: UI (demo)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/package/SaveScummer-windows-x64/bin/SaveScummer.exe",
+            "program": "${workspaceFolder}/build/dev/package/SaveScummer-windows-x64/bin/SaveScummer.UI.exe",
             "args": ["--data-dir", "${workspaceFolder}/.runtime/dev", "--demo"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,

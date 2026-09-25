@@ -909,7 +909,6 @@ dependencies = [
  "savescummer-platform",
  "serde",
  "serde_json",
- "windows-sys 0.61.2",
  "winresource",
 ]
 
@@ -964,7 +963,6 @@ dependencies = [
  "tokio",
  "ureq",
  "uuid",
- "windows-sys 0.61.2",
  "winresource",
 ]
 
@@ -989,6 +987,7 @@ dependencies = [
 name = "savescummer-platform"
 version = "0.2.0"
 dependencies = [
+ "libc",
  "notify",
  "tempfile",
  "windows-sys 0.61.2",
@@ -1012,6 +1011,7 @@ version = "0.2.0"
 dependencies = [
  "dunce",
  "hex",
+ "libc",
  "savescummer-catalog",
  "savescummer-core",
  "serde",

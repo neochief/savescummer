@@ -92,7 +92,7 @@ pub fn prepare(mut opts: Options, catalog: &str) -> Result<Options, String> {
             "steam_root": steam,
         },
         "steam_active_user_file": machine.join("steam-active-user"),
-        "use_registry": false,
+        "query_os": false,
         "gog_games": [],
         "epic_manifests": folder("epic"),
         "loose_roots": [],

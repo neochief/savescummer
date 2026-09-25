@@ -5,8 +5,9 @@ Save and load backups of game saves with a hotkey, so a bad run can be undone.
 
 Programs (in bin\):
 
-{desktop}  SaveScummer.Host.exe   the background host: monitoring, hotkeys, backups
-  SaveScummer.CLI.exe    the command-line client
+  SaveScummer.exe        SaveScummer itself: runs in the tray, watches games,
+                         reacts to hotkeys, makes and restores backups
+{ui}  SaveScummer.CLI.exe    the command-line client
 
 Your data lives in %LOCALAPPDATA%\SaveScummer (checkpoints go in its
 "checkpoints" folder unless you moved them). Installing, upgrading and

@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 const HOST: &str = env!("CARGO_BIN_EXE_savescummer-host");
 
 /// The subsystem field of a PE executable's optional header.
+#[cfg(windows)]
 fn subsystem(exe: &str) -> u16 {
     let bytes = std::fs::read(exe).unwrap();
     let pe = u32::from_le_bytes(bytes[0x3c..0x40].try_into().unwrap()) as usize;

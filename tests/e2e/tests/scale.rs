@@ -219,7 +219,8 @@ mod process {
         /// CPU time used so far, from `[[dd-]hh:]mm:ss[.ff]`.
         pub fn cpu(&self) -> std::time::Duration {
             let time = self.ps("time=");
-            let (days, rest) = time.split_once('-').map_or((0.0, time.as_str()), |(d, r)| (d.parse().unwrap_or(0.0), r));
+            let (days, rest) =
+                time.split_once('-').map_or((0.0, time.as_str()), |(d, r)| (d.parse().unwrap_or(0.0), r));
             let secs = rest.split(':').fold(0.0, |acc, part| acc * 60.0 + part.parse::<f64>().unwrap_or(0.0));
             std::time::Duration::from_secs_f64(days * 86_400.0 + secs)
         }

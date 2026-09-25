@@ -192,6 +192,8 @@ enum Cmd {
         #[arg(long)]
         no_wait: bool,
     },
+    /// Show the UI, as launching the app again does.
+    ShowUi,
     /// Stand in for the UI's focus and selection report.
     UiReport {
         #[arg(long)]
@@ -307,20 +309,17 @@ fn connect(endpoint: &str, cli: &Cli, data_dir: &std::path::Path) -> Result<Clie
         Err(ConnectError::NotRunning) => return Err("no host is running".into()),
         Err(ConnectError::Io(e)) => return Err(format!("can't reach the host: {e}")),
     }
-    let exe = host_exe().ok_or("can't find SaveScummer.Host next to the CLI")?;
+    let exe = host_exe().ok_or("can't find SaveScummer next to the CLI")?;
     let mut command = std::process::Command::new(&exe);
+    // A command needs a host, not a window.
+    command.arg("--minimized");
     if let Some(dir) = &cli.data_dir {
         command.arg("--data-dir").arg(dir);
     }
     command.args(&cli.host_args);
     command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: the host outlives us.
-        command.creation_flags(0x0000_0008 | 0x0000_0200);
-    }
-    detach_std_handles();
+    // The host outlives us.
+    savescummer_platform::process::detach(&mut command);
     command.spawn().map_err(|e| format!("can't start {}: {e}", exe.display()))?;
     let _ = data_dir;
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -339,7 +338,7 @@ fn host_exe() -> Option<PathBuf> {
     }
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     let suffix = std::env::consts::EXE_SUFFIX;
-    ["SaveScummer.Host", "savescummer-host"].iter().map(|name| dir.join(format!("{name}{suffix}"))).find(|p| p.exists())
+    ["SaveScummer", "savescummer-host"].iter().map(|name| dir.join(format!("{name}{suffix}"))).find(|p| p.exists())
 }
 
 impl Session {
@@ -528,6 +527,9 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
                     EventBody::Labels { game } if !s.json => {
                         let _ = writeln!(out, "--- labels changed: {game}");
                     }
+                    EventBody::ShowWindow if !s.json => {
+                        let _ = writeln!(out, "--- the UI was asked to come to the front");
+                    }
                     EventBody::Shutdown if !s.json => {
                         let _ = writeln!(out, "--- the host is shutting down");
                     }
@@ -651,6 +653,18 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
             Ok(s.report(&response, |v| v.to_string()))
         }
         Cmd::MoveStore { path, no_wait } => s.operation(Command::MoveStore { path }, no_wait),
+        Cmd::ShowUi => {
+            let response = s.send(Command::ShowUi)?;
+            Ok(s.report(&response, |v| {
+                match v["ui"].as_str().unwrap_or_default() {
+                    "front" => "asked the open UI to come to the front",
+                    "started" => "started the UI",
+                    "starting" => "the UI is already starting",
+                    _ => "there is no UI to show in this install",
+                }
+                .into()
+            }))
+        }
         Cmd::UiReport { focused, visible, selected } => {
             let response = s.send(Command::UiReport { focused, visible, selected })?;
             Ok(s.report(&response, |_| String::new()))
@@ -843,24 +857,3 @@ fn history_line(row: &HistoryEntry) -> String {
     }
     text
 }
-
-/// Keeps the host from inheriting our own stdout and stderr. Windows passes
-/// every inheritable handle to a child, so a host started from a CLI whose
-/// output is captured would hold the capturing pipe open for its whole life.
-#[cfg(windows)]
-fn detach_std_handles() {
-    use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
-    use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
-    for which in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
-        // SAFETY: clearing a flag on our own standard handles.
-        unsafe {
-            let handle = GetStdHandle(which);
-            if !handle.is_null() {
-                SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0);
-            }
-        }
-    }
-}
-
-#[cfg(not(windows))]
-fn detach_std_handles() {}

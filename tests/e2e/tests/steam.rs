@@ -16,6 +16,7 @@ fn local(world: &World, id64: u64) -> std::path::PathBuf {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_steam_account_switch_between_sessions_follows_the_account_at_game_start() {
     let world = World::new();
     let install = world.steam_install(1002, "Cloud Game", "CloudGame.exe");
@@ -66,6 +67,7 @@ fn a_steam_account_switch_between_sessions_follows_the_account_at_game_start() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn steam_cloud_replacing_a_restored_file_is_noted_at_the_next_start() {
     let world = World::new();
     let install = world.steam_install(1002, "Cloud Game", "CloudGame.exe");

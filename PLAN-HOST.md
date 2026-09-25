@@ -1,6 +1,6 @@
 # Save Scummer Host
 
-The host is the app's engine: everything that must keep working with no window open. It finds games, watches them run, makes and restores backups, keeps the history, reacts to hotkeys, and serves one small protocol that the desktop UI and the CLI both use.
+The host is the app: the program the user launches and the one that starts at sign-in. It's everything that must keep working with no window open. It finds games, watches them run, makes and restores backups, keeps the history, reacts to hotkeys, shows the UI when asked, and serves one small protocol that the UI and the CLI both use.
 
 The main window lives in [`PLAN-UI.md`](PLAN-UI.md). Known-game data and every decision about where a known game's saves are live in [`PLAN-CATALOG.md`](PLAN-CATALOG.md); the host calls that module and never re-decides. Builds, packaging and releases live in [`PLAN-BUILD.md`](PLAN-BUILD.md).
 
@@ -26,31 +26,34 @@ These decide the cases this document doesn't cover:
 - **Only an explicit user action deletes.** Save, restarts, scans, game exits and failures never delete checkpoints or history. Only Delete on a row and Flush do. Why: a backup tool that loses backups is worse than none.
 - **One operation per game, and reject rather than queue.** A second request for a busy game is refused, not stored for later. Other games stay fully usable. Why: a replayed hotkey press minutes later would load a save the user no longer wants.
 - **Deterministic recovery.** An interrupted operation is resolved by fixed rules at startup, never by asking the user to choose. Why: the user can't judge half-finished filesystem states, and there may be no UI.
-- **Portable core, thin platform adapters.** Game and operation rules know nothing about Windows, Qt, SQLite or the protocol. Each OS feature (process watching, hotkeys, tray, sounds, sign-in) is a small replaceable adapter. Why: macOS and Linux should be new adapters, not a rewrite.
+- **Portable core, thin platform adapters.** Game and operation rules know nothing about Windows, Qt, SQLite or the protocol. Each OS feature (process watching, hotkeys, tray, sounds, sign-in, file watching, the local transport, file identity) is a small replaceable adapter, and each OS's version lives in its own file with a stub for OSes not done yet. Shared code never branches on the OS. Why: macOS and Linux should be new files, not edits scattered through the core.
 
 
 ## PROCESSES
 
 The app ships as three programs:
 
-- **`SaveScummer`** — the desktop UI, the normal entry point.
-- **`SaveScummer.Host`** — this document: one background process per user.
+- **`SaveScummer`** — this document: the host, one per user. It is the app, and what the user launches.
+- **`SaveScummer.UI`** — the main window, started by the host when the user wants to see the app.
 - **`SaveScummer.CLI`** — a console client for scripts, testing and diagnostics.
 
-Only one host runs per user. Anything that needs it starts it from the same install folder if it isn't running, and otherwise connects to the one that is:
+Only one host runs per user. How it starts decides whether the UI shows:
 
-- Opening the UI starts or reuses the host, then shows the window.
-- A CLI command that needs the host starts it and waits until it's ready. Help and syntax errors don't start anything.
-- At sign-in (when Launch on startup is on) the host starts in the tray without opening the window.
+- **The user launches SaveScummer** (Start menu, Dock, Finder, app menu, the installer's last page): the host starts and shows the UI once it's ready.
+- **At sign-in** (when Launch on startup is on), the entry passes `--minimized`: the host starts in the tray with no window.
+- **The user launches it while it's running:** the new process finds the running host, asks it to show the UI, and exits. The user just sees the window. On macOS the OS itself delivers the second launch to the running host.
+- **A client needs a host that isn't running:** the CLI (for a command) or the UI (if its host has gone) starts one from the same install folder with `--minimized`, and waits until it's ready. Help and syntax errors don't start anything.
 
-**The host is a windowless GUI program, never a console program.** On Windows that means the GUI subsystem. Why: Windows gives a console program a console window whenever something other than a terminal starts it, and that window stays open as long as the program runs. Started at sign-in, a console host would put a terminal window on screen for the whole session; started from the UI, a window would flash or linger. Hiding the window in every launcher doesn't work either: any launcher that forgets, including a user double-clicking the exe, shows it. The first rebuild shipped the host as a console program and got exactly this.
+Showing the UI always means one window: if a UI is connected, the host tells it to come to the front; otherwise it starts one. The tray's Main window, a second launch and a click on the tray icon all do exactly this.
+
+**The host is a windowless GUI program, never a console program.** On Windows that means the GUI subsystem. Why: Windows gives a console program a console window whenever something other than a terminal starts it, and that window stays open as long as the program runs. Started at sign-in, a console host would put a terminal window on screen for the whole session; started from the Start menu, a window would flash or linger. Hiding the window in every launcher doesn't work either: any launcher that forgets, including a user double-clicking the exe, shows it.
 
 - The host has no console, so everything it has to say goes to the host log. The one exception is output a caller explicitly captured (see Command line).
 - The CLI stays a console program; terminals are its purpose. When the UI runs the CLI, it asks for no window.
 
-The host starts, in order: open the database, resolve interrupted operations, scan, start monitoring, then accept operations. The UI can connect earlier and will see the scan in progress.
+The host starts, in order: open the database, resolve interrupted operations, scan, start monitoring, then accept operations. It shows the UI as soon as it serves the protocol, so the window can appear during the first scan and show it in progress.
 
-Closing the window leaves the host in the tray. Clicking the tray icon opens or focuses the UI. The tray menu has two items:
+Closing the window ends the UI; the host stays in the tray. Clicking the tray icon shows the UI. The tray menu has two items:
 
 - Main window
 - Exit
@@ -62,10 +65,10 @@ Exit stops the host safely:
 1. Stop accepting new operations.
 2. Let any running operation (and any rollback it needs) reach a safe point.
 3. End remaining delete countdowns early and run their deletions. Failures don't block exit.
-4. Tell connected clients the host is shutting down, so the UI closes instead of reconnecting.
+4. Tell connected clients the host is shutting down, so the UI closes instead of reconnecting or restarting it.
 5. Save state, release hotkeys and the tray, and exit.
 
-The UI disconnecting is never a reason to shut down.
+The UI closing or disconnecting is never a reason to shut down.
 
 ### Where data lives
 
@@ -81,7 +84,7 @@ Resolve these through the OS (folder redirection, the real home directory), neve
 
 ### The host log
 
-The host keeps a plain-text log, `host.log` in the data folder. It is where all of the host's own output goes, since the host has no console. Why: the host usually starts at sign-in or from the UI, where nobody could read its output anyway, and "the game never showed up" or "it didn't notice I quit" can only be answered by what the host saw and when.
+The host keeps a plain-text log, `host.log` in the data folder. It is where all of the host's own output goes, since the host has no console. Why: the host usually starts at sign-in or from a launcher, where nobody could read its output anyway, and "the game never showed up" or "it didn't notice I quit" can only be answered by what the host saw and when.
 
 Each line has a UTC timestamp. The log records:
 
@@ -108,7 +111,7 @@ Checkpoints live in a `checkpoints` folder inside the data folder by default. Wh
 
 The host has a few options for the build tooling, tests and the sign-in entry. They don't change any rule:
 
-- `--minimized` — start in the tray without opening the window (used by the sign-in entry).
+- `--minimized` — start in the tray without showing the UI (used by the sign-in entry and by clients that start a host).
 - `--data-dir <dir>` — use another data folder (development and tests).
 - `--autostart on|off` — see Launch on startup.
 - `--demo` — simulated games and operations, for UI development without touching real saves.
@@ -118,11 +121,13 @@ The host has a few options for the build tooling, tests and the sign-in entry. T
 
 When a host is ready to serve, or fails to start, it writes one machine-readable ready line, so tooling can wait for it instead of guessing. The line goes to the log and to standard output. A GUI program's standard output reaches only a caller that captured it (the build tooling, tests, the CLI starting a host); a terminal shows nothing, and people read the log or use the CLI instead.
 
+A second host started for a data folder that already has one asks the running host to show the UI (unless it has `--minimized`), then reports "another host is running" in its ready line and exits, as before.
+
 ### Launch on startup
 
 The host is the only thing that writes the sign-in entry, so the checkbox and the real entry can't drift apart:
 
-- The UI checkbox and `SaveScummer.Host --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it).
+- The UI checkbox and `SaveScummer --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it).
 - `off` removes only an entry that points at this host.
 - An AppImage re-points its entry to its own path on every start, because each version is a new file. Other platforms install to a fixed path and never rewrite the entry on their own.
 - Development builds never create a sign-in entry: `--autostart on` refuses and the checkbox is disabled. Why: signing in must never start a debug host, and a dev host must not touch the installed app's entry.
@@ -155,7 +160,7 @@ Triggers:
 | The user presses Scan games | full |
 | A new catalog bundle arrives | full |
 | Every 15 minutes, including with no UI | full |
-| The desktop window is shown or gains focus (from the UI's focus report), at most once per 20 seconds | install |
+| The UI's window is shown or gains focus (from the UI's focus report), at most once per 20 seconds | install |
 | A watched store location changes, 2 seconds after the last change | install |
 
 Why focus: it is the moment the user looks, and the cooldown means alt-tabbing never causes repeated scans. Why watching as well: with the window already open while Steam finishes a download, focus never fires; and in SteamOS Game Mode our window never gets focus at all, so watching and the periodic scan are the only triggers there.
@@ -528,8 +533,8 @@ Each of these is a small adapter the host owns, so it works with no window open.
 
 ### Hotkeys
 
-- **Ctrl+F5** runs Save and **Ctrl+F9** runs Load.
-- When the desktop window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the top of the ACTIVE STACK. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
+- **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5 (PLAN-MACOS.md, decision 1).
+- When the UI's window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the top of the ACTIVE STACK. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
 - Holding a key triggers one operation, not many.
 - A busy game gets a short, rate-limited busy cue.
 
@@ -556,8 +561,9 @@ Hotkey-triggered Save and Load play a start cue when the request is accepted, th
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Process and focus watching | Yes | To investigate | To investigate |
-| Global hotkeys | Yes | To investigate | To investigate |
+| Process and focus watching | Yes | Planned (PLAN-MACOS) | To investigate |
+| Global hotkeys | Yes | Planned (PLAN-MACOS) | To investigate |
+| Tray | Notification area | Menu bar | To investigate |
 
 
 ## ARTWORK
@@ -575,7 +581,7 @@ The UI shows Steam art for known games: hero art and logo for sidebar cards, the
 
 `SaveScummer.CLI` is for scripts, testing and diagnostics. It's a client like the UI:
 
-- **It can drive the host in nearly every way the UI can.** Why: the host can then be tested end to end, and a problem reproduced, without the desktop UI or a custom test harness. Concretely:
+- **It can drive the host in nearly every way the UI can.** Why: the host can then be tested end to end, and a problem reproduced, without the UI or a custom test harness. Concretely:
   - every protocol command and query has a CLI command, including the ones only the UI normally sends;
   - it can watch: print the current state, then each new state as it arrives, until stopped;
   - it can stand in for the UI's focus and selection report, so hotkey targeting can be tested without a window;
@@ -585,7 +591,7 @@ The UI shows Steam art for known games: hero art and logo for sidebar cards, the
 - **No generic retry.** After an ordinary failure, running the same command again is the retry. Only a blocked game has its own retry command.
 - **What it doesn't replace:** real hotkey presses, the tray, sounds and notifications. Those are OS adapters, not protocol, and stay under "By hand".
 - It never opens the database or touches game files itself. A Save from the CLI can set a label, and a separate command sets or clears one later.
-- It starts the host when a command needs it, and never becomes a second host. `--no-start` makes it fail instead of starting one, for tools like the installer that only want to talk to a running host.
+- It starts the host (with `--minimized`) when a command needs it, and never becomes a second host. `--no-start` makes it fail instead of starting one, for tools like the installer that only want to talk to a running host.
 - It prints readable output by default and machine-readable output on request, with exit codes that tell success, rejection and failure apart.
 - Long history can be read page by page or streamed without loading it all. If the history changes mid-stream, it says so instead of printing duplicates or gaps.
 
@@ -616,7 +622,8 @@ Commands:
 - Scan
 - Change settings (Play sounds, Launch on startup)
 - Move the checkpoint store
-- Report the UI's focus and selected game
+- Report the UI's focus and selected game (a connection that reports and watches is the UI; a one-off report, like the CLI's, stays in effect after it disconnects)
+- Show the UI (what a second launch and the tray send)
 - Open a folder by what it is (see Opening folders), or only resolve it
 - Retry a blocked game (an ordinary failure has no retry command: the client sends the same command again with a new request ID)
 - Refresh the catalog now
@@ -650,6 +657,7 @@ A client that watches gets the full current state, then a new state whenever som
 - Every state carries a revision and a host instance ID. A new instance ID means the host restarted: throw away everything cached and start again.
 - Progress can be coalesced; each delivered state stands on its own.
 - The last message before a shutdown says so, and the UI closes instead of reconnecting.
+- The UI's connection also gets "come to the front" when the host is asked to show it while it's open.
 
 ### History pages
 
@@ -661,7 +669,7 @@ A client that watches gets the full current state, then a new state whenever som
 
 ## TESTING
 
-Rules must be provable without a desktop, and the OS parts must be proven for real. Use the normal test runner, temporary folders and databases, and one small fake-game program. No custom test framework, dashboard or scenario language.
+Rules must be provable without a UI, and the OS parts must be proven for real. Use the normal test runner, temporary folders and databases, and one small fake-game program. No custom test framework, dashboard or scenario language.
 
 ### How
 
@@ -692,13 +700,14 @@ Rules must be provable without a desktop, and the OS parts must be proven for re
 - **Operations:** Save, Load, Load this save, Revert, reverting a revert and Delete compared by actual file contents; every rejection happens before anything is created; a save set spanning several folders and two drives; a Load deleting newer matched files; a Revert removing files the Load brought back; a target absent at Save time left alone, and one that matched nothing emptied again; a missing root refusing the Load; a Load while a fake game holds a save file open, refused at stage 2 with nothing changed; the Steam Cloud check at the next game start with a file replaced and a deleted file brought back; visible history after deletions, including empty sessions disappearing; Flush with partial failures; labels (limits and trimming, shown on Saved and Loaded rows, kept after deletion, cleared by Flush, not carried to a replaced folder, set while busy, rejected for a gone checkpoint, never written into folders); delete countdowns (cancel versus run, waiting while busy, dropped by Flush, finished on shutdown, dropped after a crash); the checkpoint size after each operation, with leftover folders, and unknown while the store is unavailable.
 - **Opening folders,** through the CLI's resolve-only answer: a folder, file and pattern target's root, a folder that doesn't exist yet, the checkpoint folders and the executable's folder.
 - **Failures:** a failure injected at every step and every Load stage, and a kill at every recorded step (including mid-stage, with some files renamed and some not), each checked against the four recovery rules by both the files and the records; other games stay usable.
+- **Starting:** a host started without `--minimized` shows the UI, one started with it doesn't; a second launch reaches the running host and exits; showing the UI with a UI connected brings that one forward instead of starting another; the CLI starting a host never shows the UI.
 - **Entry points:** UI, CLI and hotkeys all hit the same lock; a busy game rejects and never replays; held keys; the right game is targeted with the window focused and unfocused; the right sound for each outcome, including never a success cue on failure.
 - **Protocol:** repeated request IDs; reconnecting mid-operation; a host restart invalidating state and history pages; paging with equal timestamps and sessions crossing pages; history bigger than any single reply; a version mismatch for each client.
 - **Scale:** histories of 100, 10,000 and 100,000 rows, in one game and spread across many. Measure startup, memory, writes per Save, the cost of an idle watch and the first history page. Timings are reported separately so a busy machine doesn't fail functional tests.
 
 ### By hand, for now
 
-Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry (including that no window appears when the host starts at sign-in or from the UI), antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform.
+Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry (including that no window appears when the host starts at sign-in or from the CLI), launching the app while it runs, antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform.
 
 Steam Cloud must be checked by hand on a real machine before relying on the after-Load check, with one game of each kind: Isaac (writes through Steam's cloud API into `remote`), Slay the Spire (Steam Auto-Cloud of its install folder) and Risk of Rain Returns (both). For each: a Load with the game closed, then launch; a Load that deletes a file; and, where possible, a Load while the cloud has newer progress from another device. Why by hand: only real Steam shows whether it uploads, re-downloads or asks.
 

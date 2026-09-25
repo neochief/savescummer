@@ -204,8 +204,18 @@ mod tests {
         }
     }
 
+    /// A fixture path, written the Windows way: as is on Windows, without
+    /// the drive letter elsewhere (`C:/Users/u` → `/Users/u`, `E:/` → `/`),
+    /// so every test means the same on every OS.
+    fn p(path: &str) -> PathBuf {
+        match path.as_bytes() {
+            [_, b':', ..] if !cfg!(windows) => PathBuf::from(&path[2..]),
+            _ => PathBuf::from(path),
+        }
+    }
+
     fn t(root: &str, filter: Filter) -> Target {
-        Target { root: root.into(), filter, excludes: vec![], presence: Presence::Present }
+        Target { root: p(root), filter, excludes: vec![], presence: Presence::Present }
     }
 
     fn exact(root: &str, name: &str) -> Target {
@@ -219,18 +229,19 @@ mod tests {
     fn broad() -> Vec<PathBuf> {
         ["C:/Users/u", "C:/Users/u/Documents", "C:/Users/u/AppData/Roaming", "C:/Program Files"]
             .iter()
-            .map(PathBuf::from)
+            .map(|s| p(s))
             .collect()
     }
 
     fn run(targets: &[Target], others: &[OtherGame<'_>]) -> Result<Vec<Target>, Failure> {
         let broad = broad();
-        let exe = [PathBuf::from("D:/Game/Game.exe")];
+        let exe = [p("D:/Game/Game.exe")];
+        let install = p("D:/Game");
         let input = SafetyInput {
             game_id: "g",
             targets,
             broad: &broad,
-            install_dir: Some(Path::new("D:/Game")),
+            install_dir: Some(&install),
             executables: &exe,
             others,
         };
@@ -293,7 +304,7 @@ mod tests {
 
     #[test]
     fn links_resolve_to_their_target() {
-        let paths = Plain { ci: true, links: vec![("C:/Link".into(), "C:/Users/u/Documents".into())] };
+        let paths = Plain { ci: true, links: vec![(p("C:/Link"), p("C:/Users/u/Documents"))] };
         let broad = broad();
         let targets = [pat("C:/Link", "*.sav")];
         let input = SafetyInput {
@@ -315,14 +326,13 @@ mod tests {
             others: &[],
         };
         let checked = check(&input, &paths).unwrap();
-        assert_eq!(checked[0].root, PathBuf::from("C:/Users/u/Documents"), "operations run on the real folder");
+        assert_eq!(checked[0].root, p("C:/Users/u/Documents"), "operations run on the real folder");
     }
 
     #[test]
     fn case_rules() {
         let broad: Vec<PathBuf> = vec![];
-        let (game, lower) =
-            if cfg!(windows) { ("C:/home/u/Game", "C:/home/u/game") } else { ("/home/u/Game", "/home/u/game") };
+        let (game, lower) = ("C:/home/u/Game", "C:/home/u/game");
         let theirs = [t(game, Filter::All)];
         let others = [OtherGame { id: "o", name: "Other", targets: &theirs }];
         let targets = [t(lower, Filter::All)];
