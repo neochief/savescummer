@@ -568,6 +568,7 @@ pub fn s(value: &Value) -> String {
 
 /// A throwaway key under `HKCU\Software\SaveScummerTests` for one world's
 /// uninstall entries, deleted with the world.
+#[cfg(windows)]
 mod registry {
     use windows_sys::Win32::System::Registry::{
         HKEY, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey, RegCreateKeyExW,
@@ -631,6 +632,25 @@ mod registry {
         // RegDeleteTreeW leaves the key itself.
         unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, wide(path).as_ptr()) };
     }
+}
+
+/// No registry off Windows: uninstall entries are never seen there, so the
+/// tests that rely on them are Windows-only.
+#[cfg(not(windows))]
+mod registry {
+    pub struct Scratch {
+        pub path: String,
+    }
+
+    impl Scratch {
+        pub fn new() -> Scratch {
+            Scratch { path: String::new() }
+        }
+    }
+
+    pub fn set_value(_path: &str, _name: &str, _value: &str) {}
+
+    pub fn delete_tree(_path: &str) {}
 }
 
 /// The longest a CLI call may take. Operations on test saves take well

@@ -190,6 +190,42 @@ mod process {
     }
 }
 
+/// Off Windows the numbers come from `ps`. There's no cheap per-process
+/// write counter, so writes report zero.
+#[cfg(not(windows))]
+mod process {
+    pub struct Process(u32);
+
+    impl Process {
+        pub fn open(pid: u32) -> Process {
+            Process(pid)
+        }
+
+        fn ps(&self, field: &str) -> String {
+            let out = std::process::Command::new("ps").args(["-o", field, "-p", &self.0.to_string()]).output().unwrap();
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+
+        /// Resident set size, for both numbers.
+        pub fn memory(&self) -> (u64, u64) {
+            let rss = self.ps("rss=").parse::<u64>().unwrap_or(0) * 1024;
+            (rss, rss)
+        }
+
+        pub fn writes(&self) -> (u64, u64) {
+            (0, 0)
+        }
+
+        /// CPU time used so far, from `[[dd-]hh:]mm:ss[.ff]`.
+        pub fn cpu(&self) -> std::time::Duration {
+            let time = self.ps("time=");
+            let (days, rest) = time.split_once('-').map_or((0.0, time.as_str()), |(d, r)| (d.parse().unwrap_or(0.0), r));
+            let secs = rest.split(':').fold(0.0, |acc, part| acc * 60.0 + part.parse::<f64>().unwrap_or(0.0));
+            std::time::Duration::from_secs_f64(days * 86_400.0 + secs)
+        }
+    }
+}
+
 fn ms(d: Duration) -> f64 {
     (d.as_secs_f64() * 10_000.0).round() / 10.0
 }
