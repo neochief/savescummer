@@ -85,6 +85,16 @@ pub struct Monitor {
     quiet_polls: u32,
 }
 
+/// The path with links resolved, as the OS reports a process's executable
+/// (`/private/var/...` for `/var/...` on macOS). Windows paths are compared
+/// as given.
+fn real_path(path: &Path) -> PathBuf {
+    if cfg!(windows) {
+        return path.to_path_buf();
+    }
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 pub fn normalize(path: &Path) -> String {
     let text = path.to_string_lossy();
     let text = text.strip_prefix(r"\\?\").unwrap_or(&text);
@@ -114,10 +124,16 @@ impl Monitor {
         self.dirs.clear();
         for game in games {
             for exe in &game.executables {
-                self.exact.insert(normalize(exe), game.game.clone());
+                let key = normalize(&real_path(exe));
+                // A macOS app bundle runs as `Foo.app/Contents/MacOS/Foo`:
+                // anything inside the listed bundle is that executable.
+                if key.ends_with(".app") {
+                    self.dirs.push((format!("{key}/"), game.game.clone()));
+                }
+                self.exact.insert(key, game.game.clone());
             }
             if let Some(dir) = &game.install_dir {
-                let mut key = normalize(dir);
+                let mut key = normalize(&real_path(dir));
                 if !key.ends_with('/') {
                     key.push('/');
                 }
@@ -143,6 +159,16 @@ impl Monitor {
 
     pub fn is_running(&self, game: &str) -> bool {
         self.running.contains_key(game)
+    }
+
+    /// The game in front, as of the last poll.
+    pub fn focused(&self) -> Option<&str> {
+        self.focused.as_deref()
+    }
+
+    /// Every running game's processes.
+    pub fn processes(&self) -> BTreeMap<String, Vec<u32>> {
+        self.running.iter().map(|(game, pids)| (game.clone(), pids.iter().copied().collect())).collect()
     }
 
     fn match_exe(&self, exe: &Path) -> Option<String> {
@@ -241,9 +267,12 @@ impl Monitor {
     }
 }
 
+pub mod open_files;
+
 // The OS process list, one file per OS.
 #[cfg_attr(windows, path = "source/windows.rs")]
-#[cfg_attr(not(windows), path = "source/unsupported.rs")]
+#[cfg_attr(target_os = "macos", path = "source/macos.rs")]
+#[cfg_attr(not(any(windows, target_os = "macos")), path = "source/unsupported.rs")]
 mod source;
 
 /// The OS process list.
@@ -360,6 +389,23 @@ mod tests {
     }
 
     #[test]
+    fn a_listed_app_bundle_matches_its_executable_inside() {
+        let fake = Fake::default();
+        let mut m = Monitor::new(Box::new(fake.clone()));
+        m.set_games(&[GameProcesses {
+            game: "foo".into(),
+            executables: vec!["/Applications/Foo.app".into()],
+            install_dir: None,
+        }]);
+        fake.set(
+            &[(10, 1, "/Applications/Foo.app/Contents/MacOS/Foo"), (11, 1, "/Applications/Foo.application")],
+            None,
+        );
+        assert_eq!(m.poll(), vec![started("foo", false)]);
+        assert_eq!(m.processes()["foo"], vec![10]);
+    }
+
+    #[test]
     fn focus_follows_the_foreground_window() {
         let (mut m, fake) = monitor();
         fake.set(
@@ -400,7 +446,7 @@ mod tests {
         assert!(m.poll().is_empty());
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     #[test]
     fn the_real_process_list_includes_this_test() {
         let mut source = system_source();

@@ -1,2 +1,9 @@
 [alias]
 xtask = "run --package xtask --"
+
+# Every Rust build targets the oldest supported macOS (xtask's pins.rs
+# MIN_MACOS; a test there keeps the two equal). Here rather than set by
+# xtask: builds that disagree about it rebuild the AppKit crates each time.
+# Ignored off macOS.
+[env]
+MACOSX_DEPLOYMENT_TARGET = "13.0"

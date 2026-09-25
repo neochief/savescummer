@@ -81,6 +81,18 @@ While a Load copies files, `name.ssnew` copies sit next to the saves for a momen
 - What the answer changes: nothing is expected. A game that does react gets a note in its instructions, or Load for it waits until the game is closed.
 
 
+## 5. macOS
+
+What only a real Mac shows (PLAN-MACOS.md). Found on a Mac with Steam, 2026-09-25: FTL at `~/Library/Application Support/fasterthanlight`, Into the Breach at `~/Library/Application Support/IntoTheBreach/profile_*`, Six Ages in its group container `group.com.a-sharp.Six-Ages`.
+
+- **FTL and Into the Breach.** ⌥F5 in fullscreen makes a checkpoint with both cues, ⌥F9 restores it; starting from Steam and quitting write the start and close markers; ⌘-Tab between the two moves the focused one to the top of the stack.
+- **Terraria.** The `Players`/`Worlds` names, as in section 1.
+- **Six Ages** (a group container: macOS 14+ asks for *other apps' data*). The host finds it in the background without asking and marks it waiting; *Allow access* (`request-access`) shows the prompt once, naming SaveScummer; after allowing, Save and Load work, and a new build asks again. Record what denying returns and which System Settings pane lists the grant.
+- **Slay the Spire** (saves inside its `.app`: App Management guards writes). Does a Load prompt, and does the prompt name SaveScummer?
+- **Steam Cloud on macOS**: section 3's checks with a Mac copy.
+- **Unknowns to settle once** (PLAN-MACOS.md, PRIVACY PERMISSIONS): whether an FSEvents watch on a guarded folder prompts or silently gets nothing; whether `stat` inside one prompts; whether picking a folder in the UI's open panel grants the host anything.
+
+
 ## Resolved by the save-set design
 
 These were open questions when every game had one save folder. They no longer need a real install:

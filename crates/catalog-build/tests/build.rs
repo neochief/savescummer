@@ -336,6 +336,48 @@ Mixed:
 }
 
 #[test]
+fn rules_for_an_os_that_never_resolves_their_placeholder_drop_with_a_warning() {
+    // The Long Dark's shape: `{XDG_DATA_HOME}` only resolves on Linux and
+    // `{DOCUMENTS}` only on Windows (PLAN-CATALOG.md 4.4).
+    let manifest = r#"
+Foreign:
+  files:
+    "<xdgData>/Foreign/save":
+      when: [{ os: mac }]
+    "<xdgData>/Foreign/linux":
+      when: [{ os: linux }]
+"#;
+    let addendum = r#"
+"Foreign":
+  exclude:
+    - when: { os: macos }
+      path: "{DOCUMENTS}/Foreign/save/settings.ini"
+"#;
+    let outcome = run(&keep(&["Foreign"]), addendum, manifest);
+    let built = game(&outcome, "Foreign");
+    assert_eq!(built.save, vec![rule("{XDG_DATA_HOME}/Foreign/linux", Some(Platform::Linux), None)]);
+    assert!(built.exclude.is_empty());
+    let warnings = issues_of(&outcome.report.warnings, IssueKind::DroppedTarget);
+    assert_eq!(warnings.len(), 2, "{warnings:#?}");
+    assert!(warnings[0].message.contains("{XDG_DATA_HOME} doesn't resolve on macos"));
+    assert!(warnings[1].message.contains("{DOCUMENTS} doesn't resolve on macos"));
+
+    // The addendum's fix replaces the row, and the warning goes away.
+    let fix = r#"
+"Foreign":
+  override:
+    save:
+      - when: { os: macos }
+        path: "{HOME}/.local/share/Foreign/save"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/Foreign/linux"
+"#;
+    let fixed = run(&keep(&["Foreign"]), fix, manifest);
+    assert_eq!(game(&fixed, "Foreign").save.len(), 2);
+    assert!(fixed.report.warnings.is_empty());
+}
+
+#[test]
 fn review_lists_multi_target_games_and_config_save_folders() {
     let manifest = r#"
 Paradox:

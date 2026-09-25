@@ -9,9 +9,11 @@
 //! - `.savescummer-package.json`, which marks it as generated output
 //! - `SHA256SUMS.txt`
 //!
-//! A package is assembled in a fresh `.staging-<uuid>` sibling and swapped
-//! into place only when complete, so a failed build never damages the
-//! existing one.
+//! The platform module lays out the executables, xtask adds the shared files
+//! and the checksums, and the platform finishes the package last (macOS signs
+//! the bundle). A package is assembled in a fresh `.staging-<uuid>` sibling
+//! and swapped into place only when complete, so a failed build never damages
+//! the existing one.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -35,10 +37,10 @@ pub struct Inputs<'a> {
     pub mode: Mode,
     pub version: &'a str,
     /// Cargo's host and CLI executables (renamed when packaged). Read by the
-    /// platform packaging, which only Windows has yet.
-    #[cfg_attr(not(windows), allow(dead_code))]
+    /// platform packaging, which Linux doesn't have yet.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub host: PathBuf,
-    #[cfg_attr(not(windows), allow(dead_code))]
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub cli: PathBuf,
     pub ui: Option<&'a Ui>,
 }
@@ -49,6 +51,9 @@ pub struct Layout {
     pub resources: PathBuf,
     /// Files that must exist, relative to the package root.
     pub required: Vec<PathBuf>,
+    /// Files and folders left out of `SHA256SUMS.txt`, relative to the package
+    /// root, because finishing the package rewrites them (macOS signing).
+    pub unsummed: Vec<PathBuf>,
 }
 
 /// The finished package folder (`build/<mode>/package/<name>`).
@@ -83,7 +88,17 @@ pub fn assemble(inputs: &Inputs) -> anyhow::Result<PathBuf> {
     if !missing.is_empty() {
         bail!("the package is missing {}", missing.join(", "));
     }
-    write_sums(&staging, &layout.resources.join(SUMS))?;
+    let sums_file = layout.resources.join(SUMS);
+    let mut unsummed = layout.unsummed;
+    unsummed.push(sums_file.strip_prefix(&staging).expect("inside the package").to_path_buf());
+    let sums = checksums(&staging, &unsummed)?;
+    fs::write(&sums_file, &sums).with_context(|| format!("writing {}", sums_file.display()))?;
+    // macOS signs here, which seals SHA256SUMS.txt; whatever that rewrites
+    // must be in `unsummed`, and this proves it.
+    platform::finish_package(&staging)?;
+    if checksums(&staging, &unsummed)? != sums {
+        bail!("finishing the package changed files listed in {SUMS}");
+    }
 
     let target = location(inputs.mode);
     swap(&staging, &target)?;
@@ -150,15 +165,20 @@ fn write_manifest(path: &Path, inputs: &Inputs) -> anyhow::Result<()> {
         .with_context(|| format!("writing {}", path.display()))
 }
 
-/// `<sha256>  <path>` for every file in the package, sorted, `/`-separated.
-fn write_sums(root: &Path, out: &Path) -> anyhow::Result<()> {
+/// `<sha256>  <path>` for every file in the package outside `skip`, sorted,
+/// `/`-separated.
+fn checksums(root: &Path, skip: &[PathBuf]) -> anyhow::Result<String> {
     let mut lines = Vec::new();
     for file in files(root)? {
-        let relative = file.strip_prefix(root).expect("walked from root").to_string_lossy().replace('\\', "/");
+        let relative = file.strip_prefix(root).expect("walked from root");
+        if skip.iter().any(|s| relative.starts_with(s)) {
+            continue;
+        }
+        let relative = relative.to_string_lossy().replace('\\', "/");
         lines.push(format!("{}  {relative}", sha256_file(&file)?));
     }
     lines.sort_by(|a, b| a[66..].cmp(&b[66..]));
-    fs::write(out, lines.join("\n") + "\n").with_context(|| format!("writing {}", out.display()))
+    Ok(lines.join("\n") + "\n")
 }
 
 pub fn sha256_file(path: &Path) -> anyhow::Result<String> {
@@ -168,16 +188,18 @@ pub fn sha256_file(path: &Path) -> anyhow::Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-/// Every file under `dir`, recursively.
+/// Every regular file under `dir`, recursively. Symlinks (in macOS
+/// frameworks) are neither followed nor listed; their targets are.
 pub fn files(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).with_context(|| format!("reading {}", dir.display()))? {
             let entry = entry?;
-            if entry.file_type()?.is_dir() {
+            let kind = entry.file_type()?;
+            if kind.is_dir() {
                 stack.push(entry.path());
-            } else {
+            } else if kind.is_file() {
                 out.push(entry.path());
             }
         }

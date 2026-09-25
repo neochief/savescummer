@@ -9,7 +9,10 @@ use std::time::Duration;
 
 use savescummer_ipc::{ScanOrigin, ScanResult};
 
+use savescummer_storage as db;
+
 use crate::host::{Host, now};
+use crate::model::SETTING_DRIVES;
 
 #[derive(Debug, Clone)]
 struct Job {
@@ -130,7 +133,7 @@ pub fn worker(host: Arc<Host>) {
             }
             host.publish(&mut inner);
         }
-        let new_games = run(&host, job.full, &job.reasons.join(", "));
+        let new_games = run(&host, job.full, job.user, &job.reasons.join(", "));
         // A user request may have joined while the scan ran.
         let user = job.user || host.scans.running_user();
         let result = ScanResult {
@@ -157,10 +160,12 @@ pub fn worker(host: Arc<Host>) {
 }
 
 /// One scan: an install scan, plus re-checking every checkpoint on disk for
-/// a full scan.
-pub fn run(host: &Arc<Host>, full: bool, reason: &str) -> usize {
+/// a full scan. A user's scan may ask macOS for access to what games wait
+/// for; any other only notifies.
+pub fn run(host: &Arc<Host>, full: bool, user: bool, reason: &str) -> usize {
     crate::checkpoints::check_store(host);
     let new_games = crate::library::scan(host, full, reason);
+    crate::privacy::after_scan(host, user);
     if full {
         crate::checkpoints::verify_all(host);
         crate::checkpoints::clean_up(host);
@@ -169,7 +174,34 @@ pub fn run(host: &Arc<Host>, full: bool, reason: &str) -> usize {
         watcher.set_paths(host.env.watch_locations());
         watcher.set_registry_keys(registry_keys(host));
     }
+    remember_drives(host);
     new_games
+}
+
+/// Remembers the drives of everything the host relies on (PLAN-HOST, "A
+/// drive the host has seen stays expected"), so a drive unplugged later reads
+/// as disconnected rather than empty. Kept in the database, so it holds for a
+/// host started while the drive is out.
+pub fn remember_drives(host: &Host) {
+    let mut used = host.env.steam_libraries();
+    {
+        let inner = host.lock();
+        used.push(inner.store.clone());
+        for game in inner.games.values() {
+            used.extend(game.installs.iter().map(|i| i.install_dir.clone()));
+        }
+        for derived in inner.derived.values() {
+            if let Ok(targets) = &derived.active {
+                used.extend(targets.iter().map(|t| t.root.clone()));
+            }
+        }
+    }
+    if savescummer_snapshots::remember_drives(&used) {
+        let drives = serde_json::to_string(&savescummer_snapshots::remembered_drives()).expect("paths serialize");
+        if let Err(e) = host.db().write(|c| db::set_setting(c, SETTING_DRIVES, &drives)) {
+            crate::trace(&format!("can't record the drives in use: {e}"));
+        }
+    }
 }
 
 /// The registry keys to watch, in the platform crate's terms. A key that

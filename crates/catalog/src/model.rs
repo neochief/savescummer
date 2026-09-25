@@ -270,6 +270,23 @@ pub const PLACEHOLDERS: &[&str] = &[
     "STEAM_USERDATA",
 ];
 
+/// Whether a placeholder resolves for a build of `os` (PLAN-CATALOG.md 4.4):
+/// the Windows folders only for Windows builds (a Proton prefix included),
+/// the XDG folders only for Linux builds, the rest for every build.
+pub fn placeholder_applies(name: &str, os: Platform) -> bool {
+    match name {
+        "APPDATA" | "LOCALAPPDATA" | "LOCALLOW" | "DOCUMENTS" | "PUBLIC" | "PROGRAMDATA" | "PROGRAMFILES"
+        | "WINDIR" => os == Platform::Windows,
+        "XDG_DATA_HOME" | "XDG_CONFIG_HOME" => os == Platform::Linux,
+        _ => true,
+    }
+}
+
+/// The placeholder a path template starts with, if it starts with one.
+pub fn leading_placeholder(path: &str) -> Option<&str> {
+    path.split('/').next()?.strip_prefix('{')?.strip_suffix('}')
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum BundleError {
     #[error("the bundle isn't valid JSON: {0}")]

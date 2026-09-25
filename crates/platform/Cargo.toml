@@ -6,9 +6,18 @@ publish = false
 
 [dependencies]
 notify.workspace = true
+serde.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 notify = { workspace = true, features = ["macos_fsevent"] }
+objc2.workspace = true
+objc2-foundation.workspace = true
+objc2-app-kit.workspace = true
+objc2-user-notifications.workspace = true
+objc2-service-management.workspace = true
+block2.workspace = true
+dispatch2.workspace = true
+global-hotkey.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

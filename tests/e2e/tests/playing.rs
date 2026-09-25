@@ -6,7 +6,6 @@ mod common;
 use common::*;
 
 #[test]
-#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_run_is_saved_loaded_and_reverted_while_playing() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Roguey");
@@ -91,15 +90,21 @@ fn load_this_save_restores_an_exact_older_checkpoint() {
     assert_eq!(rows[0]["label"], "act 1", "a Loaded row shows the label of the save it loaded");
 }
 
+/// What a Load refused because the game kept a save open reports: Windows
+/// fails stage 2 (the rename), macOS and Linux find the open file first.
+const HELD_KIND: &str = if cfg!(windows) { "in_use" } else { "held_open" };
+
 #[test]
-#[cfg_attr(not(windows), ignore = "an open file blocks a rename only on Windows (PLAN-MACOS.md, decision 3)")]
 fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Holder");
     let slot = saves.join("slot.sav");
     write(&slot, "checkpointed");
+    let other_saves = world.home.join("Saves").join("Other");
+    write(&other_saves.join("a.sav"), "other game");
     let _host = world.host();
     let (game, exe) = world.custom_game("Holder", &saves);
+    let (other, _) = world.custom_game("Other", &other_saves);
     world.ok(&["save", &game]);
     write(&slot, "current");
     write(&saves.join("other.sav"), "other");
@@ -107,10 +112,15 @@ fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
 
     let mut running = launch(&exe, &["--hold", slot.to_str().unwrap()]);
     world.wait_game(&game, "the game is running", |g| g["running"] == true);
-    let out = world.cli(&["load", &game]);
+    let started = std::time::Instant::now();
+    let load = world.cli_background(&["load", &game]);
+    // While this game waits for its save, other games work as usual.
+    world.ok(&["save", &other]);
+    let out = load.finish();
+    assert!(started.elapsed() >= std::time::Duration::from_secs(1), "the load waited before giving up");
     assert_eq!(out.code, 1, "the load ran and failed: {}", out.stdout);
-    assert_eq!(out.last()["error"]["kind"], "in_use");
-    assert_eq!(tree(&saves), before, "renames undone, copies deleted");
+    assert_eq!(out.last()["error"]["kind"], HELD_KIND);
+    assert_eq!(tree(&saves), before, "nothing changed");
     assert_eq!(world.kinds(&game), vec!["saved"], "a failed load leaves no history");
     assert!(world.game(&game)["blocked"].is_null(), "an ordinary failure doesn't block the game");
 
@@ -122,7 +132,29 @@ fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
 }
 
 #[test]
-#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
+fn a_save_the_game_lets_go_of_within_a_moment_is_waited_out() {
+    let world = World::new();
+    let saves = world.home.join("Saves").join("Brief");
+    let slot = saves.join("slot.sav");
+    write(&slot, "checkpointed");
+    let _host = world.host();
+    let (game, exe) = world.custom_game("Brief", &saves);
+    world.ok(&["save", &game]);
+    write(&slot, "current");
+
+    // Outside the save folder, so it isn't part of the save.
+    let release = world.home.join("release-the-save");
+    let _running = launch(&exe, &["--hold", slot.to_str().unwrap(), "--release-file", release.to_str().unwrap()]);
+    world.wait_game(&game, "the game is running", |g| g["running"] == true);
+    let load = world.cli_background(&["load", &game]);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    write(&release, "");
+    let out = load.finish();
+    assert_eq!(out.code, 0, "the load waited the hold out: {}", out.stdout);
+    assert_eq!(read(&slot), "checkpointed");
+}
+
+#[test]
 fn a_session_without_saves_leaves_no_markers() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Quiet");

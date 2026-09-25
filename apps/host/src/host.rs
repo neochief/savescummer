@@ -13,7 +13,7 @@ use savescummer_core::common::{Commonality, commonality};
 use savescummer_core::stack::ActiveStack;
 use savescummer_core::{ErrorKind, Failure, Filter, Presence};
 use savescummer_ipc::{
-    Availability, CheckpointBrief, EventBody, GameKind, GameSummary, OpStatus, Operation, Phase, ScanInfo,
+    AccessInfo, Availability, CheckpointBrief, EventBody, GameKind, GameSummary, OpStatus, Operation, Phase, ScanInfo,
     SettingsInfo, State, StoreInfo,
 };
 use savescummer_scanner::Environment;
@@ -72,6 +72,11 @@ pub struct Inner {
     pub stack: ActiveStack,
     /// Running games' current session ids.
     pub sessions: HashMap<String, String>,
+    /// Running games' processes, as the monitor last saw them.
+    pub processes: BTreeMap<String, Vec<u32>>,
+    /// The game in front, as the monitor last saw it, even one waiting for
+    /// access (which is never on the stack).
+    pub front: Option<String>,
     pub busy: HashMap<String, Operation>,
     pub blocked: HashMap<String, Failure>,
     pub last_results: HashMap<String, Operation>,
@@ -91,6 +96,9 @@ pub struct Inner {
     pub store_moving: bool,
     pub play_sounds: bool,
     pub launch_on_startup: bool,
+    /// macOS: turned off in System Settings, where only the user can turn
+    /// it on again.
+    pub launch_needs_approval: bool,
     pub revision: u64,
     /// Games whose hotkey operation should play sounds when it finishes.
     pub hotkey_ops: HashSet<String>,
@@ -117,6 +125,7 @@ pub struct Host {
     pub scans: crate::scan::ScanQueue,
     pub monitor_dirty: std::sync::atomic::AtomicBool,
     pub watcher: Mutex<Option<savescummer_platform::watch::Watcher>>,
+    pub privacy: Arc<crate::privacy::Privacy>,
     crash_at: Option<(String, usize)>,
 }
 
@@ -138,6 +147,7 @@ impl Host {
             Some((name.to_string(), n.parse().ok()?))
         });
         let sounds = (!opts.no_integrations).then(savescummer_platform::sounds::Player::new);
+        let privacy = Arc::new(crate::privacy::Privacy::load(&data_dir, &env));
         Arc::new(Host {
             opts,
             data_dir,
@@ -156,6 +166,7 @@ impl Host {
             scans: crate::scan::ScanQueue::default(),
             monitor_dirty: std::sync::atomic::AtomicBool::new(true),
             watcher: Mutex::new(None),
+            privacy,
             crash_at,
         })
     }
@@ -215,6 +226,7 @@ impl Host {
                 play_sounds: inner.play_sounds,
                 launch_on_startup: inner.launch_on_startup,
                 launch_on_startup_available: savescummer_platform::autostart::available(),
+                launch_on_startup_needs_approval: inner.launch_needs_approval,
                 checkpoint_store: inner.store.to_string_lossy().into_owned(),
             },
             store: StoreInfo { path: inner.store.to_string_lossy().into_owned(), available: inner.store_available },
@@ -245,6 +257,11 @@ impl Host {
             save,
             load,
             config_error: derived.active.as_ref().err().cloned(),
+            access: derived.access.as_ref().map(|(_, category)| AccessInfo {
+                category: category.as_str().to_string(),
+                denied: self.privacy.is_denied(*category),
+                settings_url: category.settings_url().to_string(),
+            }),
             latest: cache.latest.clone(),
             has_history: cache.has_history,
             checkpoints_size: inner.store_available.then_some(cache.size + cache.leftover_size),
@@ -362,7 +379,7 @@ pub fn availability(inner: &Inner, game: &Game, derived: &Derived, cache: &GameC
     let common = || -> Option<ErrorKind> {
         if let Err(f) = &derived.active {
             return Some(match f.kind {
-                ErrorKind::NoSaveLocation => ErrorKind::NoSaveLocation,
+                ErrorKind::NoSaveLocation | ErrorKind::AccessNeeded => f.kind,
                 _ => ErrorKind::InvalidTarget,
             });
         }
@@ -421,6 +438,7 @@ fn placeholder_state(instance: &str) -> State {
             play_sounds: true,
             launch_on_startup: false,
             launch_on_startup_available: false,
+            launch_on_startup_needs_approval: false,
             checkpoint_store: String::new(),
         },
         store: StoreInfo { path: String::new(), available: false },
@@ -434,7 +452,7 @@ fn placeholder_state(instance: &str) -> State {
 }
 
 impl Inner {
-    pub fn new(store: PathBuf, play_sounds: bool, launch_on_startup: bool) -> Inner {
+    pub fn new(store: PathBuf, play_sounds: bool) -> Inner {
         Inner {
             phase: Phase::Starting,
             games: BTreeMap::new(),
@@ -442,6 +460,8 @@ impl Inner {
             caches: HashMap::new(),
             stack: ActiveStack::default(),
             sessions: HashMap::new(),
+            processes: BTreeMap::new(),
+            front: None,
             busy: HashMap::new(),
             blocked: HashMap::new(),
             last_results: HashMap::new(),
@@ -457,7 +477,8 @@ impl Inner {
             store_available: false,
             store_moving: false,
             play_sounds,
-            launch_on_startup,
+            launch_on_startup: false,
+            launch_needs_approval: false,
             revision: 0,
             hotkey_ops: HashSet::new(),
             artwork: HashMap::new(),

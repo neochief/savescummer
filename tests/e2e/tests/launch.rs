@@ -183,3 +183,52 @@ fn a_one_off_focus_report_outlives_its_connection_but_the_uis_does_not() {
     // And showing the UI starts a new one rather than calling the closed one.
     assert_eq!(world.ok(&["show-ui"])["ui"], "started");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_data_folder_too_long_for_a_socket_is_refused_with_the_reason() {
+    let world = World::new();
+    let data = world.root.join("x".repeat(120));
+    let host = Command::new(HOST)
+        .args(["--minimized", "--no-integrations", "--no-catalog-update", "--data-dir"])
+        .arg(&data)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let out = output_within(host, CLI_LIMIT, "a host with a long data folder");
+    let line = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(2), "{line}");
+    assert!(line.contains("path is too long"), "{line}");
+
+    let cli = Command::new(CLI)
+        .args(["--no-start", "status", "--data-dir"])
+        .arg(&data)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let out = output_within(cli, CLI_LIMIT, "the CLI with a long data folder");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("path is too long"), "{out:?}");
+}
+
+/// Found in review: logout or `launchctl bootout` while the host starts.
+#[cfg(unix)]
+#[test]
+fn a_quit_signal_during_startup_still_exits_safely() {
+    let world = World::new();
+    let mut child = Command::new(HOST)
+        .args(world.host_args())
+        .env("SAVESCUMMER_TEST_DELAY_AT", "scan.discover:1:3000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let log = || std::fs::read_to_string(world.data.join("host.log")).unwrap_or_default();
+    wait_for("the first scan", Duration::from_secs(20), || log().contains("first scan").then_some(()));
+    Command::new("kill").args(["-TERM", &child.id().to_string()]).status().unwrap();
+    let exited = wait_for("the host to exit", Duration::from_secs(30), || child.try_wait().unwrap());
+    let log = log();
+    assert!(log.contains("host stopped"), "exited ({exited:?}) without the safe exit:\n{log}");
+}

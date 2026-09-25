@@ -7,11 +7,15 @@ publish = false
 [dependencies]
 savescummer-catalog.workspace = true
 savescummer-snapshots.workspace = true
+savescummer-platform.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+rusqlite.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

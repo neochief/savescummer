@@ -161,6 +161,11 @@ pub enum Command {
     Hotkey {
         action: HotkeyAction,
     },
+    /// Asks macOS for access to where a waiting game lives (the UI's Allow
+    /// access). Answers once the user has.
+    RequestAccess {
+        game: String,
+    },
     Shutdown,
 }
 
@@ -195,6 +200,7 @@ impl Command {
             Command::CatalogRefresh => "catalog_refresh",
             Command::ShowUi => "show_ui",
             Command::Hotkey { .. } => "hotkey",
+            Command::RequestAccess { .. } => "request_access",
             Command::Shutdown => "shutdown",
         }
     }
@@ -365,6 +371,19 @@ impl Availability {
     }
 }
 
+/// A game waiting for macOS to allow access to where it lives (PLAN-MACOS.md,
+/// PRIVACY PERMISSIONS). It's inactive until then; the UI offers Allow
+/// access, or the System Settings pane once the user denied it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccessInfo {
+    /// `documents`, `desktop`, `downloads`, `icloud_drive`, `volumes`,
+    /// `app_data` or `app_bundles`.
+    pub category: String,
+    /// Asked and refused: macOS won't ask again.
+    pub denied: bool,
+    pub settings_url: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckpointBrief {
     pub id: String,
@@ -402,6 +421,8 @@ pub struct GameSummary {
     pub load: Availability,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_error: Option<Failure>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<AccessInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest: Option<CheckpointBrief>,
     pub has_history: bool,
@@ -449,6 +470,10 @@ pub struct SettingsInfo {
     pub play_sounds: bool,
     pub launch_on_startup: bool,
     pub launch_on_startup_available: bool,
+    /// macOS: the user turned launch at login off in System Settings; only
+    /// they can turn it on again there (Login Items).
+    #[serde(default)]
+    pub launch_on_startup_needs_approval: bool,
     pub checkpoint_store: String,
 }
 

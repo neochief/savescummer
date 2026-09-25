@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 
 pub mod autostart;
 pub mod integration;
+pub mod power;
+pub mod privacy;
 pub mod process;
 pub mod sounds;
 pub mod watch;

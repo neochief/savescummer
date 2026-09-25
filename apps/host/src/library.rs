@@ -88,7 +88,7 @@ pub fn derive_one(host: &Host, inner: &mut Inner, game_id: &str) {
 }
 
 fn derive(
-    _host: &Host,
+    host: &Host,
     game: &Game,
     raw: &BTreeMap<String, Result<(Vec<Target>, bool), Failure>>,
     names: &HashMap<String, String>,
@@ -99,9 +99,15 @@ fn derive(
     let (targets, user) = match &raw[&game.id] {
         Ok(value) => value.clone(),
         Err(failure) => {
-            return Derived { active: Err(failure.clone().game(&game.id)), has_data: false, warnings };
+            return Derived { active: Err(failure.clone().game(&game.id)), has_data: false, warnings, access: None };
         }
     };
+    // Waiting for macOS to allow access: nothing inside is touched.
+    let roots: Vec<PathBuf> = targets.iter().map(|t| t.root.clone()).collect();
+    if let Some((path, category)) = crate::privacy::game_needs(host, &roots, &game.install_dirs()) {
+        let failure = Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(&path).game(&game.id);
+        return Derived { active: Err(failure), has_data: false, warnings, access: Some((path, category)) };
+    }
     // Other games' targets: every user location, and the catalog targets of
     // games ordered before this one, so two catalog games never both drop a
     // shared target.
@@ -150,7 +156,7 @@ fn derive(
                 )
                 .path(&target.root)
                 .game(&game.id);
-                return Derived { active: Err(failure), has_data: false, warnings };
+                return Derived { active: Err(failure), has_data: false, warnings, access: None };
             }
         }
         check_all(&targets)
@@ -169,6 +175,14 @@ fn derive(
         }
     };
 
+    // A location that turned unreadable may be macOS taking access back.
+    if let Ok(targets) = &active
+        && targets
+            .iter()
+            .any(|t| savescummer_snapshots::presence(&t.root) == Presence::Unknown && host.privacy.taken_back(&t.root))
+    {
+        return derive(host, game, raw, names, broad, paths);
+    }
     let mut has_data = false;
     let active = active.map(|targets| {
         targets
@@ -187,7 +201,7 @@ fn derive(
             })
             .collect()
     });
-    Derived { active, has_data, warnings }
+    Derived { active, has_data, warnings, access: None }
 }
 
 /// Refreshes presence and data for some games (running games, after an
@@ -447,6 +461,7 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
     if name.is_empty() {
         return Err(Failure::new(ErrorKind::InvalidConfig, "the name can't be blank"));
     }
+    ask_for_typed(host, &[Some(executable), Some(location)])?;
     let exe = absolute(executable)?;
     let location = user_location(location)?;
     let mut inner = host.lock();
@@ -485,6 +500,9 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
     host.refresh_cache(&mut inner, &id);
     host.monitor_dirty.store(true, std::sync::atomic::Ordering::SeqCst);
     host.publish(&mut inner);
+    drop(inner);
+    // A save location on another drive is expected from now on.
+    crate::scan::remember_drives(host);
     Ok(id)
 }
 
@@ -531,6 +549,7 @@ pub struct ConfigureRequest<'a> {
 /// Changes a game's configuration. Applied only after every new value
 /// validates; changing the save set never moves or rewrites checkpoints.
 pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> Result<(), Failure> {
+    ask_for_typed(host, &[request.executable, request.save_location])?;
     let mut inner = host.lock();
     if inner.busy.contains_key(game_id) {
         return Err(Failure::new(ErrorKind::Busy, "another operation runs for this game").game(game_id));
@@ -574,6 +593,8 @@ pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> R
     host.bump_history(&mut inner, game_id);
     host.monitor_dirty.store(true, std::sync::atomic::Ordering::SeqCst);
     host.publish(&mut inner);
+    drop(inner);
+    crate::scan::remember_drives(host);
     Ok(())
 }
 
@@ -585,6 +606,20 @@ fn absolute(text: &str) -> Result<PathBuf, Failure> {
     Ok(path)
 }
 
+/// Adding or configuring a game is a user action: a typed program or save
+/// location macOS guards is asked for right away, while the user is still at
+/// the form, and before the host's state is locked (the answer may take
+/// long).
+fn ask_for_typed(host: &Host, typed: &[Option<&str>]) -> Result<(), Failure> {
+    for text in typed.iter().flatten() {
+        let path = absolute(text)?;
+        let root = split_location(&path).map_or(path, |target| target.root);
+        crate::privacy::ask_for(host, &root)?;
+    }
+    Ok(())
+}
+
+/// A typed save location, validated.
 fn user_location(text: &str) -> Result<UserLocation, Failure> {
     let path = absolute(text)?;
     let target =

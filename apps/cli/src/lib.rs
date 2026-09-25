@@ -244,6 +244,8 @@ enum Cmd {
         #[arg(long)]
         no_wait: bool,
     },
+    /// Ask macOS for access to where a waiting game lives (may prompt).
+    RequestAccess { game: String },
     /// Stop the host safely.
     Shutdown,
     /// Send one raw protocol line and print the answer (protocol tests).
@@ -310,13 +312,19 @@ fn connect(endpoint: &str, cli: &Cli, data_dir: &std::path::Path) -> Result<Clie
         Err(ConnectError::Io(e)) => return Err(format!("can't reach the host: {e}")),
     }
     let exe = host_exe().ok_or("can't find SaveScummer next to the CLI")?;
-    let mut command = std::process::Command::new(&exe);
-    // A command needs a host, not a window.
-    command.arg("--minimized");
-    if let Some(dir) = &cli.data_dir {
-        command.arg("--data-dir").arg(dir);
-    }
-    command.args(&cli.host_args);
+    let mut command = match through_launch_services(&exe, cli) {
+        Some(command) => command,
+        None => {
+            let mut command = std::process::Command::new(&exe);
+            // A command needs a host, not a window.
+            command.arg("--minimized");
+            if let Some(dir) = &cli.data_dir {
+                command.arg("--data-dir").arg(dir);
+            }
+            command.args(&cli.host_args);
+            command
+        }
+    };
     command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     // The host outlives us.
     savescummer_platform::process::detach(&mut command);
@@ -330,6 +338,22 @@ fn connect(endpoint: &str, cli: &Cli, data_dir: &std::path::Path) -> Result<Clie
             Err(e) => return Err(format!("the host didn't start: {e}")),
         }
     }
+}
+
+/// macOS: the installed app's host starts through LaunchServices (`open`),
+/// not as our child. macOS holds whoever started a process responsible for
+/// its privacy prompts: SaveScummer must ask for itself, not for Terminal
+/// (PLAN-MACOS.md, THE APP BUNDLE). Dev hosts with `--data-dir` still run
+/// directly.
+fn through_launch_services(exe: &std::path::Path, cli: &Cli) -> Option<std::process::Command> {
+    if !cfg!(target_os = "macos") || cli.data_dir.is_some() || std::env::var_os("SAVESCUMMER_HOST_EXE").is_some() {
+        return None;
+    }
+    // …/SaveScummer.app/Contents/MacOS/SaveScummer
+    let bundle = exe.ancestors().nth(3).filter(|b| b.extension().is_some_and(|e| e == "app"))?;
+    let mut command = std::process::Command::new("/usr/bin/open");
+    command.args(["-g", "-j", "-a"]).arg(bundle).arg("--args").arg("--minimized").args(&cli.host_args);
+    Some(command)
 }
 
 fn host_exe() -> Option<PathBuf> {
@@ -757,6 +781,17 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
                 Key::Load => HotkeyAction::Load,
             };
             s.operation(Command::Hotkey { action }, no_wait)
+        }
+        Cmd::RequestAccess { game } => {
+            let response = s.send(Command::RequestAccess { game })?;
+            Ok(s.report(&response, |v| match v["access"].as_str().unwrap_or_default() {
+                "denied" => format!(
+                    "macOS denied access to {}; allow it in System Settings: {}",
+                    v["category"].as_str().unwrap_or_default(),
+                    v["settings_url"].as_str().unwrap_or_default()
+                ),
+                _ => "access granted".into(),
+            }))
         }
         Cmd::Shutdown => {
             let response = s.send(Command::Shutdown)?;

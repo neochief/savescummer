@@ -2,9 +2,12 @@
 //! presence, real paths, file identities, renames that never replace, and
 //! copies that tell reading from writing failures.
 
+use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, RwLock};
 
 use savescummer_core::{ErrorKind, Failure, Presence};
 
@@ -15,8 +18,21 @@ mod imp;
 
 /// Whether a path exists. `Missing` only when the nearest existing parent
 /// can be read and the entry isn't in it; an unplugged drive, an unreachable
-/// share or an access error is `Unknown`.
+/// share or an access error is `Unknown`. So is anything under a remembered
+/// drive that isn't mounted now (see [`remember_drives`]), and anything
+/// [guarded](set_guard).
 pub fn presence(path: &Path) -> Presence {
+    match on_disk(path) {
+        Presence::Unknown => Presence::Unknown,
+        _ if under_a_disconnected_drive(path) => Presence::Unknown,
+        seen => seen,
+    }
+}
+
+fn on_disk(path: &Path) -> Presence {
+    if is_guarded(path) {
+        return Presence::Unknown;
+    }
     match fs::symlink_metadata(path) {
         Ok(_) => Presence::Present,
         Err(e) if is_not_found(&e) => {
@@ -40,6 +56,93 @@ pub fn presence(path: &Path) -> Presence {
     }
 }
 
+// ---- Progress, so a watchdog can tell file work that's stuck (a read
+// waiting on a permission prompt) from work that's slow.
+
+static PROGRESS: AtomicU64 = AtomicU64::new(0);
+
+/// A counter that moves whenever file work gets anywhere.
+pub fn progress() -> u64 {
+    PROGRESS.load(Ordering::Relaxed)
+}
+
+pub(crate) fn advance() {
+    PROGRESS.fetch_add(1, Ordering::Relaxed);
+}
+
+// ---- Locations the OS guards (macOS privacy, PLAN-MACOS.md PRIVACY
+// PERMISSIONS). Touching one before the user allowed it makes macOS ask, and
+// the read waits until someone answers: the host says which paths to leave
+// alone for now.
+
+type Guard = Box<dyn Fn(&Path) -> bool + Send + Sync>;
+
+static GUARD: RwLock<Option<Guard>> = RwLock::new(None);
+
+/// Sets which paths must not be touched yet: their presence is unknown,
+/// their real path an error, and walking them fails.
+pub fn set_guard(blocked: impl Fn(&Path) -> bool + Send + Sync + 'static) {
+    *GUARD.write().unwrap_or_else(|e| e.into_inner()) = Some(Box::new(blocked));
+}
+
+/// Whether `path` must not be touched yet.
+pub fn is_guarded(path: &Path) -> bool {
+    GUARD.read().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|blocked| blocked(path))
+}
+
+/// The failure for a guarded path.
+pub fn guarded_failure(path: &Path) -> Failure {
+    Failure::new(ErrorKind::AccessNeeded, "macOS hasn't allowed access to this location yet").path(path)
+}
+
+// ---- Drives the host has seen (PLAN-HOST, "A drive the host has seen stays
+// expected"). On macOS and Linux an unplugged drive's mount point vanishes or
+// turns into an empty folder, which would otherwise read as "missing".
+
+/// The mount points of drives the host relies on.
+static DRIVES: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+
+fn drives() -> std::sync::MutexGuard<'static, BTreeSet<PathBuf>> {
+    DRIVES.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Starts from the drives remembered earlier (the host keeps them in its
+/// database).
+pub fn load_drives(mount_points: impl IntoIterator<Item = PathBuf>) {
+    *drives() = mount_points.into_iter().collect();
+}
+
+/// The drives remembered now, to keep.
+pub fn remembered_drives() -> Vec<PathBuf> {
+    drives().iter().cloned().collect()
+}
+
+/// Remembers the drive of every path in `used` that is there now, and forgets
+/// drives nothing in `used` lives on any more (a library removed, a location
+/// reconfigured). `used` is everything the host relies on: the checkpoint
+/// store, save locations, Steam libraries, install folders. Returns whether
+/// the remembered set changed.
+pub fn remember_drives(used: &[PathBuf]) -> bool {
+    let mut seen: BTreeSet<PathBuf> =
+        drives().iter().filter(|m| used.iter().any(|p| p.starts_with(m))).cloned().collect();
+    for path in used {
+        if on_disk(path) == Presence::Present
+            && !under_a_disconnected_drive(path)
+            && let Some(mount) = imp::mount_point(path)
+        {
+            seen.insert(mount);
+        }
+    }
+    let mut current = drives();
+    let changed = *current != seen;
+    *current = seen;
+    changed
+}
+
+fn under_a_disconnected_drive(path: &Path) -> bool {
+    drives().iter().any(|mount| path.starts_with(mount) && !imp::is_mounted(mount))
+}
+
 fn is_not_found(e: &io::Error) -> bool {
     // A drive that isn't ready reports "not found" on some systems. A path
     // under a file ("not a directory") can't exist either.
@@ -55,6 +158,9 @@ pub fn is_unavailable(e: &io::Error) -> bool {
 /// that exists, the rest appended as given. A link that can't be resolved
 /// is an error.
 pub fn real_path(path: &Path) -> Result<PathBuf, String> {
+    if is_guarded(path) {
+        return Err(format!("{}: macOS hasn't allowed access to this location yet", path.display()));
+    }
     let mut rest: Vec<&std::ffi::OsStr> = Vec::new();
     let mut current = path;
     loop {
@@ -84,12 +190,35 @@ pub fn real_path(path: &Path) -> Result<PathBuf, String> {
 
 /// A file's identity, stable across renames on one volume.
 pub fn identity(path: &Path) -> Option<String> {
+    if is_guarded(path) {
+        return None;
+    }
     imp::identity(path)
 }
 
-/// Renames without ever replacing an existing entry.
+/// A checkpoint folder's identity, where the OS keeps it stable when a drive
+/// is detached and attached again (Windows). macOS and Linux renumber drives
+/// on every attach, so there a checkpoint is judged by its signature alone.
+pub fn folder_identity(path: &Path) -> Option<String> {
+    if imp::IDENTITY_SURVIVES_REMOUNT { imp::identity(path) } else { None }
+}
+
+/// Renames without replacing an existing entry. Where the file system can do
+/// that in one operation (APFS, ext4, NTFS…), a file created at the same
+/// moment makes the rename fail instead of being overwritten. Where it can't
+/// (exFAT on macOS, some network drives), it checks, then renames: the tiny
+/// gap in between is accepted rather than refusing to work on such drives.
 pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
-    imp::rename_noreplace(from, to)
+    advance();
+    match imp::rename_noreplace(from, to) {
+        Err(e) if e.kind() == io::ErrorKind::Unsupported => {
+            if fs::symlink_metadata(to).is_ok() {
+                return Err(io::Error::new(io::ErrorKind::AlreadyExists, "destination exists"));
+            }
+            fs::rename(from, to)
+        }
+        result => result,
+    }
 }
 
 /// Which side of a copy failed.
@@ -99,11 +228,39 @@ pub enum CopyError {
 }
 
 /// Copies one file, keeping its modification time. Never replaces an
-/// existing destination.
+/// existing destination; a copy that fails partway is removed, so it can be
+/// tried again.
 pub fn copy_file(from: &Path, to: &Path) -> Result<u64, CopyError> {
     let mut source = File::open(from).map_err(CopyError::Read)?;
     let meta = source.metadata().map_err(CopyError::Read)?;
     let mut dest = fs::OpenOptions::new().write(true).create_new(true).open(to).map_err(CopyError::Write)?;
+    let copied = copy_into(&mut source, &meta, &mut dest);
+    if copied.is_err() {
+        drop(dest);
+        let _ = fs::remove_file(to);
+    }
+    copied
+}
+
+/// [`copy_file`] within a retry budget: a transient failure on either side
+/// is tried again.
+pub fn copy_file_retrying(from: &Path, to: &Path, budget: &crate::retry::Budget) -> Result<u64, CopyError> {
+    let mut last = None;
+    let result = budget.run(|| match copy_file(from, to) {
+        Ok(n) => Ok(n),
+        Err(CopyError::Read(e)) => {
+            last = Some(true);
+            Err(e)
+        }
+        Err(CopyError::Write(e)) => {
+            last = Some(false);
+            Err(e)
+        }
+    });
+    result.map_err(|e| if last == Some(true) { CopyError::Read(e) } else { CopyError::Write(e) })
+}
+
+fn copy_into(source: &mut File, meta: &fs::Metadata, dest: &mut File) -> Result<u64, CopyError> {
     let mut buffer = vec![0u8; 256 * 1024];
     let mut total = 0u64;
     loop {
@@ -115,6 +272,7 @@ pub fn copy_file(from: &Path, to: &Path) -> Result<u64, CopyError> {
         };
         dest.write_all(&buffer[..n]).map_err(CopyError::Write)?;
         total += n as u64;
+        advance();
     }
     if let Ok(modified) = meta.modified() {
         dest.set_modified(modified).map_err(CopyError::Write)?;
@@ -155,6 +313,14 @@ pub fn rename_kind(e: &io::Error) -> ErrorKind {
 /// Another program holds the file (Windows' sharing and lock violations).
 pub fn is_in_use(e: &io::Error) -> bool {
     imp::is_in_use(e)
+}
+
+/// An error that may clear by itself within moments, worth a retry: on
+/// Windows sharing and lock violations and "access denied" (a pending
+/// delete or a handle that forbids sharing reports it too). Not proof that
+/// the game holds the file.
+pub fn is_transient(e: &io::Error) -> bool {
+    imp::is_transient(e)
 }
 
 pub fn is_disk_full(e: &io::Error) -> bool {

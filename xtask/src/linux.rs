@@ -34,8 +34,18 @@ pub fn cmake_args() -> Vec<String> {
 
 pub fn qt_runtime_env(_command: &mut Command, _kit: &Path) {}
 
+/// Where the program with the fixed executable name `name` is in a package
+/// (in the AppDir; the AppImage itself dispatches through `AppRun`).
+pub fn program(package: &Path, name: &str) -> PathBuf {
+    package.join("usr").join("bin").join(name)
+}
+
 pub fn fill_package(_root: &Path, _inputs: &Inputs) -> anyhow::Result<Layout> {
     bail!(NOT_YET)
+}
+
+pub fn finish_package(_root: &Path) -> anyhow::Result<()> {
+    Ok(())
 }
 
 pub fn release_file(_package: &Path, _version: &str) -> anyhow::Result<PathBuf> {

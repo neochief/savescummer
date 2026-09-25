@@ -15,7 +15,7 @@ use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::build::{self, Options};
-use crate::naming::{self, HOST, UI};
+use crate::naming::{CLI, HOST, UI};
 use crate::paths::{self, Mode};
 use crate::{platform, procs};
 
@@ -61,10 +61,10 @@ pub fn run(demo: bool, stop_other_hosts: bool) -> anyhow::Result<()> {
     }
     start_host(&package, demo, false)?;
 
-    if !package.join("bin").join(naming::exe(UI)).is_file() {
+    if !platform::program(&package, UI).is_file() {
         println!(
             "no UI yet, so the dev host has no window to show. Drive it with\n  {} --data-dir {} status",
-            paths::show(&package.join("bin").join(naming::exe(naming::CLI))),
+            paths::show(&platform::program(&package, CLI)),
             paths::show(&paths::dev_data()),
         );
     }
@@ -79,7 +79,7 @@ fn dev_package() -> anyhow::Result<PathBuf> {
 
 fn start_host(package: &Path, demo: bool, minimized: bool) -> anyhow::Result<()> {
     stop_recorded()?;
-    let exe = package.join("bin").join(naming::exe(HOST));
+    let exe = platform::program(package, HOST);
     let data_dir = paths::dev_data();
     let logs = Mode::Dev.dir().join("logs");
     fs::create_dir_all(&logs)?;

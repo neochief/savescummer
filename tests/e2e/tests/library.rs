@@ -123,7 +123,6 @@ fn a_user_scan_reports_newly_found_games_and_scans_never_duplicate() {
 }
 
 #[test]
-#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn two_installs_of_one_game_are_two_records_with_install_tags() {
     let world = World::new();
     let steam_copy = world.steam_install(1004, "Twin Game", "TwinGame.exe");
@@ -229,7 +228,6 @@ fn a_standalone_install_and_uninstall_are_noticed_through_the_registry() {
 }
 
 #[test]
-#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_program_inside_the_install_folder_counts_as_the_game() {
     // Launchers: the catalog knows SlayTheSpire.exe, but the game runs as
     // jre/bin/javaw.exe inside the install folder.

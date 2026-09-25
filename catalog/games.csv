@@ -368,7 +368,7 @@
 
 **How progress is saved:** The campaign autosaves through its scenes and long-running clan simulation.
 
-**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.","Ignored",""
+**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.","Keep",""
 "HighFleet","yes","Limited/coarse rollback systems","yes","**Context:** A bad battle or route gamble can destroy irreplaceable ships, fuel, ammunition, and strategic position far from the last Fleet HQ checkpoint.
 
 **How progress is saved:** The game provides campaign restore points at Fleet HQs rather than fine-grained manual rollback everywhere.

@@ -146,7 +146,7 @@ savescummer/
 |-- packaging/
 |   |-- licenses/        Qt license texts, shipped on every platform
 |   |-- windows/         savescummer.iss, README.txt (+ README-qt.txt once the UI ships)
-|   |-- macos/           Info.plist.in
+|   |-- macos/           Info.plist.in, com.savescummer.SaveScummer.host.plist (login agent)
 |   `-- linux/           AppRun, SaveScummer.desktop
 |-- assets/              icons, sounds, asset tooling
 |-- target/
@@ -351,7 +351,7 @@ All three are set to the minimum macOS.
 
 ### Integration
 
-**Launch at login:** the host writes and removes `~/Library/LaunchAgents/com.savescummer.host.plist` (pointing at `Contents/MacOS/SaveScummer` inside the bundle, with `--minimized` and any `--data-dir`) and loads or unloads it with `launchctl`, through the shared `--autostart on|off` code. macOS shows its "Background item added" notice.
+**Launch at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS. Details in PLAN-MACOS.md, LAUNCH AT LOGIN.
 
 ### Upgrade and removal
 
@@ -366,7 +366,7 @@ The README gives both:
 2. Every binary in the bundle is arm64 (`lipo -archs`), and `codesign --verify --deep --strict` passes.
 3. The DMG shows the app and an Applications link; dragging installs it; after *Open Anyway* it runs on a clean machine with the minimum macOS.
 4. `Info.plist` has the Cargo version and the minimum macOS.
-5. Enabling launch at login writes the LaunchAgent and the host starts at login; disabling removes it.
+5. Enabling launch at login registers the agent, it shows as SaveScummer in *Login Items*, and the host starts at login; disabling unregisters it.
 6. Replacing the app while it runs doesn't corrupt data, and the next launch runs the new version.
 7. Nothing ever touches `~/Library/Application Support/SaveScummer`.
 
@@ -466,7 +466,7 @@ Tooling only ever makes drafts; I publish by hand. A published release is never 
 
 - **`SaveScummer --autostart on|off [--data-dir <dir>]`** sets the launch-at-login preference, writes or removes the platform's entry, and exits:
   - Windows: a `Run` value
-  - macOS: the LaunchAgent
+  - macOS: the `SMAppService` login agent
   - Linux: the XDG autostart entry
 
   `off` only removes an entry pointing at this host. The in-app checkbox uses the same code, so the host is the only writer and the entry can't get out of sync.

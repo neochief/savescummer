@@ -59,6 +59,10 @@ pub struct Options {
     /// The Delete countdown.
     #[arg(long, hide = true, default_value_t = 5000)]
     pub delete_countdown_ms: u64,
+    /// How long Save or Load may make no file progress before it's reported
+    /// failed (a read stuck on a permission prompt).
+    #[arg(long, hide = true, default_value_t = 30)]
+    pub stall_secs: u64,
     /// Watch store locations even with integrations off (tests).
     #[arg(long, hide = true)]
     pub watch: bool,

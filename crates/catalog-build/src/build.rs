@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use savescummer_catalog::model::{leading_placeholder, placeholder_applies};
 use savescummer_catalog::{Bundle, Game, PathRule, Platform, SCHEMA, Source};
 
 use crate::inputs::{AddendumEntry, Fit, GameRow, Lock, parse_addendum, parse_games_csv};
@@ -167,7 +168,7 @@ fn build_game(
     };
     let translation: Option<Translation> = manifest.get(name).map(|game| translate(name, game));
 
-    let entry = match (&translation, addendum) {
+    let mut entry = match (&translation, addendum) {
         (None, None) => {
             let suggestions = closest_names(name, manifest.keys().map(String::as_str), 3);
             let hint = if suggestions.is_empty() {
@@ -211,6 +212,9 @@ fn build_game(
             merged.entry
         }
     };
+
+    drop_foreign_placeholders(name, "save", &mut entry.save, report);
+    drop_foreign_placeholders(name, "exclude", &mut entry.exclude, report);
 
     if let Some(t) = &translation {
         // A dropped target only matters while the manifest's `save` is used;
@@ -274,6 +278,24 @@ fn build_game(
         return None;
     }
     Some(game)
+}
+
+/// Drops the rules for one OS whose builds never resolve the rule's leading
+/// placeholder (PLAN-CATALOG.md 4.4), such as `{XDG_DATA_HOME}` for macOS,
+/// with a warning each: the addendum gives that OS its real location.
+fn drop_foreign_placeholders(name: &str, field: &str, rules: &mut Vec<PathRule>, report: &mut Report) {
+    rules.retain(|rule| {
+        let (Some(os), Some(placeholder)) = (rule.when.os, leading_placeholder(&rule.path)) else { return true };
+        if placeholder_applies(placeholder, os) {
+            return true;
+        }
+        report.warnings.push(Issue::new(
+            IssueKind::DroppedTarget,
+            Some(name),
+            format!("dropped {field} {} (os: {os}): {{{placeholder}}} doesn't resolve on {os}", rule.path),
+        ));
+        false
+    });
 }
 
 /// The merged entry plus the addendum parts the manifest made unused.

@@ -6,8 +6,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorKind {
-    /// A save file is in use, so setting it aside failed (Load stage 2).
+    /// Setting a save aside failed (Load stage 2): in use or access denied
+    /// on Windows. Not proof that the game holds it.
     InUse,
+    /// The game's processes hold a file the Load would replace or delete,
+    /// and it stayed open for the whole wait (macOS, Linux). Refused before
+    /// any live file changed.
+    HeldOpen,
     /// A file couldn't be read during a copy.
     ReadFailed,
     /// The destination is full (the store, or a target's drive).
@@ -70,6 +75,13 @@ pub enum ErrorKind {
     KindConflict,
     /// A checkpoint folder can't be read right now (unreadable, not changed).
     CheckpointUnreadable,
+    /// macOS hasn't allowed access to a location yet (PLAN-MACOS.md,
+    /// PRIVACY PERMISSIONS). The detail names the category.
+    AccessNeeded,
+    /// File work stopped making progress (a read waiting on a permission
+    /// prompt nobody sees). Reported failed; the game stays locked until
+    /// the stuck work ends.
+    Stalled,
     /// Anything else the file system reported.
     Io,
 }
@@ -79,6 +91,7 @@ impl ErrorKind {
         // serde's names, without going through JSON.
         match self {
             ErrorKind::InUse => "in_use",
+            ErrorKind::HeldOpen => "held_open",
             ErrorKind::ReadFailed => "read_failed",
             ErrorKind::DiskFull => "disk_full",
             ErrorKind::AccessDenied => "access_denied",
@@ -110,6 +123,8 @@ impl ErrorKind {
             ErrorKind::Starting => "starting",
             ErrorKind::KindConflict => "kind_conflict",
             ErrorKind::CheckpointUnreadable => "checkpoint_unreadable",
+            ErrorKind::AccessNeeded => "access_needed",
+            ErrorKind::Stalled => "stalled",
             ErrorKind::Io => "io",
         }
     }

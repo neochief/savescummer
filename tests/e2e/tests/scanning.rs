@@ -19,7 +19,6 @@ fn user_scan_running(world: &World) {
 }
 
 #[test]
-#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_stuck_scan_delays_neither_requests_nor_monitoring() {
     let world = World::new();
     let install = world.steam_install(1001, "Rogue One", "RogueOne.exe");

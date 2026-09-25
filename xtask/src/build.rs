@@ -24,6 +24,8 @@ pub struct Built {
     pub package: Option<PathBuf>,
 }
 
+/// Cargo. Its settings for every build (the minimum macOS) live in
+/// `.cargo/config.toml`, so plain cargo builds agree with ours.
 fn cargo() -> Command {
     Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
 }

@@ -13,7 +13,7 @@ use savescummer_monitor::{Event, GameProcesses, Monitor};
 use savescummer_snapshots as snap;
 use savescummer_storage::{self as db, HistoryRow};
 
-use crate::host::{Host, new_id, now};
+use crate::host::{Host, Inner, new_id, now};
 
 pub fn run(host: Arc<Host>, mut monitor: Monitor) {
     let interval = Duration::from_millis(host.opts.poll_ms.max(20));
@@ -27,6 +27,14 @@ pub fn run(host: Arc<Host>, mut monitor: Monitor) {
         }
         for event in monitor.poll() {
             handle(&host, event);
+        }
+        let processes = monitor.processes();
+        {
+            let mut inner = host.lock();
+            if inner.processes != processes {
+                inner.processes = processes;
+            }
+            inner.front = monitor.focused().map(str::to_string);
         }
         // Saves appear while a game runs: keep Save's availability current.
         if last_refresh.elapsed() >= Duration::from_secs(2) {
@@ -75,14 +83,44 @@ fn marker(game: &str, kind: RowKind, session: &str, visible: bool) -> HistoryRow
 }
 
 /// "Name (id)" for the log.
-fn display_name(inner: &crate::host::Inner, game: &str) -> String {
+fn display_name(inner: &Inner, game: &str) -> String {
     match inner.games.get(game) {
         Some(g) => format!("{} ({game})", g.name),
         None => game.to_string(),
     }
 }
 
+/// A game waiting for macOS to allow access: seen running, but kept off the
+/// stack and out of the history until it's granted.
+fn waits_for_access(inner: &Inner, game: &str) -> bool {
+    inner.derived.get(game).is_some_and(|d| d.access.is_some())
+}
+
+/// Puts running games that just became active on the stack, without a start
+/// marker: when they started isn't known to the stack.
+pub fn activate_running(inner: &mut Inner) {
+    let waiting: Vec<String> =
+        inner.processes.keys().filter(|g| !inner.stack.contains(g) && !waits_for_access(inner, g)).cloned().collect();
+    for game in waiting {
+        inner.stack.started(&game);
+        inner.sessions.insert(game.clone(), new_id("session"));
+        crate::trace(&format!("game running and now allowed: {}", display_name(inner, &game)));
+    }
+}
+
 fn handle(host: &Arc<Host>, event: Event) {
+    let waiting = match &event {
+        Event::Started { game, .. } | Event::Exited { game } | Event::Focused { game } => {
+            let inner = host.lock();
+            waits_for_access(&inner, game) && !inner.stack.contains(game)
+        }
+    };
+    if waiting {
+        if let Event::Started { game, .. } = &event {
+            crate::trace(&format!("game started, waiting for access: {}", display_name(&host.lock(), game)));
+        }
+        return;
+    }
     match event {
         Event::Started { game, observed } => {
             let session = new_id("session");

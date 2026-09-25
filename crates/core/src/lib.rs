@@ -22,9 +22,21 @@ pub fn has_reserved_suffix(name: &str) -> bool {
     lower.ends_with(SUFFIX_NEW) || lower.ends_with(SUFFIX_OLD)
 }
 
+/// Files the OS or a file manager writes into folders on its own: Finder's
+/// `.DS_Store`, Explorer's `Thumbs.db` and `desktop.ini`, Dolphin's
+/// `.directory`, and macOS's AppleDouble companions (`._name`, written next
+/// to any file with extended attributes on exFAT, FAT and network drives).
+/// Exact names and that one prefix only, so no save can ever match.
+pub fn is_file_manager_file(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    matches!(lower.as_str(), ".ds_store" | "thumbs.db" | "desktop.ini" | ".directory")
+        || lower.strip_prefix("._").is_some_and(|rest| !rest.is_empty())
+}
+
 /// What is never part of a checkpoint, even inside a save folder: Steam's
-/// own files, logs and crash dumps, and our reserved suffixes. The list is
-/// short on purpose: a name that could plausibly be a save never goes on it.
+/// own files, logs and crash dumps, file managers' files and our reserved
+/// suffixes. The list is short on purpose: a name that could plausibly be a
+/// save never goes on it.
 pub fn builtin_excluded(name: &str, is_dir: bool) -> bool {
     let lower = name.to_lowercase();
     if has_reserved_suffix(&lower) {
@@ -32,6 +44,9 @@ pub fn builtin_excluded(name: &str, is_dir: bool) -> bool {
     }
     if is_dir {
         return lower == "logs" || lower == "crashes";
+    }
+    if is_file_manager_file(&lower) {
+        return true;
     }
     matches!(
         lower.as_str(),
@@ -56,5 +71,13 @@ mod tests {
         assert!(!builtin_excluded("logs.sav", false));
         assert!(!builtin_excluded("logs", false), "a file named logs could be a save");
         assert!(!builtin_excluded("changelog.txt", false));
+        assert!(builtin_excluded(".DS_Store", false));
+        assert!(builtin_excluded("Thumbs.db", false));
+        assert!(builtin_excluded("desktop.ini", false));
+        assert!(builtin_excluded(".directory", false));
+        assert!(!builtin_excluded(".directory", true), "a folder with that name could hold saves");
+        assert!(!builtin_excluded("DS_Store.sav", false));
+        assert!(builtin_excluded("._slot.sav", false));
+        assert!(!builtin_excluded("slot._sav", false));
     }
 }

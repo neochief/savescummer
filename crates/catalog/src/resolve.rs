@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::broad::is_broad_template;
 use crate::glob::{has_wildcard, match_path, match_segment};
-use crate::model::{Game, PathRule, Platform, Store};
+use crate::model::{Game, PathRule, Platform, Store, placeholder_applies};
 
 /// Whether a path exists. Only `Missing` counts as absent: a folder on an
 /// unplugged drive is `Unknown`, never missing.
@@ -249,32 +249,26 @@ impl Bases {
     }
 
     fn base(&self, placeholder: &str, build: Platform) -> Result<PathBuf, String> {
+        if !placeholder_applies(placeholder, build) {
+            return Err(format!("{{{placeholder}}} doesn't apply to a {build} build"));
+        }
         let f = &self.folders;
-        let windows_only = |value: &Option<PathBuf>| -> Result<PathBuf, String> {
-            if build != Platform::Windows {
-                return Err(format!("{{{placeholder}}} doesn't apply to a {build} build"));
-            }
-            value.clone().ok_or_else(|| format!("{{{placeholder}}} is unknown on this machine"))
-        };
-        let linux_only = |value: &Option<PathBuf>| -> Result<PathBuf, String> {
-            if build != Platform::Linux {
-                return Err(format!("{{{placeholder}}} doesn't apply to a {build} build"));
-            }
+        let known = |value: &Option<PathBuf>| -> Result<PathBuf, String> {
             value.clone().ok_or_else(|| format!("{{{placeholder}}} is unknown on this machine"))
         };
         match placeholder {
             "INSTALL_DIR" => Ok(self.install_dir.clone()),
             "HOME" => f.home.clone().ok_or_else(|| "the home folder is unknown".into()),
-            "APPDATA" => windows_only(&f.appdata),
-            "LOCALAPPDATA" => windows_only(&f.localappdata),
-            "LOCALLOW" => windows_only(&f.locallow),
-            "DOCUMENTS" => windows_only(&f.documents),
-            "PUBLIC" => windows_only(&f.public),
-            "PROGRAMDATA" => windows_only(&f.programdata),
-            "PROGRAMFILES" => windows_only(&f.programfiles),
-            "WINDIR" => windows_only(&f.windir),
-            "XDG_DATA_HOME" => linux_only(&f.xdg_data_home),
-            "XDG_CONFIG_HOME" => linux_only(&f.xdg_config_home),
+            "APPDATA" => known(&f.appdata),
+            "LOCALAPPDATA" => known(&f.localappdata),
+            "LOCALLOW" => known(&f.locallow),
+            "DOCUMENTS" => known(&f.documents),
+            "PUBLIC" => known(&f.public),
+            "PROGRAMDATA" => known(&f.programdata),
+            "PROGRAMFILES" => known(&f.programfiles),
+            "WINDIR" => known(&f.windir),
+            "XDG_DATA_HOME" => known(&f.xdg_data_home),
+            "XDG_CONFIG_HOME" => known(&f.xdg_config_home),
             "STEAM_USERDATA" => {
                 let account = self.account.ok_or("the Steam account is unknown")?;
                 let root = f.steam_root.clone().ok_or("Steam isn't installed")?;

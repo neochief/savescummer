@@ -239,8 +239,8 @@ pub fn settings(
         savescummer_platform::autostart::set(on, &exe, host.opts.data_dir.as_deref())
             .map_err(|e| Failure::new(ErrorKind::InvalidRequest, e))?;
         let _ = db::set_setting(host.db().conn(), SETTING_LAUNCH, if on { "1" } else { "0" });
-        host.lock().launch_on_startup = on;
     }
+    refresh_launch(host);
     if let Some(on) = play_sounds {
         db::set_setting(host.db().conn(), SETTING_PLAY_SOUNDS, if on { "1" } else { "0" }).map_err(io)?;
         host.lock().play_sounds = on;
@@ -248,6 +248,17 @@ pub fn settings(
     let mut inner = host.lock();
     host.publish(&mut inner);
     Ok(serde_json::json!({ "play_sounds": inner.play_sounds, "launch_on_startup": inner.launch_on_startup }))
+}
+
+/// Reads launch at login back from the OS: the user may change it in
+/// System Settings (macOS) while the host runs.
+pub fn refresh_launch(host: &Host) {
+    let Ok(exe) = std::env::current_exe() else { return };
+    let (on, approval) =
+        (savescummer_platform::autostart::is_enabled(&exe), savescummer_platform::autostart::needs_approval(&exe));
+    let mut inner = host.lock();
+    inner.launch_on_startup = on;
+    inner.launch_needs_approval = approval;
 }
 
 /// Resolves what to open to a real folder; a folder that doesn't exist opens

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use savescummer_catalog::{Context, Install, Outcome};
 use savescummer_core::{Failure, Target};
 use savescummer_ipc::GameKind;
+use savescummer_platform::privacy::Category;
 
 /// A save location the user typed (an override or a custom game's), with
 /// the real folder its root resolved to when it was configured. A link that
@@ -108,6 +109,9 @@ pub struct Derived {
     pub active: Result<Vec<Target>, Failure>,
     pub has_data: bool,
     pub warnings: Vec<String>,
+    /// The macOS privacy category the game waits for, with a path that
+    /// needs it: the game is inactive until it's granted.
+    pub access: Option<(PathBuf, Category)>,
 }
 
 impl Default for Derived {
@@ -116,6 +120,7 @@ impl Default for Derived {
             active: Err(Failure::new(savescummer_core::ErrorKind::NoSaveLocation, "not resolved yet")),
             has_data: false,
             warnings: Vec::new(),
+            access: None,
         }
     }
 }
@@ -124,3 +129,5 @@ pub const SETTING_PLAY_SOUNDS: &str = "play_sounds";
 pub const SETTING_STORE: &str = "checkpoint_store";
 pub const SETTING_LAUNCH: &str = "launch_on_startup";
 pub const SETTING_COUNTER: &str = "game_counter";
+/// The mount points of drives the host relies on, as a JSON list.
+pub const SETTING_DRIVES: &str = "drives";

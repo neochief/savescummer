@@ -14,6 +14,11 @@ pub fn endpoint(_data_dir: &Path, name: &str) -> String {
     format!(r"\\.\pipe\{name}")
 }
 
+/// Pipe names have no practical length limit.
+pub fn check(_endpoint: &str) -> io::Result<()> {
+    Ok(())
+}
+
 pub fn open(endpoint: &str) -> io::Result<Stream> {
     std::fs::OpenOptions::new().read(true).write(true).open(endpoint)
 }

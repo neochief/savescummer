@@ -13,6 +13,7 @@ use savescummer_core::common::RecordedTarget;
 use savescummer_core::{ErrorKind, Failure, Filter, Presence, Target};
 
 use crate::fsx::{self, CopyError};
+use crate::retry::Budget;
 use crate::walk::walk_target;
 
 /// The record written as `checkpoint.json` in every checkpoint.
@@ -47,12 +48,14 @@ pub fn no_hook(_: &str, _: usize) {}
 
 /// Copies what every target matches into `dest` (which must not exist),
 /// one subfolder per target, and writes the record. Returns the recorded
-/// targets and the bytes copied.
+/// targets and the bytes copied. A file that can't be read for a moment is
+/// retried within `budget`.
 pub fn copy_save_set(
     targets: &[Target],
     dest: &Path,
     meta: &mut CheckpointMeta,
     ci: bool,
+    budget: &Budget,
     hook: Hook<'_>,
 ) -> Result<u64, Failure> {
     fs::create_dir(dest).map_err(|e| fsx::failure(fsx::write_kind(&e), &e, dest))?;
@@ -90,7 +93,7 @@ pub fn copy_save_set(
                     if let Some(parent) = to.parent() {
                         fs::create_dir_all(parent).map_err(|e| fsx::failure(fsx::write_kind(&e), &e, parent))?;
                     }
-                    total += fsx::copy_file(&from, &to).map_err(|e| match e {
+                    total += fsx::copy_file_retrying(&from, &to, budget).map_err(|e| match e {
                         CopyError::Read(e) => {
                             let kind = if fsx::is_unavailable(&e) {
                                 ErrorKind::TargetUnavailable
@@ -182,8 +185,9 @@ pub fn publish(temp: &Path, parent: &Path, name: &str) -> Result<PathBuf, Failur
 }
 
 /// A change signature of a checkpoint folder: paths, kinds, sizes and
-/// modification times of everything inside. Change detection, not a
-/// content checksum.
+/// modification times of everything inside, except file managers' own files
+/// (opening a checkpoint in Finder mustn't make it look edited). Change
+/// detection, not a content checksum.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signature {
     pub hash: String,
@@ -195,7 +199,7 @@ pub fn signature(dir: &Path) -> std::io::Result<Signature> {
     let meta = fs::symlink_metadata(dir)?;
     if meta.file_type().is_symlink() || !meta.is_dir() {
         // A checkpoint replaced by a link is a changed checkpoint.
-        return Ok(Signature { hash: "link".into(), size: 0, identity: fsx::identity(dir) });
+        return Ok(Signature { hash: "link".into(), size: 0, identity: fsx::folder_identity(dir) });
     }
     let mut lines = Vec::new();
     let mut size = 0u64;
@@ -206,15 +210,43 @@ pub fn signature(dir: &Path) -> std::io::Result<Signature> {
         hasher.update(line.as_bytes());
         hasher.update(b"\n");
     }
-    Ok(Signature { hash: hex::encode(hasher.finalize()), size, identity: fsx::identity(dir) })
+    Ok(Signature { hash: hex::encode(hasher.finalize()), size, identity: fsx::folder_identity(dir) })
+}
+
+/// Whether `copy` is a faithful copy of the checkpoint folder `original`:
+/// the same paths, kinds and sizes, and modification times within two
+/// seconds. Why the slack: the copy may be on a file system that keeps
+/// coarser times (exFAT: 10 ms, FAT: 2 s), so the copy's own signature
+/// differs and has to be recorded afresh.
+pub fn copy_matches(original: &Path, copy: &Path) -> std::io::Result<bool> {
+    const SLACK_NANOS: u128 = 2_000_000_000;
+    // Each listing line is `rel|kind|size|modified`; split off the time from
+    // the right (a path may hold `|`).
+    let entries = |dir: &Path| -> std::io::Result<Vec<(String, u128)>> {
+        let mut lines = Vec::new();
+        listing(dir, "", &mut lines, &mut 0)?;
+        lines.sort();
+        Ok(lines
+            .into_iter()
+            .map(|line| match line.rsplit_once('|') {
+                Some((rest, modified)) => (rest.to_string(), modified.parse().unwrap_or(0)),
+                None => (line, 0),
+            })
+            .collect())
+    };
+    let (a, b) = (entries(original)?, entries(copy)?);
+    Ok(a.len() == b.len() && a.iter().zip(&b).all(|(x, y)| x.0 == y.0 && x.1.abs_diff(y.1) <= SLACK_NANOS))
 }
 
 fn listing(dir: &Path, prefix: &str, lines: &mut Vec<String>, size: &mut u64) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        let rel = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
         let meta = fs::symlink_metadata(entry.path())?;
+        if meta.is_file() && savescummer_core::is_file_manager_file(&name) {
+            continue;
+        }
+        let rel = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
         let modified = meta
             .modified()
             .ok()
@@ -304,7 +336,7 @@ mod tests {
         ];
         let dest = store.path().join("cp");
         let mut m = meta();
-        let size = copy_save_set(&targets, &dest, &mut m, true, &no_hook).unwrap();
+        let size = copy_save_set(&targets, &dest, &mut m, true, &Budget::new(crate::retry::FORWARD), &no_hook).unwrap();
         assert_eq!(size, 6, "two targets naming the same folder copy it twice");
         assert_eq!(fs::read(dest.join("saves/saves/1.sav")).unwrap(), b"one");
         assert!(!dest.join("saves/saves/Player.log").exists(), "logs are never copied");

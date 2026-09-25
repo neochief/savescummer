@@ -64,12 +64,12 @@ game; the first row is the header.
 - `catalog/games.csv` is committed and is the only editing surface; the builder
   reads it directly. Git diffs, agents and scripts read the same file.
 
-Current list: 88 `Keep`, 10 `Remove`, 9 `Ignored`. `Name` must match the
+Current list: 89 `Keep`, 10 `Remove`, 8 `Ignored`. `Name` must match the
 manifest key exactly. The `Ignored` games have no usable save location in the
 manifest (Catacomb Kids, Vagante, UnReal World, Total War Saga: Thrones of
-Britannia, Darkest Dungeon, Watch Dogs: Legion, King of Dragon Pass, 80 Days)
-or no manifest entry at all (Six Ages 2: Lights Going Out); each needs an
-addendum entry.
+Britannia, Darkest Dungeon, Watch Dogs: Legion, King of Dragon Pass, 80 Days);
+each needs an addendum entry. Six Ages 2: Lights Going Out has no manifest
+entry at all and is built from its addendum entry alone.
 
 ### 2.2 `catalog/addendum.yaml`
 
@@ -225,6 +225,9 @@ Used fields:
      inside such a folder is fine: `Application Support/com.vlambeer.nuclearthrone`
      touches only that entry. This is the same rule the host applies to every
      target (PLAN-HOST.md, Save set safety).
+   - a target for one OS whose leading placeholder never resolves on that
+     OS (4.4), such as a macOS row under `{XDG_DATA_HOME}` (The Long Dark).
+     Checked after the addendum merge, so the addendum's rows count too.
    Every dropped broad target is a build warning, even when other targets
    remain, so a lost OS never goes unnoticed. A game whose targets all drop out
    fails as "no usable save location". If a `Keep` game depends on one of
@@ -392,7 +395,8 @@ Given a `Game` catalog entry, the scanner finds installs:
   download. "Finished" is the fully-installed flag (bit 4) of the manifest's
   `StateFlags`. Steam keeps that flag set while an installed game updates, so
   an update never makes a game disappear.
-- **GOG**: gog id → Galaxy registry install path.
+- **GOG**: gog id → install path from Galaxy's records: the registry on
+  Windows, `InstalledBaseProducts` in Galaxy's `galaxy-2.0.db` on macOS.
 - **Epic**: no product id in the manifest, but the launcher keeps one manifest
   per installed game (`Epic/EpicGamesLauncher/Data/Manifests/*.item`, JSON
   with the install location, on Windows and macOS). Read them once per scan and
@@ -588,8 +592,9 @@ no Proton-specific data; translation is runtime policy.
 
 1. **`ActiveUser`**, the account logged into the running Steam client, when it
    is not 0. Windows keeps it in
-   `HKCU\Software\Valve\Steam\ActiveProcess`; Linux in `~/.steam/registry.vdf`
-   (to verify on macOS). Why first: it is who a game started now runs under,
+   `HKCU\Software\Valve\Steam\ActiveProcess`; Linux in `~/.steam/registry.vdf`.
+   macOS Steam's `registry.vdf` has no `ActiveUser`, even while it runs, so
+   macOS starts at step 2. Why first: it is who a game started now runs under,
    not who logged in last.
 2. The entry marked `MostRecent` in `loginusers.vdf` (older Steam versions).
 3. The entry with the newest `Timestamp` in `loginusers.vdf`. Why: current

@@ -149,6 +149,7 @@ impl Filter {
     fn build(paths: &[PathBuf]) -> Filter {
         let mut filter = Filter::default();
         for path in paths {
+            let path = &real(path);
             if path.is_dir() {
                 filter.whole.insert(path.clone());
             } else if path.is_file()
@@ -179,6 +180,16 @@ impl Filter {
         };
         self.files.get(parent).is_some_and(|names| names.iter().any(|n| same_name(n, name)))
     }
+}
+
+/// The path with links resolved where the OS reports changes that way:
+/// FSEvents names `/private/var/...` for a watch on `/var/...`. Windows
+/// reports paths as they were watched.
+fn real(path: &Path) -> PathBuf {
+    if cfg!(windows) {
+        return path.to_path_buf();
+    }
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// The volume a folder lives on, for releasing a drive's watches.
@@ -316,8 +327,13 @@ mod tests {
     }
 
     /// Lets the worker open its watches before the test changes anything.
-    fn settle() {
-        std::thread::sleep(Duration::from_millis(300));
+    /// FSEvents may still report the folder's own creation a moment after
+    /// the watch starts: that callback passes and isn't counted.
+    fn settle(count: &AtomicUsize) {
+        let wait =
+            if cfg!(target_os = "macos") { DEBOUNCE + Duration::from_millis(1500) } else { Duration::from_millis(300) };
+        std::thread::sleep(wait);
+        count.store(0, Ordering::SeqCst);
     }
 
     fn wait_past_debounce() {
@@ -325,12 +341,11 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "macos", ignore = "FSEvents reports real paths (PLAN-MACOS.md, FILE WATCHING)")]
     fn a_burst_causes_one_callback_and_a_later_change_another() {
         let dir = tempfile::tempdir().unwrap();
         let (count, watcher) = counting();
         watcher.set_paths(vec![dir.path().to_path_buf()]);
-        settle();
+        settle(&count);
 
         for i in 0..5 {
             std::fs::write(dir.path().join(format!("f{i}.acf")), "x").unwrap();
@@ -346,19 +361,18 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "macos", ignore = "FSEvents reports real paths (PLAN-MACOS.md, FILE WATCHING)")]
     fn set_paths_moves_the_watch_and_missing_paths_are_ignored() {
         let old = tempfile::tempdir().unwrap();
         let new = tempfile::tempdir().unwrap();
         let (count, watcher) = counting();
         watcher.set_paths(vec![old.path().to_path_buf()]);
-        settle();
+        settle(&count);
         watcher.set_paths(vec![
             new.path().to_path_buf(),
             new.path().join("does-not-exist"),
             PathBuf::from("Z:\\surely\\missing\\steamapps"),
         ]);
-        settle();
+        settle(&count);
 
         std::fs::write(old.path().join("ignored.acf"), "x").unwrap();
         wait_past_debounce();
@@ -370,14 +384,13 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "macos", ignore = "FSEvents reports real paths (PLAN-MACOS.md, FILE WATCHING)")]
     fn a_single_file_is_watched_through_its_parent() {
         let dir = tempfile::tempdir().unwrap();
         let vdf = dir.path().join("libraryfolders.vdf");
         std::fs::write(&vdf, "a").unwrap();
         let (count, watcher) = counting();
         watcher.set_paths(vec![vdf.clone()]);
-        settle();
+        settle(&count);
 
         std::fs::write(dir.path().join("unrelated.txt"), "x").unwrap();
         wait_past_debounce();

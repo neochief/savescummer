@@ -6,6 +6,11 @@
 //! 2. Set aside: each live file the Load replaces or deletes to `.ssold`.
 //! 3. Swap in: each `.ssnew` to its real name.
 //! 4. Clean up: delete the `.ssold` files.
+//!
+//! A file action that fails with a transient error is retried within the
+//! operation's budgets (see [`crate::retry`]): stages 1–3 draw on the
+//! forward budget, undoing them on the rollback budget, and stage 4 has a
+//! short allowance of its own.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -19,6 +24,7 @@ use savescummer_core::{ErrorKind, Failure, Filter, Presence, SUFFIX_NEW, SUFFIX_
 
 use crate::checkpoint::Hook;
 use crate::fsx::{self, CopyError, with_suffix};
+use crate::retry::{self, Budget, Retry};
 use crate::walk::{Entry, walk_target};
 
 /// One file a Load covers.
@@ -188,11 +194,11 @@ pub struct StageError {
 
 /// Stage 1: copy in. On failure the `.ssnew` copies are deleted; the live
 /// saves were never touched.
-pub fn stage_copy_in(plan: &mut LoadPlan, hook: Hook<'_>) -> Result<(), StageError> {
+pub fn stage_copy_in(plan: &mut LoadPlan, retry: &Retry, hook: Hook<'_>) -> Result<(), StageError> {
     for dir in &plan.create_dirs {
         if let Err(e) = fs::create_dir_all(dir) {
             let failure = fsx::failure(fsx::write_kind(&e), &e, dir);
-            let undone = undo_copy_in(plan).is_ok();
+            let undone = undo_copy_in(plan, &retry.rollback).is_ok();
             return Err(StageError { failure, undone });
         }
     }
@@ -203,15 +209,15 @@ pub fn stage_copy_in(plan: &mut LoadPlan, hook: Hook<'_>) -> Result<(), StageErr
             && let Err(e) = fs::create_dir_all(parent)
         {
             let failure = fsx::failure(fsx::write_kind(&e), &e, parent);
-            let undone = undo_copy_in(plan).is_ok();
+            let undone = undo_copy_in(plan, &retry.rollback).is_ok();
             return Err(StageError { failure, undone });
         }
-        if let Err(e) = fsx::copy_file(&source, &dest) {
+        if let Err(e) = fsx::copy_file_retrying(&source, &dest, &retry.forward) {
             let failure = match e {
                 CopyError::Read(e) => fsx::failure(ErrorKind::CheckpointChanged, &e, &source),
                 CopyError::Write(e) => fsx::failure(fsx::write_kind(&e), &e, &dest),
             };
-            let undone = undo_copy_in(plan).is_ok();
+            let undone = undo_copy_in(plan, &retry.rollback).is_ok();
             return Err(StageError { failure, undone });
         }
         plan.files[i].copy = fsx::identity(&dest);
@@ -220,11 +226,12 @@ pub fn stage_copy_in(plan: &mut LoadPlan, hook: Hook<'_>) -> Result<(), StageErr
     Ok(())
 }
 
-fn undo_copy_in(plan: &LoadPlan) -> Result<(), Failure> {
+/// Undoes stage 1: deletes the `.ssnew` copies and the folders it made.
+pub fn undo_copy_in(plan: &LoadPlan, budget: &Budget) -> Result<(), Failure> {
     let mut first_error = None;
     for file in &plan.files {
         let path = file.new_path();
-        match fs::remove_file(&path) {
+        match budget.run(|| fs::remove_file(&path)) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
@@ -239,16 +246,17 @@ fn undo_copy_in(plan: &LoadPlan) -> Result<(), Failure> {
 }
 
 /// Stage 2: set aside. On failure the renamed files go back and the copies
-/// are deleted; nothing was lost.
-pub fn stage_set_aside(plan: &LoadPlan, hook: Hook<'_>) -> Result<(), StageError> {
+/// are deleted; the originals are back only if that undo succeeds.
+pub fn stage_set_aside(plan: &LoadPlan, retry: &Retry, hook: Hook<'_>) -> Result<(), StageError> {
     let mut done = Vec::new();
     for (i, file) in plan.files.iter().enumerate() {
         if file.original.is_none() {
             continue;
         }
-        if let Err(e) = fsx::rename_noreplace(&file.live, &file.old_path()) {
+        if let Err(e) = retry.forward.run(|| fsx::rename_noreplace(&file.live, &file.old_path())) {
             let failure = fsx::failure(fsx::rename_kind(&e), &e, &file.live);
-            let undone = undo_set_aside(plan, &done).is_ok() && undo_copy_in(plan).is_ok();
+            let undone =
+                undo_set_aside(plan, &done, &retry.rollback).is_ok() && undo_copy_in(plan, &retry.rollback).is_ok();
             return Err(StageError { failure, undone });
         }
         done.push(i);
@@ -257,11 +265,11 @@ pub fn stage_set_aside(plan: &LoadPlan, hook: Hook<'_>) -> Result<(), StageError
     Ok(())
 }
 
-fn undo_set_aside(plan: &LoadPlan, done: &[usize]) -> Result<(), Failure> {
+fn undo_set_aside(plan: &LoadPlan, done: &[usize], budget: &Budget) -> Result<(), Failure> {
     let mut first_error = None;
     for &i in done.iter().rev() {
         let file = &plan.files[i];
-        if let Err(e) = fsx::rename_noreplace(&file.old_path(), &file.live) {
+        if let Err(e) = budget.run(|| fsx::rename_noreplace(&file.old_path(), &file.live)) {
             first_error.get_or_insert(fsx::failure(ErrorKind::RollbackFailed, &e, &file.old_path()));
         }
     }
@@ -270,24 +278,26 @@ fn undo_set_aside(plan: &LoadPlan, done: &[usize]) -> Result<(), Failure> {
 
 /// Stage 3: swap in. On failure the swapped files go back to `.ssnew`, then
 /// stage 2 and stage 1 are undone.
-pub fn stage_swap_in(plan: &LoadPlan, hook: Hook<'_>) -> Result<(), StageError> {
+pub fn stage_swap_in(plan: &LoadPlan, retry: &Retry, hook: Hook<'_>) -> Result<(), StageError> {
     let mut done = Vec::new();
     for (i, file) in plan.files.iter().enumerate() {
         if file.source.is_none() {
             continue;
         }
-        if let Err(e) = fsx::rename_noreplace(&file.new_path(), &file.live) {
+        if let Err(e) = retry.forward.run(|| fsx::rename_noreplace(&file.new_path(), &file.live)) {
             let failure = Failure::new(ErrorKind::SwapFailed, e.to_string()).path(&file.live);
             let mut undone = true;
             for &j in done.iter().rev() {
                 let f: &LoadFile = &plan.files[j];
-                if fsx::rename_noreplace(&f.live, &f.new_path()).is_err() {
+                if retry.rollback.run(|| fsx::rename_noreplace(&f.live, &f.new_path())).is_err() {
                     undone = false;
                 }
             }
             let set_aside: Vec<usize> =
                 plan.files.iter().enumerate().filter(|(_, f)| f.original.is_some()).map(|(i, _)| i).collect();
-            undone = undone && undo_set_aside(plan, &set_aside).is_ok() && undo_copy_in(plan).is_ok();
+            undone = undone
+                && undo_set_aside(plan, &set_aside, &retry.rollback).is_ok()
+                && undo_copy_in(plan, &retry.rollback).is_ok();
             return Err(StageError { failure, undone });
         }
         done.push(i);
@@ -296,16 +306,18 @@ pub fn stage_swap_in(plan: &LoadPlan, hook: Hook<'_>) -> Result<(), StageError> 
     Ok(())
 }
 
-/// Stage 4: clean up. A failure here doesn't undo the Load; the leftover
-/// `.ssold` files are returned and removed later.
+/// Stage 4: clean up, with only a short retry allowance. A failure here
+/// doesn't undo the Load; the leftover `.ssold` files are returned and
+/// removed later.
 pub fn stage_clean_up(plan: &LoadPlan, hook: Hook<'_>) -> Vec<PathBuf> {
+    let budget = Budget::new(retry::CLEAN_UP);
     let mut leftovers = Vec::new();
     for (i, file) in plan.files.iter().enumerate() {
         if file.original.is_none() {
             continue;
         }
         let old = file.old_path();
-        match fs::remove_file(&old) {
+        match budget.run(|| fs::remove_file(&old)) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => leftovers.push(old),
@@ -354,21 +366,22 @@ pub fn observe(plan: &LoadPlan) -> Vec<RecoveryEntry> {
 /// Applies a recovery rule to an interrupted Load's files. Returns an error
 /// if the rule couldn't be carried out completely.
 pub fn recover(plan: &LoadPlan, rule: Rule) -> Result<Vec<PathBuf>, Failure> {
+    let budget = Budget::new(retry::ROLLBACK);
     match rule {
-        Rule::R1 => undo_copy_in(plan).map(|_| Vec::new()),
+        Rule::R1 => undo_copy_in(plan, &budget).map(|_| Vec::new()),
         Rule::R2 => {
             let states = observe(plan);
             let mut first_error = None;
             for (file, state) in plan.files.iter().zip(&states) {
                 if state.copy == Some(Copy::AtLive)
-                    && let Err(e) = fsx::rename_noreplace(&file.live, &file.new_path())
+                    && let Err(e) = budget.run(|| fsx::rename_noreplace(&file.live, &file.new_path()))
                 {
                     first_error.get_or_insert(fsx::failure(ErrorKind::RollbackFailed, &e, &file.live));
                 }
             }
             for (file, state) in plan.files.iter().zip(&states) {
                 if state.original == Some(Original::AtOld)
-                    && let Err(e) = fsx::rename_noreplace(&file.old_path(), &file.live)
+                    && let Err(e) = budget.run(|| fsx::rename_noreplace(&file.old_path(), &file.live))
                 {
                     first_error.get_or_insert(fsx::failure(ErrorKind::RollbackFailed, &e, &file.old_path()));
                 }
@@ -376,7 +389,7 @@ pub fn recover(plan: &LoadPlan, rule: Rule) -> Result<Vec<PathBuf>, Failure> {
             if let Some(error) = first_error {
                 return Err(error);
             }
-            undo_copy_in(plan).map(|_| Vec::new())
+            undo_copy_in(plan, &budget).map(|_| Vec::new())
         }
         Rule::R3 => Ok(stage_clean_up(plan, &crate::checkpoint::no_hook)),
         Rule::R4 => Ok(Vec::new()),

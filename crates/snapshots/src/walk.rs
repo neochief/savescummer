@@ -27,6 +27,9 @@ impl Entry {
 /// Everything a target matches, files and folders, in a stable order.
 /// A missing root matches nothing.
 pub fn walk_target(root: &Path, filter: &Filter, excludes: &[String], ci: bool) -> Result<Vec<Entry>, Failure> {
+    if crate::fsx::is_guarded(root) {
+        return Err(crate::fsx::guarded_failure(root));
+    }
     let mut out = Vec::new();
     match fs::symlink_metadata(root) {
         Err(_) => return Ok(out),
@@ -78,6 +81,7 @@ impl Walker<'_> {
         out: &mut Vec<Entry>,
         _pattern: Option<&str>,
     ) -> Result<(), Failure> {
+        crate::fsx::advance();
         let file_type = meta.file_type();
         if self.excluded(rel, file_type.is_dir()) {
             return Ok(());

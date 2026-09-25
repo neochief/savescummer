@@ -2,7 +2,7 @@
 #
 # Every step is a `cargo xtask` command, so a failure here can always be
 # reproduced locally. A job is added per platform as it lands; today that's
-# Windows. Qt is installed only once the desktop exists (apps/desktop).
+# Windows and macOS. Qt is installed only once the UI exists (apps/ui).
 name: CI
 
 on:
@@ -31,7 +31,7 @@ jobs:
         run: cargo --version
       - uses: Swatinem/rust-cache@v2
       - name: Cache Qt
-        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
         uses: actions/cache@v6
         with:
           path: .runtime/Qt
@@ -42,7 +42,41 @@ jobs:
           path: .runtime/tools/cargo-about
           key: cargo-about-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
       - name: Set up Qt
-        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
+        run: cargo xtask setup qt
+      - name: Set up cargo-about
+        run: cargo xtask setup cargo-about
+      - name: Check
+        run: cargo xtask check
+      - name: Build and test
+        run: cargo xtask build --test --package
+
+  macos:
+    name: macOS
+    # Apple Silicon, the only Macs SaveScummer supports.
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache Qt
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
+        uses: actions/cache@v6
+        with:
+          path: .runtime/Qt
+          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Cache cargo-about
+        uses: actions/cache@v6
+        with:
+          path: .runtime/tools/cargo-about
+          key: cargo-about-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      # The app icon is rendered from assets/icon.svg.
+      - name: Install librsvg
+        run: brew install librsvg
+      - name: Set up Qt
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
         run: cargo xtask setup qt
       - name: Set up cargo-about
         run: cargo xtask setup cargo-about

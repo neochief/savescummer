@@ -30,7 +30,7 @@ jobs:
         run: cargo --version
       - uses: Swatinem/rust-cache@v2
       - name: Cache Qt
-        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
         uses: actions/cache@v6
         with:
           path: .runtime/Qt
@@ -43,7 +43,7 @@ jobs:
             .runtime/tools/inno-setup
           key: tools-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
       - name: Set up Qt
-        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
         run: cargo xtask setup qt
       - name: Set up cargo-about
         run: cargo xtask setup cargo-about
@@ -57,9 +57,46 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  macos:
+    name: macOS disk image
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache Qt
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
+        uses: actions/cache@v6
+        with:
+          path: .runtime/Qt
+          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Cache tools
+        uses: actions/cache@v6
+        with:
+          path: .runtime/tools/cargo-about
+          key: tools-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Install librsvg
+        run: brew install librsvg
+      - name: Set up Qt
+        if: hashFiles('apps/ui/CMakeLists.txt') != ''
+        run: cargo xtask setup qt
+      - name: Set up cargo-about
+        run: cargo xtask setup cargo-about
+      - name: Build the disk image
+        run: cargo xtask dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: dist/*
+          if-no-files-found: error
+
   publish:
     name: Draft release
-    needs: [windows]
+    needs: [windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write

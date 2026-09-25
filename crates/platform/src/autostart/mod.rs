@@ -9,7 +9,8 @@
 use std::path::Path;
 
 #[cfg_attr(windows, path = "windows.rs")]
-#[cfg_attr(not(windows), path = "unsupported.rs")]
+#[cfg_attr(target_os = "macos", path = "macos.rs")]
+#[cfg_attr(not(any(windows, target_os = "macos")), path = "unsupported.rs")]
 mod imp;
 
 const DEV_BUILD_REFUSAL: &str = "development builds never create a sign-in entry";
@@ -29,9 +30,22 @@ pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), Str
     imp::set(on, host_exe, data_dir)
 }
 
-/// Whether a sign-in entry pointing at `host_exe` exists.
+/// Whether a sign-in entry pointing at `host_exe` exists (and, on macOS, is
+/// allowed to run).
 pub fn is_enabled(host_exe: &Path) -> bool {
     imp::is_enabled(host_exe)
+}
+
+/// macOS: the entry exists but the user turned it off in System Settings,
+/// where only they can turn it on again (Login Items).
+pub fn needs_approval(host_exe: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    return imp::needs_approval(host_exe);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = host_exe;
+        false
+    }
 }
 
 #[cfg(test)]

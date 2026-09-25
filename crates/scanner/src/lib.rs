@@ -1,5 +1,5 @@
-//! Store discovery: Steam libraries and app manifests, the GOG registry,
-//! Epic's launcher manifests and loose install folders. It produces
+//! Store discovery: Steam libraries and app manifests, GOG Galaxy's install
+//! records, Epic's launcher manifests and loose install folders. It produces
 //! [`Install`] records and the real [`Probe`]; it contains no save policy.
 //!
 //! Everything the scanner reads about the machine comes from an
@@ -9,7 +9,8 @@
 pub mod vdf;
 
 // What only the live OS can say: known folders, the registry's install
-// records, the running Steam client's account. One file per OS.
+// records (GOG Galaxy's database on macOS), the running Steam client's
+// account. One file per OS.
 #[cfg_attr(windows, path = "os/windows.rs")]
 #[cfg_attr(not(windows), path = "os/unix.rs")]
 mod os;
@@ -21,8 +22,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use savescummer_catalog::{Bundle, Install, KnownFolders, Platform, Presence, Probe, SteamAccount, Store};
+use savescummer_platform::privacy::{Category, Table as PrivacyTable};
 
-/// A GOG install as the GOG registry (or a test environment) lists it.
+/// A GOG install as GOG Galaxy (the registry on Windows, its database on
+/// macOS) or a test environment lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GogGame {
     pub id: u64,
@@ -88,11 +91,12 @@ pub struct Environment {
     #[serde(default)]
     pub steam_active_user_file: Option<PathBuf>,
     /// Ask the live OS what only it knows (on Windows the registry: Steam's
-    /// ActiveUser, GOG's games). Off in test environments.
+    /// ActiveUser, GOG's games; on macOS GOG Galaxy's database). Off in test
+    /// environments.
     #[serde(default, alias = "use_registry")]
     pub query_os: bool,
-    /// Steam's `registry.vdf`, where Steam keeps the running client's
-    /// ActiveUser outside Windows (Linux: `~/.steam/registry.vdf`).
+    /// Steam's `registry.vdf`, where Linux Steam keeps the running client's
+    /// ActiveUser (`~/.steam/registry.vdf`). macOS Steam doesn't record it.
     #[serde(default)]
     pub steam_registry_file: Option<PathBuf>,
     /// GOG games when the OS isn't asked.
@@ -110,6 +114,25 @@ pub struct Environment {
     pub epic_manifests: Option<PathBuf>,
     #[serde(default)]
     pub loose_roots: Vec<LooseRoot>,
+    /// Locations macOS guards behind a permission prompt: the OS's own on a
+    /// Mac, fixture folders marked in tests (PLAN-MACOS.md, PRIVACY
+    /// PERMISSIONS).
+    #[serde(default)]
+    pub privacy: PrivacyTable,
+    /// What asking for access answers, in tests: the real prompt when
+    /// absent.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub privacy_answers: BTreeMap<Category, PrivacyAnswer>,
+}
+
+/// A test's stand-in for the user answering a permission prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyAnswer {
+    Granted,
+    Denied,
+    /// Nobody answers: the read waits.
+    Hangs,
 }
 
 impl Environment {
@@ -136,10 +159,19 @@ impl Environment {
         if platform == Platform::Windows {
             loose_roots.push(LooseRoot { path: PathBuf::from(r"C:\GOG Games"), store: Store::Gog });
         }
-        let epic_manifests = folders
-            .programdata
-            .as_ref()
-            .map(|p| p.join("Epic").join("EpicGamesLauncher").join("Data").join("Manifests"));
+        if platform == Platform::Macos {
+            loose_roots.push(LooseRoot { path: PathBuf::from("/Applications"), store: Store::Standalone });
+            if let Some(home) = &folders.home {
+                loose_roots.push(LooseRoot { path: home.join("Applications"), store: Store::Standalone });
+            }
+        }
+        // The launcher's data: `ProgramData` on Windows, the user's
+        // `Application Support` on macOS. There's no Linux launcher.
+        let epic_data = match platform {
+            Platform::Macos => folders.home.as_ref().map(|h| h.join("Library").join("Application Support")),
+            _ => folders.programdata.clone(),
+        };
+        let epic_manifests = epic_data.map(|d| d.join("Epic").join("EpicGamesLauncher").join("Data").join("Manifests"));
         let steam_registry_file = os::steam_registry_file(&folders);
         Environment {
             platform,
@@ -156,6 +188,8 @@ impl Environment {
             },
             epic_manifests,
             loose_roots,
+            privacy: PrivacyTable::os(),
+            privacy_answers: BTreeMap::new(),
         }
     }
 
@@ -304,6 +338,9 @@ impl Environment {
     /// Store locations worth watching for installs (PLAN-HOST.md, Watched
     /// locations): each library's `steamapps`, the main `libraryfolders.vdf`
     /// and Epic's manifests folder.
+    /// Guarded locations are left out until macOS allows access
+    /// (PLAN-MACOS.md, PRIVACY PERMISSIONS). On macOS `/Volumes` is watched
+    /// too, so a disk being attached triggers a scan.
     pub fn watch_locations(&self) -> Vec<PathBuf> {
         let mut out: Vec<PathBuf> = self.steam_libraries().into_iter().map(|l| l.join("steamapps")).collect();
         if let Some(root) = &self.folders.steam_root {
@@ -312,6 +349,10 @@ impl Environment {
         if let Some(epic) = &self.epic_manifests {
             out.push(epic.clone());
         }
+        // A disk mounting there may hold a Steam library (macOS); its games
+        // are scanned once access to volumes is granted.
+        out.extend(self.privacy.volumes.clone());
+        out.retain(|p| !savescummer_snapshots::is_guarded(p));
         out
     }
 
@@ -381,6 +422,12 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
     // Steam: list each library's steamapps once.
     for library in env.steam_libraries() {
         let steamapps = library.join("steamapps");
+        // A library on a drive that's disconnected, even if an empty folder
+        // is left where it was mounted, is unreadable, not empty.
+        if savescummer_snapshots::presence(&steamapps) == Presence::Unknown {
+            found.unreadable.push(library.clone());
+            continue;
+        }
         let entries = match fs::read_dir(&steamapps) {
             Ok(entries) => entries,
             Err(_) => {
@@ -437,7 +484,7 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
         }
     }
 
-    // GOG: the registry lists each install with its id.
+    // GOG: Galaxy lists each install with its id.
     for gog in env.gog() {
         if let Some(games) = by_gog.get(&gog.id)
             && gog.path.is_dir()
@@ -601,7 +648,7 @@ impl Probe for RealProbe<'_> {
     }
 
     fn is_file(&self, path: &Path) -> bool {
-        path.is_file()
+        !savescummer_snapshots::is_guarded(path) && path.is_file()
     }
 
     fn same_dir(&self, a: &Path, b: &Path) -> bool {
@@ -622,6 +669,9 @@ impl Probe for RealProbe<'_> {
     }
 
     fn list_dirs(&self, path: &Path) -> Option<Vec<String>> {
+        if savescummer_snapshots::is_guarded(path) {
+            return None;
+        }
         let entries = fs::read_dir(path).ok()?;
         Some(
             entries

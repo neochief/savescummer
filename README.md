@@ -22,7 +22,7 @@ Depending on the game, restoring progress may require returning to the main menu
 | Platform | Download |
 | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
-| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` (coming) |
+| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` |
 | Linux x86_64 (glibc 2.35+) | `SaveScummer-linux-x86_64-<version>.AppImage` (coming) |
 
 Get it from [Releases](https://github.com/neochief/savescummer/releases). The downloads aren't code-signed, so each OS asks once:
@@ -30,8 +30,10 @@ Get it from [Releases](https://github.com/neochief/savescummer/releases). The do
 - **Windows:** run the installer. SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It installs for your user only (no admin), into `%LOCALAPPDATA%\Programs\SaveScummer`, and offers to launch at sign-in.
   - **Upgrade:** run the new installer; it closes the running app safely and keeps your settings.
   - **Remove:** *Settings → Apps → SaveScummer → Uninstall*.
-- **macOS:** open the DMG and drag SaveScummer to Applications. The first launch is blocked: open *System Settings → Privacy & Security* and choose **Open Anyway**.
-  - **Upgrade:** quit it (menu-bar icon → Exit) and drag the new app over the old one.
+- **macOS:** open the DMG and drag SaveScummer to Applications. The first launch is blocked: open *System Settings → Privacy & Security* and choose **Open Anyway**. It lives in the menu bar; open the app from Finder, Launchpad or Spotlight (the programs inside the bundle aren't meant to be double-clicked).
+  - **Hotkeys:** **⌥F5** saves and **⌥F9** loads (Ctrl can't be used: macOS keeps ⌃F5 for itself). On most Mac keyboards the top row is brightness and media keys, so press **fn+⌥+F5**, unless *Keyboard settings → Use F1, F2, etc. keys as standard function keys* is on. Careful with ⌘F5 next to it: it turns VoiceOver on (press it again to turn it off).
+  - **Permissions:** macOS asks before an app reads some places: Documents, Desktop, Downloads, iCloud Drive, external disks, other apps' data. SaveScummer asks only when you do something (the first launch, Scan games, adding a game, *Allow access*); a game whose saves are somewhere it may not read yet waits, marked in the app, and you get one notification per place. If you chose *Don't Allow*, turn it on in *System Settings → Privacy & Security*.
+  - **Upgrade:** quit it (menu-bar icon → Exit) and drag the new app over the old one. The app isn't signed with a Developer ID, so macOS treats each version as a new app: allow access again, once, when it asks.
   - **Remove:** turn off launch at login, quit, drag it to the Trash.
 - **Linux:** make the AppImage executable (`chmod +x SaveScummer-*.AppImage`) and run it. Tools like Gear Lever or AppImageLauncher can add it to your app menu.
   - **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
@@ -63,7 +65,7 @@ cargo xtask check
 
 The window (the UI) isn't written yet, so for now SaveScummer is the host, which runs in the tray, plus the CLI to talk to it. Development always uses its own data in `.runtime/dev`, never your real checkpoints.
 
-On Windows, the dev package runs just like the installed app, tray icon and Ctrl+F5 / Ctrl+F9 hotkeys included:
+On Windows and macOS, the dev package runs just like the installed app, tray (menu-bar) icon and hotkeys included (Ctrl+F5 / Ctrl+F9, or ⌥F5 / ⌥F9 on a Mac). On macOS, packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
 
 ```bash
 cargo xtask setup cargo-about
@@ -72,7 +74,7 @@ cargo xtask run
 
 The dev host keeps running after `run` returns; `cargo xtask host stop` stops it.
 
-On macOS and Linux, packaging isn't done yet ([PLAN-MACOS.md](PLAN-MACOS.md)), so build and use the binaries directly. The CLI starts the host itself when it isn't running:
+On Linux, packaging isn't done yet, so build and use the binaries directly. The CLI starts the host itself when it isn't running:
 
 ```bash
 cargo build

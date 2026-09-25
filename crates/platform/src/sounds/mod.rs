@@ -19,7 +19,8 @@ pub enum Cue {
 }
 
 #[cfg_attr(windows, path = "windows.rs")]
-#[cfg_attr(not(windows), path = "unsupported.rs")]
+#[cfg_attr(target_os = "macos", path = "macos.rs")]
+#[cfg_attr(not(any(windows, target_os = "macos")), path = "unsupported.rs")]
 mod imp;
 
 /// Silence between two cues, so back-to-back cues stay distinguishable.
@@ -170,6 +171,17 @@ mod tests {
         }
         assert!(started.elapsed() < Duration::from_millis(100));
         drop(player);
+    }
+
+    /// Plays every cue out loud, one after another.
+    #[test]
+    #[ignore = "plays sounds; run by hand"]
+    fn every_cue_plays() {
+        for cue in ALL {
+            let started = Instant::now();
+            play_now(cue);
+            eprintln!("{cue:?}: {:?}", started.elapsed());
+        }
     }
 
     #[test]

@@ -125,7 +125,10 @@ pub fn judge(record: &CheckpointRow, path: &Path) -> Verdict {
         Presence::Unknown => Verdict::Unknown,
         Presence::Present => match snap::signature(path) {
             Ok(sig) => {
-                let same_identity = record.identity.is_none() || sig.identity == record.identity;
+                // Only compared where both are known: a checkpoint recorded
+                // before identities were dropped on this OS keeps its history.
+                let same_identity =
+                    record.identity.is_none() || sig.identity.is_none() || sig.identity == record.identity;
                 if sig.hash == record.signature && same_identity { Verdict::Same } else { Verdict::Changed }
             }
             Err(_) => Verdict::Unknown,

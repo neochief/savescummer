@@ -127,7 +127,7 @@ A second host started for a data folder that already has one asks the running ho
 
 The host is the only thing that writes the sign-in entry, so the checkbox and the real entry can't drift apart:
 
-- The UI checkbox and `SaveScummer --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it).
+- The UI checkbox and `SaveScummer --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS login agent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it).
 - `off` removes only an entry that points at this host.
 - An AppImage re-points its entry to its own path on every start, because each version is a new file. Other platforms install to a fixed path and never rewrite the entry on their own.
 - Development builds never create a sign-in entry: `--autostart on` refuses and the checkbox is disabled. Why: signing in must never start a debug host, and a dev host must not touch the installed app's entry.
@@ -170,7 +170,7 @@ Why focus: it is the moment the user looks, and the cooldown means alt-tabbing n
 Per platform:
 
 - **Windows:** folder change notifications and registry change notifications. A folder watch keeps the folder open, which would stop the user from safely removing a USB drive holding a Steam library, so the host releases a drive's watches when Windows asks to remove it and watches again when the drive returns.
-- **macOS:** FSEvents; it holds nothing open, so ejecting is never blocked. The first access to a removable or network volume, or to Documents, makes macOS ask the user for permission. The first scan to touch such a location must follow a user action (first run, Scan games), never a silent background scan. Why: a permission dialog out of nowhere looks like the app is snooping.
+- **macOS:** FSEvents; it holds nothing open, so ejecting is never blocked. The first access to a removable or network volume, or to Documents, makes macOS ask the user for permission. Only a user action may cause that prompt (first run, Scan games, adding a game, Allow access); background scans skip locations not yet granted and list their games as inactive until the user allows access. Why: a permission dialog out of nowhere looks like the app is snooping, and one during a fullscreen game may go unseen while the read waits on it. Details in PLAN-MACOS, PRIVACY PERMISSIONS.
 - **Linux / SteamOS:** inotify; a watch is dropped automatically on unmount. New mounts (a Steam Deck SD card under `/run/media`) are watched for so their libraries are picked up.
 - **Everywhere:** network drives don't reliably report changes, and the OS may drop events under load and only say "something changed". Both are answered with a scan; focus and periodic scans remain the safety net.
 
@@ -190,6 +190,7 @@ Rules the host enforces around scanning:
 - **Scans never delete files or history.** They may notice that checkpoints changed on disk (see CHECKPOINTS AND HISTORY).
 - **A save set can change, by the catalog's rules.** It changes when the build or the Steam account changes (the targets then name other folders) or when a catalog update edits the game's locations. The host accepts the catalog's answer. Old checkpoints are never moved or rewritten; which of them can still be restored follows the rule in Checkpoints belong to their targets. User overrides and custom games are never re-resolved.
 - **A target's presence is present, missing or unknown.** Only a confirmed absence counts as missing. A target on an unplugged drive or an unreadable folder is unknown, and Save, Load and Revert are unavailable for that game until it can be read again. Why: recording an unreadable target as absent would make a checkpoint that silently skips it.
+- **A drive the host has seen stays expected.** The host remembers every drive it has seen the store, a save location or a Steam library on. While that drive isn't connected, everything on it counts as unknown ("drive disconnected"), never missing or empty, even if an empty folder is left where it was. Why: otherwise an unplugged drive reads as "the saves are gone" or "the store is empty".
 - **No save location at all.** If the catalog finds no target for an install (the game is unsupported on this platform or store), the game stays visible with a configuration error and no operations, so the user can set a save location in Configure.
 
 The catalog can turn two installs of one game into two game records, each with its own save set and history (for example a Steam copy and a GOG copy). When that happens, the host gives each of them an **install tag**: the store's name (`Steam`, `GOG`, `Epic`), or the install folder's name when both come from the same store. A game with one install has no tag. Why: two identical names in the library would be impossible to tell apart, and the tag says which copy the user is about to touch.
@@ -306,6 +307,7 @@ checkpoints/
 - **Never Steam's own files** (`steam_autocloud.vdf`, `remotecache.vdf`), even inside a save folder. They belong to Steam's cloud sync, not to the game.
 - **Never logs or crash dumps**, even inside a save folder: files ending in `.log`, folders named `logs` (any case), the known log names `log.txt`, `client_log.txt` and `output_log.txt` (older Unity games), and folders named `Crashes`. Why: many games' save folders also hold the log the running game keeps open (Unity's `Player.log`, Unreal's `Saved/Logs`, Godot's `logs/godot.log`, Isaac's `log.txt`). A Load at the main menu would then fail to rename it and be refused every time, and restoring an old log is pointless anyway. The list is short on purpose: a name that could plausibly be a save never goes on it.
 - **Never our reserved suffixes** (`.ssnew`, `.ssold`), even when a pattern like `save*` would match them. Why: leftovers from an interrupted Load must never be backed up or restored as saves.
+- **Never files the OS or a file manager writes on its own**, in a save folder or a checkpoint: `.DS_Store` (Finder), `Thumbs.db` and `desktop.ini` (Explorer), `.directory` (Dolphin), and macOS's `._name` companions (written next to any file with extended attributes on exFAT, FAT and network drives). Save doesn't copy them, Load neither restores nor removes them, and they don't count as a change to a checkpoint. Why: they appear without the user doing anything to the saves, and a checkpoint must not look edited because the user opened it. Exact names only, added when a real case needs it.
 - **A target that didn't exist at Save time is recorded as absent**, so a Load knows to leave it alone.
 
 ### Checkpoints belong to their targets
@@ -320,7 +322,7 @@ Why this one rule: it replaces separate rules for account switches, build switch
 
 ### Backups changed outside the app
 
-A checkpoint is one observed *generation* of a folder, not a permanent claim on its name. Record the folder's identity and a change signature (paths, kinds, sizes and modification times of everything inside) and check them again:
+A checkpoint is one observed *generation* of a folder, not a permanent claim on its name. Record the folder's identity and a change signature (paths, kinds, sizes and modification times of everything inside) and check them again. The identity counts only on Windows, where it survives unplugging a drive; on macOS and Linux the signature alone decides. An exact copy with the same timestamps holds the same saves, so treating it as the same checkpoint is harmless:
 
 - **Gone** (the parent can be read and the folder isn't there): retire that checkpoint.
 - **Replaced or edited** (different identity or signature): retire the old checkpoint and register the folder as a new one with new IDs. A folder can be deleted and recreated between scans, or while the host was off; the result is the same.
@@ -367,7 +369,7 @@ Actions in the same second stay distinct: rows have stable IDs and a stable orde
 
 Every operation, from any entry point, goes through the same handling and the same per-game lock. The lock covers Save, Load, Revert, Delete, Flush and configuration changes. A request for a busy game is rejected immediately; nothing is queued for later.
 
-The app works on files. The user is responsible for the game picking up a restored state, for example by reloading or restarting it. Copying is ordinary and best-effort: the host doesn't pause the game or detect writes during a copy. A copy made while the game is writing may be inconsistent; real copy errors fail the operation.
+The app works on files. The user is responsible for the game picking up a restored state, following the game's instructions: for most games, reloading from the main menu. Where a game must be closed, the order is close → Load → launch. Why not "restart after restoring": some games save on exit and would overwrite the restored files. Copying is ordinary and best-effort: the host doesn't pause the game or detect writes during a copy. A copy made while the game is writing may be inconsistent; real copy errors fail the operation.
 
 **Known issue, ignored for now: very large saves.** Every Save copies the whole save set, and every Load copies it twice (the recovery checkpoint, then the `.ssnew` copies). For games with huge save folders, such as a Project Zomboid world with hundreds of MB in thousands of files, a hotkey press can take minutes and every checkpoint takes the full size on disk. The catalog is mostly roguelikes and strategy games with small saves, so this is accepted. If it becomes a problem, the options are skipping files unchanged since the previous checkpoint, hard links between checkpoints, or copy-on-write clones where the file system supports them.
 
@@ -395,14 +397,43 @@ Steps:
 3. Copy the current state of the save set to a new recovery checkpoint, with the same filters. If the copy fails, stop; nothing live was touched. Because the filters are the same, every file the Load deletes is in this recovery checkpoint.
 4. Apply the checkpoint in four stages. Each stage finishes for **all** files before the next one starts, so a failure always leaves a state that can be undone:
    1. **Copy in.** Copy each checkpoint file next to its live counterpart as `name.ssnew`. If this fails, delete the `.ssnew` files; the live saves were never touched.
-   2. **Set aside.** Rename each live file the Load will replace or delete to `name.ssold`. If this fails, rename the `.ssold` files back; nothing was lost. A file the running game holds open fails here, while everything can still be reversed, so no separate lock check is needed.
+   2. **Set aside.** Rename each live file the Load will replace or delete to `name.ssold`. If this fails, rename the `.ssold` files back and delete the `.ssnew` files. The originals are back only if this undo succeeds; an undo that fails blocks the game (recovery rule 4). Before this stage starts, the host checks whether the game holds any of these files open (see *Interference from the running game*).
    3. **Swap in.** Rename each `.ssnew` to its real name. If this fails, rename those back to `.ssnew`, then undo stage 2.
-   4. **Clean up.** Delete the `.ssold` files. A failure here doesn't undo the Load; leftovers are removed later.
+
+   No rename replaces an existing file, so a save the game writes at that moment isn't overwritten. On a drive that can't guarantee this in one step (exFAT on macOS, some network drives), the host checks, then renames, and accepts the tiny gap. Why: refusing to load on such drives would cost far more than a game writing in the same millisecond.
+   4. **Clean up.** Delete the `.ssold` files, with only a short retry allowance. A failure here doesn't undo the Load: it is committed, and leftovers are removed later.
 5. After stage 3, add a Loaded row that references the checkpoint loaded and the new recovery checkpoint. It also says how many files were removed, if any ("removed 2 newer saves, kept in the recovery point").
 
 Why stage next to the live files: the copies sit in the same folder as the files they replace, so every rename is on the same drive and atomic, and undoing a failed Load is just reversing renames. It needs no staging area of its own and no restore from the recovery checkpoint. The costs, accepted: our temporary files are briefly visible in the game's folder while stage 1 copies; between stages 2 and 3 the save names briefly don't exist; and the drive needs room for a second copy of the files being restored.
 
 Load works while the game is running. Why: the usual flow is to die, go back to the main menu, press the Load hotkey and continue, with the game's process running throughout. The user is responsible for the game picking up the restored state.
+
+#### Interference from the running game
+
+Two problems, handled separately. Both share one wait budget. Neither is a guarantee: the game can open a file again after the check, or later write its in-memory state over the restored files. The per-game instructions stay necessary.
+
+**Brief holds: retry the failed action.** Antivirus, the search indexer or the game itself can hold a file for a moment. The action that failed is retried, never the whole Save, Load or Revert.
+
+- Retryable only where it can be transient: on Windows, sharing and lock violations, and "access denied" from the rename, delete or open of a file (a pending delete or a handle that forbids sharing reports it). Every other error fails at once. On macOS and Linux an open file blocks neither rename nor delete, so nothing is classified retryable there for now.
+- **One budget per operation:** about one second of waiting in total across the forward operation (the Save or recovery-checkpoint copy and Load stages 1–3), not per file and not a count of attempts. Only the time spent waiting counts; ordinary copying doesn't. Waits are short and grow a little each time.
+- **Rollback has its own budget** of the same size, so a forward operation that used its budget up can still be undone.
+- **Stage 4 gets only a short allowance** (a fraction of a second). If a `.ssold` still can't be deleted, the Load stays committed and the leftover is removed later, as today.
+- The per-game lock is held throughout, including while waiting. Waiting never delays requests or other games' operations.
+- When the budget runs out, the operation fails with the original error, its OS code and the path. A retryable "access denied" doesn't prove that the game holds the file, so neither the result nor the message says it does.
+- No setting for now; the budget is a constant.
+
+**Open saves (macOS, Linux): detect, wait briefly, then refuse.** On Windows, a handle opened without delete sharing makes stage 2 fail; on macOS and Linux nothing does, and the Load would replace the files under the game's open handle. So after stage 1 and before stage 2, the host inspects the game's processes:
+
+- **Which files:** every live file stage 2 will rename, whether it's replaced or deleted. Files are matched by identity (device and inode taken just before the check), not by path, so a file already renamed or reached through another path still matches.
+- **Which processes:** every process the monitor currently attributes to this game (all processes of the session). A game the monitor doesn't see running has nothing to inspect.
+- **How:** native interfaces only, no `lsof`. macOS: `proc_pidinfo(PROC_PIDLISTFDS)`, then `proc_pidfdinfo(PROC_PIDFDVNODEINFO)` for each vnode descriptor, comparing device and inode. Linux: `stat` on each entry of `/proc/<pid>/fd`, comparing device and inode.
+- **Outcomes:**
+  - *Nothing open, inspection complete:* proceed.
+  - *An affected file is open* (even when another part of the inspection was incomplete): wait briefly and check again, using the same budget as the retries. If it closes in time, proceed. If it's still open when the budget runs out, refuse before stage 2: delete the `.ssnew` files, change nothing live, and report the files and processes. The user closes the game, loads again, then launches it.
+  - *Inspection unavailable or incomplete, nothing found:* proceed as today, and log what couldn't be inspected and why. This is never reported or logged as "no files open".
+- **Best-effort, and it depends on permissions.** A process of another user, a hardened or protected process, `/proc` mounted with `hidepid`, or a game in a sandbox or another pid namespace (a Flatpak Steam) may not be inspectable; that is the "incomplete" outcome. The macOS calls have existed for a long time and are what process tools use, but Apple doesn't document them as a stable API; treat any unexpected failure as "unavailable", never as a crash or a refusal.
+- **Windows:** no inspection for now. A handle that allows delete sharing lets stage 2 succeed, the same limitation as on macOS and Linux.
+- Session-long holds are intended to end in the refusal: a useful message is better than silently replacing files under a known open handle.
 
 The checkpoint itself is never modified, and every later row stays.
 
@@ -480,8 +511,9 @@ Every failure reaches clients as a structured result: a stable kind, the game, a
 
 | Situation | Host behavior |
 | --- | --- |
-| A save file is in use, so setting it aside fails (Load stage 2) | Renames undone; nothing changed. Retry can help. |
-| A file couldn't be read during a copy | Nothing changed. Retry can help. |
+| Setting a save aside fails (Load stage 2), even after the retries | Renames undone, so the originals are back; if the undo fails, recovery rule 4. Retry can help. |
+| The game holds a file the Load would replace or delete, and it stayed open for the whole wait (macOS, Linux) | Refused before stage 2; nothing live changed. Says to close the game, load, then launch it. |
+| A file couldn't be read during a copy, even after the retries | Nothing changed. Retry can help. |
 | The destination is full, or writing is denied (the store, or a target's drive for `.ssnew` copies) | Nothing changed. Retry can help. |
 | A target's drive or share is unavailable | Nothing changed; the game's operations are unavailable until it's back. |
 | The checkpoint store is unavailable | Nothing changed; every game's operations are unavailable, checkpoints aren't retired. |
@@ -533,7 +565,7 @@ Each of these is a small adapter the host owns, so it works with no window open.
 
 ### Hotkeys
 
-- **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5 (PLAN-MACOS.md, decision 1).
+- **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5 (PLAN-MACOS.md, HOTKEYS).
 - When the UI's window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the top of the ACTIVE STACK. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
 - Holding a key triggers one operation, not many.
 - A busy game gets a short, rate-limited busy cue.
@@ -561,9 +593,12 @@ Hotkey-triggered Save and Load play a start cue when the request is accepted, th
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Process and focus watching | Yes | Planned (PLAN-MACOS) | To investigate |
-| Global hotkeys | Yes | Planned (PLAN-MACOS) | To investigate |
-| Tray | Notification area | Menu bar | To investigate |
+| Process and focus watching | Yes | Yes: `libproc`, the frontmost app from `NSWorkspace` | To investigate |
+| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 (Carbon hot keys, no permission needed) | To investigate |
+| Tray | Notification area | Menu bar (template icon) | To investigate |
+| Notifications | Tray balloons | `UNUserNotificationCenter`, asked the first time one is needed | To investigate |
+| Open-file check before a Load | No (a handle without delete sharing fails stage 2) | Yes (`libproc`) | Planned (`/proc`) |
+| Privacy prompts for save locations | None | Games wait until the user allows access (PLAN-MACOS, PRIVACY PERMISSIONS) | None |
 
 
 ## ARTWORK
@@ -602,7 +637,7 @@ This is the contract between the host and its clients (UI, CLI). A client can be
 
 ### Shape
 
-- **Local and per user.** Named pipes on Windows, Unix sockets elsewhere, reachable only by the signed-in user.
+- **Local and per user.** Named pipes on Windows, Unix sockets elsewhere, reachable only by the signed-in user. A Unix socket lives in the data folder; a data folder whose path is too long for one (about 100 characters) is refused at start with that reason, and the host and CLI say to choose a shorter one. Why not a fallback location: only a custom `--data-dir` can be that long, and a clear error costs nothing.
 - **Versioned.** Every message carries the protocol version. A mismatch is refused clearly, never half-understood. Host and clients ship together and change together, with shared example messages that both sides test against.
 - **Plain data.** Stable opaque IDs, UTC timestamps, no UI concepts, no internal records. Timestamps are for display, never IDs.
 - **Structured errors.** A kind, the game and the paths involved. The host sends no user-facing wording.
@@ -627,6 +662,7 @@ Commands:
 - Open a folder by what it is (see Opening folders), or only resolve it
 - Retry a blocked game (an ordinary failure has no retry command: the client sends the same command again with a new request ID)
 - Refresh the catalog now
+- Ask macOS for access to where a waiting game lives (the UI's *Allow access*; answered once the user has, granted or denied; PLAN-MACOS, PRIVACY PERMISSIONS)
 - Shut down (the same safe Exit as the tray menu)
 
 Queries:
@@ -652,7 +688,7 @@ Queries:
 
 A client that watches gets the full current state, then a new state whenever something changes:
 
-- The state is a **summary**, and it's self-contained: games (configuration, install tag, install and availability status, instructions, artwork, and whether Save and Load are available with the reason when not: no game data, no save location, a target unreadable, the checkpoint store unavailable, no saves, busy or blocked), settings, the ACTIVE STACK, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
+- The state is a **summary**, and it's self-contained: games (configuration, install tag, install and availability status, instructions, artwork, and whether Save and Load are available with the reason when not: no game data, no save location, a target unreadable, the checkpoint store unavailable, no saves, busy, blocked, or waiting for macOS to allow access, with the category and whether the user denied it), settings (on macOS, whether launch at login was turned off in System Settings), the ACTIVE STACK, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
 - It never contains full history or old records, so its size doesn't grow with history. History is always queried separately, in pages.
 - Every state carries a revision and a host instance ID. A new instance ID means the host restarted: throw away everything cached and start again.
 - Progress can be coalesced; each delivered state stands on its own.
@@ -675,6 +711,7 @@ Rules must be provable without a UI, and the OS parts must be proven for real. U
 
 - **Core logic** runs in a plain test process with a fake filesystem, database and clock. This is where the history rules, checkpoint selection, locking, delete countdowns and the four recovery rules are pinned down, including failures injected at every step.
 - **File operations** run against real temporary folders: copies, never-overwrite naming, the four Load stages and their undo, leftover `.ssnew`/`.ssold` files, the delete-by-rename, locked files, links and junctions.
+- **Retry budgets and open-file checks** run in core tests with a fake clock and a fake inspector, and for real in integration with the fake game holding files.
 - **Storage** runs against real SQLite files: transactions, restart, migrations, and proof that a Save writes nothing it didn't change.
 - **Integration** runs the real host with the fake game and drives it through the CLI's machine-readable output, the same way a user or the UI would. The fake game is copied to different paths to act as different games, run several times to act as one game with several processes, and can delay its window, launch a child and exit, crash, write saves slowly or hold a file open. The monitor must find it through the same OS mechanisms as real games.
 - **Crashes** are simulated by killing a real host between recorded steps, then starting it again on the same folders and database.
@@ -697,7 +734,7 @@ Rules must be provable without a UI, and the OS parts must be proven for real. U
   - background scans publish their origin, and a user-requested scan's result counts only newly found games;
   - Windows: a drive's watches are released on a removal request and restored when it returns.
 - **Checkpoints:** only configured targets are copied, never configs, Steam's own files, logs and crash dumps, or the reserved suffixes; a Load at the main menu of a game whose save folder holds its open log; absent targets recorded as absent; the "in common" rule after an account switch, a build switch, an override and a catalog update (usable, partly usable, unavailable, usable again on return); moving the store, including an interrupted move; an unreachable store; folders copied into the store by hand are ignored; external deletion, replacement (between scans and while the host is off) and in-place edits; unreadable folders not retired; changed recovery checkpoints never imported.
-- **Operations:** Save, Load, Load this save, Revert, reverting a revert and Delete compared by actual file contents; every rejection happens before anything is created; a save set spanning several folders and two drives; a Load deleting newer matched files; a Revert removing files the Load brought back; a target absent at Save time left alone, and one that matched nothing emptied again; a missing root refusing the Load; a Load while a fake game holds a save file open, refused at stage 2 with nothing changed; the Steam Cloud check at the next game start with a file replaced and a deleted file brought back; visible history after deletions, including empty sessions disappearing; Flush with partial failures; labels (limits and trimming, shown on Saved and Loaded rows, kept after deletion, cleared by Flush, not carried to a replaced folder, set while busy, rejected for a gone checkpoint, never written into folders); delete countdowns (cancel versus run, waiting while busy, dropped by Flush, finished on shutdown, dropped after a crash); the checkpoint size after each operation, with leftover folders, and unknown while the store is unavailable.
+- **Operations:** Save, Load, Load this save, Revert, reverting a revert and Delete compared by actual file contents; every rejection happens before anything is created; a save set spanning several folders and two drives; a Load deleting newer matched files; a Revert removing files the Load brought back; a target absent at Save time left alone, and one that matched nothing emptied again; a missing root refusing the Load; interference from the running game: a transient hold that clears within the budget (the Load succeeds, and only the failed action was retried); a persistent hold that outlasts it (Windows: stage 2 fails with the original error and is undone; macOS and Linux: refused before stage 2, with no `.ssold` ever created); several held files sharing one budget, so the total wait stays about a second; incomplete or unavailable inspection proceeding and logging, never reporting "no files open"; a positive find refusing even when another process couldn't be inspected; a rollback that needs retries succeeding after the forward budget ran out; a stage-4 delete that stays blocked leaving the Load committed; other games usable and requests answered while one game waits; the Steam Cloud check at the next game start with a file replaced and a deleted file brought back; visible history after deletions, including empty sessions disappearing; Flush with partial failures; labels (limits and trimming, shown on Saved and Loaded rows, kept after deletion, cleared by Flush, not carried to a replaced folder, set while busy, rejected for a gone checkpoint, never written into folders); delete countdowns (cancel versus run, waiting while busy, dropped by Flush, finished on shutdown, dropped after a crash); the checkpoint size after each operation, with leftover folders, and unknown while the store is unavailable.
 - **Opening folders,** through the CLI's resolve-only answer: a folder, file and pattern target's root, a folder that doesn't exist yet, the checkpoint folders and the executable's folder.
 - **Failures:** a failure injected at every step and every Load stage, and a kill at every recorded step (including mid-stage, with some files renamed and some not), each checked against the four recovery rules by both the files and the records; other games stay usable.
 - **Starting:** a host started without `--minimized` shows the UI, one started with it doesn't; a second launch reaches the running host and exits; showing the UI with a UI connected brings that one forward instead of starting another; the CLI starting a host never shows the UI.
@@ -707,7 +744,7 @@ Rules must be provable without a UI, and the OS parts must be proven for real. U
 
 ### By hand, for now
 
-Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry (including that no window appears when the host starts at sign-in or from the CLI), launching the app while it runs, antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform.
+Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry (including that no window appears when the host starts at sign-in or from the CLI), launching the app while it runs, antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform. On macOS, sleep and resume means: put the Mac to sleep with the host running, wake it, and see a scan start at once (the host log says "the computer woke from sleep"), also with a Steam library disk plugged in or removed meanwhile.
 
 Steam Cloud must be checked by hand on a real machine before relying on the after-Load check, with one game of each kind: Isaac (writes through Steam's cloud API into `remote`), Slay the Spire (Steam Auto-Cloud of its install folder) and Risk of Rain Returns (both). For each: a Load with the game closed, then launch; a Load that deletes a file; and, where possible, a Load while the cloud has newer progress from another device. Why by hand: only real Steam shows whether it uploads, re-downloads or asks.
 

@@ -22,7 +22,7 @@ savescummer-platform.workspace = true
 savescummer-ipc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["signal"] }
 clap.workspace = true
 chrono.workspace = true
 uuid.workspace = true

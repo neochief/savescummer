@@ -20,6 +20,7 @@ pub mod model;
 pub mod monitoring;
 pub mod ops;
 pub mod options;
+pub mod privacy;
 pub mod queries;
 pub mod recovery;
 pub mod scan;
@@ -39,7 +40,7 @@ use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, Storage};
 
 use crate::host::{CatalogState, Host, Inner};
-use crate::model::{SETTING_PLAY_SOUNDS, SETTING_STORE};
+use crate::model::{SETTING_DRIVES, SETTING_PLAY_SOUNDS, SETTING_STORE};
 use crate::options::Options;
 
 /// The catalog built into the host, the fallback when nothing newer exists.
@@ -225,16 +226,25 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         }
     };
     let setting = |key: &str| db::setting(storage.conn(), key).ok().flatten();
+    // Drives seen before: one unplugged since reads as disconnected.
+    let drives: Vec<PathBuf> = setting(SETTING_DRIVES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    savescummer_snapshots::load_drives(drives);
     let store = setting(SETTING_STORE).map(PathBuf::from).unwrap_or_else(|| data_dir.join("checkpoints"));
     let play_sounds = setting(SETTING_PLAY_SOUNDS).is_none_or(|v| v == "1");
-    let launch = std::env::current_exe().map(|exe| savescummer_platform::autostart::is_enabled(&exe)).unwrap_or(false);
     let notices = db::notices(storage.conn()).unwrap_or_default();
-    let mut inner = Inner::new(store, play_sounds, launch);
+    let mut inner = Inner::new(store, play_sounds);
     for (game, kind, _) in notices {
         inner.notices.insert(game, kind);
     }
     let endpoint = savescummer_ipc::endpoint(&data_dir);
+    if let Err(e) = savescummer_ipc::transport::check(&endpoint) {
+        ready_line(false, &e.to_string(), None);
+        return ExitCode::from(2);
+    }
     let host = Host::new(opts.clone(), data_dir, env, endpoint.clone(), catalog, storage, inner);
+    // Before anything reads a game's files.
+    privacy::guard(&host.privacy);
+    queries::refresh_launch(&host);
     if let Err(e) = host.db().write(|c| db::start_run(c, &host.instance, &host::now())) {
         trace(&format!("can't record this run: {e}"));
     }
@@ -266,11 +276,15 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         }
     };
     runtime.spawn(server::serve(host.clone(), listener));
+    // From here on, SIGTERM (logout, `launchctl bootout`) waits for startup
+    // to finish, then exits safely.
+    #[cfg(unix)]
+    stop_on_sigterm(&runtime, &host);
 
     trace("resolving interrupted operations");
     recovery::resolve_all(&host);
     trace("first scan");
-    scan::run(&host, true, "startup");
+    scan::run(&host, true, false, "startup");
     trace("scan done");
     {
         let mut inner = host.lock();
@@ -288,6 +302,12 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         std::thread::spawn(move || catalog_update::run(catalog));
         let art = host.clone();
         std::thread::spawn(move || artwork::run(art));
+        let woken = Arc::downgrade(&host);
+        savescummer_platform::power::on_wake(move || {
+            if let Some(host) = woken.upgrade() {
+                host.scans.request(false, false, "the computer woke from sleep");
+            }
+        });
     }
     // The demo plays its games through a scripted process list.
     let demo_processes = demo::DemoProcesses::default();
@@ -324,19 +344,48 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     if !opts.minimized {
         feedback::show_ui(&host);
     }
+    if privacy::first_run_asks(&host) {
+        let asking = host.clone();
+        std::thread::spawn(move || {
+            privacy::after_scan(&asking, true);
+            asking.privacy.end_first_run();
+        });
+    }
     if opts.demo {
         let demo_host = host.clone();
         std::thread::spawn(move || demo::drive(demo_host, demo_processes));
     }
 
     // The main thread belongs to the OS's event loop where the OS needs one
-    // there (macOS); elsewhere it just waits for shutdown.
+    // there (macOS); elsewhere it just waits for shutdown. Shutting down
+    // happens in `wait`, so an OS waiting for the app to quit (logout) is
+    // answered only once it's done.
+    let stopping = host.clone();
     savescummer_platform::integration::run_main_loop(move || {
         let _ = shutdown_rx.recv();
+        shutdown(&stopping);
     });
-    shutdown(&host);
     runtime.shutdown_timeout(Duration::from_millis(500));
     ExitCode::SUCCESS
+}
+
+/// Logout and `launchctl bootout` end the host with SIGTERM: exit the same
+/// safe way as the menu's Exit. Listening starts before this returns.
+#[cfg(unix)]
+fn stop_on_sigterm(runtime: &tokio::runtime::Runtime, host: &Arc<Host>) {
+    use tokio::signal::unix::{SignalKind, signal};
+    let _context = runtime.enter();
+    let Ok(mut sigterm) = signal(SignalKind::terminate()) else {
+        trace("can't listen for SIGTERM");
+        return;
+    };
+    let host = host.clone();
+    runtime.spawn(async move {
+        if sigterm.recv().await.is_some() {
+            trace("SIGTERM: shutting down");
+            host.request_shutdown();
+        }
+    });
 }
 
 /// Exit, safely: stop accepting operations, let running ones reach a safe

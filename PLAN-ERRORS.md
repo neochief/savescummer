@@ -30,8 +30,13 @@ Terms used below:
   files, the recovery checkpoint and unpublished Save folders survive until the rules
   below or the ordinary Flush rules permit removal.
 - **Reversible until the last stage.** A Load swaps files by renames in the same folder,
-  so every failure before the final cleanup is undone by renaming back. The recovery
-  checkpoint is for Revert, not for rollback.
+  so every failure before the final cleanup is undone by renaming back. The originals
+  are back only if that undo succeeds; an undo that fails has its own recovery (R4,
+  E-B1). The recovery checkpoint is for Revert, not for rollback.
+- **Wait out brief interference, never retry the whole operation.** A file action that
+  fails with a transient sharing or lock violation is retried within one budget of
+  about a second per operation; rollback has its own budget (PLAN-HOST, *Interference
+  from the running game*). Other errors fail at once.
 - **Per-game scope.** A blocked or failed game does not block other games. Sidebar rows
   remain selectable; only the affected game's operation controls are disabled. The one
   exception is a missing checkpoint store, which affects every game (E-C14).
@@ -78,7 +83,8 @@ this order:
 | R4 | Anything else: files that don't match the journal, a real name occupied by a file the game created mid-Load, a file changed since the journal, a target's drive unavailable | Keep every file exactly as it is, including `.ssnew`/`.ssold`. Mark the operation failed with no history entry. Retain the recovery checkpoint. Release the game when every covered name has a live file; otherwise keep the game blocked and show the sticky error (E-B1). Retry automatically at each host start. |
 
 Never blindly roll back over current data, never retry the requested operation
-automatically, and never delete retained material to "clean up" an uncertain outcome.
+automatically (retrying a single failed file action within the budget is not a retry of
+the operation), and never delete retained material to "clean up" an uncertain outcome.
 
 ## 3. Error block
 
@@ -116,16 +122,22 @@ The game has a save file open. Close the game, then try again.
 | E-A3 | Killed after the result was in place (a Save published, or every Load/Revert file swapped in), before commit | Finished automatically (R3). No notice. |
 | E-A4 | Disposal folder left behind by a failed checkpoint delete | Reserved name, never mistaken for a checkpoint; removed on the next scan or host start. |
 | E-A5 | Checkpoint deleted or replaced externally | Generation retired; affected rows refresh or disappear silently. |
-| E-A6 | Stage 4 can't delete some `.ssold` files (antivirus or the game briefly holds one) | The Load stays applied and is committed. Leftover `.ssold` files are deleted on the next scan or host start. They carry a reserved suffix, so no filter, checkpoint or Load delete ever picks them up meanwhile. |
+| E-A6 | Stage 4 can't delete some `.ssold` files within its short retry allowance (antivirus or the game holds one) | The Load stays applied and is committed. Leftover `.ssold` files are deleted on the next scan or host start. They carry a reserved suffix, so no filter, checkpoint or Load delete ever picks them up meanwhile. |
 
 ### 4.2 Clean failures — nothing on disk changed
 
+Each of these fails only after the retry budget ran out, for errors that are retried at
+all. A failure that needs an undo leaves the originals in place only when the undo
+succeeds; otherwise E-B1. Details always carry the original error, its OS code and the
+path.
+
 | ID | Situation | Message (what happened / likeliest reason) | Buttons |
 |---|---|---|---|
-| E-C1 | Load/Revert stage 2: renaming a live file to `.ssold` fails because the running game holds it open. Already-renamed files go back, `.ssnew` files are deleted. Logs and crash dumps are never in a target, so a log the game keeps open never causes this. | "Couldn't replace the saves. The game has a save file open. Close the game, then try again." | Retry · Open save location |
+| E-C1 | Load/Revert stage 2: renaming a live file to `.ssold` fails. On Windows, typically a handle opened without delete sharing (the game or antivirus) or access denied; a handle that allows delete sharing doesn't cause it. Already-renamed files go back, `.ssnew` files are deleted. Logs and crash dumps are never in a target, so a log the game keeps open never causes this. | "Couldn't replace the saves. A save file is in use or access to it was denied, possibly by the game or antivirus. If the game is running, close it, load again, then start the game." | Retry · Open save location |
 | E-C2 | File locked or unreadable while copying (a Save, the recovery checkpoint, or Load stage 1) | "Couldn't read part of the save. The game or antivirus may be using it." | Retry · Open save location |
+| E-C16 | macOS/Linux, before Load/Revert stage 2: the open-file check found a game process holding a file the Load would replace or delete, and it stayed open for the whole wait. `.ssnew` files are deleted; nothing live changed. Details list the files and processes. | "The game has a save file open. Close the game, load again, then start the game." | Retry · Open save location |
 | E-C3 | Checkpoint store's drive full (a Save or the recovery checkpoint) | "Not enough free space to create the checkpoint." | Retry · Open checkpoints folder |
-| E-C4 | Permission denied writing to the store, or creating `.ssnew` files in a target | "Windows blocked writing to the checkpoints folder." / "Windows blocked writing to the save location." | Retry · Open checkpoints folder / Open save location |
+| E-C4 | Permission denied writing to the store, or creating `.ssnew` files in a target | "Windows blocked writing to the checkpoints folder." / "Windows blocked writing to the save location." ("macOS blocked…" on a Mac, "The system blocked…" on Linux) | Retry · Open checkpoints folder / Open save location |
 | E-C5 | A target's drive or share is unavailable, so its presence is unknown (E-N3) | "The drive with part of this game's saves isn't connected." | Retry · Open save location |
 | E-C6 | Link, junction or special file inside a target | "The save location contains a link SaveScummer can't copy." | Open save location |
 | E-C7 | Checkpoint changed or removed since it was shown | "This checkpoint was changed or removed outside SaveScummer." | Open checkpoints folder |
@@ -134,14 +146,16 @@ The game has a save file open. Close the game, then try again.
 | E-C11 | Host is shutting down | "SaveScummer is shutting down." | Retry after restart |
 | E-C12 | Delete target changed or points at live data | "This checkpoint no longer matches what SaveScummer recorded." | Open checkpoints folder |
 | E-C13 | Load stage 1: a target's drive has no room for the `.ssnew` copies (the restored files need a second copy next to the live ones). `.ssnew` files are deleted. | "Not enough free space next to the save to load this checkpoint." | Retry · Open save location |
-| E-C14 | Checkpoint store unavailable: it sits on, or was moved to, a drive that isn't connected. Save, Load and Revert are refused for every game; history rows are marked unavailable, not retired. | "The drive with your checkpoints isn't connected." | Retry · Open checkpoints folder |
+| E-C14 | Checkpoint store unavailable: it sits on, or was moved to, a drive that isn't connected (on macOS and Linux also when an empty folder is left where the drive was mounted). Save, Load and Revert are refused for every game; history rows are marked unavailable, not retired. | "The drive with your checkpoints isn't connected." | Retry · Open checkpoints folder |
 | E-C15 | Load/Revert stage 3: renaming a `.ssnew` to the real name fails partway (the game created that name between stages, or antivirus holds the `.ssnew`). Swapped-in files go back to `.ssnew`, then stage 2 is undone. | "Couldn't put the restored saves in place. The game or antivirus may be using the save location." | Retry · Open save location |
+| E-C17 | macOS: the game's save location (or install folder, or the store) is somewhere macOS guards, and the user hasn't allowed access yet (`access_needed`, with the category). Refused before anything is read; the game is listed but inactive. A hotkey in front of it plays the failure cue and repeats the notification. | "SaveScummer needs your permission to read <Documents / other apps' data / …>." When the user denied it: "macOS denied access. Allow SaveScummer in System Settings." | Allow access / Open System Settings |
+| E-C18 | Save/Load file work made no progress for 30 s (`stalled`): most likely a read waiting on a macOS permission prompt nobody sees. Reported failed at once; the game stays locked until the stuck work ends, and its real outcome is recorded then. | "SaveScummer is waiting for the system to answer. macOS may be showing a permission prompt." | — (the game unlocks by itself) |
 
 ### 4.3 Blocked / uncertain — material retained
 
 | ID | Situation | Message (what happened / likeliest reason) | Buttons |
 |---|---|---|---|
-| E-B1 | Rollback could not rename files back (R4, or an E-C1/E-C15 undo that itself failed) | "The previous load was interrupted. The original save couldn't be put back automatically — the game may be holding it, or the drive is unavailable." | Retry · Open save location · Open recovery checkpoint |
+| E-B1 | Rollback could not rename files back, even within its own retry budget (R4, or an E-C1/E-C15 undo that itself failed) | "The previous load was interrupted. The original save couldn't be put back automatically — the game may be holding it, or the drive is unavailable." | Retry · Open save location · Open recovery checkpoint |
 | E-B2 | Load applied but the metadata commit failed | "The load was applied, but SaveScummer couldn't record it. The database may be full or busy." | Retry · Open save location |
 | E-B3 | Delete could not finish | "Couldn't finish deleting this checkpoint. It will be cleaned up automatically." | Retry · Open checkpoint |
 | E-B4 | Database unreadable or unwritable on startup | "SaveScummer couldn't open its database." | Restart app |
@@ -171,7 +185,7 @@ a locked folder is never partially deleted under its real name.
 | E-L4 | Checkpoint folder replaced by a link | Treated as changed externally (E-A5/E-C7); restoring from it is refused. |
 | E-N1 | No target exists yet, or none matches anything | Save disabled with `No game data yet`; the status stays `Running`/`Stopped` and the game is provisional. Open save location (may not exist). |
 | E-N2 | A target root that held data at Save time is missing at Load | Load of that checkpoint is refused: restoring only the other targets would be half a save, and roots are never recreated. Known game: the catalog resolves the save set again; if the set changes, old checkpoints are unavailable until it returns (E-C8). Override or custom game: unavailable until the folder returns or is reconfigured. |
-| E-N3 | A target root on an unplugged drive or unreachable share | Presence is unknown, not missing: the target is not treated as absent and no generation is retired. Save, Load and Revert are refused with E-C5, because a checkpoint recorded without that target would later leave it alone as "absent". Retry when accessible. |
+| E-N3 | A target root on an unplugged drive or unreachable share, including a drive the host has seen whose mount point is now gone or an empty folder (macOS, Linux) | Presence is unknown, not missing: the target is not treated as absent and no generation is retired. Save, Load and Revert are refused with E-C5, because a checkpoint recorded without that target would later leave it alone as "absent". Retry when accessible. |
 | E-N4 | Game uninstalled | Not shown in the sidebar (known and custom alike). History and checkpoints are retained. |
 | E-N5 | UI disconnected from the host | Reconnecting state; no operation errors are produced. |
 | E-N6 | Host/UI version mismatch | Explicit "upgrade required" message; no operation starts. |
@@ -226,7 +240,8 @@ real machine before relying on them (5.2).
 |---|---|---|
 | E-X1 | The game writes files during a copy | Copying is best-effort; the checkpoint may be internally inconsistent. No hint is shown during normal saving; the caveat lives in the docs. |
 | E-X2 | Content-level corruption with unchanged metadata | The change signature covers paths, kinds, sizes, identities and modification times; it is not a content checksum and cannot detect attribute-preserving edits. |
-| E-X3 | Load while the game is running, and the game later writes its in-memory state over the restored files | Load works while the game sits at the main menu; refusing is not an option. Only a Steam Cloud replacement is detected (E-S1). |
+| E-X3 | Load while the game is running, and the game later writes its in-memory state over the restored files | Load works while the game sits at the main menu; refusing just because the game runs is not an option. Only a Steam Cloud replacement is detected (E-S1). |
+| E-X5 | The open-file check can't see everything, or the game opens a file after it | The check is best-effort and depends on permissions (other users, protected processes, `hidepid`, sandboxes). Unavailable or incomplete inspection proceeds as before and is logged, never reported as "no files open". A file opened after the check isn't noticed. The per-game instructions stay necessary. |
 | E-X4 | The game looks at its folder during a Load | Accepted costs: `.ssnew` files are briefly visible during stage 1, and names are briefly missing between stages 2 and 3 (milliseconds). |
 
 ## 5. Testing
@@ -254,7 +269,12 @@ real machine before relying on them (5.2).
 | Fault | How to reproduce |
 |---|---|
 | Locked file/folder | Hold an exclusive handle from the test process or the fake game. |
-| Game holds a save open | Fake game keeps a save file open without delete sharing; stage 2 rename fails. |
+| Game holds a save open | Windows: fake game keeps a save file open without delete sharing; stage 2 rename fails. macOS/Linux: fake game keeps it open (a plain open); the open-file check finds it. |
+| Transient hold | Fake game holds the file for a set time shorter than the budget, then closes it. |
+| Persistent hold | Fake game holds the file until told to stop. |
+| Several holds | Fake game holds two affected files, each for most of the budget. |
+| Incomplete inspection | Fake inspector reporting an uninspectable process (core); on Linux, a held file in a process of another user where the test machine allows it. |
+| Retries during rollback | Stage 3 fails, then an undo rename hits a transient hold (Windows) or an injected transient error (core). |
 | Permission denied | ACL deny on a temporary directory (not the read-only attribute). |
 | Disk full | Small VHD or injected IO failure where mechanical reproduction is not worth it. |
 | Kill at a durable phase | Existing `crash_worker` pattern: terminate the host between persisted phases and between the four Load stages, including partway through a stage. |
@@ -275,12 +295,18 @@ real machine before relying on them (5.2).
 | E-A1–E-A3 | core unit + integration | R1–R4 rules; kill between and within stages | crash_worker, leftover fixtures |
 | E-A4 | integration | disposal cleanup on scan/start | rename-then-fail-delete |
 | E-A5 | integration | generation retirement on external change | edit/delete checkpoint |
-| E-A6 | integration | leftover `.ssold` cleaned, Load stays committed | lock an `.ssold` |
-| E-C1 | integration | stage 2 rollback | game holds a save open |
+| E-A6 | integration | stage 4 gives up quickly, leftover `.ssold` cleaned, Load stays committed | lock an `.ssold` |
+| E-C1 | integration (Windows) | stage 2 fails after the retries, original error kept, rollback | persistent hold |
+| E-C16 | integration (macOS, Linux) | refused before stage 2, no `.ssold` created, `.ssnew` deleted | persistent hold |
+| E-C17 | integration (every OS, guarded table and answers from the test environment) | inactive in the background without asking, one notification per category, Allow access granted and denied, adding a game asks, a new build forgets, a hotkey in front fails | fixture folder marked guarded |
+| E-C18 | integration | reported failed while the lock is held, real outcome recorded after | test delay at the copy |
+| Retries | core unit + integration | transient hold clears and the operation succeeds; several held files share one budget; only the failed action is retried; non-retryable errors fail at once; rollback succeeds on its own budget after the forward one ran out; stage 4 stays short | transient, several, rollback holds; fake clock |
+| E-X5 | core unit | unavailable or incomplete inspection proceeds and logs; a positive find still waits and refuses | fake inspector |
+| Wait isolation | integration | other games operate and requests are answered while one game waits | held file + second game |
 | E-C2 | integration | locked source file during copy | exclusive handle |
 | E-C3 / E-C13 | core unit | store full; target drive full in stage 1 | injected IO error |
 | E-C4 | integration | ACL deny on store and on a target | ACL |
-| E-C5 / E-N3 | manual + integration | unknown presence refuses operations | VHD detach / bad UNC |
+| E-C5 / E-N3 | manual + integration | unknown presence refuses operations; a remembered drive detached, gone or left as an empty folder | VHD detach / bad UNC / disk image detach (macOS) |
 | E-C6 / E-L3 | snapshots unit + integration | reparse rejection | mklink /J, ln -s |
 | E-C7 | integration | changed checkpoint row | edit checkpoint |
 | E-C8 / E-N10 | core unit + Qt | checkpoint of another save set | fixture state, account switch |
@@ -290,7 +316,7 @@ real machine before relying on them (5.2).
 | E-D4 | integration | Flush deletes what exists at confirm time | mutate between preview/confirm |
 | E-C11 | host test | shutdown admission | host shutdown |
 | E-C12 | core unit | unsafe delete refusal | changed alias fixture |
-| E-B1 | core unit + integration | failed rollback retained state | lock during undo |
+| E-B1 | core unit + integration | failed rollback retained state after its budget | lock during undo |
 | E-B2 | core unit | commit failure after swap | injected storage error |
 | E-B3 / E-D1–E-D3 | integration | delete failures and disposal retry | locks, detached drive |
 | E-B4 | host test | unreadable database | corrupt/locked DB |
@@ -318,9 +344,17 @@ real machine before relying on them (5.2).
 - Per-checkpoint delete uses a 5-second inline countdown with Cancel.
 - Recovery is fully automatic (R1–R4); the recovery prompt and the `Recovery needed`
   status are removed from the UI. There is no manual `recover` command.
-- Load rollback reverses renames and never needs the recovery checkpoint; a running
-  game's locks surface in stage 2, while everything is still reversible, so there is no
-  separate lock preflight.
+- Load rollback reverses renames and never needs the recovery checkpoint.
+- Transient sharing and lock failures are retried per action within about a second per
+  operation, with a separate budget for rollback and a short one for stage 4. No user
+  setting. A retryable "access denied" is not treated as proof that the game holds the
+  file.
+- On macOS and Linux, a Load or Revert checks the game's processes for open handles on
+  the files stage 2 will change, waits within the same budget, and refuses before stage
+  2 if one stays open (E-C16). Unavailable or incomplete inspection keeps today's
+  behavior and is logged. No filename heuristics and no Loaded-row note for this.
+- When a game must be closed, the advice is close → Load → launch, never a blanket
+  "restart after restoring": some games save on exit.
 - `.ssnew` and `.ssold` are reserved suffixes everywhere.
 - Unknown presence (unplugged drive) refuses operations instead of treating the target
   as absent (E-N3).

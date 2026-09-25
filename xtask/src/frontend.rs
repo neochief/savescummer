@@ -24,8 +24,8 @@ use crate::{cmd, pins, platform};
 /// A built UI, ready to be packaged.
 pub struct Ui {
     /// The `cmake --install` output. Read by the platform packaging, which
-    /// only Windows has yet.
-    #[cfg_attr(not(windows), allow(dead_code))]
+    /// Linux doesn't have yet.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub install: PathBuf,
 }
 

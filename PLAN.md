@@ -96,9 +96,9 @@ These hold across every part:
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Status | First target | Planned | Planned (SteamOS in mind) |
-| Game monitoring | Yes | Planned (PLAN-MACOS) | To investigate |
-| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 (PLAN-MACOS) | To investigate |
+| Status | First target | Implemented, 13+ on Apple Silicon (PLAN-MACOS) | Planned (SteamOS in mind) |
+| Game monitoring | Yes | Yes | To investigate |
+| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 | To investigate |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
 
 

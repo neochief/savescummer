@@ -190,9 +190,54 @@ mod process {
     }
 }
 
-/// Off Windows the numbers come from `ps`. There's no cheap per-process
-/// write counter, so writes report zero.
-#[cfg(not(windows))]
+/// macOS: `proc_pid_rusage`. It counts bytes written, not write operations:
+/// both numbers are bytes (logical, then those that reached the disk).
+#[cfg(target_os = "macos")]
+mod process {
+    pub struct Process(i32);
+
+    impl Process {
+        pub fn open(pid: u32) -> Process {
+            Process(pid as i32)
+        }
+
+        fn usage(&self) -> libc::rusage_info_v4 {
+            // SAFETY: a zeroed plain-data struct the kernel fills in.
+            unsafe {
+                let mut info: libc::rusage_info_v4 = std::mem::zeroed();
+                let rc = libc::proc_pid_rusage(self.0, libc::RUSAGE_INFO_V4, (&raw mut info).cast());
+                assert_eq!(rc, 0, "proc_pid_rusage for the host");
+                info
+            }
+        }
+
+        /// Resident size and physical footprint (what Activity Monitor shows).
+        pub fn memory(&self) -> (u64, u64) {
+            let usage = self.usage();
+            (usage.ri_resident_size, usage.ri_phys_footprint)
+        }
+
+        pub fn writes(&self) -> (u64, u64) {
+            let usage = self.usage();
+            (usage.ri_logical_writes, usage.ri_diskio_byteswritten)
+        }
+
+        /// CPU time used so far; the kernel counts in Mach time units.
+        #[allow(deprecated)] // libc points to the mach2 crate for the timebase.
+        pub fn cpu(&self) -> std::time::Duration {
+            let usage = self.usage();
+            let mut base = libc::mach_timebase_info { numer: 0, denom: 0 };
+            // SAFETY: fills in the struct.
+            unsafe { libc::mach_timebase_info(&mut base) };
+            let ticks = (usage.ri_user_time + usage.ri_system_time) as u128;
+            std::time::Duration::from_nanos((ticks * base.numer as u128 / base.denom.max(1) as u128) as u64)
+        }
+    }
+}
+
+/// Linux: the numbers come from `ps`. There's no cheap per-process write
+/// counter, so writes report zero.
+#[cfg(not(any(windows, target_os = "macos")))]
 mod process {
     pub struct Process(u32);
 

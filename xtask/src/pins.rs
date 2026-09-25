@@ -23,3 +23,14 @@ pub const MIN_MACOS: &str = "13.0";
 /// Linux builds run on the oldest supported Ubuntu, so this is its glibc.
 pub const MIN_GLIBC: &str = "2.35";
 pub const OLDEST_UBUNTU: &str = "22.04";
+
+#[cfg(test)]
+mod tests {
+    /// `.cargo/config.toml` sets the deployment target for every Rust build;
+    /// it must be this minimum.
+    #[test]
+    fn cargo_builds_target_the_minimum_macos() {
+        let config = std::fs::read_to_string(crate::paths::root().join(".cargo").join("config.toml")).unwrap();
+        assert!(config.contains(&format!("MACOSX_DEPLOYMENT_TARGET = \"{}\"", super::MIN_MACOS)), "{config}");
+    }
+}

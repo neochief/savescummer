@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use savescummer_core::{ErrorKind, Failure};
 use savescummer_ipc::{EventBody, HotkeyAction, Operation};
 use savescummer_platform::integration::{self, Signal};
+use savescummer_platform::sounds::Cue;
 
 use crate::host::{Host, hotkey_target, new_id};
 use crate::ops;
@@ -19,6 +20,12 @@ use crate::ops;
 /// `request_id` makes a protocol request safe to repeat; a real key press
 /// passes a fresh one.
 pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Result<Operation, Failure> {
+    // A game in front that waits for macOS's permission: fail, and never
+    // fall through to another game on the stack.
+    if let Some(refusal) = crate::privacy::hotkey_refusal(host) {
+        ops::cue(host, Cue::Failed);
+        return Err(refusal);
+    }
     let target = hotkey_target(&host.lock()).map(|(g, _)| g);
     let Some(game) = target else {
         return Err(Failure::new(ErrorKind::NotFound, "no game to act on: no window focus and no running game"));

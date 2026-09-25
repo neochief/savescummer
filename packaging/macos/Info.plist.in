@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- SaveScummer.app's Info.plist; xtask fills in the Cargo version and the minimum macOS (pins.rs). -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<!-- Fixed forever: macOS keys permissions and settings on it. -->
+	<key>CFBundleIdentifier</key>
+	<string>com.savescummer.SaveScummer</string>
+	<key>CFBundleName</key>
+	<string>SaveScummer</string>
+	<key>CFBundleDisplayName</key>
+	<string>SaveScummer</string>
+	<!-- The host: opening the app starts it. -->
+	<key>CFBundleExecutable</key>
+	<string>SaveScummer</string>
+	<key>CFBundleIconFile</key>
+	<string>SaveScummer</string>
+	<key>CFBundleShortVersionString</key>
+	<string>{version}</string>
+	<key>CFBundleVersion</key>
+	<string>{version}</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>{min_macos}</string>
+	<!-- No Dock icon: the host lives in the menu bar; the UI shows one while its window is open. -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>

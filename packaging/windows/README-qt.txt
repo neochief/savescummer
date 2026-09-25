@@ -1,7 +1,7 @@
 Qt
 --
 
-The desktop app uses the Qt {qt_version} libraries (the Qt*.dll files and the
+The window (SaveScummer.UI) uses the Qt {qt_version} libraries (the Qt*.dll files and the
 plugin folders in bin\), licensed under the GNU Lesser General Public License
 version 3 (LGPL-3.0). The license texts are in the licenses\ folder.
 

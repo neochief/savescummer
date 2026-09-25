@@ -49,6 +49,8 @@ fn machine() -> Machine {
         uninstall_keys: vec![],
         epic_manifests: Some(root.join("epic")),
         loose_roots: vec![LooseRoot { path: root.join("Programs"), store: Store::Standalone }],
+        privacy: Default::default(),
+        privacy_answers: Default::default(),
     };
     Machine { _dir: dir, root, env }
 }
@@ -191,6 +193,53 @@ fn steam_account_order() {
     assert_eq!(m.env.steam_account().unwrap().account_id, 1);
     write(&active, "0");
     assert_eq!(m.env.steam_account().unwrap().account_id, 44258119);
+}
+
+#[cfg(not(windows))]
+#[test]
+fn gog_galaxy_database_lists_installs_and_is_skipped_when_locked_or_missing() {
+    let m = machine();
+    let db = m.root.join("galaxy-2.0.db");
+    let writer = rusqlite::Connection::open(&db).unwrap();
+    writer
+        .execute_batch(
+            "CREATE TABLE InstalledBaseProducts (productId INTEGER PRIMARY KEY, installationPath TEXT, \
+             installationDate TEXT);
+             INSERT INTO InstalledBaseProducts VALUES (1207658924, '/Applications/Game One', '2026-09-25');
+             INSERT INTO InstalledBaseProducts VALUES (1447763046, '/Users/Shared/GOG/The Long Dark', NULL);",
+        )
+        .unwrap();
+    assert_eq!(
+        os::galaxy_games(&db),
+        vec![
+            GogGame { id: 1207658924, path: PathBuf::from("/Applications/Game One") },
+            GogGame { id: 1447763046, path: PathBuf::from("/Users/Shared/GOG/The Long Dark") },
+        ]
+    );
+
+    // Galaxy writing right now: skipped at once, not waited for.
+    writer.execute_batch("BEGIN EXCLUSIVE").unwrap();
+    assert_eq!(os::galaxy_games(&db), vec![]);
+    writer.execute_batch("COMMIT").unwrap();
+
+    assert_eq!(os::galaxy_games(&m.root.join("missing.db")), vec![]);
+    assert!(!m.root.join("missing.db").exists(), "a read-only open never creates the file");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn detects_this_mac() {
+    let env = Environment::detect();
+    let home = env.folders.home.clone().unwrap();
+    assert_eq!(env.platform, Platform::Macos);
+    assert!(env.loose_roots.contains(&LooseRoot { path: "/Applications".into(), store: Store::Standalone }));
+    assert!(env.loose_roots.contains(&LooseRoot { path: home.join("Applications"), store: Store::Standalone }));
+    assert_eq!(
+        env.epic_manifests,
+        Some(home.join("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"))
+    );
+    assert!(env.uninstall_keys.is_empty());
+    assert!(env.watch_registry_keys().is_empty());
 }
 
 #[test]

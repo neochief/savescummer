@@ -7,12 +7,16 @@
 //!
 //! - `--write <path>=<text>`: write a save file at start.
 //! - `--hold <path>`: keep a file open without delete sharing until exit.
+//! - `--release-file <path>`: close the held files when this file appears,
+//!   and keep running.
 //! - `--launch <exe> [args…] --`: start another program, then keep going.
 //! - `--exit-now`: exit right after starting (a launcher).
 //! - `--crash-after <ms>`: exit abnormally after a while.
 //! - `--run-ms <ms>`: exit normally after a while.
 //! - `--quit-file <path>`: exit when this file appears.
-//! - `--window`: show a window (Windows only).
+//! - `--window`: show a window and come to the front (Windows, macOS).
+//! - `--activate-file <path>`: come to the front again whenever this file
+//!   appears (it's removed), so tests can switch between games.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -21,10 +25,12 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut held = Vec::new();
     let mut quit_file: Option<PathBuf> = None;
+    let mut release_file: Option<PathBuf> = None;
     let mut run_ms: Option<u64> = None;
     let mut crash_ms: Option<u64> = None;
     let mut exit_now = false;
     let mut window = false;
+    let mut activate_file: Option<PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -61,6 +67,10 @@ fn main() {
                 crash_ms = args[i + 1].parse().ok();
                 i += 2;
             }
+            "--release-file" => {
+                release_file = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
             "--quit-file" => {
                 quit_file = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
@@ -68,6 +78,10 @@ fn main() {
             "--window" => {
                 window = true;
                 i += 1;
+            }
+            "--activate-file" => {
+                activate_file = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
             }
             other => panic!("unknown argument {other}"),
         }
@@ -83,13 +97,22 @@ fn main() {
         if quit_file.as_ref().is_some_and(|q| q.exists()) {
             break;
         }
+        if release_file.as_ref().is_some_and(|r| r.exists()) {
+            held.clear();
+        }
         if run_ms.is_some_and(|ms| start.elapsed() >= Duration::from_millis(ms)) {
             break;
         }
         if crash_ms.is_some_and(|ms| start.elapsed() >= Duration::from_millis(ms)) {
             std::process::exit(101);
         }
-        pump();
+        if let Some(file) = activate_file.as_ref().filter(|f| f.exists()) {
+            let _ = std::fs::remove_file(file);
+            activate();
+        }
+        if window {
+            pump();
+        }
         std::thread::sleep(Duration::from_millis(20));
     }
     drop(held);
@@ -147,8 +170,60 @@ fn show_window() {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(windows)]
+fn activate() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::*;
+    let class: Vec<u16> = "SaveScummerFakeGame\0".encode_utf16().collect();
+    // SAFETY: finds our own window and brings it to the front.
+    unsafe {
+        let hwnd = FindWindowW(class.as_ptr(), std::ptr::null());
+        SetForegroundWindow(hwnd);
+    }
+}
+
+/// A regular app with one window, in front: what makes it the frontmost
+/// app macOS reports.
+#[cfg(target_os = "macos")]
+fn show_window() {
+    use objc2::MainThreadOnly;
+    use objc2_app_kit::{
+        NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSWindow, NSWindowStyleMask,
+    };
+    use objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize};
+    let mtm = MainThreadMarker::new().expect("the main thread");
+    let app = NSApplication::sharedApplication(mtm);
+    app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+    app.finishLaunching();
+    let frame = NSRect::new(NSPoint::new(100.0, 100.0), NSSize::new(320.0, 200.0));
+    // SAFETY: a plain titled window; it stays open until the process exits.
+    let window = unsafe {
+        NSWindow::initWithContentRect_styleMask_backing_defer(
+            NSWindow::alloc(mtm),
+            frame,
+            NSWindowStyleMask::Titled,
+            NSBackingStoreType::Buffered,
+            false,
+        )
+    };
+    // SAFETY: the window is kept for the process's lifetime.
+    unsafe { window.setReleasedWhenClosed(false) };
+    window.makeKeyAndOrderFront(None);
+    std::mem::forget(window);
+    activate();
+}
+
+#[cfg(target_os = "macos")]
+fn activate() {
+    let mtm = objc2_foundation::MainThreadMarker::new().expect("the main thread");
+    #[allow(deprecated)] // The replacement only asks; a test game must take the front.
+    objc2_app_kit::NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn show_window() {}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn activate() {}
 
 #[cfg(windows)]
 fn pump() {
@@ -163,5 +238,25 @@ fn pump() {
     }
 }
 
-#[cfg(not(windows))]
+/// Hands AppKit its events, so the window and activation work.
+#[cfg(target_os = "macos")]
+fn pump() {
+    use objc2_app_kit::{NSApplication, NSEventMask};
+    use objc2_foundation::{MainThreadMarker, NSDate, NSDefaultRunLoopMode};
+    let mtm = MainThreadMarker::new().expect("the main thread");
+    let app = NSApplication::sharedApplication(mtm);
+    // SAFETY: a plain event loop step on the main thread.
+    while let Some(event) = unsafe {
+        app.nextEventMatchingMask_untilDate_inMode_dequeue(
+            NSEventMask::Any,
+            Some(&NSDate::distantPast()),
+            NSDefaultRunLoopMode,
+            true,
+        )
+    } {
+        app.sendEvent(&event);
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn pump() {}

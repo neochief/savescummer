@@ -45,6 +45,11 @@ pub fn qt_runtime_env(command: &mut Command, kit: &Path) {
     command.env("PATH", std::env::join_paths(dirs).expect("PATH entries are valid"));
 }
 
+/// Where the program with the fixed executable name `name` is in a package.
+pub fn program(package: &Path, name: &str) -> PathBuf {
+    package.join("bin").join(naming::exe(name))
+}
+
 /// Keeps console programs from flashing a window.
 pub fn hide_window(command: &mut Command) {
     command.creation_flags(CREATE_NO_WINDOW);
@@ -226,7 +231,11 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
 
     fs::write(root.join("README.txt"), readme(inputs)).context("writing README.txt")?;
     required.push(PathBuf::from("README.txt"));
-    Ok(Layout { resources: root.to_path_buf(), required })
+    Ok(Layout { resources: root.to_path_buf(), required, unsummed: Vec::new() })
+}
+
+pub fn finish_package(_root: &Path) -> anyhow::Result<()> {
+    Ok(())
 }
 
 fn readme(inputs: &Inputs) -> String {

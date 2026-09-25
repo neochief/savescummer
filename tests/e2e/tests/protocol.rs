@@ -243,9 +243,21 @@ fn the_cli_starts_a_host_when_needed_and_never_a_second_one() {
     let (_, out) = run(&["status"]);
     let again: Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
     assert_eq!(s(&again["instance"]), instance);
-    // Starting a host directly while one runs is refused.
+    // Starting a host directly while one runs is refused, and it leaves the
+    // running host's socket alone: the data folder's lock comes first.
     let second = Command::new(HOST).args(world.host_args()).output().unwrap();
     assert_eq!(second.status.code(), Some(3));
+    let (code, out) = run(&["--no-start", "status"]);
+    assert_eq!(code, 0, "{out}");
+    let still: Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
+    assert_eq!(s(&still["instance"]), instance);
+    // Only the signed-in user may connect.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(world.data.join("host.sock")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
     run(&["shutdown"]);
 }
 
@@ -267,7 +279,6 @@ fn delete_and_flush_outcomes_survive_a_host_restart() {
 }
 
 #[test]
-#[cfg_attr(not(windows), ignore = "needs a process source for this OS (PLAN-MACOS.md, PROCESS MONITORING)")]
 fn a_repeated_hotkey_request_returns_the_same_operation() {
     let world = World::new();
     let _host = world.host();

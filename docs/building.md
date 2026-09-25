@@ -2,7 +2,7 @@
 
 All build automation is `cargo xtask`: one Rust program that runs the same on every OS, locally and in CI. There are no PowerShell, bash or Python build scripts. The design and the reasons behind it are in [PLAN-BUILD.md](../PLAN-BUILD.md); this guide is the how-to.
 
-Windows is implemented. On macOS the host and CLI build and `cargo xtask check` passes, but packaging isn't implemented yet ([PLAN-MACOS.md](../PLAN-MACOS.md)); Linux packaging isn't either. Both fail with a clear message.
+Windows and macOS are implemented ([PLAN-MACOS.md](../PLAN-MACOS.md) has what's macOS-specific). Linux packaging isn't yet and fails with a clear message.
 
 
 ## Prerequisites
@@ -16,6 +16,13 @@ Every platform:
 Windows:
 
 - **Visual Studio 2022+ or its Build Tools** with "Desktop development with C++". Rust links with it, and the Visual C++ runtime DLLs shipped in the package come from it.
+
+macOS (13+, Apple Silicon only):
+
+- **Xcode command-line tools** (`xcode-select --install`): the linker, `codesign`, `iconutil` and `hdiutil`.
+- **rsvg-convert** (`brew install librsvg`), which renders the app icon from `assets/icon.svg` for every package.
+- Every Rust build targets the oldest supported macOS: `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET`, kept equal to `pins::MIN_MACOS` by a test.
+- The end-to-end tests that switch between windows need an unlocked desktop session; while the screen is locked they say so and pass.
 
 UI frontend (only once `apps/ui` exists; until then builds contain the host and CLI only):
 
@@ -92,6 +99,20 @@ build/<mode>/package/SaveScummer-windows-x64/
   SHA256SUMS.txt
 ```
 
+On macOS the package is the app bundle itself:
+
+```text
+build/<mode>/package/SaveScummer.app/
+  Contents/Info.plist             LSUIElement: menu bar only, no Dock icon
+  Contents/MacOS/SaveScummer      host: the bundle's executable, what opening the app runs
+  Contents/MacOS/SaveScummer.UI   UI (once it exists)
+  Contents/MacOS/SaveScummer.CLI  CLI
+  Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist   launch at login
+  Contents/Resources/SaveScummer.icns, licenses, manifest, SHA256SUMS.txt
+```
+
+It's signed ad hoc (`codesign --sign -`) as the last step and verified. The main executable and `_CodeSignature` are left out of `SHA256SUMS.txt`: the signature covers them, and they change whenever the bundle is signed.
+
 Cargo builds `savescummer-host` and `savescummer-cli` (Cargo names can't contain dots); packaging renames them to the fixed names above (`SaveScummer` and `SaveScummer.CLI`).
 
 A package is assembled in a `.staging-<uuid>` folder and swapped in only when complete, after stopping anything running from the old one, so a failed build never breaks the existing package.
@@ -152,6 +173,15 @@ Every build (so also `run`, `host start` and `dist`), `check` and `clean` first 
 Version resources: `apps/host/build.rs` and `apps/cli/build.rs` embed the Cargo version and `assets/icon.ico` (winresource).
 
 
+## macOS disk image
+
+`cargo xtask dist` puts the release bundle and an `Applications` link into `dist/SaveScummer-macos-arm64-<version>.dmg` (`hdiutil`, UDZO). The user drags the app over; there's no installer.
+
+- Signed ad hoc, not with a Developer ID: the first launch needs *Open Anyway*, and each new build is a new identity to macOS, so it asks again for any privacy permission (PLAN-MACOS.md, SIGNING).
+- Launch at login is an `SMAppService` agent whose plist is inside the bundle; macOS lists it as SaveScummer in *Login Items*.
+- The version is in `Info.plist`; the `winresource` build scripts do nothing on macOS.
+
+
 ## RELEASING
 
 1. `cargo xtask release 1.2.3` on a clean branch: checks the version is new and the tag free (locally and on origin), writes the version into `Cargo.toml`, refreshes `Cargo.lock`, runs `check` (`--skip-checks` for emergencies), commits "Release 1.2.3", tags `v1.2.3` and pushes both. `--no-push` prints the two push commands instead. If anything fails before the commit, the bump is undone.
@@ -166,7 +196,7 @@ A published release never changes; fixes ship as a new version. To rebuild a dra
 
 ## CI
 
-- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. On Windows: `setup cargo-about` (and `setup qt` once the UI exists), `check`, `build --test --package`. Superseded runs are cancelled.
+- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. On Windows and macOS (Apple Silicon runners): `setup cargo-about` (and `setup qt` once the UI exists), `check`, `build --test --package`; macOS also installs librsvg for the icon. Superseded runs are cancelled.
 - [`release.yml`](../.github/workflows/release.yml): `v*` tags. Never cancelled.
 
 Qt and the pinned tools are cached, keyed on `xtask/src/pins.rs`. Every step is a `cargo xtask` command, so a CI failure reproduces locally with the same command.

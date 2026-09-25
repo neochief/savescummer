@@ -11,7 +11,8 @@ use savescummer_core::{ErrorKind, Filter, Presence, Target};
 use savescummer_snapshots::load::{
     self, observe, recover, stage_clean_up, stage_copy_in, stage_set_aside, stage_swap_in,
 };
-use savescummer_snapshots::{CheckpointMeta, copy_save_set, no_hook, plan_load};
+use savescummer_snapshots::retry::FORWARD;
+use savescummer_snapshots::{Budget, CheckpointMeta, Retry, copy_save_set, no_hook, plan_load};
 
 struct Fixture {
     _dir: tempfile::TempDir,
@@ -47,7 +48,7 @@ fn snapshot(targets: &[Target], dest: &Path) -> Vec<RecordedTarget> {
         operation: None,
         targets: vec![],
     };
-    copy_save_set(targets, dest, &mut meta, true, &no_hook).unwrap();
+    copy_save_set(targets, dest, &mut meta, true, &Budget::new(FORWARD), &no_hook).unwrap();
     meta.targets
 }
 
@@ -75,9 +76,9 @@ fn contents(root: &Path) -> Vec<String> {
 fn apply(checkpoint: &Path, recorded: &[RecordedTarget], targets: &[Target]) -> Result<usize, load::StageError> {
     let pairs: Vec<_> = recorded.iter().cloned().zip(targets.iter().cloned()).collect();
     let mut plan = plan_load(checkpoint, &pairs, true).map_err(|f| load::StageError { failure: f, undone: true })?;
-    stage_copy_in(&mut plan, &no_hook)?;
-    stage_set_aside(&plan, &no_hook)?;
-    stage_swap_in(&plan, &no_hook)?;
+    stage_copy_in(&mut plan, &Retry::new(), &no_hook)?;
+    stage_set_aside(&plan, &Retry::new(), &no_hook)?;
+    stage_swap_in(&plan, &Retry::new(), &no_hook)?;
     assert!(stage_clean_up(&plan, &no_hook).is_empty());
     Ok(plan.removed_files())
 }
@@ -174,7 +175,7 @@ fn a_save_set_spanning_several_folders() {
 
 #[cfg(windows)]
 #[test]
-fn a_save_held_open_refuses_the_load_at_stage_two_with_nothing_changed() {
+fn a_save_held_open_for_longer_than_the_budget_fails_stage_two_with_nothing_changed() {
     use std::os::windows::fs::OpenOptionsExt;
     let f = fixture();
     write(&f.live.join("a.sav"), "a1");
@@ -194,6 +195,134 @@ fn a_save_held_open_refuses_the_load_at_stage_two_with_nothing_changed() {
     assert_eq!(contents(&f.live), before, "renames undone, copies deleted");
 }
 
+/// Makes renaming a file fail until the returned guard is released: a
+/// handle without delete sharing on Windows, the immutable flag on macOS
+/// (which fails with "operation not permitted", so tests count that as
+/// transient there).
+#[cfg(any(windows, target_os = "macos"))]
+mod block {
+    use std::path::Path;
+    #[cfg(target_os = "macos")]
+    use std::path::PathBuf;
+
+    #[cfg(windows)]
+    pub struct Blocked(#[allow(dead_code)] std::fs::File);
+
+    #[cfg(windows)]
+    pub fn block(path: &Path) -> Blocked {
+        use std::os::windows::fs::OpenOptionsExt;
+        Blocked(std::fs::OpenOptions::new().read(true).share_mode(1).open(path).unwrap())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub struct Blocked(PathBuf);
+
+    #[cfg(target_os = "macos")]
+    pub fn block(path: &Path) -> Blocked {
+        set_flags(path, libc::UF_IMMUTABLE);
+        Blocked(path.to_path_buf())
+    }
+
+    #[cfg(target_os = "macos")]
+    impl Drop for Blocked {
+        fn drop(&mut self) {
+            set_flags(&self.0, 0);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn set_flags(path: &Path, flags: u32) {
+        use std::os::unix::ffi::OsStrExt;
+        let c = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: a NUL-terminated path that outlives the call.
+        assert_eq!(unsafe { libc::chflags(c.as_ptr(), flags) }, 0);
+    }
+
+    pub fn transient(e: &std::io::Error) -> bool {
+        #[cfg(target_os = "macos")]
+        return e.raw_os_error() == Some(libc::EPERM);
+        #[cfg(windows)]
+        return savescummer_snapshots::fsx::is_transient(e);
+    }
+
+    /// Releases the block after `ms` from another thread.
+    pub fn release_after(blocked: Blocked, ms: u64) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+            drop(blocked);
+        })
+    }
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+use savescummer_snapshots::retry::ROLLBACK;
+
+#[cfg(any(windows, target_os = "macos"))]
+fn retry(forward: std::time::Duration) -> Retry {
+    let budget = |total| Budget::custom(total, std::thread::sleep, block::transient);
+    Retry { forward: budget(forward), rollback: budget(ROLLBACK) }
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn a_rename_blocked_for_a_moment_is_retried_and_the_load_goes_through() {
+    let f = fixture();
+    write(&f.live.join("a.sav"), "a1");
+    let targets = [target(&f.live, Filter::All)];
+    let cp = f.store.join("cp");
+    let recorded = snapshot(&targets, &cp);
+    write(&f.live.join("a.sav"), "a2");
+    let pairs: Vec<_> = recorded.iter().cloned().zip(targets.iter().cloned()).collect();
+    let mut plan = plan_load(&cp, &pairs, true).unwrap();
+    let retry = retry(FORWARD);
+    stage_copy_in(&mut plan, &retry, &no_hook).unwrap();
+
+    let released = block::release_after(block::block(&f.live.join("a.sav")), 150);
+    stage_set_aside(&plan, &retry, &no_hook).unwrap();
+    released.join().unwrap();
+    stage_swap_in(&plan, &retry, &no_hook).unwrap();
+    assert!(stage_clean_up(&plan, &no_hook).is_empty());
+    assert_eq!(contents(&f.live), vec!["a.sav=a1"]);
+    assert!(retry.forward.left() < FORWARD, "the wait came out of the forward budget");
+    assert_eq!(retry.rollback.left(), ROLLBACK);
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn a_rollback_that_needs_retries_succeeds_on_its_own_budget() {
+    let f = fixture();
+    write(&f.live.join("a.sav"), "a1");
+    write(&f.live.join("b.sav"), "b1");
+    let targets = [target(&f.live, Filter::All)];
+    let cp = f.store.join("cp");
+    let recorded = snapshot(&targets, &cp);
+    write(&f.live.join("a.sav"), "a2");
+    write(&f.live.join("b.sav"), "b2");
+    let before = contents(&f.live);
+    let pairs: Vec<_> = recorded.iter().cloned().zip(targets.iter().cloned()).collect();
+    let mut plan = plan_load(&cp, &pairs, true).unwrap();
+    assert!(plan.files[0].live.ends_with("a.sav"), "a is set aside first");
+    // The forward budget is already used up, and b stays blocked.
+    let retry = retry(std::time::Duration::ZERO);
+    stage_copy_in(&mut plan, &retry, &no_hook).unwrap();
+    let _b = block::block(&f.live.join("b.sav"));
+    // Right after a is set aside, a.ssold is blocked for a moment too, so
+    // putting it back needs retries.
+    let released = std::cell::RefCell::new(None);
+    let hook = |_: &str, n: usize| {
+        if n == 1 {
+            let blocked = block::block(&f.live.join("a.sav.ssold"));
+            *released.borrow_mut() = Some(block::release_after(blocked, 150));
+        }
+    };
+    let err = stage_set_aside(&plan, &retry, &hook).unwrap_err();
+    released.take().unwrap().join().unwrap();
+    assert!(err.undone, "the undo waited the block out: {:?}", err.failure);
+    assert!(retry.rollback.left() < ROLLBACK, "the wait came out of the rollback budget");
+    drop(_b);
+    assert_eq!(contents(&f.live), before, "originals back, copies deleted");
+}
+
 #[test]
 fn a_name_created_between_stages_fails_stage_three_and_undoes_everything() {
     let f = fixture();
@@ -204,11 +333,11 @@ fn a_name_created_between_stages_fails_stage_three_and_undoes_everything() {
     write(&f.live.join("a.sav"), "a2");
     let pairs: Vec<_> = recorded.iter().cloned().zip(targets.iter().cloned()).collect();
     let mut plan = plan_load(&cp, &pairs, true).unwrap();
-    stage_copy_in(&mut plan, &no_hook).unwrap();
-    stage_set_aside(&plan, &no_hook).unwrap();
+    stage_copy_in(&mut plan, &Retry::new(), &no_hook).unwrap();
+    stage_set_aside(&plan, &Retry::new(), &no_hook).unwrap();
     // The game writes its save between stages 2 and 3.
     write(&f.live.join("a.sav"), "game wrote");
-    let err = stage_swap_in(&plan, &no_hook).unwrap_err();
+    let err = stage_swap_in(&plan, &Retry::new(), &no_hook).unwrap_err();
     assert_eq!(err.failure.kind, ErrorKind::SwapFailed);
     // The set-aside original can't go back over the game's new file: the
     // undo reports it, and every file is kept.
@@ -239,9 +368,9 @@ fn interrupted(stop_after: usize) -> (Fixture, Rule, Vec<String>) {
         }
     };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        stage_copy_in(&mut plan, &hook).unwrap();
-        stage_set_aside(&plan, &hook).unwrap();
-        stage_swap_in(&plan, &hook).unwrap();
+        stage_copy_in(&mut plan, &Retry::new(), &hook).unwrap();
+        stage_set_aside(&plan, &Retry::new(), &hook).unwrap();
+        stage_swap_in(&plan, &Retry::new(), &hook).unwrap();
         stage_clean_up(&plan, &hook);
     }));
     assert!(result.is_err() || stop_after > 100);

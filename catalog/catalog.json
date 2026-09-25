@@ -1426,6 +1426,41 @@
       ]
     },
     {
+      "id": "steam-2278010",
+      "name": "Six Ages 2: Lights Going Out",
+      "info": "**Context:** A bad ritual, expedition, battle, or crisis response can consume scarce food/magic and weaken a clan already fighting long-term collapse.\n\n**How progress is saved:** The campaign autosaves through its scenes and long-running clan simulation.\n\n**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.",
+      "detect": {
+        "steam": 2278010,
+        "gog": 1834655399
+      },
+      "installDirs": [
+        "Six Ages Lights Going Out",
+        "Six Ages 2 Lights Going Out"
+      ],
+      "executables": {
+        "windows": [
+          "Lights Going Out.exe"
+        ],
+        "macos": [
+          "LightsGoingOut.app"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{INSTALL_DIR}/Documents/DarkAge"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages/DarkAge"
+        }
+      ]
+    },
+    {
       "id": "steam-234390",
       "name": "Teleglitch: Die More Edition",
       "info": "**Context:** A late run can be resource-starved but valuable, with a specific weapon, ammo, armor, and crafting setup.\n\n**How progress is saved:** The game uses single-use exit saves at level boundaries; Steam builds need restore testing because cloud/API behavior can interfere with copied saves.\n\n**SaveScummer value:** Checkpoint before loading into a dangerous later level. If the run dies, restore the same inventory and resource state instead of restarting, provided the platform-specific restore works.",
@@ -2459,7 +2494,7 @@
           "when": {
             "os": "macos"
           },
-          "path": "{XDG_DATA_HOME}/Hinterland/TheLongDark"
+          "path": "{HOME}/.local/share/Hinterland/TheLongDark"
         },
         {
           "when": {
@@ -4165,16 +4200,15 @@
       "save": [
         {
           "when": {
-            "store": "steam"
+            "os": "windows"
           },
           "path": "{INSTALL_DIR}/Documents/StormAge"
         },
         {
           "when": {
-            "os": "macos",
-            "store": "steam"
+            "os": "macos"
           },
-          "path": "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages"
+          "path": "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages/StormAge"
         }
       ]
     },

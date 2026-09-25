@@ -1,5 +1,8 @@
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// A volume serial and file index stay the same when a drive comes back.
+pub const IDENTITY_SURVIVES_REMOUNT: bool = true;
 
 /// Windows reports "access denied" for a file another program holds open,
 /// as well as for real permission problems.
@@ -11,9 +14,24 @@ pub fn is_unavailable(e: &io::Error) -> bool {
     matches!(e.raw_os_error(), Some(21 | 53 | 64 | 67 | 59 | 1167 | 1112))
 }
 
+/// Windows reports a missing drive letter or share as "not ready" or "bad
+/// path" (see [`is_unavailable`]), so there's nothing to remember.
+pub fn mount_point(_path: &Path) -> Option<PathBuf> {
+    None
+}
+
+pub fn is_mounted(_mount: &Path) -> bool {
+    true
+}
+
 /// SHARING_VIOLATION, LOCK_VIOLATION.
 pub fn is_in_use(e: &io::Error) -> bool {
     matches!(e.raw_os_error(), Some(32 | 33))
+}
+
+/// ACCESS_DENIED, SHARING_VIOLATION, LOCK_VIOLATION.
+pub fn is_transient(e: &io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(5 | 32 | 33))
 }
 
 /// HANDLE_DISK_FULL, DISK_FULL.

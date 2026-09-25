@@ -53,6 +53,15 @@ ureq = "3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 winresource = "0.1"
 libc = "0.2"
+# macOS: AppKit and friends, through objc2's generated bindings.
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-user-notifications = "0.3"
+objc2-service-management = "0.3"
+block2 = "0.6"
+dispatch2 = "0.3"
+global-hotkey = "0.8"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",

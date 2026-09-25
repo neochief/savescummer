@@ -114,6 +114,24 @@
       - when: { store: steam }
         path: "{STEAM_USERDATA}/219740/remote"
 
+# The Long Dark: the manifest's macOS row is `<xdgData>/Hinterland/TheLongDark`,
+# and `{XDG_DATA_HOME}` never resolves on macOS (PLAN-CATALOG.md 4.4). The Mac
+# build (Unity) writes to `~/.local/share/Hinterland/TheLongDark` like Linux
+# does (PCGamingWiki's save location for macOS is `$XDG_DATA_HOME/Hinterland/
+# TheLongDark`, checked 2026-09-25, and its default on a Mac is
+# `~/.local/share`; Steam discussions since 2018 and savelocation.net agree;
+# before 2018 it used `~/Library/Application Support/Hinterland`). Not yet
+# checked on a real Mac install.
+"The Long Dark":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{LOCALAPPDATA}/Hinterland/TheLongDark"
+      - when: { os: macos }
+        path: "{HOME}/.local/share/Hinterland/TheLongDark"
+      - when: { os: linux }
+        path: "{XDG_DATA_HOME}/Hinterland/TheLongDark"
+
 # Entries below were checked against real folders (Windows, 2026-09-24).
 
 # Enter the Gungeon: the Unity folder also holds `Unity/` (engine cache),
@@ -185,15 +203,41 @@
 # Six Ages: Ride Like the Wind: `<install>/Documents` holds the save folder
 # `StormAge` and, on the machine checked, four hand-made copies
 # (`StormAge - Copy`, …). Copies would bloat every checkpoint, and a Load
-# would delete copies made after it. The macOS group container is the game's
-# own and stays whole.
+# would delete copies made after it. On macOS the saves are in a group
+# container shared with Six Ages 2 (`DarkAge`, with its own hand-made copies,
+# which Steam Cloud syncs too), so only `StormAge` is taken there as well.
+# The manifest limits both to Steam, but the game picks the folders itself:
+# GOG builds (Windows and macOS) save to the same places.
 "Six Ages: Ride Like the Wind":
   override:
     save:
-      - when: { store: steam }
+      - when: { os: windows }
         path: "{INSTALL_DIR}/Documents/StormAge"
-      - when: { os: macos, store: steam }
-        path: "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages"
+      - when: { os: macos }
+        path: "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages/StormAge"
+
+# Six Ages 2: Lights Going Out: not in the manifest. Save folders as the
+# developer gives them (Steam discussion 3825288583727164417): on Windows
+# `<install>/Documents/DarkAge`, on macOS `DarkAge` in the group container it
+# shares with the first game (checked on a Mac, 2026-09-25:
+# `DarkAge/Slot1/Save-*.6a`). Not limited to Steam, as for the first game.
+# The Windows executable and GOG's install folder are from GOG's build
+# manifest (1.0.4); Steam's install folder and macOS app from a Steam install.
+# GOG's macOS build installs as the bundle itself
+# (`Six Ages 2 Lights Going Out.app`), so it has no executable to list.
+"Six Ages 2: Lights Going Out":
+  detect:
+    steam: 2278010
+    gog: 1834655399
+  installDirs: ["Six Ages Lights Going Out", "Six Ages 2 Lights Going Out"]
+  executables:
+    windows: ["Lights Going Out.exe"]
+    macos: ["LightsGoingOut.app"]
+  save:
+    - when: { os: windows }
+      path: "{INSTALL_DIR}/Documents/DarkAge"
+    - when: { os: macos }
+      path: "{HOME}/Library/Group Containers/group.com.a-sharp.Six-Ages/DarkAge"
 
 # Void War: the saves are `autosave.sav`, `profile.sav` and `score.sav`.
 # The folder also holds `crewnames.txt`, `enemynames.txt`, `gm_exports/`, a

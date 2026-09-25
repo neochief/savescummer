@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The launch-at-login agent, registered by the host with SMAppService.agent
+     (PLAN-MACOS.md LAUNCH AT LOGIN). Paths are relative to the bundle. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.savescummer.SaveScummer.host</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/SaveScummer</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>Contents/MacOS/SaveScummer</string>
+		<string>--minimized</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<!-- A crashed host isn't restarted behind the user's back. -->
+	<key>KeepAlive</key>
+	<false/>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

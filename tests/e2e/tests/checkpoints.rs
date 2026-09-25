@@ -274,3 +274,36 @@ fn opening_folders_resolves_real_paths_and_missing_folders_open_their_parent() {
     let store = world.ok(&["open", "checkpoints", "--game", &game, "--resolve-only"]);
     assert!(s(&store["path"]).starts_with(&*world.data.to_string_lossy()));
 }
+
+#[test]
+fn files_the_os_or_a_file_manager_writes_are_left_alone() {
+    let world = World::new();
+    let _host = world.host();
+    let (game, saves) = game_with_saves(&world, "Browsed");
+    write(&saves.join(".DS_Store"), "finder, before");
+    write(&saves.join("._slot.sav"), "attributes");
+    let saved = world.ok(&["save", &game, "--label", "clean"]);
+    let checkpoint = s(&saved["result"]["checkpoint"]);
+    let folder =
+        std::path::PathBuf::from(s(
+            &world.ok(&["open", "checkpoint", "--checkpoint", &checkpoint, "--resolve-only"])["path"]
+        ));
+    let copied = tree(&folder);
+    assert!(copied.iter().all(|f| !f.contains(".DS_Store") && !f.contains("._")), "not copied: {copied:?}");
+
+    // Looking at the checkpoint in a file manager doesn't make it edited.
+    write(&folder.join(".DS_Store"), "finder");
+    write(&folder.join("Thumbs.db"), "explorer");
+    world.ok(&["scan", "--full"]);
+    let row = world.history(&game)[0].clone();
+    assert_eq!(s(&row["checkpoint"]), checkpoint, "{row}");
+    assert_eq!(row["label"], "clean");
+
+    // A Load neither restores nor removes them in the save folder.
+    write(&saves.join("slot.sav"), "v2");
+    write(&saves.join(".DS_Store"), "finder, after");
+    world.ok(&["load", &game]);
+    assert_eq!(read(&saves.join("slot.sav")), "v1");
+    assert_eq!(read(&saves.join(".DS_Store")), "finder, after");
+    assert_eq!(read(&saves.join("._slot.sav")), "attributes");
+}

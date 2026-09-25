@@ -7,6 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -16,8 +17,9 @@ use savescummer_core::history::RowKind;
 use savescummer_core::labels;
 use savescummer_core::{ErrorKind, Failure, Presence, SUFFIX_NEW, SUFFIX_OLD, Target};
 use savescummer_ipc::{OpResult, OpStatus, Operation, Phase};
+use savescummer_monitor::open_files::{self, FileId};
 use savescummer_platform::sounds::Cue;
-use savescummer_snapshots::{self as snap, CheckpointMeta, LoadPlan, TEMP_PREFIX, load};
+use savescummer_snapshots::{self as snap, Budget, CheckpointMeta, LoadPlan, Retry, TEMP_PREFIX, load};
 use savescummer_storage::{self as db, CheckpointRow, HistoryRow, OperationRow};
 
 use crate::checkpoints::{Verdict, judge, recompute_visibility};
@@ -270,6 +272,10 @@ fn submit_new(
         }
         host.publish(&mut inner);
     }
+    let done = Arc::new(AtomicBool::new(false));
+    if matches!(request, Request::Save { .. } | Request::Load { .. } | Request::Revert { .. }) {
+        watch_for_stall(host.clone(), op_id.clone(), game_id.clone(), done.clone());
+    }
     let worker_host = host.clone();
     let worker_game = game_id.clone();
     let worker_op = op_id.clone();
@@ -284,8 +290,53 @@ fn submit_new(
             _ => Err(Failure::new(ErrorKind::InvalidRequest, "unexpected request")),
         };
         finish(&worker_host, &worker_op, &worker_game, outcome);
+        done.store(true, Ordering::SeqCst);
     });
     Ok(operation)
+}
+
+/// The safety net for a read that blocks (PLAN-MACOS.md, PRIVACY
+/// PERMISSIONS: a guarded location the table misses): after `--stall-secs`
+/// without any file progress, the operation is reported failed. Its thread
+/// is left to finish and keeps the game's lock until it does, so no second
+/// Load runs over a half-finished one; its real outcome is recorded then.
+fn watch_for_stall(host: Arc<Host>, op_id: String, game_id: String, done: Arc<AtomicBool>) {
+    let stall = Duration::from_secs(host.opts.stall_secs);
+    std::thread::spawn(move || {
+        let (mut seen, mut since) = (snap::progress(), Instant::now());
+        while !done.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(100));
+            let now = snap::progress();
+            if now != seen {
+                (seen, since) = (now, Instant::now());
+            } else if since.elapsed() >= stall {
+                report_stalled(&host, &op_id, &game_id);
+                return;
+            }
+        }
+    });
+}
+
+fn report_stalled(host: &Arc<Host>, op_id: &str, game_id: &str) {
+    let failure =
+        Failure::new(ErrorKind::Stalled, "file work stopped responding; macOS may be waiting on a permission prompt")
+            .game(game_id);
+    crate::trace(&format!("{op_id} for {game_id} stalled; the game stays locked until it ends"));
+    let hotkey = {
+        let mut inner = host.lock();
+        let Some(operation) = inner.ops.get_mut(op_id).filter(|o| !o.status.is_final()) else { return };
+        operation.status = OpStatus::Failed;
+        operation.error = Some(failure.clone());
+        let operation = operation.clone();
+        inner.last_results.insert(game_id.to_string(), operation);
+        let hotkey = inner.hotkey_ops.remove(op_id);
+        host.publish(&mut inner);
+        hotkey
+    };
+    if hotkey {
+        cue(host, Cue::Failed);
+        notify_failure(host, &failure);
+    }
 }
 
 enum Prepared {
@@ -305,6 +356,11 @@ struct Restore {
 fn preflight(host: &Arc<Host>, game_id: &str, request: &Request) -> Result<Prepared, Failure> {
     let mut inner = host.lock();
     crate::library::derive_one(host, &mut inner, game_id);
+    // Every location it touches must be allowed before the first read: a
+    // prompt during a game may go unseen while the read waits on it.
+    if let Some(category) = host.privacy.needed(&inner.store) {
+        return Err(Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(&inner.store));
+    }
     if !inner.store_available {
         return Err(
             Failure::new(ErrorKind::StoreUnavailable, "the checkpoint store can't be reached").path(&inner.store)
@@ -464,6 +520,7 @@ fn make_checkpoint(
     game_id: &str,
     kind: &str,
     targets: &[Target],
+    budget: &Budget,
     journal_base: &mut Journal,
 ) -> Result<CheckpointRow, Failure> {
     let (game_name, folder) = {
@@ -488,7 +545,7 @@ fn make_checkpoint(
     };
     let hook_name = format!("{kind}.copy");
     let hook = |_: &str, n: usize| host.crash_point(&hook_name, n);
-    let copied = snap::copy_save_set(targets, &temp, &mut meta, host.env.case_insensitive(), &hook);
+    let copied = snap::copy_save_set(targets, &temp, &mut meta, host.env.case_insensitive(), budget, &hook);
     if let Err(failure) = copied {
         let _ = snap::remove_disposal(&temp);
         return Err(failure);
@@ -539,7 +596,8 @@ fn run_save(host: &Arc<Host>, op_id: &str, game_id: &str, label: Option<String>)
     let targets = current_targets(host, game_id)?;
     let label = label.as_deref().and_then(labels::normalize);
     let mut j = Journal { phase: "save".into(), label: label.clone(), ..Default::default() };
-    let mut checkpoint = make_checkpoint(host, op_id, game_id, "saved", &targets, &mut j)?;
+    let retry = Retry::new();
+    let mut checkpoint = make_checkpoint(host, op_id, game_id, "saved", &targets, &retry.forward, &mut j)?;
     checkpoint.label = label;
     let row = HistoryRow {
         seq: 0,
@@ -629,7 +687,9 @@ fn run_restore(host: &Arc<Host>, op_id: &str, game_id: &str, prepared: Restore) 
         cloud_check: is_steam,
         ..Default::default()
     };
-    let recovery = make_checkpoint(host, op_id, game_id, "recovery", &targets, &mut j)?;
+    // One waiting budget for the whole forward operation, one for undoing it.
+    let retry = Retry::new();
+    let recovery = make_checkpoint(host, op_id, game_id, "recovery", &targets, &retry.forward, &mut j)?;
     host.db()
         .write(|c| db::insert_checkpoint(c, &recovery).map(|_| ()))
         .map_err(|e| Failure::new(ErrorKind::NotRecorded, e.to_string()))?;
@@ -657,8 +717,15 @@ fn run_restore(host: &Arc<Host>, op_id: &str, game_id: &str, prepared: Restore) 
     journal(host, op_id, &j)?;
 
     let hook = |name: &str, n: usize| host.crash_point(name, n);
+    let set_aside = |p: &mut LoadPlan| {
+        if let Err(failure) = wait_for_open_files(host, game_id, p, &retry.forward) {
+            let undone = load::undo_copy_in(p, &retry.rollback).is_ok();
+            return Err(load::StageError { failure, undone });
+        }
+        load::stage_set_aside(p, &retry, &hook)
+    };
     let stages: [Stage<'_>; 3] =
-        [&|p| load::stage_copy_in(p, &hook), &|p| load::stage_set_aside(p, &hook), &|p| load::stage_swap_in(p, &hook)];
+        [&|p| load::stage_copy_in(p, &retry, &hook), &set_aside, &|p| load::stage_swap_in(p, &retry, &hook)];
     for (i, stage) in stages.iter().enumerate() {
         if let Err(e) = stage(&mut plan) {
             if e.undone {
@@ -698,6 +765,61 @@ fn run_restore(host: &Arc<Host>, op_id: &str, game_id: &str, prepared: Restore) 
     commit(host, op_id, game_id, None, Some(&row), &result)?;
     load::stage_clean_up(&plan, &hook);
     Ok(result)
+}
+
+/// Before Load stage 2 (PLAN-HOST, LOAD, "Interference from the running
+/// game"): the files stage 2 would rename, checked against the game's
+/// processes as the monitor sees them.
+fn wait_for_open_files(host: &Host, game_id: &str, plan: &LoadPlan, budget: &Budget) -> Result<(), Failure> {
+    if !open_files::SUPPORTED {
+        return Ok(());
+    }
+    let files: Vec<(&Path, FileId)> = plan
+        .files
+        .iter()
+        .filter(|f| f.original.is_some())
+        .filter_map(|f| Some((f.live.as_path(), FileId::of(&f.live)?)))
+        .collect();
+    let pids = || host.lock().processes.get(game_id).cloned().unwrap_or_default();
+    wait_until_closed(game_id, &files, pids, budget)
+}
+
+/// While `pids` hold any of `files` open, waits within `budget`; refuses if
+/// one is still open when it runs out. Where nothing is found open but some
+/// process couldn't be inspected, goes on as before and logs it.
+fn wait_until_closed(
+    game_id: &str,
+    files: &[(&Path, FileId)],
+    pids: impl Fn() -> Vec<u32>,
+    budget: &Budget,
+) -> Result<(), Failure> {
+    let ids: Vec<FileId> = files.iter().map(|(_, id)| *id).collect();
+    loop {
+        let pids = pids();
+        if pids.is_empty() || ids.is_empty() {
+            return Ok(());
+        }
+        let found = open_files::inspect(&pids, &ids);
+        if found.open.is_empty() {
+            if !found.incomplete.is_empty() {
+                let why: Vec<String> = found.incomplete.iter().map(|(pid, why)| format!("pid {pid}: {why}")).collect();
+                crate::trace(&format!(
+                    "open-file check for {game_id} couldn't inspect every process, loading as before: {}",
+                    why.join("; ")
+                ));
+            }
+            return Ok(());
+        }
+        if budget.wait() {
+            continue;
+        }
+        let held: Vec<String> =
+            found.open.iter().map(|&(pid, i)| format!("pid {pid} holds {}", files[i].0.display())).collect();
+        let detail = format!("still open after waiting: {}", held.join("; "));
+        crate::trace(&format!("load of {game_id} refused before changing any file, {detail}"));
+        let open: std::collections::BTreeSet<usize> = found.open.iter().map(|&(_, i)| i).collect();
+        return Err(Failure::new(ErrorKind::HeldOpen, detail).paths(open.into_iter().map(|i| files[i].0)));
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -975,6 +1097,9 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
     {
         notify_failure(host, e);
     }
+    if let Some(e) = &error {
+        crate::privacy::after_failure(host, e);
+    }
 }
 
 pub fn cue(host: &Host, cue: Cue) {
@@ -1006,6 +1131,8 @@ pub fn move_store(host: &Arc<Host>, request_id: &str, target: &str) -> Result<Op
     if !new_store.is_absolute() {
         return Err(Failure::new(ErrorKind::InvalidConfig, "use a full path").path(&new_store));
     }
+    // A user action: a location macOS guards is asked for now.
+    crate::privacy::ask_for(host, &new_store)?;
     let op_id = new_id("op");
     let old_store;
     {
@@ -1108,10 +1235,15 @@ fn run_move(host: &Arc<Host>, op_id: &str, old: &Path, new: &Path) -> Result<OpR
     let records = db::all_live_checkpoints(host.db().conn()).unwrap_or_default();
     let mut identities = Vec::new();
     for record in records.iter().filter(|r| r.state != "deleting") {
-        let copy = new.join(&record.folder);
+        let (original, copy) = (old.join(&record.folder), new.join(&record.folder));
+        // The original must still be the recorded generation, and the copy
+        // a faithful copy of it. The copy's own signature is recorded: a
+        // drive with coarser timestamps (exFAT, FAT) gives it another one.
+        let faithful = snap::signature(&original).is_ok_and(|sig| sig.hash == record.signature)
+            && snap::copy_matches(&original, &copy).unwrap_or(false);
         match snap::signature(&copy) {
-            Ok(sig) if sig.hash == record.signature => identities.push((record.id.clone(), sig.identity)),
-            _ if snap::presence(&old.join(&record.folder)) != Presence::Present => {}
+            Ok(sig) if faithful => identities.push((record.id.clone(), sig.hash, sig.identity)),
+            _ if snap::presence(&original) != Presence::Present => {}
             _ => {
                 cleanup_new();
                 return Err(Failure::new(ErrorKind::Io, "a copied checkpoint doesn't match its original").path(&copy));
@@ -1121,10 +1253,10 @@ fn run_move(host: &Arc<Host>, op_id: &str, old: &Path, new: &Path) -> Result<OpR
     host.db()
         .write(|c| {
             db::set_setting(c, crate::model::SETTING_STORE, &new.to_string_lossy())?;
-            for (id, identity) in &identities {
+            for (id, signature, identity) in &identities {
                 c.execute(
-                    "UPDATE checkpoints SET identity = ?2 WHERE id = ?1",
-                    [id.as_str(), identity.as_deref().unwrap_or("")],
+                    "UPDATE checkpoints SET signature = ?2, identity = ?3 WHERE id = ?1",
+                    [id.as_str(), signature.as_str(), identity.as_deref().unwrap_or("")],
                 )?;
             }
             let j = Journal {
@@ -1144,6 +1276,8 @@ fn run_move(host: &Arc<Host>, op_id: &str, old: &Path, new: &Path) -> Result<OpR
         inner.store = new.to_path_buf();
         inner.store_available = true;
     }
+    // The new store's drive is expected from now on.
+    crate::scan::remember_drives(host);
     host.crash_point("move.switched", 1);
     remove_old_store(old);
     Ok(OpResult { count: Some(identities.len() as u32), ..Default::default() })
@@ -1193,3 +1327,130 @@ pub fn mark_ready(inner: &mut Inner) {
 
 /// One Load stage, run over the plan.
 type Stage<'a> = &'a dyn Fn(&mut LoadPlan) -> Result<(), load::StageError>;
+
+#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
+mod tests {
+    use super::*;
+    use std::process::{Child, Command};
+
+    /// A process that opens `file`, keeps it open for `hold` seconds, then
+    /// closes it and keeps running, like a game that let go of its save.
+    fn holder(file: &Path, hold: f32) -> Child {
+        let script = format!("exec 3<\"$0\"; sleep {hold}; exec 3<&-; sleep 10");
+        let child = Command::new("sh").arg("-c").arg(script).arg(file).spawn().unwrap();
+        let id = FileId::of(file).unwrap();
+        let started = Instant::now();
+        while open_files::inspect(&[child.id()], &[id]).open.is_empty() {
+            assert!(started.elapsed() < Duration::from_secs(5), "the holder never opened the file");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        child
+    }
+
+    struct Held {
+        _dir: tempfile::TempDir,
+        paths: Vec<PathBuf>,
+        children: Vec<Child>,
+    }
+
+    impl Held {
+        fn files(&self) -> Vec<(&Path, FileId)> {
+            self.paths.iter().map(|p| (p.as_path(), FileId::of(p).unwrap())).collect()
+        }
+
+        fn pids(&self) -> Vec<u32> {
+            self.children.iter().map(Child::id).collect()
+        }
+    }
+
+    impl Drop for Held {
+        fn drop(&mut self) {
+            for child in &mut self.children {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
+    /// Save files, each held by its own process for the given seconds.
+    fn held(holds: &[f32]) -> Held {
+        let dir = tempfile::tempdir().unwrap();
+        let mut paths = Vec::new();
+        let mut children = Vec::new();
+        for (i, hold) in holds.iter().enumerate() {
+            let path = dir.path().join(format!("slot{i}.sav"));
+            fs::write(&path, "save").unwrap();
+            children.push(holder(&path, *hold));
+            paths.push(path);
+        }
+        Held { _dir: dir, paths, children }
+    }
+
+    #[test]
+    fn a_hold_that_clears_within_the_budget_is_waited_out() {
+        let h = held(&[0.3]);
+        let budget = Budget::new(snap::retry::FORWARD);
+        let started = Instant::now();
+        wait_until_closed("g", &h.files(), || h.pids(), &budget).unwrap();
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(!budget.left().is_zero(), "part of the budget is left");
+    }
+
+    #[test]
+    fn a_hold_that_outlasts_the_budget_is_refused_naming_the_file() {
+        let h = held(&[30.0]);
+        let budget = Budget::new(snap::retry::FORWARD);
+        let started = Instant::now();
+        let err = wait_until_closed("g", &h.files(), || h.pids(), &budget).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::HeldOpen);
+        assert_eq!(err.paths, vec![h.paths[0].to_string_lossy().into_owned()]);
+        assert!(err.detail.contains(&format!("pid {}", h.children[0].id())), "{}", err.detail);
+        assert!(budget.left().is_zero());
+        let waited = started.elapsed();
+        assert!(waited >= Duration::from_secs(1) && waited < Duration::from_secs(3), "{waited:?}");
+    }
+
+    #[test]
+    fn several_held_files_share_the_operations_one_budget() {
+        // Earlier retries in the same operation already used most of the
+        // budget, so a hold that alone would fit in it doesn't any more.
+        let budget = Budget::new(snap::retry::FORWARD);
+        while budget.left() > Duration::from_millis(300) {
+            budget.wait();
+        }
+        let h = held(&[0.6, 30.0]);
+        let started = Instant::now();
+        let err = wait_until_closed("g", &h.files(), || h.pids(), &budget).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::HeldOpen);
+        assert!(started.elapsed() < Duration::from_millis(800), "only what was left is waited");
+        assert_eq!(err.paths.len(), 2, "both files still open are named: {:?}", err.paths);
+    }
+
+    #[test]
+    fn a_process_that_cant_be_inspected_lets_the_load_go_on() {
+        // pid 1 belongs to root: nothing found, but not "nothing open".
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("slot.sav");
+        fs::write(&path, "save").unwrap();
+        let files = [(path.as_path(), FileId::of(&path).unwrap())];
+        let budget = Budget::new(snap::retry::FORWARD);
+        wait_until_closed("g", &files, || vec![1], &budget).unwrap();
+        assert_eq!(budget.left(), snap::retry::FORWARD, "no waiting without a find");
+    }
+
+    #[test]
+    fn a_file_found_open_is_refused_even_when_another_process_cant_be_inspected() {
+        let h = held(&[30.0]);
+        let budget = Budget::new(Duration::from_millis(100));
+        let pids = || [vec![1], h.pids()].concat();
+        let err = wait_until_closed("g", &h.files(), pids, &budget).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::HeldOpen);
+    }
+
+    #[test]
+    fn a_game_that_isnt_running_has_nothing_to_wait_for() {
+        let h = held(&[30.0]);
+        let budget = Budget::new(snap::retry::FORWARD);
+        wait_until_closed("g", &h.files(), Vec::new, &budget).unwrap();
+    }
+}

@@ -167,9 +167,33 @@ impl World {
     }
 
     pub fn set_gog_games(&self, games: Value) {
+        self.set_env("gog_games", games);
+    }
+
+    /// Changes one field of the machine the host reads (`--env`).
+    pub fn set_env(&self, key: &str, value: Value) {
         let mut env: Value = serde_json::from_str(&std::fs::read_to_string(&self.env_file).unwrap()).unwrap();
-        env["gog_games"] = games;
+        env[key] = value;
         std::fs::write(&self.env_file, serde_json::to_string_pretty(&env).unwrap()).unwrap();
+    }
+
+    /// Everything the host logged so far.
+    pub fn host_log(&self) -> String {
+        std::fs::read_to_string(self.data.join("host.log")).unwrap_or_default()
+    }
+
+    /// A macOS app bundle at `app` (`…/Name.app`) whose executable is the
+    /// fake game; returns that executable.
+    pub fn app_bundle(&self, app: &Path) -> PathBuf {
+        let name = app.file_stem().unwrap().to_string_lossy().into_owned();
+        let exe = app.join("Contents").join("MacOS").join(&name);
+        copy_game(&exe);
+        let plist = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict>\n<key>CFBundleExecutable</key><string>{name}</string>\n<key>CFBundleIdentifier</key><string>test.savescummer.{}</string>\n<key>CFBundlePackageType</key><string>APPL</string>\n</dict></plist>\n",
+            name.replace(' ', "-")
+        );
+        std::fs::write(app.join("Contents").join("Info.plist"), plist).unwrap();
+        exe
     }
 
     /// What a standalone installer does: an uninstall entry with its folder.
@@ -543,6 +567,21 @@ pub fn launch(exe: &Path, args: &[&str]) -> Game {
 
 fn unique() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+}
+
+/// Whether windows can take focus now. A locked Mac keeps `loginwindow` in
+/// front, so tests of focus can't run; they say so and pass.
+pub fn desktop_unlocked(test: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let out = Command::new("ioreg").args(["-n", "Root", "-d1"]).output().expect("ioreg");
+        if String::from_utf8_lossy(&out.stdout).contains("\"IOConsoleLocked\" = Yes") {
+            eprintln!("{test}: skipped, the screen is locked (focus needs an unlocked desktop session)");
+            return false;
+        }
+    }
+    let _ = test;
+    true
 }
 
 /// Polls until `check` returns a value, with a bounded timeout.

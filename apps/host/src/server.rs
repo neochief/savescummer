@@ -321,6 +321,8 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             };
             if scan {
                 host.scans.request(false, false, "the window gained focus");
+                crate::queries::refresh_launch(host);
+                host.publish(&mut host.lock());
             }
             json(serde_json::json!({ "scan": scan }))
         }
@@ -331,6 +333,7 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             let op = crate::feedback::hotkey(host, request_id, action)?;
             json(op)
         }
+        Command::RequestAccess { game } => crate::privacy::request_access(host, &game),
         Command::Shutdown => {
             host.request_shutdown();
             json(serde_json::json!({ "shutting_down": true }))
