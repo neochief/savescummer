@@ -4,44 +4,60 @@
         {
             "label": "SaveScummer: build dev",
             "type": "process",
-            "command": "pwsh",
-            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "demo"],
+            "command": "cargo",
+            "args": ["xtask", "build", "--package"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
-            "problemMatcher": ["$msCompile"]
+            "problemMatcher": ["$rustc", "$msCompile"]
         },
         {
-            "label": "SaveScummer: test Rust and Qt",
+            "label": "SaveScummer: test",
             "type": "process",
-            "command": "pwsh",
-            "args": ["-NoProfile", "-File", "${workspaceFolder}/build.ps1", "dev", "-Test"],
+            "command": "cargo",
+            "args": ["xtask", "build", "--test"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "test", "isDefault": true },
-            "problemMatcher": ["$msCompile"]
+            "problemMatcher": ["$rustc", "$msCompile"]
         },
         {
-            "label": "SaveScummer: prepare app",
+            "label": "SaveScummer: check",
             "type": "process",
-            "command": "pwsh",
-            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "prepare"],
+            "command": "cargo",
+            "args": ["xtask", "check"],
             "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": ["$msCompile"]
+            "problemMatcher": ["$rustc"]
         },
         {
-            "label": "SaveScummer: stop debug host",
+            "label": "SaveScummer: start dev host",
             "type": "process",
-            "command": "pwsh",
-            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/vscode-session.ps1", "-Action", "stop"],
+            "command": "cargo",
+            "args": ["xtask", "host", "start"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$rustc", "$msCompile"]
+        },
+        {
+            "label": "SaveScummer: start dev host (demo)",
+            "type": "process",
+            "command": "cargo",
+            "args": ["xtask", "host", "start", "--demo"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$rustc", "$msCompile"]
+        },
+        {
+            "label": "SaveScummer: stop dev host",
+            "type": "process",
+            "command": "cargo",
+            "args": ["xtask", "host", "stop"],
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
         },
         {
-            "label": "SaveScummer: package release",
+            "label": "SaveScummer: dist",
             "type": "process",
-            "command": "pwsh",
-            "args": ["-NoProfile", "-File", "${workspaceFolder}/build.ps1", "release"],
+            "command": "cargo",
+            "args": ["xtask", "dist"],
             "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": ["$msCompile"]
+            "problemMatcher": ["$rustc", "$msCompile"]
         }
     ]
 }

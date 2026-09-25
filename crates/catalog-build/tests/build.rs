@@ -249,6 +249,20 @@ fn invalid_product_fit_fails() {
 }
 
 #[test]
+fn ignored_rows_are_left_out_with_a_warning() {
+    // Even a game that couldn't be built (not in the manifest) is fine once ignored.
+    let csv = format!("{CSV_HEADER}\"Known Game\",\"Keep\",\"\"\n\"Missing Game\",\"Ignored\",\"\"\n");
+    let outcome = run(&csv, "", MANIFEST);
+    let bundle = outcome.bundle.expect("builds");
+    assert_eq!(bundle.games.len(), 1);
+    assert!(outcome.report.errors.is_empty());
+    let warnings = issues_of(&outcome.report.warnings, IssueKind::IgnoredGame);
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(warnings[0].game.as_deref(), Some("Missing Game"));
+    assert_eq!(outcome.report.stats.ignored_rows, 1);
+}
+
+#[test]
 fn manifest_hash_mismatch_fails() {
     let csv = keep(&["Known Game"]);
     let lock = lock_for("something else");

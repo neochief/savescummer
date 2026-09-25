@@ -17,129 +17,48 @@ Depending on the game, restoring progress may require returning to the main menu
 
 ---
 
-## Tech info
+## Install
 
-The first Windows runtime is implemented in Rust. The background host owns SQLite,
-game monitoring and file operations. The C++ / Qt 6 Widgets desktop and command-line
-clients share the same local service contract.
+| Platform | Download |
+| --- | --- |
+| Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
+| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` (coming) |
+| Linux x86_64 (glibc 2.35+) | `SaveScummer-linux-x86_64-<version>.AppImage` (coming) |
 
-## Build and test
+Get it from [Releases](https://github.com/neochief/savescummer/releases). The downloads aren't code-signed, so each OS asks once:
 
-The main Windows entry point builds **both Rust and Qt** from current source:
+- **Windows:** run the installer. SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It installs for your user only (no admin), into `%LOCALAPPDATA%\Programs\SaveScummer`, and offers to launch at sign-in.
+  - **Upgrade:** run the new installer; it closes the running app safely and keeps your settings.
+  - **Remove:** *Settings → Apps → SaveScummer → Uninstall*.
+- **macOS:** open the DMG and drag SaveScummer to Applications. The first launch is blocked: open *System Settings → Privacy & Security* and choose **Open Anyway**.
+  - **Upgrade:** quit it (menu-bar icon → Exit) and drag the new app over the old one.
+  - **Remove:** turn off launch at login, quit, drag it to the Trash.
+- **Linux:** make the AppImage executable (`chmod +x SaveScummer-*.AppImage`) and run it. Tools like Gear Lever or AppImageLauncher can add it to your app menu.
+  - **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
+  - **Remove:** turn off launch at login, quit, delete the file.
 
-```powershell
-./build.ps1 dev -Run       # Compile incrementally and open the development app
-./build.ps1 dev -Run -Demo # Simulated data, no game operations
-./build.ps1 release        # Compile optimized binaries and create a portable ZIP
-./build.ps1 release -Test  # Also run Rust and Qt/host integration tests
-./build.ps1 clean          # Remove regenerable outputs (build/ and dist/)
-./build.ps1 clean -Deep    # Also remove the Cargo cache (target/)
-```
+## Your data
 
-Release output: `dist/SaveScummer-windows-x64/bin/SaveScummer.exe` and
-`dist/SaveScummer-windows-x64-<version>.zip` (the version comes from
-`Cargo.toml`). `./build.ps1 release` also produces the per-user installer
-`dist/SaveScummer-windows-x64-<version>-setup.exe` when Inno Setup 6.3+ is
-available (`./scripts/setup-innosetup.ps1`). Keep the extracted folder
-together. Its application executables are `SaveScummer.exe`,
-`SaveScummer.Host.exe`, and `SaveScummer.CLI.exe`. See
-[the build guide](docs/building.md) for prerequisites, profiles, development data,
-timings, lower-level commands and installer details.
+Checkpoints are your saves, so installing, upgrading and removing the app never touch them:
 
-Every push and pull request runs the same checks in CI
-(`.github/workflows/ci.yml`). Tagging `v<version>` builds and packages the
-release and creates a draft GitHub release for review
-([details](docs/building.md#continuous-integration)).
+- Windows: `%LOCALAPPDATA%\SaveScummer`
+- macOS: `~/Library/Application Support/SaveScummer`
+- Linux: `~/.local/share/SaveScummer`
 
-Install Rust with rustup and the Visual Studio C++ build tools. The repository pins
-the toolchain in `rust-toolchain.toml`; SQLite is built from its bundled source.
+Checkpoints go in its `checkpoints` folder unless you move them.
 
-```powershell
-# If Rust was just installed and this shell has not picked up its PATH:
-$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-cargo build --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all --check
-```
+## Build
 
-`scripts/check.ps1` runs these verification commands. Tests create their own temporary
-directories and databases. Process tests launch only test-owned processes; restart
-tests terminate a child at a deterministic durable operation phase. The ignored
-`crash_worker` test is a subprocess fixture invoked by the passing restart tests,
-not a skipped recovery scenario.
-
-## Qt desktop
-
-Install Qt 6.5 or newer (Widgets, Network, SVG and Test), CMake 3.21 or newer,
-and a compatible C++ compiler — or run `./scripts/setup-qt.ps1` to install the
-pinned SDK on Windows, macOS or Linux. On Windows with the local Qt 6.5.3 SDK and VS 2019:
-
-```powershell
-./build.ps1 dev -Run -Demo
-./build.ps1 dev -Run
-```
-
-Pass `-QtPrefix C:/Qt/<version>/<kit>` to `build.ps1` for another Qt installation;
-`-Generator 'Visual Studio 17 2022'` selects VS 2022. The demo
-uses memory only and never connects to the host, plays audio, or changes game files.
-Normal launch connects to the host, starting it if needed. Closing the desktop
-leaves the host and accepted operations running. The client also accepts `--host`,
-`--data-dir`, `--endpoint` (connect only), and `--theme system|dark|light`.
-
-Standard CMake commands work on other platforms (not yet qualified):
+Everything is `cargo xtask`; see [the build guide](docs/building.md) for prerequisites and details.
 
 ```text
-cmake -S . -B build/local-desktop -DCMAKE_PREFIX_PATH=<Qt kit>
-cmake --build build/local-desktop --config Release
-ctest --test-dir build/local-desktop -C Release --output-on-failure
+cargo xtask setup cargo-about   # once: the license generator
+cargo xtask check               # fmt, clippy, tests, catalog check
+cargo xtask build --test        # build and run all tests
+cargo xtask run                 # dev build + dev host (data in .runtime/dev)
+cargo xtask setup inno          # once: the Windows installer compiler
+cargo xtask dist                # release build + installer in dist/
 ```
-
-Qt tests cover framed protocol fixtures, escaped instruction text, row selection,
-regrouping, unavailable history, busy/recovery/disconnected states, and reconnecting
-without replaying commands. If the debug Rust host has been built, they also run
-Save/Load/Revert and reconnect over real IPC against temporary data with audio off.
-Visual test captures are written to `build/<mode>/desktop/screenshots` in both themes.
-The desktop reads host state only; it never copies saves or opens the database.
-
-The main window uses the standard system title bar and window frame. It includes
-history Restore/Revert, Configure with host validation,
-Explore, a revision-bound Flush confirmation, recovery choices, and the shared
-Play sounds and Launch on startup settings. Configure exposes detected locations;
-Reset uses the selected catalog location (or the sole detected default). The host
-registers Ctrl+F5/Ctrl+F9, owns the tray and notifications, and runs without Qt.
-While the desktop is focused, Ctrl+F5/Ctrl+F9 invoke the selected game's Save/Load
-buttons, including their progress and disabled states, even if no game is running.
-Otherwise the host targets the top running game. The host owns the global hotkeys
-whenever OS integrations are enabled, including the default development runner, and
-forwards them to the focused desktop; the desktop's local shortcuts are only a
-fallback when integrations are disabled (as in a demo session);
-it does not register competing global shortcuts. `--minimized` attaches without
-showing a window; subsequent launches focus the existing desktop for that host.
-
-The **Installed games** section is always present. Use **Scan for known games** to
-refresh catalog discovery, or open its **…** menu and choose **Add custom game** to
-register a name, executable, and save location. Custom games remain listed when their executable is unavailable
-and can be removed with **Forget this game** after confirming the same cleanup
-preview used by Flush.
-
-To rebuild and package the desktop and Rust binaries with their runtime DLLs:
-
-```powershell
-./build.ps1 release
-```
-
-The output is `dist/SaveScummer-windows-x64/bin/SaveScummer.exe` and the portable
-`dist/SaveScummer-windows-x64-<version>.zip`, plus the per-user installer
-`dist/SaveScummer-windows-x64-<version>-setup.exe` when Inno Setup is available.
-Keep the entire extracted folder together.
-No Qt installation or PowerShell launcher is needed to run that executable.
-Both components must build successfully before packaging; the command does not
-fall back to an older host. `scripts/package-windows.ps1` is a lower-level deployment
-helper for binaries you have already built, and `scripts/build-installer.ps1`
-compiles the installer from a staged payload.
-See [docs/building.md](docs/building.md) for the release-publishing process
-(draft-first GitHub Releases).
 
 ## Run without the UI
 

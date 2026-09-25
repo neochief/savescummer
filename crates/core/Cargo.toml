@@ -2,6 +2,7 @@
 name = "savescummer-core"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [dependencies]
 savescummer-catalog.workspace = true

@@ -151,6 +151,8 @@ pub fn worker(host: Arc<Host>) {
             inner.scan.last_user = Some(result);
         }
         host.publish(&mut inner);
+        drop(inner);
+        crate::artwork::request(&host);
     }
 }
 

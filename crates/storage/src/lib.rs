@@ -18,7 +18,7 @@ use savescummer_core::history::RowKind;
 pub use rusqlite::Error;
 pub type Result<T> = rusqlite::Result<T>;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -89,6 +89,14 @@ CREATE TABLE host_runs (
 );
 "#;
 
+/// Indexes that return a game's history and checkpoints already in order.
+/// Why: sorting a long history (10,000 rows) spilled to a temporary file on
+/// every Save, megabytes of writes that grew with the history.
+const MIGRATION_3: &str = r#"
+CREATE INDEX history_by_game ON history (game_id, seq);
+CREATE INDEX checkpoints_in_order ON checkpoints (game_id, seq);
+"#;
+
 pub struct Storage {
     conn: Connection,
 }
@@ -101,6 +109,8 @@ impl Storage {
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "FULL")?;
+        // Sorts and temporary tables stay in memory; they are small.
+        conn.pragma_update(None, "temp_store", "MEMORY")?;
         let mut storage = Storage { conn };
         storage.migrate()?;
         Ok(storage)
@@ -123,6 +133,12 @@ impl Storage {
             let tx = self.conn.transaction()?;
             tx.execute_batch(MIGRATION_2)?;
             tx.pragma_update(None, "user_version", 2)?;
+            tx.commit()?;
+        }
+        if version < 3 {
+            let tx = self.conn.transaction()?;
+            tx.execute_batch(MIGRATION_3)?;
+            tx.pragma_update(None, "user_version", 3)?;
             tx.commit()?;
         }
         Ok(())

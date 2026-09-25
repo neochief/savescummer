@@ -25,6 +25,15 @@ pub struct Proc {
 
 pub trait ProcessSource: Send {
     fn list(&mut self) -> Vec<Proc>;
+    /// Whether a full look may find something new since the last `list`:
+    /// one of `watched` (the running games' processes) exited, or an
+    /// unknown process is in front. A source that can't tell cheaply says
+    /// yes. The monitor also takes a full look every [`FULL_EVERY`] polls,
+    /// for programs that start in the background.
+    fn may_have_changed(&mut self, watched: &[u32]) -> bool {
+        let _ = watched;
+        true
+    }
     /// The process owning the foreground window.
     fn foreground(&mut self) -> Option<u32>;
 }
@@ -54,6 +63,13 @@ pub enum Event {
     },
 }
 
+/// A full look at the process list at least every this many polls.
+/// Why not every poll: listing processes is a kernel query over every
+/// process and thread on the machine, and doing it four times a second was
+/// nearly all of an idle host's CPU time. Exits of running games and games
+/// taking the foreground are still seen at the next poll.
+pub const FULL_EVERY: u32 = 8;
+
 pub struct Monitor {
     source: Box<dyn ProcessSource>,
     exact: HashMap<String, String>,
@@ -63,6 +79,10 @@ pub struct Monitor {
     running: BTreeMap<String, BTreeSet<u32>>,
     focused: Option<String>,
     first_poll: bool,
+    /// The games changed since the last full look.
+    games_changed: bool,
+    /// Polls since the last full look.
+    quiet_polls: u32,
 }
 
 pub fn normalize(path: &Path) -> String {
@@ -82,6 +102,8 @@ impl Monitor {
             running: BTreeMap::new(),
             focused: None,
             first_poll: true,
+            games_changed: true,
+            quiet_polls: 0,
         }
     }
 
@@ -102,6 +124,7 @@ impl Monitor {
                 self.dirs.push((key, game.game.clone()));
             }
         }
+        self.games_changed = true;
         // Longest install folder first, so nested installs match precisely.
         self.dirs.sort_by_key(|entry| std::cmp::Reverse(entry.0.len()));
         // Processes already assigned keep their game: a game's child whose
@@ -132,6 +155,23 @@ impl Monitor {
 
     /// Takes one look at the process list and reports what changed.
     pub fn poll(&mut self) -> Vec<Event> {
+        // Nothing suggests a change and a full look isn't due: only focus
+        // is checked.
+        let watched: Vec<u32> = self.running.values().flatten().copied().collect();
+        self.quiet_polls += 1;
+        if !self.first_poll
+            && !self.games_changed
+            && self.quiet_polls < FULL_EVERY
+            && !self.source.may_have_changed(&watched)
+        {
+            let mut events = Vec::new();
+            let seen = std::mem::take(&mut self.seen);
+            self.check_focus(&seen, &mut events);
+            self.seen = seen;
+            return events;
+        }
+        self.games_changed = false;
+        self.quiet_polls = 0;
         let processes = self.source.list();
         let mut next: HashMap<u32, (u32, Option<String>)> = HashMap::new();
         // Parents before children where possible: process lists are mostly
@@ -174,8 +214,18 @@ impl Monitor {
             }
         }
 
+        self.check_focus(&next, &mut events);
+
+        self.seen = next;
+        self.running = running;
+        self.first_poll = false;
+        events
+    }
+
+    /// Reports a game coming to the front; forgets focus when another app is.
+    fn check_focus(&mut self, seen: &HashMap<u32, (u32, Option<String>)>, events: &mut Vec<Event>) {
         let foreground = self.source.foreground();
-        let focused_game = foreground.and_then(|pid| next.get(&pid)).and_then(|(_, g)| g.clone());
+        let focused_game = foreground.and_then(|pid| seen.get(&pid)).and_then(|(_, g)| g.clone());
         if let Some(game) = focused_game
             && self.focused.as_deref() != Some(game.as_str())
         {
@@ -183,16 +233,11 @@ impl Monitor {
             self.focused = Some(game);
         } else if foreground.is_some()
             && self.focused.is_some()
-            && next.get(&foreground.unwrap()).is_none_or(|(_, g)| g.is_none())
+            && seen.get(&foreground.unwrap()).is_none_or(|(_, g)| g.is_none())
         {
             // Another app is in front; the next switch back is a new focus.
             self.focused = None;
         }
-
-        self.seen = next;
-        self.running = running;
-        self.first_poll = false;
-        events
     }
 }
 
@@ -223,26 +268,44 @@ impl ProcessSource for Unsupported {
 
 #[cfg(windows)]
 mod windows {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::os::windows::ffi::OsStringExt;
     use std::path::PathBuf;
 
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
     };
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, QueryFullProcessImageNameW,
+        WaitForSingleObject,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 
     use super::{Proc, ProcessSource};
 
     /// Caches each process's path by pid and parent, so a poll opens only
-    /// processes it hasn't seen.
+    /// processes it hasn't seen. Between full looks it answers from the ids
+    /// of the last snapshot, the foreground window and handles on the
+    /// running games' processes, which are all cheap.
     #[derive(Default)]
     pub struct WindowsSource {
         paths: HashMap<(u32, u32), Option<PathBuf>>,
+        pids: HashSet<u32>,
+        exits: HashMap<u32, Handle>,
+    }
+
+    /// A process handle that can only be waited on; closed on drop.
+    struct Handle(HANDLE);
+
+    // SAFETY: a process handle may be used from any thread.
+    unsafe impl Send for Handle {}
+
+    impl Drop for Handle {
+        fn drop(&mut self) {
+            // SAFETY: opened by us, closed once.
+            unsafe { CloseHandle(self.0) };
+        }
     }
 
     fn image_path(pid: u32) -> Option<PathBuf> {
@@ -294,9 +357,30 @@ mod windows {
                     fresh.insert((pid, parent), exe.clone());
                     Proc { pid, parent, exe }
                 })
-                .collect();
+                .collect::<Vec<Proc>>();
             self.paths = fresh;
+            self.pids = procs.iter().map(|p| p.pid).collect();
             procs
+        }
+
+        fn may_have_changed(&mut self, watched: &[u32]) -> bool {
+            // A process we haven't listed is in front: likely a game starting.
+            if self.foreground().is_some_and(|pid| !self.pids.contains(&pid)) {
+                return true;
+            }
+            self.exits.retain(|pid, _| watched.contains(pid));
+            for pid in watched {
+                let handle = self.exits.entry(*pid).or_insert_with(|| {
+                    // SAFETY: a wait-only handle, closed on drop. Null if the
+                    // process is already gone, which counts as an exit.
+                    Handle(unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, *pid) })
+                });
+                // SAFETY: a zero-timeout wait on our own handle.
+                if handle.0.is_null() || unsafe { WaitForSingleObject(handle.0, 0) } == WAIT_OBJECT_0 {
+                    return true;
+                }
+            }
+            false
         }
 
         fn foreground(&mut self) -> Option<u32> {
@@ -472,5 +556,59 @@ mod tests {
         let list = source.list();
         let mine = list.iter().find(|p| p.pid == me).expect("this process is listed");
         assert_eq!(normalize(mine.exe.as_ref().unwrap()), normalize(&exe));
+    }
+
+    /// Processes, the foreground pid, "may have changed", and list calls.
+    type QuietState = (Vec<Proc>, Option<u32>, bool, usize);
+
+    /// A source that reports "unchanged" until told otherwise, counting how
+    /// often it is listed.
+    #[derive(Clone, Default)]
+    struct Quiet(Arc<Mutex<QuietState>>);
+
+    impl ProcessSource for Quiet {
+        fn list(&mut self) -> Vec<Proc> {
+            let mut s = self.0.lock().unwrap();
+            s.2 = false;
+            s.3 += 1;
+            s.0.clone()
+        }
+        fn may_have_changed(&mut self, _watched: &[u32]) -> bool {
+            self.0.lock().unwrap().2
+        }
+        fn foreground(&mut self) -> Option<u32> {
+            self.0.lock().unwrap().1
+        }
+    }
+
+    #[test]
+    fn an_unchanged_process_list_is_not_matched_again_but_focus_still_counts() {
+        let quiet = Quiet::default();
+        let game = Proc { pid: 10, parent: 1, exe: Some(PathBuf::from(r"C:GamesA.exe")) };
+        *quiet.0.lock().unwrap() = (vec![game], None, true, 0);
+        let mut m = Monitor::new(Box::new(quiet.clone()));
+        let games =
+            [GameProcesses { game: "a".into(), executables: vec![PathBuf::from(r"C:GamesA.exe")], install_dir: None }];
+        m.set_games(&games);
+        assert_eq!(m.poll(), vec![Event::Started { game: "a".into(), observed: false }]);
+        assert!(m.poll().is_empty());
+        assert_eq!(quiet.0.lock().unwrap().3, 1, "listed once");
+
+        // Focus moves without any process starting.
+        quiet.0.lock().unwrap().1 = Some(10);
+        assert_eq!(m.poll(), vec![Event::Focused { game: "a".into() }]);
+        assert_eq!(quiet.0.lock().unwrap().3, 1);
+
+        // New games: matched again even though no process changed.
+        m.set_games(&games);
+        m.poll();
+        assert_eq!(quiet.0.lock().unwrap().3, 2);
+
+        // A process exits: the source says so, and the exit is seen.
+        let mut s = quiet.0.lock().unwrap();
+        s.0.clear();
+        s.2 = true;
+        drop(s);
+        assert_eq!(m.poll(), vec![Event::Exited { game: "a".into() }]);
     }
 }

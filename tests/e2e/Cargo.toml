@@ -26,6 +26,10 @@ serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 dunce.workspace = true
+image.workspace = true
+savescummer-storage.workspace = true
+savescummer-snapshots.workspace = true
+savescummer-core.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true

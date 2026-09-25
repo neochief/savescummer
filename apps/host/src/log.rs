@@ -1,4 +1,5 @@
-//! The host's log: `host.log` in the data folder, plus stderr. It records
+//! The host's log: `host.log` in the data folder, where all of the host's
+//! own output goes (it is a GUI program with no console). It records
 //! startup and shutdown steps and what the host noticed on its own, such as
 //! games installed and uninstalled, so there is a record even when nothing
 //! was attached to the host's output (started at sign-in, or by the UI).
@@ -20,10 +21,9 @@ pub fn init(data_dir: &std::path::Path) {
     let _ = FILE.set(Mutex::new(data_dir.join("host.log")));
 }
 
-/// One timestamped line, to stderr and the log file.
+/// One timestamped line in the log file.
 pub fn line(text: &str) {
     let line = format!("[{}] {text}\n", crate::host::now());
-    eprint!("{line}");
     let Some(path) = FILE.get() else { return };
     let path = path.lock().unwrap_or_else(|e| e.into_inner());
     if fs::metadata(&*path).is_ok_and(|m| m.len() > MAX_BYTES) {

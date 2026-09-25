@@ -34,6 +34,10 @@ pub struct CatalogState {
     pub bundle: Arc<Bundle>,
     /// `embedded`, `downloaded` or `file`.
     pub source: String,
+    /// When the host last looked for a newer catalog.
+    pub checked_at: Option<String>,
+    /// Why the last look failed.
+    pub problem: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -86,6 +90,8 @@ pub struct Inner {
     pub revision: u64,
     /// Games whose hotkey operation should play sounds when it finishes.
     pub hotkey_ops: HashSet<String>,
+    /// Cached art by Steam app id.
+    pub artwork: HashMap<u64, savescummer_ipc::Artwork>,
 }
 
 pub struct Host {
@@ -101,6 +107,8 @@ pub struct Host {
     pub events_tx: tokio::sync::broadcast::Sender<EventBody>,
     pub sounds: Option<savescummer_platform::sounds::Player>,
     pub integration: Mutex<Option<savescummer_platform::integration::Integration>>,
+    /// Requests for an artwork pass; see [`crate::artwork`].
+    pub artwork_tx: Mutex<Option<std::sync::mpsc::Sender<()>>>,
     pub shutdown: Mutex<Option<std::sync::mpsc::Sender<()>>>,
     pub scans: crate::scan::ScanQueue,
     pub monitor_dirty: std::sync::atomic::AtomicBool,
@@ -139,6 +147,7 @@ impl Host {
             events_tx,
             sounds,
             integration: Mutex::new(None),
+            artwork_tx: Mutex::new(None),
             shutdown: Mutex::new(None),
             scans: crate::scan::ScanQueue::default(),
             monitor_dirty: std::sync::atomic::AtomicBool::new(true),
@@ -174,7 +183,7 @@ impl Host {
             && point == name
             && *at == n
         {
-            eprintln!("test crash at {name}:{n}");
+            crate::trace(&format!("test crash at {name}:{n}"));
             hard_exit();
         }
     }
@@ -241,6 +250,8 @@ impl Host {
             notice: inner.notices.get(&game.id).cloned(),
             labels_version: cache.labels_version,
             history_version: cache.history_version,
+            artwork: crate::artwork::steam_app(self, game.catalog_id.as_deref())
+                .and_then(|app| inner.artwork.get(&app).cloned()),
         }
     }
 
@@ -443,6 +454,7 @@ impl Inner {
             launch_on_startup,
             revision: 0,
             hotkey_ops: HashSet::new(),
+            artwork: HashMap::new(),
         }
     }
 

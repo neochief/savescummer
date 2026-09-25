@@ -107,6 +107,14 @@ pub fn build_with(inputs: &Inputs, options: Options) -> Outcome {
 
     report.stats.keep_rows = unique.iter().filter(|r| r.fit == Fit::Keep).count();
     report.stats.remove_rows = unique.iter().filter(|r| r.fit == Fit::Remove).count();
+    report.stats.ignored_rows = unique.iter().filter(|r| r.fit == Fit::Ignored).count();
+    for row in unique.iter().filter(|r| r.fit == Fit::Ignored) {
+        report.warnings.push(Issue::new(
+            IssueKind::IgnoredGame,
+            Some(&row.name),
+            "marked `Ignored` in games.csv: not built until it's addressed",
+        ));
+    }
 
     let keep: BTreeSet<&str> = unique.iter().filter(|r| r.fit == Fit::Keep).map(|r| r.name.as_str()).collect();
     for name in addendum.keys() {

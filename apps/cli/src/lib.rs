@@ -672,7 +672,29 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
         }
         Cmd::Catalog { refresh } => {
             let response = s.send(if refresh { Command::CatalogRefresh } else { Command::Catalog })?;
-            Ok(s.report(&response, |v| v.to_string()))
+            Ok(s.report(&response, |v| {
+                let info = v.get("catalog").unwrap_or(v);
+                let text = |k: &str| info.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+                let mut out = format!(
+                    "{} at {} ({} games, {})",
+                    text("repo"),
+                    text("revision"),
+                    info.get("games").and_then(|g| g.as_u64()).unwrap_or(0),
+                    text("source")
+                );
+                if info.get("updates").and_then(|u| u.as_bool()) != Some(true) {
+                    out.push_str("\nupdates are off");
+                } else if let Some(checked) = info.get("checked_at").and_then(|c| c.as_str()) {
+                    out.push_str(&format!("\nlast checked {checked}"));
+                }
+                if let Some(problem) = info.get("problem").and_then(|p| p.as_str()) {
+                    out.push_str(&format!("\nthe last check failed: {problem}"));
+                }
+                if v.get("changed").and_then(|c| c.as_bool()) == Some(true) {
+                    out.push_str("\nupdated; the library was rescanned");
+                }
+                out
+            }))
         }
         Cmd::Outcome { operation, wait } => {
             let response = s.send(Command::Outcome { operation, wait })?;

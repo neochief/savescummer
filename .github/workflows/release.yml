@@ -1,0 +1,82 @@
+# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag builds every platform's
+# release file into one draft GitHub release. A human publishes it.
+#
+# Every step is a `cargo xtask` command. A build job is added per platform
+# as it lands; `publish` requires exactly one file per shipping platform.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# Never cancelled, so a release is never half-built.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache Qt
+        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        uses: actions/cache@v6
+        with:
+          path: .runtime/Qt
+          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Cache tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            .runtime/tools/cargo-about
+            .runtime/tools/inno-setup
+          key: tools-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Set up Qt
+        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        run: cargo xtask setup qt
+      - name: Set up cargo-about
+        run: cargo xtask setup cargo-about
+      - name: Set up Inno Setup
+        run: cargo xtask setup inno
+      - name: Build the installer
+        run: cargo xtask dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Draft release
+    needs: [windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Fetch the tag
+        run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Upload to the draft release
+        run: cargo xtask publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

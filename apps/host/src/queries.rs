@@ -309,29 +309,19 @@ pub fn catalog(host: &Arc<Host>) -> CatalogInfo {
         revision: catalog.bundle.source.revision.clone(),
         games: catalog.bundle.games.len(),
         source: catalog.source.clone(),
+        updates: !host.opts.no_catalog_update,
+        checked_at: catalog.checked_at.clone(),
+        problem: catalog.problem.clone(),
     }
 }
 
-/// Re-reads a downloaded bundle from the data folder, and rescans when its
-/// revision changed. Fetching bundles from the network isn't built yet.
+/// Looks for a newer catalog now, and waits for the rescan when one
+/// arrived.
 pub fn catalog_refresh(host: &Arc<Host>) -> Result<serde_json::Value, Failure> {
-    let path = host.data_dir.join("catalog").join("catalog.json");
-    let changed = match std::fs::read_to_string(&path) {
-        Ok(text) => {
-            let bundle = savescummer_catalog::Bundle::parse(&text)
-                .map_err(|e| Failure::new(ErrorKind::InvalidRequest, e.to_string()))?;
-            let mut catalog = host.catalog.write().unwrap_or_else(|e| e.into_inner());
-            let changed = catalog.bundle.source.revision != bundle.source.revision || *catalog.bundle != bundle;
-            if changed {
-                catalog.bundle = Arc::new(bundle);
-                catalog.source = "downloaded".into();
-            }
-            changed
-        }
-        Err(_) => false,
-    };
+    let outcome = crate::catalog_update::check(host);
+    let changed = matches!(outcome, crate::catalog_update::Outcome::Updated { .. });
     if changed {
-        let job = host.scans.request(true, true, "the catalog changed");
+        let job = host.scans.request(true, true, "a catalog update");
         host.scans.wait(job, std::time::Duration::from_secs(600));
     }
     let info = catalog(host);

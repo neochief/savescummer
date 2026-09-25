@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+pub mod http;
+
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -90,6 +92,7 @@ pub fn fixture_catalog() -> Value {
 
 impl World {
     pub fn new() -> World {
+        guard();
         let dir = tempfile::Builder::new().prefix("ss-e2e-").tempdir().expect("temp dir");
         let root = dunce::canonicalize(dir.path()).expect("canonical temp dir");
         let home = root.join("home");
@@ -205,14 +208,30 @@ impl World {
 
     /// Starts the real host on this world and waits for its ready line.
     pub fn host_with(&self, args: &[&str], env: &[(&str, &str)]) -> HostProcess {
+        let mut all = self.host_args();
+        all.extend(args.iter().map(|a| a.to_string()));
+        self.spawn_host(all, env)
+    }
+
+    /// Starts the host with catalog updates on, fetched from `url`.
+    pub fn host_updating(&self, url: &str, args: &[&str]) -> HostProcess {
+        let mut all: Vec<String> = self.host_args().into_iter().filter(|a| a != "--no-catalog-update").collect();
+        all.extend(["--catalog-url".to_string(), url.to_string()]);
+        all.extend(args.iter().map(|a| a.to_string()));
+        self.spawn_host(all, &[])
+    }
+
+    fn spawn_host(&self, args: Vec<String>, env: &[(&str, &str)]) -> HostProcess {
         let mut command = Command::new(HOST);
-        command.args(self.host_args()).args(args);
+        command.args(&args);
         for (k, v) in env {
             command.env(k, v);
         }
-        let log = self.root.join(format!("host-{}.log", unique()));
-        let stderr = std::fs::File::create(&log).expect("host log");
-        command.stdout(Stdio::piped()).stderr(stderr).stdin(Stdio::null());
+        // The host is a GUI program: its own output is in the data
+        // folder's host.log, which failures below show.
+        let data = args.iter().rposition(|a| a == "--data-dir").map(|i| PathBuf::from(&args[i + 1]));
+        let log = data.unwrap_or_else(|| self.data.clone()).join("host.log");
+        command.stdout(Stdio::piped()).stderr(Stdio::null()).stdin(Stdio::null());
         let mut child = command.spawn().expect("start the host");
         let stdout = child.stdout.take().unwrap();
         // Owned at once, so a failing wait below still kills it.
@@ -232,7 +251,13 @@ impl World {
             ),
         };
         let ready: Value = serde_json::from_str(&line).expect("the ready line is JSON");
-        assert_eq!(ready["ready"], true, "host not ready: {line}");
+        assert_eq!(
+            ready["ready"],
+            true,
+            "host not ready: {line}
+{}",
+            std::fs::read_to_string(&log).unwrap_or_default()
+        );
         host
     }
 
@@ -250,6 +275,9 @@ impl World {
             "100".into(),
             "--delete-countdown-ms".into(),
             "1500".into(),
+            // Never Steam's real CDN; a closed port fails at once.
+            "--artwork-url".into(),
+            "http://127.0.0.1:9".into(),
         ]
     }
 
@@ -262,9 +290,11 @@ impl World {
             .arg("--no-start")
             .args(args)
             .env("SAVESCUMMER_HOST_EXE", HOST)
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .expect("run the CLI");
-        Output::from(output)
+        Output::from(output_within(output, CLI_LIMIT, &format!("the CLI {args:?}")))
     }
 
     /// Starts the CLI without waiting for it; `finish` collects its output.
@@ -369,6 +399,10 @@ pub struct HostProcess {
 }
 
 impl HostProcess {
+    pub fn pid(&self) -> Option<u32> {
+        self.child.as_ref().map(|c| c.id())
+    }
+
     /// Waits for the host to exit on its own (a test crash point).
     pub fn wait_exit(&mut self, timeout: Duration) -> Option<i32> {
         let child = self.child.as_mut()?;
@@ -456,7 +490,7 @@ impl Background {
     }
 
     pub fn finish(mut self) -> Output {
-        Output::from(self.child.take().unwrap().wait_with_output().expect("wait for the CLI"))
+        Output::from(output_within(self.child.take().unwrap(), CLI_LIMIT, "a background CLI"))
     }
 }
 
@@ -596,5 +630,93 @@ mod registry {
         unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, wide(path).as_ptr()) };
         // RegDeleteTreeW leaves the key itself.
         unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, wide(path).as_ptr()) };
+    }
+}
+
+/// The longest a CLI call may take. Operations on test saves take well
+/// under a second; a call still waiting after this is a hung host.
+pub const CLI_LIMIT: Duration = Duration::from_secs(120);
+
+/// Waits for a child's exit and output, killing it after `limit`, so a hung
+/// host fails the test instead of hanging the suite.
+pub fn output_within(mut child: Child, limit: Duration, what: &str) -> std::process::Output {
+    use std::io::Read;
+    let mut stdout = child.stdout.take();
+    let mut stderr = child.stderr.take();
+    let out = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(s) = stdout.as_mut() {
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(s) = stderr.as_mut() {
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait for a child") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{what} didn't finish within {limit:?}: the host is probably hung");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    std::process::Output { status, stdout: out.join().unwrap_or_default(), stderr: err.join().unwrap_or_default() }
+}
+
+/// Once per test binary: every process it starts dies with it, and the
+/// whole binary is stopped if it runs far longer than it should. Why: a
+/// test killed on a timeout, or one stuck on a hung host, must never leave
+/// hosts or fake games running, and a hang must end as a failure.
+fn guard() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        #[cfg(windows)]
+        kill_children_on_exit();
+        let limit = std::env::var("SAVESCUMMER_E2E_WATCHDOG_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(900u64);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(limit));
+            eprintln!("e2e watchdog: this test binary ran for {limit}s; stopping it (set SAVESCUMMER_E2E_WATCHDOG_SECS to change)");
+            std::process::exit(99);
+        });
+    });
+}
+
+/// Puts this process in a job that kills everything in it when the last
+/// handle closes, which happens when this process exits, however it exits.
+#[cfg(windows)]
+fn kill_children_on_exit() {
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject,
+    };
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    // SAFETY: a new unnamed job whose handle is deliberately kept open for
+    // the life of the process; the limit structure is zeroed with its flag set.
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return;
+        }
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &limits as *const _ as *const _,
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        AssignProcessToJobObject(job, GetCurrentProcess());
     }
 }

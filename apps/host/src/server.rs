@@ -30,7 +30,7 @@ pub async fn serve(host: Arc<Host>, first: tokio::net::windows::named_pipe::Name
         server = match ServerOptions::new().reject_remote_clients(true).create(&host.endpoint) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("can't create another pipe instance: {e}");
+                crate::trace(&format!("can't create another pipe instance: {e}"));
                 return;
             }
         };
@@ -121,6 +121,8 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
             send(&tx, &ok_response(&id, serde_json::json!({})));
             if !watching {
                 watching = true;
+                // A UI attaching: art it may be missing is fetched now.
+                crate::artwork::request(&host);
                 tokio::spawn(watch(host.clone(), tx.clone()));
             }
             continue;

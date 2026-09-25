@@ -78,12 +78,12 @@
 
 **How progress is saved:** Permadeath runs can be saved between floors; that floor transition is the reliable serialization boundary.
 
-**SaveScummer value:** Checkpoint between floors before a dangerous area or boss. If the next floor kills the run, retry it with the same build rather than rerolling a new kid.","Keep",""
+**SaveScummer value:** Checkpoint between floors before a dangerous area or boss. If the next floor kills the run, retry it with the same build rather than rerolling a new kid.","Ignored",""
 "Vagante","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A late run can have a rare combination of class levels, enchanted equipment, spells, and stats that disappears on death.
 
 **How progress is saved:** The run can be resumed around level transitions, giving SaveScummer a stable state to version.
 
-**SaveScummer value:** Checkpoint before a boss or difficult biome when the build is unusually strong. Restore after death instead of depending on another procedural run to recreate it.","Keep",""
+**SaveScummer value:** Checkpoint before a boss or difficult biome when the build is unusually strong. Restore after death instead of depending on another procedural run to recreate it.","Ignored",""
 "Void War","no","Permadeath roguelike/roguelite runs","no","**Context:** A promising run can hinge on a specific starship build (weapons, modules, reactor power, crew, wargear and artifacts) that is expensive to recreate after one lost fight.
 
 **How progress is saved:** The active run is autosaved and persistent progression is stored separately; permadeath still ends a run rather than leaving reusable rollback points.
@@ -163,7 +163,7 @@
 
 **How progress is saved:** Each survivor is persisted in a character folder, and death is permanent.
 
-**SaveScummer value:** Checkpoint before a bear/Njerpez fight, winter journey, or expedition far from home. Restore the whole survivor after a fatal mistake instead of losing months of survival progress.","Keep",""
+**SaveScummer value:** Checkpoint before a bear/Njerpez fight, winter journey, or expedition far from home. Restore the whole survivor after a fatal mistake instead of losing months of survival progress.","Ignored",""
 "The Long Dark","yes","Hardcore one-life characters or worlds","yes","**Context:** A Survival run can represent hundreds of in-game days, stocked bases, crafted clothing, mapped routes, and maxed skills.
 
 **How progress is saved:** Survival autosaves, and death normally ends the run; Cheat Death exists but has limited uses and penalties.
@@ -298,7 +298,7 @@
 
 **How progress is saved:** Legendary commits progress through automatic saves and disables normal manual rollback.
 
-**SaveScummer value:** Checkpoint before an invasion, decisive siege, succession issue, or risky declaration. Restore the kingdom before one bad turn snowballs into a lost campaign.","Keep",""
+**SaveScummer value:** Checkpoint before an invasion, decisive siege, succession issue, or risky declaration. Restore the kingdom before one bad turn snowballs into a lost campaign.","Ignored",""
 "Total War: Warhammer II","yes","Ironman / single-save campaigns","yes","**Context:** A Legendary campaign can invest dozens of turns into legendary lords, elite armies, settlements, and campaign objectives before one battle or End Turn cascade destroys them.
 
 **How progress is saved:** Legendary restricts manual saving and maintains the campaign through automatic saves.
@@ -318,7 +318,7 @@
 
 **How progress is saved:** The campaign autosaves continuously, so deaths and expedition outcomes are committed instead of sitting behind manual save slots.
 
-**SaveScummer value:** Checkpoint before a Champion boss, Darkest Dungeon expedition, or other mission using irreplaceable heroes/trinkets. Restore after a death or disastrous retreat instead of training replacements for many weeks.","Keep",""
+**SaveScummer value:** Checkpoint before a Champion boss, Darkest Dungeon expedition, or other mission using irreplaceable heroes/trinkets. Restore after a death or disastrous retreat instead of training replacements for many weeks.","Ignored",""
 "State of Decay 2","yes","Permanent roster or asset loss","yes","**Context:** A community can contain rare survivors, maxed skills, leader progress, vehicles, weapons, and a developed base, while survivor death is permanent.
 
 **How progress is saved:** The game autosaves the community continuously rather than offering manual rollback slots.
@@ -328,7 +328,7 @@
 
 **How progress is saved:** The campaign is autosave-driven; a dead operative is committed to the current save.
 
-**SaveScummer value:** Checkpoint before a difficult restricted-area infiltration or mission using a rare operative. Restore after a permanent death while keeping the rest of the Resistance Mode challenge intact.","Keep","Keep specifically for Resistance mode, which gives the restricted mode an independent reason to exist."
+**SaveScummer value:** Checkpoint before a difficult restricted-area infiltration or mission using a rare operative. Restore after a permanent death while keeping the rest of the Resistance Mode challenge intact.","Ignored","Keep specifically for Resistance mode, which gives the restricted mode an independent reason to exist."
 "This War of Mine","yes","Permanent roster or asset loss","no","**Context:** A shelter can depend on a small group of survivors, scarce food/medicine, relationships, and upgrades, while one bad scavenging night can permanently kill a key character.
 
 **How progress is saved:** The game advances through automatic day/night saves rather than unrestricted manual slots.
@@ -358,7 +358,7 @@
 
 **How progress is saved:** The modern PC version autosaves rather than offering free decision-point saves.
 
-**SaveScummer value:** Checkpoint before a heroquest, risky raid, or major tribal decision. Restore to explore another outcome without replaying seasons of clan management.","Keep",""
+**SaveScummer value:** Checkpoint before a heroquest, risky raid, or major tribal decision. Restore to explore another outcome without replaying seasons of clan management.","Ignored",""
 "Six Ages: Ride Like the Wind","yes","Limited/coarse rollback systems","yes","**Context:** Heroquests, marriages, feuds, raids, and ritual choices can alter clan relationships and resources for years.
 
 **How progress is saved:** The game autosaves whenever the clan state changes rather than exposing manual branch slots.
@@ -368,7 +368,7 @@
 
 **How progress is saved:** The campaign autosaves through its scenes and long-running clan simulation.
 
-**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.","Keep",""
+**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.","Ignored",""
 "HighFleet","yes","Limited/coarse rollback systems","yes","**Context:** A bad battle or route gamble can destroy irreplaceable ships, fuel, ammunition, and strategic position far from the last Fleet HQ checkpoint.
 
 **How progress is saved:** The game provides campaign restore points at Fleet HQs rather than fine-grained manual rollback everywhere.
@@ -428,7 +428,7 @@
 
 **How progress is saved:** The journey is saved as one current campaign rather than a set of manual route branches.
 
-**SaveScummer value:** Checkpoint before an expensive route, risky transport, or story choice. Restore to try the alternate connection or outcome without restarting the entire journey from London.","Keep",""
+**SaveScummer value:** Checkpoint before an expensive route, risky transport, or story choice. Restore to try the alternate connection or outcome without restarting the entire journey from London.","Ignored",""
 "Signs of the Sojourner","yes","Committed narrative/autosave choices","no","**Context:** One conversation can change the deck you carry into every later relationship, sometimes locking you out of future dialogue paths.
 
 **How progress is saved:** The game uses a single local save rather than manual branch slots.

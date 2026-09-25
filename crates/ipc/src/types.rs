@@ -412,8 +412,29 @@ pub struct GameSummary {
     pub notice: Option<String>,
     /// Bumps when the game's labels change.
     pub labels_version: u64,
+    /// Cached Steam art, as local files; absent for custom games and games
+    /// without art.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artwork: Option<Artwork>,
     /// Bumps when the game's visible history changes.
     pub history_version: u64,
+}
+
+/// A game's art in the host's cache, scaled for display. Each file is
+/// complete whenever it is named here.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Artwork {
+    /// Hero art: the sidebar card's background.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hero: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
+    /// The fallback background.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header: Option<String>,
+    /// The small square icon beside the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -590,6 +611,14 @@ pub struct CatalogInfo {
     pub games: usize,
     /// `embedded`, `downloaded` or `file`.
     pub source: String,
+    /// Whether the host looks for newer catalogs (`--no-catalog-update` turns it off).
+    #[serde(default)]
+    pub updates: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at: Option<String>,
+    /// Why the last look for a newer catalog failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

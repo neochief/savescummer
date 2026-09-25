@@ -23,6 +23,8 @@ use std::time::{Duration, Instant};
 use notify::{EventKind, RecursiveMode, Watcher as _};
 
 #[cfg(windows)]
+mod drives;
+#[cfg(windows)]
 mod registry;
 
 /// Quiet time after the last change before `on_change` runs.
@@ -31,6 +33,15 @@ pub const DEBOUNCE: Duration = Duration::from_secs(2);
 enum Msg {
     SetPaths(Vec<PathBuf>),
     Changed,
+    /// Windows asked to remove this volume: drop its watches, then answer.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Release(String, Sender<()>),
+    /// The volume is back (or its removal failed): watch it again.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Restore(String),
+    /// Test only: acts as if Windows sent a device event for a volume.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Simulate(u32, String),
     Stop,
 }
 
@@ -61,7 +72,10 @@ impl Watcher {
         let events = tx.clone();
         #[cfg(windows)]
         let registry = registry::KeyWatcher::new(tx.clone());
-        let _ = std::thread::Builder::new().name("savescummer-watch".into()).spawn(move || run(rx, events, on_change));
+        let drive_events = tx.clone();
+        let _ = std::thread::Builder::new()
+            .name("savescummer-watch".into())
+            .spawn(move || run(rx, events, drive_events, on_change));
         Watcher {
             tx,
             #[cfg(windows)]
@@ -84,6 +98,39 @@ impl Watcher {
         }
         #[cfg(not(windows))]
         let _ = keys;
+    }
+
+    /// Acts as if Windows sent `event` for the volume `path` lives on, the
+    /// way a USB drive's removal would (tests). Handled on the worker, soon after.
+    #[doc(hidden)]
+    pub fn simulate_drive_event(&self, event: DriveEvent, path: &Path) {
+        let Some(volume) = volume_of(path) else { return };
+        let _ = self.tx.send(Msg::Simulate(event.code(), volume));
+    }
+}
+
+/// A device event, for tests that can't unplug a drive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriveEvent {
+    /// Windows asks whether the volume may be removed.
+    QueryRemove,
+    /// Something refused the removal; the volume stays.
+    QueryRemoveFailed,
+    /// The volume is gone.
+    RemoveComplete,
+    /// A volume arrived.
+    Arrival,
+}
+
+impl DriveEvent {
+    /// The `DBT_*` code Windows sends.
+    pub fn code(self) -> u32 {
+        match self {
+            DriveEvent::Arrival => 0x8000,
+            DriveEvent::QueryRemove => 0x8001,
+            DriveEvent::QueryRemoveFailed => 0x8002,
+            DriveEvent::RemoveComplete => 0x8004,
+        }
     }
 }
 
@@ -138,6 +185,17 @@ impl Filter {
     }
 }
 
+/// The volume a folder lives on, for releasing a drive's watches.
+fn volume_of(dir: &Path) -> Option<String> {
+    #[cfg(windows)]
+    return drives::volume_of(dir);
+    #[cfg(not(windows))]
+    {
+        let _ = dir;
+        None
+    }
+}
+
 /// File names compare case-insensitively where the file system does.
 fn same_name(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
     if cfg!(any(windows, target_os = "macos")) {
@@ -147,7 +205,13 @@ fn same_name(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
     }
 }
 
-fn run(rx: mpsc::Receiver<Msg>, events: Sender<Msg>, on_change: Box<dyn Fn() + Send + 'static>) {
+fn run(
+    rx: mpsc::Receiver<Msg>,
+    events: Sender<Msg>,
+    drive_events: Sender<Msg>,
+    on_change: Box<dyn Fn() + Send + 'static>,
+) {
+    let resend = drive_events.clone();
     let filter = Arc::new(Mutex::new(Filter::default()));
     let handler_filter = Arc::clone(&filter);
     let handler = move |result: notify::Result<notify::Event>| {
@@ -173,7 +237,16 @@ fn run(rx: mpsc::Receiver<Msg>, events: Sender<Msg>, on_change: Box<dyn Fn() + S
     let Ok(mut os) = notify::recommended_watcher(handler) else {
         return;
     };
-    let mut watched: Vec<PathBuf> = Vec::new();
+    #[cfg(windows)]
+    let drives = drives::Drives::start(drive_events);
+    #[cfg(not(windows))]
+    let _ = drive_events;
+    // The folders watched now, each with its volume.
+    let mut watched: Vec<(PathBuf, Option<String>)> = Vec::new();
+    // What the caller asked for, to watch again when a volume returns.
+    let mut wanted: Vec<PathBuf> = Vec::new();
+    // Volumes Windows asked to remove; their folders wait for the return.
+    let mut released: HashSet<String> = HashSet::new();
     let mut due: Option<Instant> = None;
 
     loop {
@@ -184,16 +257,54 @@ fn run(rx: mpsc::Receiver<Msg>, events: Sender<Msg>, on_change: Box<dyn Fn() + S
         match msg {
             Ok(Msg::Changed) => due = Some(Instant::now() + DEBOUNCE),
             Ok(Msg::SetPaths(paths)) => {
-                for dir in watched.drain(..) {
+                for (dir, _) in watched.drain(..) {
                     let _ = os.unwatch(&dir);
                 }
                 let next = Filter::build(&paths);
                 for dir in next.dirs() {
+                    let volume = volume_of(dir);
+                    if volume.as_ref().is_some_and(|v| released.contains(v)) {
+                        continue;
+                    }
                     if os.watch(dir, RecursiveMode::NonRecursive).is_ok() {
-                        watched.push(dir.clone());
+                        watched.push((dir.clone(), volume));
                     }
                 }
                 *filter.lock().unwrap_or_else(|e| e.into_inner()) = next;
+                wanted = paths;
+                #[cfg(windows)]
+                if let Some(drives) = &drives {
+                    let volumes: HashSet<String> = watched.iter().filter_map(|(_, v)| v.clone()).collect();
+                    drives.remote().set_volumes(volumes.into_iter().collect());
+                }
+            }
+            Ok(Msg::Release(volume, ack)) => {
+                watched.retain(|(dir, v)| {
+                    let on_volume = v.as_deref() == Some(volume.as_str());
+                    if on_volume {
+                        let _ = os.unwatch(dir);
+                    }
+                    !on_volume
+                });
+                released.insert(volume);
+                let _ = ack.send(());
+            }
+            Ok(Msg::Restore(volume)) => {
+                if released.remove(&volume) {
+                    // Watch everything again; the folders may have changed
+                    // while the drive was away, so that counts as a change.
+                    let _ = resend.send(Msg::SetPaths(wanted.clone()));
+                    due = Some(Instant::now() + DEBOUNCE);
+                }
+            }
+            Ok(Msg::Simulate(_event, _volume)) => {
+                #[cfg(windows)]
+                if let Some(drives) = &drives {
+                    let remote = drives.remote();
+                    // Sent from another thread: the window answers after it
+                    // asked us to release, which this loop must be free for.
+                    std::thread::spawn(move || remote.simulate(_event, &_volume));
+                }
             }
             Ok(Msg::Stop) | Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => {
@@ -343,5 +454,94 @@ mod registry_tests {
         set_value(&entry, "ignored", "now unwatched");
         wait_past_debounce();
         assert_eq!(count.load(Ordering::SeqCst), 3);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod drive_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn counting() -> (Arc<AtomicUsize>, Watcher) {
+        let count = Arc::new(AtomicUsize::new(0));
+        let c = Arc::clone(&count);
+        let watcher = Watcher::new(Box::new(move || {
+            c.fetch_add(1, Ordering::SeqCst);
+        }));
+        (count, watcher)
+    }
+
+    fn settle() {
+        std::thread::sleep(Duration::from_millis(400));
+    }
+
+    fn wait_past_debounce() {
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(1500));
+    }
+
+    /// A folder holding an open watch can't be renamed; one without can.
+    /// That is what stands between the user and "Safely remove".
+    fn is_held(library: &Path) -> bool {
+        let moved = library.with_extension("moved");
+        match std::fs::rename(library, &moved) {
+            Ok(()) => {
+                std::fs::rename(&moved, library).unwrap();
+                false
+            }
+            Err(_) => true,
+        }
+    }
+
+    #[test]
+    fn a_removal_request_releases_the_drive_and_its_return_watches_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = dir.path().join("SteamLibrary");
+        let steamapps = library.join("steamapps");
+        std::fs::create_dir_all(&steamapps).unwrap();
+        let (count, watcher) = counting();
+        watcher.set_paths(vec![steamapps.clone()]);
+        settle();
+        assert!(is_held(&library), "the watch holds the folder open");
+
+        watcher.simulate_drive_event(DriveEvent::QueryRemove, &steamapps);
+        settle();
+        assert!(!is_held(&library), "nothing holds the drive after the request");
+        std::fs::write(steamapps.join("appmanifest_1.acf"), "x").unwrap();
+        wait_past_debounce();
+        assert_eq!(count.load(Ordering::SeqCst), 0, "not watched while the drive is away");
+
+        // Back: watched again, and the return counts as a change (installs
+        // may have happened on another machine).
+        watcher.simulate_drive_event(DriveEvent::RemoveComplete, &steamapps);
+        watcher.simulate_drive_event(DriveEvent::Arrival, &steamapps);
+        wait_past_debounce();
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        assert!(is_held(&library));
+        std::fs::write(steamapps.join("appmanifest_2.acf"), "x").unwrap();
+        wait_past_debounce();
+        assert_eq!(count.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn a_refused_removal_watches_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = dir.path().join("SteamLibrary");
+        let steamapps = library.join("steamapps");
+        std::fs::create_dir_all(&steamapps).unwrap();
+        let (count, watcher) = counting();
+        watcher.set_paths(vec![steamapps.clone()]);
+        settle();
+
+        watcher.simulate_drive_event(DriveEvent::QueryRemove, &steamapps);
+        settle();
+        assert!(!is_held(&library));
+        watcher.simulate_drive_event(DriveEvent::QueryRemoveFailed, &steamapps);
+        settle();
+        assert!(is_held(&library));
+        wait_past_debounce();
+        let after_return = count.load(Ordering::SeqCst);
+        std::fs::write(steamapps.join("appmanifest_3.acf"), "x").unwrap();
+        wait_past_debounce();
+        assert_eq!(count.load(Ordering::SeqCst), after_return + 1);
     }
 }

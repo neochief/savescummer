@@ -45,13 +45,18 @@ game; the first row is the header.
 | Column | Meaning |
 |---|---|
 | `Name` | display name in the app; exact Ludusavi lookup key |
-| `Product fit` | `Keep` or `Remove`; only `Keep` rows are built |
+| `Product fit` | `Keep`, `Remove` or `Ignored`; only `Keep` rows are built |
 | `Info` | markdown instructions, copied verbatim into the bundle |
 
 - Lookup is an exact `Name` match against the pinned manifest. No match →
   build error with closest-name suggestions.
 - Duplicate names (case-insensitive) → build error.
 - Unknown `Product fit` values → build error.
+- `Ignored` marks a game we want but can't build yet (e.g. no usable save
+  location). It's left out like `Remove`, but every build lists it as a
+  warning, so it stays visible until someone addresses it and sets it back to
+  `Keep`. Why not just `Remove`: that means "not wanted", and the game would be
+  forgotten.
 - `Info` holds markdown and may contain commas, quotes and newlines as normal
   quoted CSV content. It is the only source of game instructions.
 - The file may contain extra columns; the builder ignores any column beyond
@@ -59,8 +64,11 @@ game; the first row is the header.
 - `catalog/games.csv` is committed and is the only editing surface; the builder
   reads it directly. Git diffs, agents and scripts read the same file.
 
-Current list: 97 `Keep`, 10 `Remove`. `Name` must match the manifest key
-exactly. `Six Ages 2: Lights Going Out` has no manifest entry and needs an
+Current list: 88 `Keep`, 10 `Remove`, 9 `Ignored`. `Name` must match the
+manifest key exactly. The `Ignored` games have no usable save location in the
+manifest (Catacomb Kids, Vagante, UnReal World, Total War Saga: Thrones of
+Britannia, Darkest Dungeon, Watch Dogs: Legion, King of Dragon Pass, 80 Days)
+or no manifest entry at all (Six Ages 2: Lights Going Out); each needs an
 addendum entry.
 
 ### 2.2 `catalog/addendum.yaml`
@@ -326,7 +334,7 @@ folder only); duplicate names; invalid `Product fit`; addendum
 schema errors; manifest hash mismatch.
 
 Warnings: addendum shadowed by the manifest; addendum with no `Keep` row;
-every dropped broad target. Listed for review, not failures: every addendum
+every dropped broad target; every `Ignored` row. Listed for review, not failures: every addendum
 override, every game whose save set spans more than one target, and every
 save target that is a whole folder tagged both config and save. Why the last:
 the manifest is written for backups, where taking too much is harmless, so it

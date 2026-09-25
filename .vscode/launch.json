@@ -5,33 +5,25 @@
             "name": "SaveScummer: app",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe",
-            "args": [
-                "--data-dir", "${workspaceFolder}/.runtime/vscode",
-                "--host", "${workspaceFolder}/target/debug/savescummer-host.exe"
-            ],
+            "program": "${workspaceFolder}/build/dev/package/SaveScummer-windows-x64/bin/SaveScummer.exe",
+            "args": ["--data-dir", "${workspaceFolder}/.runtime/dev"],
             "cwd": "${workspaceFolder}",
-            "environment": [
-                { "name": "PATH", "value": "${workspaceFolder}/.runtime/Qt/6.5.3/msvc2019_64/bin;${env:PATH}" }
-            ],
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "SaveScummer: prepare app",
-            "postDebugTask": "SaveScummer: stop debug host"
+            "preLaunchTask": "SaveScummer: start dev host",
+            "postDebugTask": "SaveScummer: stop dev host"
         },
         {
             "name": "SaveScummer: demo",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/desktop/apps/desktop/RelWithDebInfo/SaveScummer.exe",
-            "args": ["--demo"],
+            "program": "${workspaceFolder}/build/dev/package/SaveScummer-windows-x64/bin/SaveScummer.exe",
+            "args": ["--data-dir", "${workspaceFolder}/.runtime/dev", "--demo"],
             "cwd": "${workspaceFolder}",
-            "environment": [
-                { "name": "PATH", "value": "${workspaceFolder}/.runtime/Qt/6.5.3/msvc2019_64/bin;${env:PATH}" }
-            ],
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "SaveScummer: build dev"
+            "preLaunchTask": "SaveScummer: start dev host (demo)",
+            "postDebugTask": "SaveScummer: stop dev host"
         }
     ]
 }

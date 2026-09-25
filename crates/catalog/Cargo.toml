@@ -2,6 +2,7 @@
 name = "savescummer-catalog"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [dependencies]
 serde.workspace = true

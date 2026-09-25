@@ -2,6 +2,7 @@
 name = "savescummer-platform"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [dependencies]
 notify.workspace = true

@@ -17,7 +17,8 @@ pub struct Options {
     /// Write or remove the sign-in entry, then exit.
     #[arg(long, value_parser = ["on", "off"])]
     pub autostart: Option<String>,
-    /// Simulated games and operations, for UI development.
+    /// Simulated games and operations, for UI development: a generated
+    /// machine in `<data folder>\demo` (or `--data-dir`), wiped at start.
     #[arg(long)]
     pub demo: bool,
     /// Never fetch a newer catalog.
@@ -30,6 +31,12 @@ pub struct Options {
     /// Use this catalog bundle instead of the built-in one (tests).
     #[arg(long, hide = true)]
     pub catalog: Option<PathBuf>,
+    /// Fetch catalog updates from this URL instead of the repository (tests).
+    #[arg(long, hide = true)]
+    pub catalog_url: Option<String>,
+    /// Fetch Steam art from this base URL instead of Steam's CDN (tests).
+    #[arg(long, hide = true)]
+    pub artwork_url: Option<String>,
     /// Read the machine's folders and stores from this file instead of the
     /// OS, so tests never touch real game libraries.
     #[arg(long, hide = true)]

@@ -43,12 +43,19 @@ Only one host runs per user. Anything that needs it starts it from the same inst
 - A CLI command that needs the host starts it and waits until it's ready. Help and syntax errors don't start anything.
 - At sign-in (when Launch on startup is on) the host starts in the tray without opening the window.
 
+**The host is a windowless GUI program, never a console program.** On Windows that means the GUI subsystem. Why: Windows gives a console program a console window whenever something other than a terminal starts it, and that window stays open as long as the program runs. Started at sign-in, a console host would put a terminal window on screen for the whole session; started from the UI, a window would flash or linger. Hiding the window in every launcher doesn't work either: any launcher that forgets, including a user double-clicking the exe, shows it. The first rebuild shipped the host as a console program and got exactly this.
+
+- The host has no console, so everything it has to say goes to the host log. The one exception is output a caller explicitly captured (see Command line).
+- The CLI stays a console program; terminals are its purpose. When the UI runs the CLI, it asks for no window.
+
 The host starts, in order: open the database, resolve interrupted operations, scan, start monitoring, then accept operations. The UI can connect earlier and will see the scan in progress.
 
 Closing the window leaves the host in the tray. Clicking the tray icon opens or focuses the UI. The tray menu has two items:
 
 - Main window
 - Exit
+
+The tray icon and menu stay sharp on high-resolution and scaled displays, including when the scale changes while the host runs. Why: by default, Windows draws a program's tray icon and menu at 100% scale and then stretches them, so they look blurry at any other scale.
 
 Exit stops the host safely:
 
@@ -74,11 +81,12 @@ Resolve these through the OS (folder redirection, the real home directory), neve
 
 ### The host log
 
-The host keeps a plain-text log, `host.log` in the data folder, and writes the same lines to its error output. Why: the host usually starts at sign-in or from the UI, where nobody reads its output, and "the game never showed up" or "it didn't notice I quit" can only be answered by what the host saw and when.
+The host keeps a plain-text log, `host.log` in the data folder. It is where all of the host's own output goes, since the host has no console. Why: the host usually starts at sign-in or from the UI, where nobody could read its output anyway, and "the game never showed up" or "it didn't notice I quit" can only be answered by what the host saw and when.
 
 Each line has a UTC timestamp. The log records:
 
 - startup and shutdown steps, and a clean stop;
+- why the host didn't start or stopped early (another host running, an unreadable database, a bad option), and problems it works around quietly (a hotkey another app already holds, a failed catalog update);
 - games installed, installed again and uninstalled, with each game's name, ID, store and folder, and the reason the scan ran (startup, a store folder or registry key changed, the window gained focus, the periodic scan, a catalog update, a user request);
 - games started and closed, and a game found already running when the host started (its start time is unknown, so none is claimed).
 
@@ -106,15 +114,15 @@ The host has a few options for the build tooling, tests and the sign-in entry. T
 - `--demo` — simulated games and operations, for UI development without touching real saves.
 - `--no-catalog-update` — never fetch a newer catalog (tests and isolated runs).
 - `--no-integrations` — no hotkeys, tray, sounds or sign-in changes (automated tests).
-- `--version` — print the version and exit.
+- `--version` — write the version to standard output and exit.
 
-When a host is ready to serve, it prints one machine-readable ready line, so tooling can wait for it instead of guessing.
+When a host is ready to serve, or fails to start, it writes one machine-readable ready line, so tooling can wait for it instead of guessing. The line goes to the log and to standard output. A GUI program's standard output reaches only a caller that captured it (the build tooling, tests, the CLI starting a host); a terminal shows nothing, and people read the log or use the CLI instead.
 
 ### Launch on startup
 
 The host is the only thing that writes the sign-in entry, so the checkbox and the real entry can't drift apart:
 
-- The UI checkbox and `SaveScummer.Host --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and report the result.
+- The UI checkbox and `SaveScummer.Host --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS LaunchAgent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it).
 - `off` removes only an entry that points at this host.
 - An AppImage re-points its entry to its own path on every start, because each version is a new file. Other platforms install to a fixed path and never rewrite the entry on their own.
 - Development builds never create a sign-in entry: `--autostart on` refuses and the checkbox is disabled. Why: signing in must never start a debug host, and a dev host must not touch the installed app's entry.
@@ -690,7 +698,7 @@ Rules must be provable without a desktop, and the OS parts must be proven for re
 
 ### By hand, for now
 
-Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry, antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform.
+Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry (including that no window appears when the host starts at sign-in or from the UI), antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform.
 
 Steam Cloud must be checked by hand on a real machine before relying on the after-Load check, with one game of each kind: Isaac (writes through Steam's cloud API into `remote`), Slay the Spire (Steam Auto-Cloud of its install folder) and Risk of Rain Returns (both). For each: a Load with the game closed, then launch; a Load that deletes a file; and, where possible, a Load while the cloud has newer progress from another device. Why by hand: only real Steam shows whether it uploads, re-downloads or asks.
 

@@ -2,6 +2,7 @@
 name = "savescummer-snapshots"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [dependencies]
 savescummer-core.workspace = true

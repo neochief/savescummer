@@ -23,11 +23,13 @@ pub use imp::{Integration, start};
 
 #[cfg(windows)]
 mod imp {
+    use std::cell::Cell;
     use std::sync::mpsc;
     use std::thread::JoinHandle;
 
     use windows_sys::Win32::Foundation::{GetLastError, HWND, LPARAM, LRESULT, POINT, WPARAM};
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         MOD_CONTROL, MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_F5, VK_F9,
     };
@@ -37,11 +39,12 @@ mod imp {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         AppendMenuW, CreateIconFromResourceEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
-        DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetSystemMetrics,
-        GetWindowLongPtrW, HICON, IDI_APPLICATION, LR_DEFAULTCOLOR, LoadIconW, MF_STRING, MSG, PostMessageW,
-        PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetMenuDefaultItem,
+        DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW,
+        HICON, IDI_APPLICATION, LR_DEFAULTCOLOR, LoadIconW, MF_STRING, MSG, PostMessageW, PostQuitMessage,
+        RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetMenuDefaultItem,
         SetWindowLongPtrW, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP,
-        WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_NULL, WNDCLASSW, WS_OVERLAPPED,
+        WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_NULL,
+        WNDCLASSW, WS_OVERLAPPED,
     };
 
     use super::{HotkeyAction, Signal};
@@ -70,9 +73,27 @@ mod imp {
     /// the popup menu's modal loop re-enters the window procedure.
     struct UiState {
         on_signal: Box<dyn Fn(Signal) + Send + 'static>,
-        icon: HICON,
-        owns_icon: bool,
+        /// The tray icon, reloaded when the display scale changes.
+        icon: Cell<AppIcon>,
         taskbar_created: u32,
+    }
+
+    #[derive(Clone, Copy)]
+    struct AppIcon {
+        handle: HICON,
+        /// Pixel size it was loaded for.
+        size: i32,
+        /// Whether we must destroy it (the stock fallback is shared).
+        owned: bool,
+    }
+
+    impl AppIcon {
+        fn release(self) {
+            if self.owned {
+                // SAFETY: we created it and nothing uses it anymore.
+                unsafe { DestroyIcon(self.handle) };
+            }
+        }
     }
 
     pub struct Integration {
@@ -179,11 +200,9 @@ mod imp {
                 return;
             }
 
-            let (icon, owns_icon) = load_app_icon();
             let state = Box::into_raw(Box::new(UiState {
                 on_signal,
-                icon,
-                owns_icon,
+                icon: Cell::new(load_app_icon(small_icon_size(hwnd))),
                 taskbar_created: RegisterWindowMessageW(taskbar.as_ptr()),
             }));
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, state as isize);
@@ -206,10 +225,7 @@ mod imp {
                 DispatchMessageW(&msg);
             }
 
-            let state = Box::from_raw(state);
-            if state.owns_icon {
-                DestroyIcon(state.icon);
-            }
+            Box::from_raw(state).icon.get().release();
         }
     }
 
@@ -240,6 +256,17 @@ mod imp {
                 // SAFETY: `notify` posted a Box<Balloon> and gave up ownership.
                 let balloon = unsafe { Box::from_raw(lparam as *mut Balloon) };
                 show_balloon(hwnd, &balloon);
+                0
+            }
+            WM_DPICHANGED | WM_DISPLAYCHANGE => {
+                // The display scale changed: redraw the icon at the new size.
+                if refresh_icon(hwnd, state) {
+                    let mut nid = tray_data(hwnd);
+                    nid.uFlags = NIF_ICON;
+                    nid.hIcon = state.icon.get().handle;
+                    // SAFETY: `nid` is fully initialized and sized.
+                    unsafe { Shell_NotifyIconW(NIM_MODIFY, &nid) };
+                }
                 0
             }
             WM_CLOSE => {
@@ -281,10 +308,12 @@ mod imp {
     }
 
     fn add_tray_icon(hwnd: HWND, state: &UiState) {
+        // Explorer may have restarted because the scale changed.
+        refresh_icon(hwnd, state);
         let mut nid = tray_data(hwnd);
         nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         nid.uCallbackMessage = WM_TRAY;
-        nid.hIcon = state.icon;
+        nid.hIcon = state.icon.get().handle;
         copy_wide(&mut nid.szTip, TOOLTIP);
         nid.Anonymous.uVersion = NOTIFYICON_VERSION_4;
         // SAFETY: `nid` is fully initialized and sized.
@@ -346,11 +375,28 @@ mod imp {
         }
     }
 
-    /// The app icon from the embedded .ico at small-icon size, else the
-    /// stock application icon. Returns whether we own (must destroy) it.
-    fn load_app_icon() -> (HICON, bool) {
-        // SAFETY: GetSystemMetrics has no preconditions.
-        let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16);
+    /// The small-icon size at the window's DPI (the tray's monitor: the
+    /// window sits at the primary monitor's origin). Real pixels only because
+    /// the host's manifest makes it DPI-aware; otherwise always 16.
+    fn small_icon_size(hwnd: HWND) -> i32 {
+        // SAFETY: plain Win32 queries on our own window.
+        unsafe { GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForWindow(hwnd)) }.max(16)
+    }
+
+    /// Reloads the icon if the small-icon size changed; returns whether it
+    /// did. The shell keeps its own copy, so the old one can go at once.
+    fn refresh_icon(hwnd: HWND, state: &UiState) -> bool {
+        let size = small_icon_size(hwnd);
+        if size == state.icon.get().size {
+            return false;
+        }
+        state.icon.replace(load_app_icon(size)).release();
+        true
+    }
+
+    /// The app icon from the embedded .ico at `size` pixels, else the stock
+    /// application icon.
+    fn load_app_icon(size: i32) -> AppIcon {
         if let Some(image) = ico_image(ICO, size as u32) {
             // SAFETY: `image` is one complete icon image (BMP or PNG) from the
             // .ico, as CreateIconFromResourceEx expects; 0x00030000 is the
@@ -367,11 +413,12 @@ mod imp {
                 )
             };
             if !icon.is_null() {
-                return (icon, true);
+                return AppIcon { handle: icon, size, owned: true };
             }
         }
         // SAFETY: loads a shared system icon; it must not be destroyed.
-        (unsafe { LoadIconW(std::ptr::null_mut(), IDI_APPLICATION) }, false)
+        let handle = unsafe { LoadIconW(std::ptr::null_mut(), IDI_APPLICATION) };
+        AppIcon { handle, size, owned: false }
     }
 
     /// Picks the image in an .ico file that best fits `size` pixels: the

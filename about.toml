@@ -1,0 +1,19 @@
+# Licenses a crate linked into the host or CLI may use (PLAN-BUILD.md APP
+# PACKAGE). Packaging fails on anything else, so licensing is checked on
+# every build rather than at release time. Adding one is a deliberate choice.
+accepted = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+ignore-dev-dependencies = true
+ignore-build-dependencies = true
+
+# The app's own crates (all `publish = false`) aren't third-party.
+[private]
+ignore = true

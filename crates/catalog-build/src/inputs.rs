@@ -22,6 +22,9 @@ pub struct GameRow {
 pub enum Fit {
     Keep,
     Remove,
+    /// Should be supported but can't be built yet (e.g. no usable save
+    /// location): left out, with a warning on every build so it stays visible.
+    Ignored,
 }
 
 /// A `games.csv` problem that isn't about one game's content.
@@ -64,11 +67,12 @@ pub fn parse_games_csv(text: &str) -> Result<(Vec<GameRow>, Vec<RowError>), Stri
         let fit = match fit_text {
             "Keep" => Fit::Keep,
             "Remove" => Fit::Remove,
+            "Ignored" => Fit::Ignored,
             other => {
                 errors.push(RowError {
                     line,
                     name: Some(name),
-                    message: format!("invalid `Product fit` {other:?} (expected `Keep` or `Remove`)"),
+                    message: format!("invalid `Product fit` {other:?} (expected `Keep`, `Remove` or `Ignored`)"),
                 });
                 continue;
             }

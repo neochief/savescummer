@@ -1,0 +1,52 @@
+# CI (PLAN-BUILD.md CI): nothing merges that breaks a platform.
+#
+# Every step is a `cargo xtask` command, so a failure here can always be
+# reproduced locally. A job is added per platform as it lands; today that's
+# Windows. Qt is installed only once the desktop exists (apps/desktop).
+name: CI
+
+on:
+  push:
+    # Branch pushes only; tags are built by release.yml.
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      # rustup applies rust-toolchain.toml on first use.
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache Qt
+        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        uses: actions/cache@v6
+        with:
+          path: .runtime/Qt
+          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Cache cargo-about
+        uses: actions/cache@v6
+        with:
+          path: .runtime/tools/cargo-about
+          key: cargo-about-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Set up Qt
+        if: hashFiles('apps/desktop/CMakeLists.txt') != ''
+        run: cargo xtask setup qt
+      - name: Set up cargo-about
+        run: cargo xtask setup cargo-about
+      - name: Check
+        run: cargo xtask check
+      - name: Build and test
+        run: cargo xtask build --test --package

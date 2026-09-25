@@ -2,6 +2,7 @@
 name = "savescummer-cli"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [lib]
 path = "src/lib.rs"
@@ -19,3 +20,6 @@ clap.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+[build-dependencies]
+winresource.workspace = true

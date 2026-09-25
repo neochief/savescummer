@@ -49,11 +49,11 @@ pub fn start(host: &Arc<Host>) {
     match result {
         Ok(integration) => {
             for error in integration.hotkey_errors() {
-                eprintln!("hotkey: {error}");
+                crate::trace(&format!("hotkey: {error}"));
             }
             *host.integration.lock().unwrap_or_else(|e| e.into_inner()) = Some(integration);
         }
-        Err(e) => eprintln!("tray and hotkeys unavailable: {e}"),
+        Err(e) => crate::trace(&format!("tray and hotkeys unavailable: {e}")),
     }
 }
 

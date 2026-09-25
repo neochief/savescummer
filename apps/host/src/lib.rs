@@ -6,8 +6,12 @@
 //! start monitoring, then accept operations. Clients can connect earlier
 //! and see the host starting.
 
+pub mod artwork;
+pub mod catalog_update;
 pub mod checkpoints;
+pub mod demo;
 pub mod feedback;
+pub mod fetch;
 pub mod host;
 pub mod library;
 pub mod log;
@@ -40,19 +44,49 @@ use crate::options::Options;
 /// The catalog built into the host, the fallback when nothing newer exists.
 pub const EMBEDDED_CATALOG: &str = include_str!("../../../catalog/catalog.json");
 
+/// The host is a GUI program (see PLAN-HOST, PROCESSES): no console window,
+/// whoever starts it. Everything it has to say goes to the host log; the
+/// ready line and `--version` also go to standard output, which reaches a
+/// caller that captured it.
 pub fn main() -> ExitCode {
-    let opts = Options::parse();
+    // A panic's message would otherwise go to a console nobody has.
+    std::panic::set_hook(Box::new(|info| log::line(&format!("panic: {info}"))));
+    let mut opts = match Options::try_parse() {
+        Ok(opts) => opts,
+        Err(e) if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) => {
+            print!("{}", e.render());
+            return ExitCode::SUCCESS;
+        }
+        Err(e) => {
+            // The options didn't parse: log where `--data-dir` points if it
+            // is there at all, else in the default data folder.
+            early_log(&raw_data_dir().unwrap_or_else(savescummer_platform::data_dir));
+            let text = e.render().to_string();
+            ready_line(false, &format!("bad options: {}", text.lines().next().unwrap_or_default()), None);
+            return ExitCode::from(2);
+        }
+    };
     if opts.demo {
-        eprintln!("--demo isn't available in this build yet");
-        return ExitCode::from(2);
+        opts = match demo::prepare(opts, EMBEDDED_CATALOG) {
+            Ok(opts) => opts,
+            Err(e) => {
+                // Never write into a folder --demo refused.
+                early_log(&savescummer_platform::data_dir());
+                ready_line(false, &format!("--demo: {e}"), None);
+                return ExitCode::from(2);
+            }
+        };
     }
     let data_dir = opts.data_dir.clone().unwrap_or_else(savescummer_platform::data_dir);
-    if let Some(mode) = &opts.autostart {
-        return autostart(mode == "on", &opts);
-    }
     if let Err(e) = fs::create_dir_all(&data_dir) {
+        early_log(&savescummer_platform::data_dir());
         ready_line(false, &format!("can't create the data folder {}: {e}", data_dir.display()), None);
         return ExitCode::from(2);
+    }
+    // Logged from here on, even when another host owns the folder.
+    log::init(&data_dir);
+    if let Some(mode) = &opts.autostart {
+        return autostart(mode == "on", &opts);
     }
     // One host per user and data folder.
     let lock_path = data_dir.join("host.lock");
@@ -67,7 +101,6 @@ pub fn main() -> ExitCode {
         ready_line(false, "another host is already running for this data folder", None);
         return ExitCode::from(3);
     }
-    log::init(&data_dir);
     trace(&format!("host {} starting", env!("CARGO_PKG_VERSION")));
     let code = run(opts, data_dir);
     drop(lock);
@@ -78,17 +111,19 @@ fn autostart(on: bool, opts: &Options) -> ExitCode {
     let exe = match std::env::current_exe() {
         Ok(exe) => exe,
         Err(e) => {
-            eprintln!("{e}");
+            trace(&format!("launch on startup: {e}"));
             return ExitCode::from(2);
         }
     };
     match savescummer_platform::autostart::set(on, &exe, opts.data_dir.as_deref()) {
         Ok(()) => {
-            println!("launch on startup: {}", if on { "on" } else { "off" });
+            let text = format!("launch on startup: {}", if on { "on" } else { "off" });
+            trace(&text);
+            println!("{text}");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("{e}");
+            trace(&format!("launch on startup: {e}"));
             ExitCode::from(2)
         }
     }
@@ -106,25 +141,44 @@ fn ready_line(ready: bool, error: &str, host: Option<&Host>) {
         }),
         None => serde_json::json!({ "ready": ready, "error": error }),
     };
+    trace(&format!("ready line: {line}"));
     println!("{line}");
 }
 
-fn load_catalog(opts: &Options, data_dir: &Path) -> Result<CatalogState, String> {
-    if let Some(path) = &opts.catalog {
-        let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let bundle = Bundle::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-        return Ok(CatalogState { bundle: Arc::new(bundle), source: "file".into() });
-    }
-    let embedded = Bundle::parse(EMBEDDED_CATALOG).map_err(|e| format!("the built-in catalog: {e}"))?;
-    // A downloaded bundle that still parses wins; any failure falls back
-    // silently to the built-in one.
-    let downloaded = fs::read_to_string(data_dir.join("catalog").join("catalog.json"))
-        .ok()
-        .and_then(|text| Bundle::parse(&text).ok());
-    Ok(match downloaded {
-        Some(bundle) => CatalogState { bundle: Arc::new(bundle), source: "downloaded".into() },
-        None => CatalogState { bundle: Arc::new(embedded), source: "embedded".into() },
+/// `--data-dir` from the raw arguments, for options that didn't parse.
+fn raw_data_dir() -> Option<PathBuf> {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    args.iter().enumerate().rev().find_map(|(i, arg)| {
+        let text = arg.to_string_lossy();
+        match text.strip_prefix("--data-dir=") {
+            Some(value) => Some(PathBuf::from(value)),
+            None if text == "--data-dir" => args.get(i + 1).map(PathBuf::from),
+            None => None,
+        }
     })
+}
+
+/// Logs into `data_dir` for failures before the real data folder is usable.
+fn early_log(data_dir: &Path) {
+    let _ = fs::create_dir_all(data_dir);
+    log::init(data_dir);
+}
+
+fn load_catalog(opts: &Options, data_dir: &Path) -> Result<CatalogState, String> {
+    // The built-in catalog, or the one a test names instead.
+    let (built_in, source) = match &opts.catalog {
+        Some(path) => {
+            let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+            (Bundle::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?, "file")
+        }
+        None => (Bundle::parse(EMBEDDED_CATALOG).map_err(|e| format!("the built-in catalog: {e}"))?, "embedded"),
+    };
+    // A verified downloaded bundle wins; any failure falls back silently.
+    let (bundle, source) = match catalog_update::load_downloaded(data_dir) {
+        Some(bundle) => (bundle, "downloaded"),
+        None => (built_in, source),
+    };
+    Ok(CatalogState { bundle: Arc::new(bundle), source: source.into(), checked_at: None, problem: None })
 }
 
 fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
@@ -212,8 +266,16 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         std::thread::spawn(move || scan::periodic(periodic));
         let heartbeat = host.clone();
         std::thread::spawn(move || run_heartbeat(heartbeat));
+        let catalog = host.clone();
+        std::thread::spawn(move || catalog_update::run(catalog));
+        let art = host.clone();
+        std::thread::spawn(move || artwork::run(art));
     }
-    let monitor = savescummer_monitor::Monitor::new(savescummer_monitor::system_source());
+    // The demo plays its games through a scripted process list.
+    let demo_processes = demo::DemoProcesses::default();
+    let source: Box<dyn savescummer_monitor::ProcessSource> =
+        if opts.demo { Box::new(demo_processes.clone()) } else { savescummer_monitor::system_source() };
+    let monitor = savescummer_monitor::Monitor::new(source);
     {
         let monitor_host = host.clone();
         std::thread::spawn(move || monitoring::run(monitor_host, monitor));
@@ -241,6 +303,10 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         *host.watcher.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
     }
     ready_line(true, "", Some(&host));
+    if opts.demo {
+        let demo_host = host.clone();
+        std::thread::spawn(move || demo::drive(demo_host, demo_processes));
+    }
 
     let _ = shutdown_rx.recv();
     shutdown(&host);

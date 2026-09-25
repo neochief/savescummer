@@ -20,6 +20,7 @@ pub struct Report {
 pub struct Stats {
     pub keep_rows: usize,
     pub remove_rows: usize,
+    pub ignored_rows: usize,
     pub games_built: usize,
     pub from_manifest: usize,
     pub from_addendum_only: usize,
@@ -62,6 +63,8 @@ pub enum IssueKind {
     AddendumShadowed,
     AddendumWithoutKeepRow,
     DroppedTarget,
+    /// An `Ignored` row: left out until someone addresses it.
+    IgnoredGame,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -128,8 +131,9 @@ impl fmt::Display for Report {
         let s = &self.stats;
         writeln!(
             f,
-            "catalog: {} games built ({} from the manifest, {} addendum-only) of {} Keep rows; {} Remove rows skipped",
-            s.games_built, s.from_manifest, s.from_addendum_only, s.keep_rows, s.remove_rows
+            "catalog: {} games built ({} from the manifest, {} addendum-only) of {} Keep rows; \
+             {} Remove rows skipped; {} Ignored rows need attention",
+            s.games_built, s.from_manifest, s.from_addendum_only, s.keep_rows, s.remove_rows, s.ignored_rows
         )?;
         let r = &self.review;
         writeln!(
