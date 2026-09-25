@@ -520,7 +520,7 @@ pub struct State {
     pub settings: SettingsInfo,
     pub store: StoreInfo,
     pub scan: ScanInfo,
-    /// Running games, top (the hotkeys' target) first.
+    /// Running games, top first.
     pub active_stack: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotkey_target: Option<String>,
@@ -684,7 +684,7 @@ pub struct HostRun {
 pub struct HotkeyTargetInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game: Option<String>,
-    /// `window` (the UI's selection) or `stack` (the top running game).
+    /// `window` (the UI's selection) or `active` (the active game).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }

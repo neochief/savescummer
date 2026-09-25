@@ -20,7 +20,7 @@ fn a_run_is_saved_loaded_and_reverted_while_playing() {
     world.wait_game(&game, "the game is running", |g| g["running"] == true);
     let target = world.ok(&["hotkey-target"]);
     assert_eq!(s(&target["game"]), game);
-    assert_eq!(s(&target["source"]), "stack");
+    assert_eq!(s(&target["source"]), "active");
 
     // Ctrl+F5 before the boss.
     let saved = world.ok(&["hotkey", "save"]);

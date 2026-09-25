@@ -28,7 +28,7 @@ pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Resul
     }
     let target = hotkey_target(&host.lock()).map(|(g, _)| g);
     let Some(game) = target else {
-        return Err(Failure::new(ErrorKind::NotFound, "no game to act on: no window focus and no running game"));
+        return Err(Failure::new(ErrorKind::NotFound, "no game to act on: no window focus and no active game"));
     };
     let request = match action {
         HotkeyAction::Save => ops::Request::Save { label: None },

@@ -12,6 +12,7 @@ use savescummer_catalog::{Decision, Install, Outcome, Probe, assign_games, resol
 use savescummer_core::safety::{OtherGame, RealPaths, SafetyInput, check};
 use savescummer_core::{ErrorKind, Failure, Presence, Target};
 use savescummer_ipc::GameKind;
+use savescummer_platform::privacy::Category;
 use savescummer_scanner::{RealProbe, discover};
 use savescummer_storage as db;
 
@@ -461,7 +462,7 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
     if name.is_empty() {
         return Err(Failure::new(ErrorKind::InvalidConfig, "the name can't be blank"));
     }
-    ask_for_typed(host, &[Some(executable), Some(location)])?;
+    ask_for_typed(host, Some(executable), Some(location))?;
     let exe = absolute(executable)?;
     let location = user_location(location)?;
     let mut inner = host.lock();
@@ -549,7 +550,7 @@ pub struct ConfigureRequest<'a> {
 /// Changes a game's configuration. Applied only after every new value
 /// validates; changing the save set never moves or rewrites checkpoints.
 pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> Result<(), Failure> {
-    ask_for_typed(host, &[request.executable, request.save_location])?;
+    ask_for_typed(host, request.executable, request.save_location)?;
     let mut inner = host.lock();
     if inner.busy.contains_key(game_id) {
         return Err(Failure::new(ErrorKind::Busy, "another operation runs for this game").game(game_id));
@@ -610,10 +611,16 @@ fn absolute(text: &str) -> Result<PathBuf, Failure> {
 /// location macOS guards is asked for right away, while the user is still at
 /// the form, and before the host's state is locked (the answer may take
 /// long).
-fn ask_for_typed(host: &Host, typed: &[Option<&str>]) -> Result<(), Failure> {
-    for text in typed.iter().flatten() {
+fn ask_for_typed(host: &Host, executable: Option<&str>, location: Option<&str>) -> Result<(), Failure> {
+    for (text, program) in [(executable, true), (location, false)] {
+        let Some(text) = text else { continue };
         let path = absolute(text)?;
         let root = split_location(&path).map_or(path, |target| target.root);
+        // A program is only read, and app bundles only guard writes (as for
+        // install folders, see `privacy::game_needs`).
+        if program && host.privacy.needed(&root) == Some(Category::AppBundles) {
+            continue;
+        }
         crate::privacy::ask_for(host, &root)?;
     }
     Ok(())

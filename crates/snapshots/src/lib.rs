@@ -13,7 +13,8 @@ pub use checkpoint::{
     copy_save_set, dispose, folder_size, is_reserved_folder, no_hook, publish, read_meta, remove_disposal, signature,
 };
 pub use fsx::{
-    identity, is_guarded, load_drives, presence, progress, real_path, remember_drives, remembered_drives, set_guard,
+    count_progress, identity, is_guarded, load_drives, presence, real_path, remember_drives, remembered_drives,
+    set_guard,
 };
 pub use load::{LoadFile, LoadPlan, StageError, plan_load};
 pub use retry::{Budget, Retry};

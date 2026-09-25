@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -273,13 +273,15 @@ fn submit_new(
         host.publish(&mut inner);
     }
     let done = Arc::new(AtomicBool::new(false));
+    let progress = Arc::new(AtomicU64::new(0));
     if matches!(request, Request::Save { .. } | Request::Load { .. } | Request::Revert { .. }) {
-        watch_for_stall(host.clone(), op_id.clone(), game_id.clone(), done.clone());
+        watch_for_stall(host.clone(), op_id.clone(), game_id.clone(), done.clone(), progress.clone());
     }
     let worker_host = host.clone();
     let worker_game = game_id.clone();
     let worker_op = op_id.clone();
     std::thread::spawn(move || {
+        snap::count_progress(progress);
         let outcome = match (request, prepared) {
             (Request::Save { label }, _) => run_save(&worker_host, &worker_op, &worker_game, label),
             (Request::Load { .. }, Prepared::Restore(r)) | (Request::Revert { .. }, Prepared::Restore(r)) => {
@@ -297,16 +299,17 @@ fn submit_new(
 
 /// The safety net for a read that blocks (PLAN-MACOS.md, PRIVACY
 /// PERMISSIONS: a guarded location the table misses): after `--stall-secs`
-/// without any file progress, the operation is reported failed. Its thread
+/// without any progress of its own file work, the operation is reported
+/// failed. Its thread
 /// is left to finish and keeps the game's lock until it does, so no second
 /// Load runs over a half-finished one; its real outcome is recorded then.
-fn watch_for_stall(host: Arc<Host>, op_id: String, game_id: String, done: Arc<AtomicBool>) {
+fn watch_for_stall(host: Arc<Host>, op_id: String, game_id: String, done: Arc<AtomicBool>, progress: Arc<AtomicU64>) {
     let stall = Duration::from_secs(host.opts.stall_secs);
     std::thread::spawn(move || {
-        let (mut seen, mut since) = (snap::progress(), Instant::now());
+        let (mut seen, mut since) = (progress.load(Ordering::Relaxed), Instant::now());
         while !done.load(Ordering::SeqCst) {
             std::thread::sleep(Duration::from_millis(100));
-            let now = snap::progress();
+            let now = progress.load(Ordering::Relaxed);
             if now != seen {
                 (seen, since) = (now, Instant::now());
             } else if since.elapsed() >= stall {

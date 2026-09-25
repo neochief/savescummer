@@ -36,12 +36,20 @@ fn the_active_stack_follows_starts_and_exits() {
     assert_eq!(stack(&world), vec![a.clone(), b.clone()]);
     assert_eq!(s(&world.ok(&["hotkey-target"])["game"]), a);
 
+    // The active game closes: it stays the hotkeys' target, so it can be
+    // loaded before it's relaunched.
     alpha.quit();
     world.wait_state("Alpha left", |st| st["active_stack"].as_array().unwrap().len() == 1);
     assert_eq!(stack(&world), vec![b.clone()]);
-    assert_eq!(s(&world.ok(&["hotkey-target"])["game"]), b);
+    assert_eq!(s(&world.ok(&["hotkey-target"])["game"]), a);
+    assert_eq!(s(&world.ok(&["hotkey", "save"])["game"]), a);
+    // Relaunched, it's back on top.
+    let _alpha = launch(&a_exe, &[]);
+    world.wait_state("Alpha runs again", |st| st["active_stack"].as_array().unwrap().len() == 2);
+    assert_eq!(stack(&world), vec![a.clone(), b.clone()]);
     beta.quit();
-    world.wait_state("nothing runs", |st| st["active_stack"].as_array().unwrap().is_empty());
+    world.wait_state("Beta left", |st| st["active_stack"].as_array().unwrap().len() == 1);
+    assert_eq!(s(&world.ok(&["hotkey-target"])["game"]), a);
 }
 
 #[test]

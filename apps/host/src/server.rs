@@ -131,7 +131,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
         let mut inner = host.lock();
         inner.ui_connections -= 1;
         if inner.ui_connections == 0 {
-            // No window any more: hotkeys go back to the ACTIVE STACK.
+            // No window any more: hotkeys go back to the active game.
             inner.ui = crate::host::UiReport::default();
             host.publish(&mut inner);
         }

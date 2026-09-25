@@ -7,7 +7,7 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use savescummer_core::{ErrorKind, Failure, Presence};
 
@@ -57,17 +57,24 @@ fn on_disk(path: &Path) -> Presence {
 }
 
 // ---- Progress, so a watchdog can tell file work that's stuck (a read
-// waiting on a permission prompt) from work that's slow.
+// waiting on a permission prompt) from work that's slow. Counted per
+// thread: other work going on at the same time must not hide a stuck one.
 
-static PROGRESS: AtomicU64 = AtomicU64::new(0);
+thread_local! {
+    static PROGRESS: std::cell::RefCell<Option<Arc<AtomicU64>>> = const { std::cell::RefCell::new(None) };
+}
 
-/// A counter that moves whenever file work gets anywhere.
-pub fn progress() -> u64 {
-    PROGRESS.load(Ordering::Relaxed)
+/// From now on, file work on this thread moves `counter`.
+pub fn count_progress(counter: Arc<AtomicU64>) {
+    PROGRESS.with(|p| *p.borrow_mut() = Some(counter));
 }
 
 pub(crate) fn advance() {
-    PROGRESS.fetch_add(1, Ordering::Relaxed);
+    PROGRESS.with(|p| {
+        if let Some(counter) = p.borrow().as_ref() {
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
+    });
 }
 
 // ---- Locations the OS guards (macOS privacy, PLAN-MACOS.md PRIVACY

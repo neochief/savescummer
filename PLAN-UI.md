@@ -136,20 +136,19 @@ The running game gets its own group at the top of the sidebar. It is selected wh
 
 ## ACTIVE STACK, SELECTION AND FOCUS
 
-The ACTIVE STACK holds the running games, ordered by when the user last switched to each game's window outside the app. Its top game is the **active game**: the first card under `RUNNING` and the target of global hotkeys while the app is unfocused. The game **selected** in the main view can be different, because the user may be browsing another game.
+The ACTIVE STACK holds the running games, ordered by when the user last switched to each game's window outside the app. The **active game** is the game the user was last in: the top of the stack or, after that game closes, still that game until the user switches to another (PLAN-HOST.md, MONITOR AND ACTIVE STACK). It's the target of global hotkeys while the app is unfocused. The game **selected** in the main view can be different, because the user may be browsing another game.
 
 The key rule: **only an external focus change moves a game up the stack and selects it.** The user has necessarily left the app to switch to the game, so the view never changes while they're using it. Starting or closing a game in the background moves it between groups but never takes over the view. A newly started game appears under `RUNNING` but doesn't jump ahead of games with a more recent focus.
 
 The main view changes automatically only when:
 
 - an external focus change moves a running game to the top;
-- the displayed game closes and something else has to be shown;
 - nothing is selected yet.
 
 Consequences:
 
 - **At startup,** select the most recently focused running game if the order is known, otherwise the top running game. If no game is running, select nothing. Don't preselect a game just because it's installed. The main view then shows only the quiet line `No known games are running.`
-- **When the active game closes,** the next game in the stack becomes active. If the closed game was on screen, the new active game replaces it. If no running games remain, show `No known games are running.` A manual selection of a different game is always kept.
+- **When a game closes,** the view stays. The active game stays active and moves from `RUNNING` to the library, so the user can load it before relaunching; the next external focus change moves the view on.
 - **When the user picks a game in the sidebar** (running or not), only the view changes, not the stack.
 
 
@@ -428,8 +427,8 @@ The bar should look like a compact game status strip, not a settings form. The s
 **Which game the hotkeys act on:**
 
 - **When the app is focused,** they act on the *selected* game, even a stopped one. Why: when the user is working inside the app, they mean the game they're looking at.
-- **When the app is unfocused,** they act on the active game, the top of the ACTIVE STACK.
-- **With no target** (the app is focused with nothing selected, or it's unfocused with no game running), the hotkeys are shown as unavailable.
+- **When the app is unfocused,** they act on the active game, even one that just closed.
+- **With no target** (the app is focused with nothing selected, or it's unfocused with no active game), the hotkeys are shown as unavailable.
 - While the target game is busy, conflicting operations are unavailable. A pending deletion countdown alone changes neither whether the hotkeys work nor which game they target.
 
 
@@ -652,7 +651,7 @@ UI tests run against a fake service that can simulate being busy, failing, missi
 - **Selection:**
     - external focus moves a game up and selects it;
     - a manual selection is kept when games start or close;
-    - the fallback when the active game closes.
+    - the view and the active game staying put when the active game closes.
 - **Scan:** the zero, singular and plural messages, counting only newly found known games; background scans leave the button idle while their games appear; pressing Scan during a background scan shows `Scanning…` until the requested scan finishes; showing or focusing the window sends the focus report.
 - **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Open next to the executable is disabled while the field is edited. The Flush item's size: rounding at each boundary, the OS's units, and no size when there's nothing to flush or the size is unknown; the dialog's total matching it.
 - **History rows:**

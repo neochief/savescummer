@@ -175,10 +175,14 @@ impl Privacy {
 }
 
 /// Installs the privacy guard: file helpers leave locations not granted yet
-/// alone.
+/// alone. Reading inside an app bundle is fine: macOS guards only writes
+/// there, and a game writing its saves there waits for access anyway
+/// (`game_needs`).
 pub fn guard(privacy: &Arc<Privacy>) {
     let privacy = Arc::downgrade(privacy);
-    savescummer_snapshots::set_guard(move |path| privacy.upgrade().is_some_and(|p| p.needed(path).is_some()));
+    savescummer_snapshots::set_guard(move |path| {
+        privacy.upgrade().and_then(|p| p.needed(path)).is_some_and(|c| c != Category::AppBundles)
+    });
 }
 
 /// The category a game waits for, with the path that needs it: its save
@@ -304,11 +308,12 @@ pub fn ask_for(host: &Host, path: &Path) -> Result<(), Failure> {
 }
 
 /// A category was granted: every game waiting for it becomes active now,
-/// and a scan (queued like any other, never two at once) resolves them
-/// again with their locations readable.
+/// and a scan resolves them again with their locations readable. A scan
+/// running now (the one that asked) read without access, so it's a new one,
+/// queued after it.
 fn granted(host: &Arc<Host>) {
     crate::library::derive_all(host, &mut host.lock());
-    host.scans.request(false, false, "access was granted");
+    host.scans.request_again(false, "access was granted");
     let watcher = host.watcher.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(watcher) = watcher.as_ref() {
         watcher.set_paths(host.env.watch_locations());

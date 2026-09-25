@@ -12,6 +12,7 @@ The main window lives in [`PLAN-UI.md`](PLAN-UI.md). Known-game data and every d
 - **Checkpoint** — a copy of everything the save set matched at one moment, kept in the **checkpoint store**. A **saved** checkpoint is one the user made with Save. A **recovery** checkpoint (the UI calls it a "recovery point") is the state captured automatically just before a Load or Revert.
 - **History** — the per-game log of what happened: saves, loads, reverts, game starts and closes. Rows point at checkpoints; they never own files.
 - **ACTIVE STACK** — the running games, ordered by which one the user switched to last.
+- **Active game** — the game the user was last in: the top of the ACTIVE STACK, or, after that game closes, still that game until the user switches to another.
 - **Known game** — found on the machine through the catalog. **Custom game** — added by the user with their own paths.
 
 
@@ -249,14 +250,15 @@ These are hard errors, not warnings. If a catalog target is invalid, it's left o
 
 ## MONITOR AND ACTIVE STACK
 
-After the first scan, the host watches every game's executables start, get focus and exit, and keeps the ACTIVE STACK:
+After the first scan, the host watches every game's executables start, get focus and exit, and keeps the ACTIVE STACK and the active game:
 
 - One entry per running game. Several processes of one game count as one.
 - A game switched to (its window gets focus) moves to the top.
 - A game that starts appears in the stack but doesn't jump ahead of games focused more recently.
 - When the last process of a game exits, it leaves the stack.
+- The active game is the top of the stack. When it exits, it stays active until another game gets focus; if it starts again first, it's back on top. Why: many games are savescummed by quitting, loading and relaunching, and some (FTL) write their save on quit, so a Load while they run would be overwritten anyway.
 
-For example: FTL is running, so the stack is just FTL. Void War starts and gets focus, so it goes on top. The user alt-tabs to FTL, so FTL goes on top. FTL exits, so Void War is on top again, even if another app is in the foreground now.
+For example: FTL is running, so the stack is just FTL. Void War starts and gets focus, so it goes on top. The user alt-tabs to FTL, so FTL goes on top. FTL exits: the stack is just Void War, but FTL stays active, so Load acts on FTL before the user relaunches it. Once the user switches to Void War, Void War is active.
 
 Processes are matched to games by the full executable path, so an unrelated program with the same file name elsewhere doesn't count. When two installs of one game exist, each install's executables map to its own game record, so hotkeys target the copy that's actually running.
 
@@ -273,7 +275,7 @@ Why record runs at all, when sessions already stop at a restart: "last seen" bou
 
 When a Steam game starts, the host asks the catalog resolver for the current Steam account again and re-resolves that game if the account changed since the last scan. Why: the user can switch Steam accounts between two sessions, and the game runs under whoever is logged in at launch. Without this, the first Save after a switch would back up the other account's folder. The account order and the context rule are the catalog's (PLAN-CATALOG.md, 4.4 and 4.5).
 
-The monitor starts correctly whether games were started before or after it, and rebuilds the current stack after a restart.
+The monitor starts correctly whether games were started before or after it, and rebuilds the current stack after a restart. A closed active game isn't remembered across a restart.
 
 
 ## CHECKPOINTS AND HISTORY
@@ -566,7 +568,7 @@ Each of these is a small adapter the host owns, so it works with no window open.
 ### Hotkeys
 
 - **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5 (PLAN-MACOS.md, HOTKEYS).
-- When the UI's window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the top of the ACTIVE STACK. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
+- When the UI's window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the active game. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
 - Holding a key triggers one operation, not many.
 - A busy game gets a short, rate-limited busy cue.
 
@@ -688,7 +690,7 @@ Queries:
 
 A client that watches gets the full current state, then a new state whenever something changes:
 
-- The state is a **summary**, and it's self-contained: games (configuration, install tag, install and availability status, instructions, artwork, and whether Save and Load are available with the reason when not: no game data, no save location, a target unreadable, the checkpoint store unavailable, no saves, busy, blocked, or waiting for macOS to allow access, with the category and whether the user denied it), settings (on macOS, whether launch at login was turned off in System Settings), the ACTIVE STACK, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
+- The state is a **summary**, and it's self-contained: games (configuration, install tag, install and availability status, instructions, artwork, and whether Save and Load are available with the reason when not: no game data, no save location, a target unreadable, the checkpoint store unavailable, no saves, busy, blocked, or waiting for macOS to allow access, with the category and whether the user denied it), settings (on macOS, whether launch at login was turned off in System Settings), the ACTIVE STACK, the hotkeys' target, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
 - It never contains full history or old records, so its size doesn't grow with history. History is always queried separately, in pages.
 - Every state carries a revision and a host instance ID. A new instance ID means the host restarted: throw away everything cached and start again.
 - Progress can be coalesced; each delivered state stands on its own.
@@ -719,7 +721,7 @@ Rules must be provable without a UI, and the OS parts must be proven for real. U
 
 ### What must be proven
 
-- **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the stack after a host restart; exactly one start and one close marker per session; a Steam account switched between two sessions re-resolves the game at its start, before any Save; a host killed mid-session while the game then exits unseen: no Game closed for that session, the next launch is a separate session, and the killed run has no end while a clean exit records one; starts, closes and "already running" appear in the host log.
+- **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the active game staying the target after it exits, until another game gets focus, and back on top when it starts again; the stack after a host restart; exactly one start and one close marker per session; a Steam account switched between two sessions re-resolves the game at its start, before any Save; a host killed mid-session while the game then exits unseen: no Game closed for that session, the next launch is a separate session, and the killed run has no end while a clean exit records one; starts, closes and "already running" appear in the host log.
 - **Library:** scans don't duplicate games; installs and uninstalls are noticed; unavailable drives aren't uninstalls; overrides and custom games survive scans; every save set safety rule, including exact names allowed in broad folders and wildcards rejected there, patterns in custom locations, overlaps between games, aliases, case rules, redirected folders, Proton equivalents and targets that don't exist yet; a target of unknown presence makes operations unavailable; no test ever copies or replaces a real system folder.
 - **Scanning:**
   - the periodic scan's handler (without waiting 15 minutes);

@@ -5,7 +5,6 @@
 //! ([`run_main_loop`]), also without integrations: `NSWorkspace` only tracks
 //! the frontmost app while it runs (see the monitor's macOS source).
 
-use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Once};
 
@@ -331,26 +330,42 @@ fn register_hotkeys() -> (Option<GlobalHotKeyManager>, Vec<String>) {
 }
 
 /// `global-hotkey` takes one handler per process: it forwards to whoever
-/// listens now. Holding a key sends one signal, not one per repeat.
+/// listens now.
 fn listen_to_hotkeys() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        let held: Mutex<HashSet<u32>> = Mutex::new(HashSet::new());
-        GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
-            let Some(&(_, action, _)) =
-                HOTKEYS.iter().find(|(code, ..)| HotKey::new(Some(Modifiers::ALT), *code).id() == event.id)
-            else {
-                return;
-            };
-            match event.state {
-                HotKeyState::Pressed if lock(&held).insert(event.id) => emit(Signal::Hotkey(action)),
-                HotKeyState::Pressed => {}
-                HotKeyState::Released => {
-                    lock(&held).remove(&event.id);
-                }
+        GlobalHotKeyEvent::set_event_handler(Some(|event: GlobalHotKeyEvent| {
+            if let Some(action) = hotkey_action(event) {
+                emit(Signal::Hotkey(action));
             }
         }));
     });
+}
+
+/// Each press is one action. Carbon hotkeys never auto-repeat while held
+/// (apps wanting repeats time them themselves), so there's nothing to
+/// filter, and no key-up to wait for: one macOS loses (the screen locking
+/// while the key is down) can't leave a key dead.
+fn hotkey_action(event: GlobalHotKeyEvent) -> Option<HotkeyAction> {
+    if event.state != HotKeyState::Pressed {
+        return None;
+    }
+    HOTKEYS.iter().find(|(code, ..)| HotKey::new(Some(Modifiers::ALT), *code).id() == event.id).map(|h| h.1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_press_after_a_lost_release_still_counts() {
+        let id = HotKey::new(Some(Modifiers::ALT), Code::F5).id();
+        let press = GlobalHotKeyEvent { id, state: HotKeyState::Pressed };
+        assert_eq!(hotkey_action(press), Some(HotkeyAction::Save));
+        // The release never arrives (the screen locked while ⌥F5 was down).
+        assert_eq!(hotkey_action(press), Some(HotkeyAction::Save), "the next press saves");
+        assert_eq!(hotkey_action(GlobalHotKeyEvent { id, state: HotKeyState::Released }), None);
+    }
 }
 
 // --- Notifications: `UNUserNotificationCenter`, which only works inside an

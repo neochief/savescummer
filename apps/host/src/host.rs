@@ -417,7 +417,7 @@ pub fn availability(inner: &Inner, game: &Game, derived: &Derived, cache: &GameC
 }
 
 /// Which game the hotkeys act on: the selected game while the window is
-/// focused, otherwise the top of the ACTIVE STACK.
+/// focused, otherwise the active game.
 pub fn hotkey_target(inner: &Inner) -> Option<(String, &'static str)> {
     if inner.ui.focused
         && let Some(selected) = &inner.ui.selected
@@ -425,7 +425,7 @@ pub fn hotkey_target(inner: &Inner) -> Option<(String, &'static str)> {
     {
         return Some((selected.clone(), "window"));
     }
-    inner.stack.top().map(|g| (g.to_string(), "stack"))
+    inner.stack.active().filter(|g| inner.games.contains_key(*g)).map(|g| (g.to_string(), "active"))
 }
 
 fn placeholder_state(instance: &str) -> State {

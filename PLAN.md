@@ -20,7 +20,8 @@ This document is the map. Each part of the app has its own plan, written so that
 - **History** — the per-game timeline: saves, loads, reverts, game starts and closes. Rows point at checkpoints; they never own files.
 - **Load** restores a saved checkpoint. **Revert** restores the recovery checkpoint of a Load or Revert. Both keep the current state as a new recovery checkpoint first, so nothing is ever lost.
 - **Flush** deletes all of a game's checkpoints and history, after confirmation.
-- **ACTIVE STACK** — the running games, ordered by which one the user switched to last. Its top is the hotkeys' target.
+- **ACTIVE STACK** — the running games, ordered by which one the user switched to last.
+- **Active game** — the game the user was last in, and the hotkeys' target: the top of the ACTIVE STACK, or, after that game closes, still that game until the user switches to another, so a game can be quit, loaded and relaunched.
 - **Known game** — found through the catalog. **Custom game** — added by the user with their own paths.
 - **Catalog** — the built-in list of supported games, with what proves each is installed and where its saves may be.
 

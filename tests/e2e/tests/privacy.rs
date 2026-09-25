@@ -244,3 +244,91 @@ fn a_guarded_game_found_later_in_the_first_run_is_notified() {
     let log = world.host_log();
     assert!(log.contains("notification: SaveScummer needs access to Documents for 1 game"), "{log}");
 }
+
+#[test]
+fn a_game_added_by_the_program_inside_an_app_bundle_asks_nothing() {
+    let world = World::new();
+    // App bundles guard writes; a program is only ever read.
+    world.set_env("privacy", json!({ "app_bundles": true }));
+    world.set_env("privacy_answers", json!({ "app_bundles": "denied" }));
+    let _host = world.host();
+    let exe = world.root.join("Applications").join("Bundled.app").join("Contents").join("MacOS").join("Bundled");
+    copy_game(&exe);
+    let saves = world.home.join("Saves").join("Bundled");
+    write(&saves.join("slot.sav"), "progress");
+    let out = world.cli(&[
+        "add-game",
+        "--name",
+        "Bundled",
+        "--exe",
+        exe.to_str().unwrap(),
+        "--saves",
+        saves.to_str().unwrap(),
+    ]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(!world.host_log().contains("asking for access"), "{}", world.host_log());
+}
+
+#[test]
+fn a_stalled_save_is_reported_while_other_file_work_goes_on() {
+    let world = World::new();
+    let _host = world.host_with(&["--stall-secs", "3"], &[("SAVESCUMMER_TEST_DELAY_AT", "saved.copy:1:8000")]);
+    let stuck_saves = world.home.join("Saves").join("Stuck");
+    write(&stuck_saves.join("slot.sav"), "progress");
+    let (stuck, _) = world.custom_game("Stuck", &stuck_saves);
+    // Another game runs: the host re-reads its saves every 2 s.
+    let busy_saves = world.home.join("Saves").join("Busy");
+    write(&busy_saves.join("slot.sav"), "progress");
+    let (busy, busy_exe) = world.custom_game("Busy", &busy_saves);
+    let _running = launch(&busy_exe, &[]);
+    world.wait_game(&busy, "running", |g| g["running"] == true);
+
+    world.ok(&["save", &stuck, "--no-wait"]);
+    // Stuck for 8 s; reported after 3 s without progress of its own.
+    wait_for("the stall reported", Duration::from_secs(7), || {
+        (world.game(&stuck)["last_result"]["error"]["kind"] == "stalled").then_some(())
+    });
+}
+
+#[test]
+fn a_damaged_privacy_record_asks_again_only_once() {
+    let world = World::new();
+    documents_game(&world, 9001, "Docs One");
+    guard(&world, &world.documents, "denied");
+    std::fs::create_dir_all(&world.data).unwrap();
+    std::fs::write(world.data.join("privacy.json"), "{ \"identity\": ").unwrap();
+    for launch in 1..=2 {
+        let mut host = world.host_launched(&[]);
+        wait_for("the launch ready", Duration::from_secs(10), || {
+            (world.host_log().matches("ready line").count() == launch).then_some(())
+        });
+        std::thread::sleep(Duration::from_secs(1));
+        host.kill();
+    }
+    // Read as a first run once; answering rewrote the record.
+    let log = world.host_log();
+    assert_eq!(log.matches("asking for access").count(), 1, "{log}");
+}
+
+#[test]
+fn allowing_access_in_scan_games_finds_what_that_scan_could_not_read() {
+    let world = World::new();
+    let one = documents_game(&world, 9001, "Docs One");
+    let mut host = world.host();
+    assert_eq!(world.game(&one)["installed"], true);
+    host.kill();
+    // Its Steam library turns guarded (a new build: macOS forgot access),
+    // and another game was installed there meanwhile.
+    world.steam_install(9002, "Docs Two", "DocsTwo.exe");
+    write(&world.documents.join("Docs Two").join("slot.sav"), "progress");
+    guard(&world, &world.steam, "granted");
+    let _host = world.host();
+    assert_eq!(access(&world, &one)["category"], "documents");
+    assert!(world.game("steam-9002").is_null(), "its library can't be read yet");
+
+    world.ok(&["scan"]);
+    assert!(access(&world, &one).is_null());
+    wait_for("the other game found", Duration::from_secs(10), || {
+        (world.game("steam-9002")["installed"] == true).then_some(())
+    });
+}

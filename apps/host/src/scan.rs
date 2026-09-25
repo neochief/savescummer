@@ -41,8 +41,19 @@ pub struct ScanQueue {
 impl ScanQueue {
     /// Asks for a scan and returns the id of the scan that will answer it.
     pub fn request(&self, full: bool, user: bool, reason: &'static str) -> u64 {
+        self.queue(full, user, reason, true)
+    }
+
+    /// Asks for a scan that starts after the one running now: what changed
+    /// (access was granted) makes that one's findings stale.
+    pub fn request_again(&self, full: bool, reason: &'static str) -> u64 {
+        self.queue(full, false, reason, false)
+    }
+
+    fn queue(&self, full: bool, user: bool, reason: &'static str, join_running: bool) -> u64 {
         let mut q = self.queue.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(running) = &mut q.running
+        if join_running
+            && let Some(running) = &mut q.running
             && (running.full || !full)
         {
             running.user |= user;
