@@ -145,8 +145,12 @@ impl Integration {
 impl Drop for Integration {
     fn drop(&mut self) {
         *lock(&HANDLER) = None;
-        run_on_main(|_| {
+        run_on_main(|mtm| {
             if let Some(state) = MAIN.with(|main| main.borrow_mut().take()) {
+                // A menu open right now closes first.
+                if let Some(menu) = state.bar.menu(mtm) {
+                    menu.cancelTracking();
+                }
                 NSStatusBar::systemStatusBar().removeStatusItem(&state.bar);
                 drop(state.hotkeys);
             }
@@ -205,11 +209,7 @@ define_class!(
                 e.r#type() == NSEventType::RightMouseUp || e.modifierFlags().contains(NSEventModifierFlags::Control)
             });
             if wants_menu {
-                MAIN.with(|main| {
-                    if let Some(state) = main.borrow().as_ref() {
-                        show_menu(&state.bar, self, mtm);
-                    }
-                });
+                open_menu(self, mtm);
             } else {
                 emit(Signal::OpenMainWindow);
             }
@@ -274,6 +274,16 @@ fn template_icon() -> Retained<NSImage> {
     }
     image.setTemplate(true);
     image
+}
+
+/// Opens the menu under the menu-bar item; returns once it closes. Nothing
+/// stays borrowed meanwhile: the menu runs its own event loop, in which the
+/// host may shut down.
+fn open_menu(delegate: &Delegate, mtm: MainThreadMarker) {
+    let bar = MAIN.with(|main| main.borrow().as_ref().map(|state| state.bar.clone()));
+    if let Some(bar) = bar {
+        show_menu(&bar, delegate, mtm);
+    }
 }
 
 fn show_menu(bar: &NSStatusItem, delegate: &Delegate, mtm: MainThreadMarker) {

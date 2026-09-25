@@ -178,7 +178,7 @@ Version resources: `apps/host/build.rs` and `apps/cli/build.rs` embed the Cargo 
 `cargo xtask dist` puts the release bundle and an `Applications` link into `dist/SaveScummer-macos-arm64-<version>.dmg` (`hdiutil`, UDZO). The user drags the app over; there's no installer.
 
 - Signed ad hoc, not with a Developer ID: the first launch needs *Open Anyway*, and each new build is a new identity to macOS, so it asks again for any privacy permission (PLAN-MACOS.md, SIGNING).
-- Launch at login is an `SMAppService` agent whose plist is inside the bundle; macOS lists it as SaveScummer in *Login Items*.
+- Launch at login is an `SMAppService` agent whose plist is inside the bundle; macOS lists it as SaveScummer in *System Settings → General → Login Items*, under *Allow in the Background* (not *Open at Login*).
 - The version is in `Info.plist`; the `winresource` build scripts do nothing on macOS.
 
 

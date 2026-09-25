@@ -351,7 +351,7 @@ All three are set to the minimum macOS.
 
 ### Integration
 
-**Launch at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS. Details in PLAN-MACOS.md, LAUNCH AT LOGIN.
+**Launch at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*, under *Allow in the Background*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS. Details in PLAN-MACOS.md, LAUNCH AT LOGIN.
 
 ### Upgrade and removal
 
@@ -366,7 +366,7 @@ The README gives both:
 2. Every binary in the bundle is arm64 (`lipo -archs`), and `codesign --verify --deep --strict` passes.
 3. The DMG shows the app and an Applications link; dragging installs it; after *Open Anyway* it runs on a clean machine with the minimum macOS.
 4. `Info.plist` has the Cargo version and the minimum macOS.
-5. Enabling launch at login registers the agent, it shows as SaveScummer in *Login Items*, and the host starts at login; disabling unregisters it.
+5. Enabling launch at login registers the agent, it shows as SaveScummer in *Login Items* (*Allow in the Background*), and the host starts at login; disabling unregisters it.
 6. Replacing the app while it runs doesn't corrupt data, and the next launch runs the new version.
 7. Nothing ever touches `~/Library/Application Support/SaveScummer`.
 

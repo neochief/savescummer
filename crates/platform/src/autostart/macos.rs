@@ -1,8 +1,9 @@
 //! The macOS login item: an agent registered with `SMAppService.agent`
 //! (macOS 13+). Its plist ships inside the bundle
 //! (`Contents/Library/LaunchAgents`) and runs the host with `--minimized`,
-//! so macOS lists it as SaveScummer in Login Items, the user can turn it
-//! off there, and nothing outside the bundle can go stale.
+//! so macOS lists it as SaveScummer in Login Items (under Allow in the
+//! Background), the user can turn it off there, and nothing outside the
+//! bundle can go stale.
 //!
 //! The registration belongs to the bundle the host runs from: `off` can't
 //! remove another copy's.

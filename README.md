@@ -34,7 +34,7 @@ Get it from [Releases](https://github.com/neochief/savescummer/releases). The do
   - **Hotkeys:** **⌥F5** saves and **⌥F9** loads (Ctrl can't be used: macOS keeps ⌃F5 for itself). On most Mac keyboards the top row is brightness and media keys, so press **fn+⌥+F5**, unless *Keyboard settings → Use F1, F2, etc. keys as standard function keys* is on. Careful with ⌘F5 next to it: it turns VoiceOver on (press it again to turn it off).
   - **Permissions:** macOS asks before an app reads some places: Documents, Desktop, Downloads, iCloud Drive, external disks, other apps' data. SaveScummer asks only when you do something (the first launch, Scan games, adding a game, *Allow access*); a game whose saves are somewhere it may not read yet waits, marked in the app, and you get one notification per place. If you chose *Don't Allow*, turn it on in *System Settings → Privacy & Security*.
   - **Upgrade:** quit it (menu-bar icon → Exit) and drag the new app over the old one. The app isn't signed with a Developer ID, so macOS treats each version as a new app: allow access again, once, when it asks.
-  - **Remove:** turn off launch at login, quit, drag it to the Trash.
+  - **Remove:** turn off launch at login (*System Settings → General → Login Items*, under *Allow in the Background*), quit, drag it to the Trash.
 - **Linux:** make the AppImage executable (`chmod +x SaveScummer-*.AppImage`) and run it. Tools like Gear Lever or AppImageLauncher can add it to your app menu.
   - **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
   - **Remove:** turn off launch at login, quit, delete the file.

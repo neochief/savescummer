@@ -136,14 +136,14 @@ Done when the six cues play for their hotkey outcomes on a Mac, with the "Play s
 
 `crates/platform/src/autostart/`: `set` returns "not supported yet" and `is_enabled` is always false.
 
-- **`SMAppService.agent` (macOS 13+),** not a plist written into `~/Library/LaunchAgents`. Why: macOS lists the item under the app's name and icon in *Login Items*, the user can turn it off there like any other app, and there's no file outside the bundle to go stale or point at an old copy.
+- **`SMAppService.agent` (macOS 13+),** not a plist written into `~/Library/LaunchAgents`. Why: macOS lists the item under the app's name and icon in *Login Items* (the *Allow in the Background* list, not *Open at Login*: that one is for apps that open a window), the user can turn it off there like any other app, and there's no file outside the bundle to go stale or point at an old copy.
 - **The agent's plist ships inside the bundle:** `Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`, with `BundleProgram` `Contents/MacOS/SaveScummer`, `ProgramArguments` ending in `--minimized`, `RunAtLoad` true, `KeepAlive` false (a crashed host isn't restarted behind the user's back) and `ProcessType` Interactive.
 - **`on`** calls `register()`, **`off`** calls `unregister()`; `is_enabled` reads `status`. The registration belongs to this bundle, so `off` can't remove another copy's entry.
 - **Turned off in System Settings:** `status` becomes *requires approval*. The host reports launch at login as off, and the UI's checkbox offers to open the pane (`SMAppService.openSystemSettingsLoginItems()`), since the app can't turn it back on by itself.
 - **No custom data folder.** The plist is fixed at build time, so it can't carry `--data-dir`: `--autostart on` with a `--data-dir` other than the default refuses on macOS with a clear message. Dev hosts keep refusing, as everywhere.
 - **To verify first:** that `register()` works from the ad-hoc signed bundle (SIGNING), and that the registration survives dragging a new build over the old app. If either fails, fall back to writing the plist into `~/Library/LaunchAgents` and loading it with `launchctl bootstrap gui/<uid>`.
 
-Done when PLAN-BUILD.md macOS "Done when" items 5 and 7 pass: turning it on makes the host start at login in the menu bar without a window, and it shows as SaveScummer in *Login Items*; turning it off, from the app or from System Settings, stops it.
+Done when PLAN-BUILD.md macOS "Done when" items 5 and 7 pass: turning it on makes the host start at login in the menu bar without a window, and it shows as SaveScummer in *Login Items → Allow in the Background* (confirmed 2026-09-26 on macOS 15); turning it off, from the app or from System Settings, stops it.
 
 
 ## FILE WATCHING
