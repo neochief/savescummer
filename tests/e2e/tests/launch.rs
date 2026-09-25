@@ -96,7 +96,7 @@ fn a_minimized_start_shows_nothing() {
 fn a_second_launch_reaches_the_running_host() {
     let launch = Launch::new();
     let _host = launch.minimized();
-    let _ui = launch.open_ui();
+    let mut ui = launch.open_ui();
 
     let second = Command::new(HOST)
         .args(launch.world.launch_args())
@@ -112,6 +112,9 @@ fn a_second_launch_reaches_the_running_host() {
 
     let lines = launch.wait_lines("the open UI is asked to come forward", |l| count(l, "show") == 1);
     assert_eq!(count(&lines, "started"), 1, "no second UI: {lines:?}");
+    // The stand-in exits with the host.
+    launch.world.ok(&["shutdown"]);
+    ui.wait().unwrap();
 }
 
 #[test]
@@ -177,4 +180,6 @@ fn a_one_off_focus_report_outlives_its_connection_but_the_uis_does_not() {
     wait_for("the closed UI's focus is dropped", Duration::from_secs(20), || {
         (target()["source"] != "window").then_some(())
     });
+    // And showing the UI starts a new one rather than calling the closed one.
+    assert_eq!(world.ok(&["show-ui"])["ui"], "started");
 }
