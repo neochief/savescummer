@@ -42,9 +42,7 @@ fn a_custom_game_given_as_its_app_bundle_runs_as_the_executable_inside() {
 
 #[test]
 fn the_frontmost_app_is_the_top_of_the_stack() {
-    if !desktop_unlocked("the_frontmost_app_is_the_top_of_the_stack") {
-        return;
-    }
+    let Some(_screen) = desktop("the_frontmost_app_is_the_top_of_the_stack") else { return };
     let world = World::new();
     let _host = world.host();
     let mut games = Vec::new();
@@ -105,4 +103,47 @@ fn a_mac_port_is_found_played_saved_and_loaded() {
     assert_eq!(read(&saves.join("profile.sav")), "before");
     drop(running);
     world.wait_game(game, "closed", |g| g["running"] == false);
+}
+
+#[test]
+fn quitting_the_game_in_front_keeps_it_the_target_while_macos_brings_another_forward() {
+    let Some(_screen) = desktop("quitting_the_game_in_front_keeps_it_the_target_while_macos_brings_another_forward")
+    else {
+        return;
+    };
+    let world = World::new();
+    let _host = world.host();
+    let mut games = Vec::new();
+    for name in ["Quit A", "Quit B"] {
+        let app = world.root.join("Applications").join(format!("{name}.app"));
+        let exe = world.app_bundle(&app);
+        let saves = world.home.join("Saves").join(name);
+        write(&saves.join("slot.sav"), "v1");
+        let added =
+            world.ok(&["add-game", "--name", name, "--exe", app.to_str().unwrap(), "--saves", saves.to_str().unwrap()]);
+        games.push((s(&added["game"]), exe, app, world.root.join(format!("activate-{name}"))));
+    }
+    let [(a, exe_a, _, activate_a), (b, exe_b, app_b, _)] = &games[..] else { unreachable!() };
+
+    // Into the Breach open, then the user ⌘-Tabs to FTL and quits it.
+    let mut running_a = launch(exe_a, &["--window", "--activate-file", activate_a.to_str().unwrap()]);
+    wait_for("A in front", Duration::from_secs(20), || (top(&world) == *a).then_some(()));
+    let _running_b = launch(exe_b, &["--window"]);
+    wait_for("B in front", Duration::from_secs(20), || (top(&world) == *b).then_some(()));
+    std::fs::write(activate_a, "").unwrap();
+    wait_for("A in front again", Duration::from_secs(20), || (top(&world) == *a).then_some(()));
+    running_a.quit();
+    world.wait_state("A closed", |st| st["active_stack"].as_array().unwrap().len() == 1);
+    // macOS brings the app used before forward on its own: here, B. (Which
+    // app that is depends on the session's history, and a click elsewhere
+    // on a machine in use moves it, so the test keeps B in front.)
+    let bring_b = || assert!(std::process::Command::new("open").arg(app_b).status().unwrap().success());
+    bring_b();
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(s(&world.ok(&["hotkey-target"])["game"]), *a, "the user didn't switch to B");
+    // Still in front 5 s after the quit: B is the game being played.
+    wait_for("B takes over", Duration::from_secs(10), || {
+        bring_b();
+        (s(&world.ok(&["hotkey-target"])["game"]) == *b).then_some(())
+    });
 }

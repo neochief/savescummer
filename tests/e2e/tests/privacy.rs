@@ -139,9 +139,7 @@ fn a_new_build_forgets_what_the_old_one_was_allowed() {
 #[cfg(any(windows, target_os = "macos"))]
 #[test]
 fn a_hotkey_in_front_of_a_waiting_game_fails_and_changes_nothing() {
-    if !desktop_unlocked("a_hotkey_in_front_of_a_waiting_game_fails_and_changes_nothing") {
-        return;
-    }
+    let Some(_screen) = desktop("a_hotkey_in_front_of_a_waiting_game_fails_and_changes_nothing") else { return };
     let world = World::new();
     let game = documents_game(&world, 9001, "Docs One");
     let exe = world.steam.join("steamapps").join("common").join("Docs One").join("DocsOne.exe");

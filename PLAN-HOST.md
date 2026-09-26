@@ -12,7 +12,7 @@ The main window lives in [`PLAN-UI.md`](PLAN-UI.md). Known-game data and every d
 - **Checkpoint** — a copy of everything the save set matched at one moment, kept in the **checkpoint store**. A **saved** checkpoint is one the user made with Save. A **recovery** checkpoint (the UI calls it a "recovery point") is the state captured automatically just before a Load or Revert.
 - **History** — the per-game log of what happened: saves, loads, reverts, game starts and closes. Rows point at checkpoints; they never own files.
 - **ACTIVE STACK** — the running games, ordered by which one the user switched to last.
-- **Active game** — the game the user was last in: the top of the ACTIVE STACK, or, after that game closes, still that game until the user switches to another.
+- **Active game** — the game the user was last in: the top of the ACTIVE STACK, or, after that game closes, still that game until another running game is in front 5 seconds or more after the close.
 - **Known game** — found on the machine through the catalog. **Custom game** — added by the user with their own paths.
 
 
@@ -256,9 +256,10 @@ After the first scan, the host watches every game's executables start, get focus
 - A game switched to (its window gets focus) moves to the top.
 - A game that starts appears in the stack but doesn't jump ahead of games focused more recently.
 - When the last process of a game exits, it leaves the stack.
-- The active game is the top of the stack. When it exits, it stays active until another game gets focus; if it starts again first, it's back on top. Why: many games are savescummed by quitting, loading and relaunching, and some (FTL) write their save on quit, so a Load while they run would be overwritten anyway.
+- The active game is the top of the stack. When it exits, it stays active until another running game is in front 5 seconds or more after the exit; if it starts again first, it's back on top. Why: many games are savescummed by quitting, loading and relaunching, and some (FTL) write their save on quit, so a Load while they run would be overwritten anyway.
+- Why the 5 seconds: when a game quits, macOS and Windows bring the next window forward on their own (for a fullscreen game, after its slide out of its Space), which may be another running game, and the monitor can't tell that from the user switching. A game still in front after that is the one being played. Switching between two windows of one game, or closing one of them, changes nothing: only the game's last process exiting closes it.
 
-For example: FTL is running, so the stack is just FTL. Void War starts and gets focus, so it goes on top. The user alt-tabs to FTL, so FTL goes on top. FTL exits: the stack is just Void War, but FTL stays active, so Load acts on FTL before the user relaunches it. Once the user switches to Void War, Void War is active.
+For example: FTL is running, so the stack is just FTL. Void War starts and gets focus, so it goes on top. The user alt-tabs to FTL, so FTL goes on top. FTL exits: the stack is just Void War, but FTL stays active, so Load acts on FTL before the user relaunches it, even while macOS shows Void War for a moment. If Void War is still in front 5 seconds after FTL closed, or the user switches to it later, Void War is active.
 
 Processes are matched to games by the full executable path, so an unrelated program with the same file name elsewhere doesn't count. When two installs of one game exist, each install's executables map to its own game record, so hotkeys target the copy that's actually running.
 
@@ -721,7 +722,7 @@ Rules must be provable without a UI, and the OS parts must be proven for real. U
 
 ### What must be proven
 
-- **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the active game staying the target after it exits, until another game gets focus, and back on top when it starts again; the stack after a host restart; exactly one start and one close marker per session; a Steam account switched between two sessions re-resolves the game at its start, before any Save; a host killed mid-session while the game then exits unseen: no Game closed for that session, the next launch is a separate session, and the killed run has no end while a clean exit records one; starts, closes and "already running" appear in the host log.
+- **Monitor:** starts before and after games; normal exit, kill and crash; quick relaunches; a process that exits before showing a window; one entry for several processes; launchers that start the game and exit; same file name at a different path; focus switching between games and unrelated apps; the active game staying the target after it exits, also while macOS brings another game forward, until another game is in front 5 seconds after the exit, and back on top when it starts again; the stack after a host restart; exactly one start and one close marker per session; a Steam account switched between two sessions re-resolves the game at its start, before any Save; a host killed mid-session while the game then exits unseen: no Game closed for that session, the next launch is a separate session, and the killed run has no end while a clean exit records one; starts, closes and "already running" appear in the host log.
 - **Library:** scans don't duplicate games; installs and uninstalls are noticed; unavailable drives aren't uninstalls; overrides and custom games survive scans; every save set safety rule, including exact names allowed in broad folders and wildcards rejected there, patterns in custom locations, overlaps between games, aliases, case rules, redirected folders, Proton equivalents and targets that don't exist yet; a target of unknown presence makes operations unavailable; no test ever copies or replaces a real system folder.
 - **Scanning:**
   - the periodic scan's handler (without waiting 15 minutes);

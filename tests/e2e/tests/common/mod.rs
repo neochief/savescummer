@@ -569,19 +569,23 @@ fn unique() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
 }
 
-/// Whether windows can take focus now. A locked Mac keeps `loginwindow` in
-/// front, so tests of focus can't run; they say so and pass.
-pub fn desktop_unlocked(test: &str) -> bool {
+/// The screen, for a test whose windows take focus: one such test at a time
+/// (tests in one binary run in parallel), and none on a locked Mac, which
+/// keeps `loginwindow` in front. None: the test can't run; it says so and
+/// passes.
+pub fn desktop(test: &str) -> Option<std::sync::MutexGuard<'static, ()>> {
+    static SCREEN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let screen = SCREEN.lock().unwrap_or_else(|e| e.into_inner());
     #[cfg(target_os = "macos")]
     {
         let out = Command::new("ioreg").args(["-n", "Root", "-d1"]).output().expect("ioreg");
         if String::from_utf8_lossy(&out.stdout).contains("\"IOConsoleLocked\" = Yes") {
             eprintln!("{test}: skipped, the screen is locked (focus needs an unlocked desktop session)");
-            return false;
+            return None;
         }
     }
     let _ = test;
-    true
+    Some(screen)
 }
 
 /// Polls until `check` returns a value, with a bounded timeout.

@@ -35,6 +35,9 @@ pub fn run(host: Arc<Host>, mut monitor: Monitor) {
                 inner.processes = processes;
             }
             inner.front = monitor.focused().map(str::to_string);
+            if inner.stack.settle(monitor.focused(), Instant::now()) {
+                host.publish(&mut inner);
+            }
         }
         // Saves appear while a game runs: keep Save's availability current.
         if last_refresh.elapsed() >= Duration::from_secs(2) {
@@ -155,7 +158,7 @@ fn handle(host: &Arc<Host>, event: Event) {
         }
         Event::Exited { game } => {
             let mut inner = host.lock();
-            inner.stack.exited(&game);
+            inner.stack.exited(&game, Instant::now());
             crate::trace(&format!("game closed: {}", display_name(&inner, &game)));
             if let Some(session) = inner.sessions.remove(&game) {
                 let storage = host.db();

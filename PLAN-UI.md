@@ -2,7 +2,7 @@
 
 This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 
-The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is a timeline listing every event, newest first.
+The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is an activity log listing every event, newest first.
 
 
 ## PRINCIPLES
@@ -10,11 +10,11 @@ The app should feel like a game-oriented utility: not a generic settings app, an
 These decide the cases this document doesn't cover:
 
 - **Controls report their own results.** The button that started an action shows its progress and its outcome. Don't add toasts, results panels or success dialogs. Why: feedback shows up where the user is already looking, and there is nothing to dismiss.
-- **Only show what applies right now.** No empty groups, no headings when there is only one group, no controls without a target. Why: a list of games that repeats "INSTALLED" on every item, or hotkeys when there are no games, is noise.
-- **Stable layout.** Controls stay in fixed places. Live updates (new history rows, ticking relative times, midnight regrouping) never move the user's scroll position or resize rows. Why: the user is often mid-game and glances at the window. Things that jump around look like errors.
+- **Only show what applies right now.** No empty groups or controls without a target. Keep a heading for every non-empty sidebar group, even when it is the only group, to preserve alignment with the main actions. Why: a list of games that repeats "INSTALLED" on every item, or hotkeys when there are no games, is noise.
+- **Stable layout.** Controls stay in fixed places. Live updates (new history rows, midnight regrouping) never move the user's scroll position or resize rows. Why: the user is often mid-game and glances at the window. Things that jump around look like errors.
 - **Keep text short.** Use short state labels (`Running`, `Scanning…`, `No new games`), not sentences explaining what a button obviously does.
 - **Running games get priority, but never take the view from the user.** Only an actual switch to a game's window changes what the app shows (see ACTIVE STACK).
-- **Few dialogs.** Common actions happen in place. Only configuration, adding a game and Flush get dialogs.
+- **Few dialogs.** Common actions happen in place. Only Settings, path configuration, adding a game and Flush get dialogs.
 - **Plan for thousands of history entries,** not a demo with five. Use virtualized rendering and compact rows. Don't use save cards.
 
 Visual emphasis, from strongest to weakest:
@@ -25,11 +25,11 @@ Visual emphasis, from strongest to weakest:
 4. Checkpoint, load and revert rows
 5. Game started/closed rows
 6. Library controls (Scan, Add custom game)
-7. Preferences in the bottom bar
+7. Settings below Scan games
 
 Settings should never draw the eye away from the checkpoint workflow.
 
-To make it feel like a game, use presentation: dark layered surfaces, strong type, crisp icons, an accent color for checkpoints, timeline connectors, styled keycaps and satisfying button states. Avoid fake sci-fi panels, heavy neon, giant artwork, ornamental borders and role-playing words that hide ordinary actions. "Save", "Load" and "History" already sound like games.
+To make it feel like a game, use presentation: dark layered surfaces, strong type, crisp icons, an accent color for checkpoints, subtle zebra rows, shortcut hints and satisfying button states. Avoid fake sci-fi panels, heavy neon, giant artwork, ornamental borders and role-playing words that hide ordinary actions. "Save", "Load" and "History" already sound like games.
 
 
 ## LAYOUTS
@@ -41,102 +41,99 @@ The layout depends on **visible games**, not on database records. Games confirme
 The main area takes the full width and there is no sidebar. It shows one compact, centered block:
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ SaveScummer                                                                                 ─  □  × │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                                     │
-│                                                                                                     │
-│                                                                                                     │
-│                                                  ◇                                                  │
-│                                                                                                     │
-│                                      No supported games found                                       │
-│                                                                                                     │
-│                                          [ ⟳ Scan games ]                                           │
-│                                          + Add custom game                                          │
-│                                                                                                     │
-│                                                                                                     │
-│                                                                                                     │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 ☑ Launch on startup │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SaveScummer                                                                              ─  □  ×   │
+├────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                    │
+│                                                                                                    │
+│                                                                                                    │
+│                                                 ◇                                                  │
+│                                                                                                    │
+│                                      No supported games found                                      │
+│                                                                                                    │
+│                                         + Add custom game                                          │
+│                                          [ ⟳ Scan games ]                                          │
+│                                             ⚙ Settings                                             │
+│                                                                                                    │
+│                                                                                                    │
+│                                                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-There's no explanatory paragraph and no illustration; the two controls are the explanation. The bottom bar contains only `☑ Launch on startup`, in the same right-aligned position it has in the other states.
+There's no explanatory paragraph and no illustration. Settings sits directly below Scan games and opens the same dialog as in the sidebar. There is no status bar in any layout.
 
 ### 2. Games visible, none running
 
-When the first game becomes visible:
+When the first game becomes visible, Add custom game, Scan games and Settings move from the center to the bottom of the sidebar. The sidebar slides in from the left (see MOTION).
 
-- Scan and Add custom game move from the center to the bottom of the sidebar.
-- The sidebar slides in from the left (see MOTION).
-- The bottom bar grows to its full set of controls.
-
-Nothing is preselected. The sidebar is a flat list, and the main area stays quiet:
+Nothing is preselected. The sidebar shows the installed games under `INSTALLED`, even when there is only one game, and the main area stays quiet:
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ SaveScummer                                                                                 ─  □  × │
-├────────────────────────┬────────────────────────────────────────────────────────────────────────────┤
-│ ┌────────────────────┐ │                                                                            │
-│ │ XCOM 2             │ │                                                                            │
-│ └────────────────────┘ │                                                                            │
-│ ┌────────────────────┐ │                                                                            │
-│ │ NOITA              │ │                        No known games are running.                         │
-│ └────────────────────┘ │                                                                            │
-│ ┌────────────────────┐ │                                                                            │
-│ │ BATTLE BROTHERS    │ │                                                                            │
-│ └────────────────────┘ │                                                                            │
-│ ┌────────────────────┐ │                                                                            │
-│ │ VOID WAR           │ │                                                                            │
-│ └────────────────────┘ │                                                                            │
-│                        │                                                                            │
-│ + Add custom game      │                                                                            │
-│ ⟳ Scan games           │                                                                            │
-├────────────────────────┴────────────────────────────────────────────────────────────────────────────┤
-│ Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load  ☑ Play sounds  ▤ Checkpoint folder…  ☑ Launch on startup │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SaveScummer                                                                              ─  □  ×   │
+├────────────────────────┬───────────────────────────────────────────────────────────────────────────┤
+│ INSTALLED              │                                                                           │
+│ ┌────────────────────┐ │                                                                           │
+│ │ XCOM 2             │ │                                                                           │
+│ └────────────────────┘ │                                                                           │
+│ ┌────────────────────┐ │                                                                           │
+│ │ NOITA              │ │                                                                           │
+│ └────────────────────┘ │                    No known games are running.                            │
+│ ┌────────────────────┐ │                                                                           │
+│ │ BATTLE BROTHERS    │ │                                                                           │
+│ └────────────────────┘ │                                                                           │
+│ ┌────────────────────┐ │                                                                           │
+│ │ VOID WAR           │ │                                                                           │
+│ └────────────────────┘ │                                                                           │
+│                        │                                                                           │
+│ + Add custom game      │                                                                           │
+│ ⟳ Scan games           │                                                                           │
+│ ⚙ Settings             │                                                                           │
+└────────────────────────┴───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 3. A game is running
 
-The running game gets its own group at the top of the sidebar. It is selected when nothing else is, or when the user switches to its window (see ACTIVE STACK). The main area shows its header, actions and history:
+The running game gets its own group at the top of the sidebar. It is selected when nothing else is, or when the user switches to its window (see ACTIVE STACK). Its card supplies the game identity and running marker; the main area starts directly with actions, followed by history:
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ SaveScummer                                                                                 ─  □  × │
-├────────────────────────┬────────────────────────────────────────────────────────────────────────────┤
-│ RUNNING                │ ▣ VOID WAR                                                                 │
-│ ┏━━━━━━━━━━━━━━━━━━━━┓ │   Running                                                                  │
-│ ┃ VOID WAR         ● ┃ │                                                                            │
-│ ┗━━━━━━━━━━━━━━━━━━━━┛ │ [ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]                                   │
-│ INSTALLED              │             [  3 seconds ago  ]                                            │
-│ ┌────────────────────┐ │                                                                            │
-│ │ XCOM 2             │ ├────────────────────────────────────────────────────────────────────────────┤
-│ └────────────────────┘ │ HISTORY                                                                    │
-│ ┌────────────────────┐ │                                                                            │
-│ │ NOITA              │ │ TODAY                                                                      │
-│ └────────────────────┘ │ 3 seconds ago              ◆ Saved                                 [↶] [✕] │
-│ ┌────────────────────┐ │ 12:24:03                     Before entering the station                   │
-│ │ BATTLE BROTHERS    │ │ 1 hour and 12 minutes ago  ↶ Loaded · 10:47:10                     [↶] [✕] │
-│ └────────────────────┘ │ 11:18:44                                                                   │
-│                        │ 2 hours ago                ● Game started                                  │
-│                        │ 10:04:12                                                                   │
-│                        │ YESTERDAY                                                                  │
-│                        │ Yesterday                  ◆ Saved                                 [↶] [✕] │
-│                        │ 23:20:12                     Add label…                                    │
-│                        │ Yesterday                  ■ Game closed                                   │
-│ + Add custom game      │ 22:58:40                                                                   │
-│ ⟳ Scan games           │                                                                            │
-├────────────────────────┴────────────────────────────────────────────────────────────────────────────┤
-│ Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load  ☑ Play sounds  ▤ Checkpoint folder…  ☑ Launch on startup │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SaveScummer                                                                              ─  □  ×   │
+├────────────────────────┬───────────────────────────────────────────────────────────────────────────┤
+│ RUNNING                │           [Ctrl+F5]                      [Ctrl+F9]                        │
+│ ┏━━━━━━━━━━━━━━━━━━━━┓ │ ┌────────────────────────────┐ ┌────────────────────────────┐             │
+│ ┃ VOID WAR         ● ┃ │ │          ⚑ SAVE            │ │          ↶ LOAD            │  [ ··· ]    │
+│ ┗━━━━━━━━━━━━━━━━━━━━┛ │ └────────────────────────────┘ └────────────────────────────┘             │
+│                        │                                  Before boarding · 12:24:03               │
+│ INSTALLED              │                                                                           │
+│ ┌────────────────────┐ │ TODAY                                                                     │
+│ │ XCOM 2             │ │ ⚑ 12:24:03  Saved                                               [↶] [✕]   │
+│ └────────────────────┘ │             Before boarding                                               │
+│ ┌────────────────────┐ │ ↶ 11:18:44  Loaded · 10:47:10                                    [↶] [✕]  │
+│ │ NOITA              │ │                                                                           │
+│ └────────────────────┘ │ ● 10:04:12  Game started                                                  │
+│ ┌────────────────────┐ │                                                                           │
+│ │ BATTLE BROTHERS    │ │ YESTERDAY                                                                 │
+│ └────────────────────┘ │ ⚑ 23:20:12  Saved                                               [↶] [✕]   │
+│                        │             Add label…                                                    │
+│                        │ ■ 22:58:40  Game closed                                                   │
+│                        │                                                                           │
+│                        │                                                                           │
+│ + Add custom game      │                                                                           │
+│ ⟳ Scan games           │                                                                           │
+│ ⚙ Settings             │                                                                           │
+└────────────────────────┴───────────────────────────────────────────────────────────────────────────┘
 ```
 
-`✕` stands for the trash icon. Each sidebar box is an art card (see SIDEBAR): the capitalized name stands for the game's logo, the heavy border marks the selected card and `●` marks a running game. The error and instructions blocks, when present, sit between the action row and HISTORY.
+
+`✕` stands for the trash icon. Each sidebar box is an art card: the capitalized name stands for the game's logo, the heavy border marks selection and `●` marks a running game. Save and Load share the card's height and align with its top and bottom edges. Their widths are equal, with a separate fixed-width area for `···`. The Load caption is attached to its bottom edge; the text mockup puts it on a separate line to show the attachment. It never shifts the centered icon and title. Shortcut hints sit immediately above each button, in the same horizontal band as the first sidebar group heading.
+
+History entries alternate between two subtly different dark backgrounds across the full row, including its label or notes; the text mockup cannot show this dimmed zebra treatment. Date headings use the same font size as the main row text. There is no timeline line or separate timeline point column. The error and instructions blocks, when present, sit below the action area and its hints, before the first history date heading. There is no visible `HISTORY` title.
+
 
 ## ACTIVE STACK, SELECTION AND FOCUS
 
-The ACTIVE STACK holds the running games, ordered by when the user last switched to each game's window outside the app. The **active game** is the game the user was last in: the top of the stack or, after that game closes, still that game until the user switches to another (PLAN-HOST.md, MONITOR AND ACTIVE STACK). It's the target of global hotkeys while the app is unfocused. The game **selected** in the main view can be different, because the user may be browsing another game.
+The ACTIVE STACK holds the running games, ordered by when the user last switched to each game's window outside the app. The **active game** is the game the user was last in: the top of the stack or, after that game closes, still that game until another running game is in front 5 seconds or more after the close (PLAN-HOST.md, MONITOR AND ACTIVE STACK). It's the target of global hotkeys while the app is unfocused. The game **selected** in the main view can be different, because the user may be browsing another game.
 
 The key rule: **only an external focus change moves a game up the stack and selects it.** The user has necessarily left the app to switch to the game, so the view never changes while they're using it. Starting or closing a game in the background moves it between groups but never takes over the view. A newly started game appears under `RUNNING` but doesn't jump ahead of games with a more recent focus.
 
@@ -148,7 +145,7 @@ The main view changes automatically only when:
 Consequences:
 
 - **At startup,** select the most recently focused running game if the order is known, otherwise the top running game. If no game is running, select nothing. Don't preselect a game just because it's installed. The main view then shows only the quiet line `No known games are running.`
-- **When a game closes,** the view stays. The active game stays active and moves from `RUNNING` to the library, so the user can load it before relaunching; the next external focus change moves the view on.
+- **When a game closes,** the view stays. The active game stays active and moves from `RUNNING` to the library, so the user can load it before relaunching; the view moves on when another game takes over as the active game.
 - **When the user picks a game in the sidebar** (running or not), only the view changes, not the stack.
 
 
@@ -161,9 +158,9 @@ The sidebar is the game library and the main way to navigate. It stays narrow, a
 - About 3:1 and roughly 76 px tall, the full width of the sidebar, with a small gap between cards.
 - The background is the game's Steam hero art, cropped to fill the card.
 - The game's logo sits on the left, fitted to the card height, over a dark gradient that fades out to the right. The gradient keeps light and dark logos readable on busy art.
-- A small `●` in the top-right corner marks a running game. Why: when every game is running, the list is flat with no `RUNNING` heading, so the card has to say it.
+- A small `●` in the top-right corner marks a running game. The marker keeps the running state visible on the card itself, including when its group heading has scrolled out of view.
 - Nothing else goes on the card: no counts, timestamps or descriptions. The one exception is the **install tag** the host supplies when the same game is installed twice (`Steam`, `GOG`): a small tag in the bottom-right corner. Why: two cards with the same art are otherwise impossible to tell apart. Games with one install never show a tag.
-- The game's name is always the card's accessible name and tooltip, even when only the logo shows it. With an install tag, both include it: `Dead Cells — GOG`. The game header shows it the same way.
+- The game's name is always the card's accessible name and tooltip, even when only the logo shows it. With an install tag, both include it: `Dead Cells — GOG`. Per-game dialog titles include the install tag too.
 
 **Selection:** the selected card gets an accent outline, and the other cards are slightly dimmed. Why: an outline alone gets lost on busy art. A hovered card is shown undimmed.
 
@@ -183,8 +180,8 @@ Cards trade some density for recognition: about eight fit in a default-height wi
 
 **Groups:**
 
-- Show `RUNNING` and `INSTALLED` headings only when both groups are non-empty, with `RUNNING` on top.
-- Otherwise, show a flat list with no heading.
+- Always show a heading for each non-empty group: `RUNNING` for running games and `INSTALLED` for the rest, with `RUNNING` on top when present. This applies even to a single game or a single group.
+- The first group heading shares a fixed-height horizontal band with the shortcut hints above the main buttons. Do not collapse that band when there is only one group; the first card and the main buttons must keep matching top edges.
 - There is no overall `GAMES` heading. The sidebar is obviously a game list, so it would only take space.
 - Never show an empty group.
 
@@ -193,7 +190,7 @@ Cards trade some density for recognition: about eight fit in a default-height wi
 - Hide confirmed-uninstalled games, whether they are known games or custom games. A custom game whose executable disappears is hidden until it comes back.
 - Keep installed games that haven't produced save data yet.
 
-**Library controls** stay anchored at the bottom of the sidebar:
+**Library controls** stay anchored at the bottom of the sidebar in this order: Add custom game, Scan games, Settings.
 
 - **`+ Add custom game`** is for games that aren't recognized automatically or that need custom paths. Use this exact wording; "Add game" would suggest it's the normal way to add games. Custom games are kept forever, and the main window has no way to remove them. A future management screen may add that.
 - **`⟳ Scan games`** adds discovered games immediately. There's no results screen and no confirmation. The button itself cycles through these states:
@@ -209,20 +206,20 @@ Cards trade some density for recognition: about eight fit in a default-height wi
   Background scans are **silent**: the button keeps its idle state, and newly found games simply appear in their group. Only a scan the user started drives the `Scanning…` and result states. Why: focus scans happen on nearly every alt-tab, and a button that flickers `Scanning… → No new games` each time is noise. If the user presses the button while a background scan is running, the button shows `Scanning…` until the scan they asked for finishes, and counts games found since they pressed.
 
 
-## GAME HEADER AND ACTIONS
+- **`⚙ Settings`** is a cog-and-text button directly below Scan games. It opens the Settings dialog for shortcuts, sound effects and launch on startup. It stays available with no selected game and while a game is busy.
 
-```text
-▣ VOID WAR
-  Running
-[ ◆ SAVE ]  [ ↶ LOAD                     ]  [ ··· ]
-                         [ 3 seconds ago ]
-```
+## MAIN ACTIONS
 
-- The game's small square Steam icon comes first, next to the name. It isn't the card art or the logo. Why: the art is already in the sidebar, and a large logo here would compete with Save. Without an icon, the initials placeholder takes its place.
-- The status sits directly under the name and is only ever `Running` or `Stopped`. There are no badges and no separate readiness indicator.
-- **The host decides whether each action is available, separately from the status.** When there is no game data to copy, Save is disabled and its tooltip and accessible name say `No game data yet`. Nothing else signals this.
+There is no game name, icon or status header above the buttons. The selected sidebar card already identifies the target and shows whether it is running. Stopped games remain selectable and use the same action layout.
+
+- **Alignment:** the action row starts at the same vertical position as the first sidebar game card, below the always-visible first group heading. The shortcut hints occupy the same band as that heading. In the default running-game view this is the selected game's card. Keep the action row in place when the user selects a lower card or scrolls the library; do not chase that card down the window.
+- **Height:** Save and Load are both the same height as a sidebar game card (roughly 76 px), with matching top and bottom edges.
+- **Width:** reserve a fixed-width area at the right for `···` and the gaps between controls. Divide all remaining main-view width equally between Save and Load: 50/50. They keep equal widths as the window resizes.
+- **Contents:** center each button's icon-and-title group horizontally and vertically. The Save and Load groups share the same vertical center. Attach Load's smaller target caption absolutely to the button's bottom edge, outside the icon-and-title layout; the caption takes no layout space and never moves either main title. Reserve clearance below the buttons so the caption cannot overlap the content that follows.
+- **Shortcut hints:** show the current Save shortcut centered immediately above Save and the current Load shortcut centered immediately above Load. These are quiet help text/keycaps, not extra buttons. Keep the gap to the buttons small and align their band with the first sidebar group heading.
+- **Availability:** the host decides whether each action is available, separately from whether the game is running. When there is no game data to copy, Save is disabled and its tooltip and accessible name say `No game data yet`. Nothing else signals this.
 - The order is fixed: Save, then Load, then `···`, which is always last.
-- Directly below the row sits the **error block**, then the **instructions block**. The error block stays until the next action or game selection and never becomes a modal dialog.
+- Below the buttons and the Load caption sit the **error block**, then the **instructions block**. The error block stays until the next action or game selection and never becomes a modal dialog.
 
 ### Save
 
@@ -232,10 +229,9 @@ This is the main action and has the strongest emphasis. It supports the core loo
 
 The main Load button restores the **latest retained checkpoint**. Only checkpoints the app made count; copies the user makes by hand are not checkpoints.
 
-What Load will restore is shown *inside the button*, on a smaller, quieter second line: `3 seconds ago`, `Yesterday`, `2012-12-12`. This line uses the same age wording as the history, updates live, and replaces any separate "Last save" line. With no checkpoints, the button is disabled and its second line reads `No saves yet`. When the host reports no game data on disk, Load is disabled too, with the same `No game data yet` tooltip as Save; the second line still shows what it would restore. The history's Load and Revert buttons follow the same rule.
+What Load will restore is shown in a smaller, quieter caption attached absolutely to the button's bottom edge (see MAIN ACTIONS). Use the exact local time for today's save (`12:24:03`); include the day for earlier saves (`Yesterday · 23:20:12`, or `2026-09-20 · 12:24:03`). With no checkpoints, the button is disabled and its caption reads `No saves yet`. When the host reports no game data on disk, Load is disabled too, with the same `No game data yet` tooltip as Save; the caption still shows what it would restore. The history's Load and Revert buttons follow the same rule.
 
-If that save has a label, the label comes first: `Before boss fight · 3 seconds ago`. The button keeps its width, so a long label is shortened with `…` and the age always stays visible. The full label is in the tooltip. Why: a label says *which* save far better than a time, and Load is where the user needs to know that.
-
+If that save has a label, the label comes first: `Before boarding · 12:24:03`. The button keeps its width, so a long label is shortened with `…` and the timestamp always stays visible. The full label is in the tooltip. The caption never changes the button's size or the vertical alignment of its icon and title.
 A pending deletion doesn't change Load. It still targets the latest checkpoint, even if that checkpoint is counting down to deletion, and loading doesn't cancel the deletion. The host runs the two one after the other, and the latest checkpoint is recalculated only after the deletion succeeds.
 
 Every successful Load, and every Revert, also creates a **recovery point** holding the state just before it. That is what the row's Revert restores. Load errors go to the error block.
@@ -247,12 +243,12 @@ Load always restores the whole checkpoint, every save location in it, exactly as
 Each command has its own icon:
 
 ```text
-[ ◆ SAVE ]  [ ↶ LOAD          ]  [ ··· ]
-            [  3 seconds ago  ]  ┌──────────────────────────────────┐
-                                 │ ▤  Open checkpoints folder       │
-                                 │ ✎  Configure paths…              │
-                                 │ ✕  Flush checkpoints (2.4 GB)…   │
-                                 └──────────────────────────────────┘
+[       ⚑ SAVE       ] [       ↶ LOAD       ] [ ··· ]
+                            12:24:03         ┌──────────────────────────────────┐
+                                             │ ▤  Open checkpoints folder       │
+                                             │ ✎  Configure paths…              │
+                                             │ ✕  Flush checkpoints (2.4 GB)…   │
+                                             └──────────────────────────────────┘
 ```
 
 - **Open checkpoints folder** opens this game's folder in the checkpoint store, where each checkpoint is an ordinary folder named by its time and kind. Why here and not on history rows: rows already carry Load, Revert and Delete, and a fourth icon on thousands of rows is noise; the folder names make a checkpoint easy to find.
@@ -262,7 +258,7 @@ Each command has its own icon:
 
 Sizes are rounded: one decimal under 10, whole numbers from 10 up (`840 KB`, `23 MB`, `2.4 GB`, `12 GB`), with a space before the unit. Units follow the OS file manager: 1024-based on Windows, 1000-based on macOS and Linux. Why: the number matches what the user sees when they check the folder.
 
-There is no global Settings screen or gear icon. The few app-wide preferences are in the bottom bar.
+App-wide preferences belong to the Settings dialog, opened by `⚙ Settings` below Scan games in the sidebar.
 
 ### Busy state
 
@@ -283,23 +279,26 @@ A game's catalog instructions (`info`, read-only) appear between the error block
 
 ## HISTORY
 
-The history is a vertical, newest-first, effectively unlimited activity log. It should read as a run log, not as save slots or cards. A subtle vertical line may connect the events.
+The history is a vertical, newest-first, effectively unlimited activity log. It should read as a run log, not as save slots or cards. Start directly with the first date heading; do not render a `HISTORY` title. Use dimmed zebra backgrounds to distinguish entries. Do not draw a timeline connector or separate timeline points.
 
 **Empty history** shows one quiet line: `Saves will appear here.`
 
 ### Rows
 
-Each row has:
+Each row reads from left to right:
 
-1. **A time column** with two lines. The first line is relative: `4 seconds ago` and `1 hour and 12 minutes ago` for today, then `Yesterday`, the full localized weekday for recent days, and `yyyy-MM-dd` for older dates. The second line is always the exact local `HH:mm:ss` and never changes.
-2. **An event icon and description.** The icon supplements the text and never replaces it.
-3. **Actions** at the end of the row's first line, when the row has any. They sit together in one line, with Delete always last.
+1. **An event icon** at the far left. It supplements the description and never replaces it; no separate timeline marker is drawn.
+2. **One exact local time**, `HH:mm:ss`, on the first line. No relative age, `ago` wording, repeated day label or second timestamp line.
+3. **The description**, with the save label or load notes beneath it when applicable.
+4. **Actions** at the far right of the first line, when the row has any. They sit together in one line, with Delete always last.
 
 Details that are easy to get wrong:
 
-- The column must fit the longest relative label or weekday name. It never abbreviates or truncates.
-- Rows are grouped under lightweight day headings, and the time column lines up exactly with the heading's left edge.
-- Relative labels update live, in place, without reordering rows. At local midnight, the day groups are recalculated so today's rows become yesterday's, and the scroll position is kept.
+- Use the same font size for date headings, exact times and the main event descriptions. Labels and notes can remain quieter secondary text.
+- Group rows under day headings: `Today`, `Yesterday`, the full localized weekday for recent days, and `yyyy-MM-dd` for older dates. Headings align with the row's left inset, before the icon column. They provide the date once for the whole group.
+- Alternate two subtly different dark backgrounds across complete entries, including each entry's second line. These are continuous rows, not bordered cards. Day headings stay outside the striping. Base alternation on the row's position in its day group, not on which rows happen to be rendered in the viewport.
+- The time column fits `HH:mm:ss` without truncation. Times never tick or change as an entry ages.
+- At local midnight, recalculate the day groups without moving the scroll position or resizing rows.
 - New entries go on top. If the user has scrolled down, keep their position; never pull them back to the top.
 
 ### Event kinds
@@ -332,15 +331,15 @@ A save's label goes on the row's second line, under `Saved`, for example `Before
 A new save has no label. Its second line shows a dimmed `Add label…` suggestion, which looks like a button when hovered:
 
 ```text
-3 seconds ago   ◆ Saved                                 [↶] [✕]
-12:24:03          Add label…
+⚑ 12:24:03  Saved                                 [↶] [✕]
+            Add label…
 ```
 
 Clicking the label, or `Add label…`, turns that line into a text field with an inline check button (`✓`) on the right. Why an icon: a second button called "Save" would be confused with the main Save action.
 
 ```text
-3 seconds ago   ◆ Saved                                 [↶] [✕]
-12:24:03          [Before boss fight_          ] [✓]
+⚑ 12:24:03  Saved                                 [↶] [✕]
+            [Before boss fight_          ] [✓]
 ```
 
 Changes save automatically, so the user never has to remember to confirm. A save happens on any of these:
@@ -365,30 +364,28 @@ Delete is deliberately not immediate. Deleting a saved row removes the checkpoin
 
 ```text
 Normal
-3 seconds ago              ◆ Saved                             [↶] [✕]
-12:24:03                     Before entering the station
+⚑ 12:24:03  Saved                             [↶] [✕]
+            Before entering the station
 
 Counting down (5 → 4 → 3 → 2 → 1, updated in place)
-3 seconds ago              ◆ Saved              Deleting in 5 [Cancel]
-12:24:03                     Before entering the station
+⚑ 12:24:03  Saved              Deleting in 5 [Cancel]
+            Before entering the station
 
 Countdown over, game busy
-3 seconds ago              ◆ Saved         Waiting to delete… [Cancel]
-12:24:03                     Before entering the station
+⚑ 12:24:03  Saved         Waiting to delete… [Cancel]
+            Before entering the station
 
 Deleting (no Cancel)
-3 seconds ago              ◆ Saved                         ◌ Deleting…
-12:24:03                     Before entering the station
+⚑ 12:24:03  Saved                         ◌ Deleting…
+            Before entering the station
 ```
 
 Loaded and reverted rows work the same way:
 
 ```text
-1 hour and 12 minutes ago  ↶ Loaded · 10:47:10                 [↶] [✕]
-11:18:44
+↶ 11:18:44  Loaded · 10:47:10                 [↶] [✕]
 
-1 hour and 12 minutes ago  ↶ Loaded · 10:47:10  Deleting in 3 [Cancel]
-11:18:44
+↶ 11:18:44  Loaded · 10:47:10  Deleting in 3 [Cancel]
 ```
 
 Why a countdown instead of a dialog: deleting a checkpoint should be quick, and a mistake needs to be undoable. A confirmation dialog repeated on every row gets clicked through without reading.
@@ -409,40 +406,54 @@ The host owns the countdown. The UI only sends delete and cancel requests and di
 There is no queue screen, no batch confirmation and no extra history event for deletions.
 
 
-## BOTTOM BAR
+## SHORTCUT HINTS
 
-```text
-Hotkeys │ [Ctrl+F5] Save │ [Ctrl+F9] Load     ☑ Play sounds     ▤ Checkpoint folder…  ☑ Launch on startup
-```
-
-The bar should look like a compact game status strip, not a settings form. The shortcuts are styled as keycaps and stand out slightly more than their `Save`/`Load` labels. `Play sounds` sits next to the hotkeys. `Checkpoint folder…` and `Launch on startup` sit at the far right, apart from the others, because they set up the app itself, not Save and Load.
-
-**Checkpoint folder** is where every game's checkpoints are kept: one central folder in the user's app data by default (`%LOCALAPPDATA%\SaveScummer\checkpoints` on Windows, `~/Library/Application Support/SaveScummer/checkpoints` on macOS, `~/.local/share/SaveScummer/checkpoints` on Linux). The user can move it, for example to a bigger drive. Why it's here: it is the one app-wide setting that isn't a checkbox, and it's rarely changed, so it gets a quiet control rather than a settings screen.
-
-- The control's tooltip shows the current location.
-- Clicking it opens the system folder picker. Picking a different folder asks the host to move the checkpoints there.
-- Like Scan, the control reports the move itself: `Moving…` while it runs, then back to normal, or a short failure state with the reason in its tooltip. The host owns the move; while it runs, games are busy.
-- The control appears only in the full bottom bar, not in the zero-games layout.
+The current shortcuts appear immediately above their corresponding main buttons, in the same horizontal band as the first sidebar group heading. There is no bottom/status bar. Reassigning a shortcut in Settings updates its hint after the host accepts the change. Use the platform's key names; defaults are `Ctrl+F5` / `Ctrl+F9` on Windows and `⌥F5` / `⌥F9` on macOS.
 
 **Which game the hotkeys act on:**
 
-- **When the app is focused,** they act on the *selected* game, even a stopped one. Why: when the user is working inside the app, they mean the game they're looking at.
+- **When the app is focused,** they act on the *selected* game, even a stopped one.
 - **When the app is unfocused,** they act on the active game, even one that just closed.
-- **With no target** (the app is focused with nothing selected, or it's unfocused with no active game), the hotkeys are shown as unavailable.
-- While the target game is busy, conflicting operations are unavailable. A pending deletion countdown alone changes neither whether the hotkeys work nor which game they target.
-
+- **With no target,** they do nothing. With no selected game there are no main buttons or hints; Settings remains accessible.
+- While the target game is busy, conflicting operations and their hints appear unavailable. A pending deletion countdown alone changes neither whether the hotkeys work nor which game they target.
+- While a shortcut field is capturing a replacement in Settings, those keypresses are input to the field and must not trigger Save or Load.
 
 ## DIALOGS
 
-There are only three dialogs: Add custom game, Configure paths and Flush checkpoints. All of them:
+There are four dialogs: Settings, Add custom game, Configure paths and Flush checkpoints. All of them:
 
 - size to their content and can't be resized;
 - use text-only buttons;
 - rely on the platform's standard behavior for focus, keyboard navigation, the default button and cancelling. Don't write custom Enter or focus handling; a deliberately focused button must still activate normally.
 
-The title of a per-game dialog includes the game's name (`Configure paths · Void War`), because the dialog covers the header that would otherwise show which game it's for.
+The title of a per-game dialog includes the game's name (`Configure paths · Void War`), so the target stays explicit even when the sidebar is covered. Include the install tag when needed to distinguish installs.
 
 Deleting a single checkpoint is not a dialog; it uses the row countdown above.
+
+### Settings
+
+Opened by the cog-and-text `⚙ Settings` button directly below Scan games, including in the zero-games layout.
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Settings                                                   × │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│ Save shortcut       [ Ctrl+F5                              ]  │
+│ Load shortcut       [ Ctrl+F9                              ]  │
+│                                                              │
+│ ☑ Play sounds                                                │
+│ ☑ Launch on startup                                          │
+│                                                              │
+│                                        [ Save ]  [ Cancel ]  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- Focus a shortcut field and press the desired combination to replace it. Show the platform's key names and the currently saved bindings when opening the dialog.
+- `Play sounds` enables or disables sound effects; `Launch on startup` enables or disables starting the host at sign-in. These preferences appear only here, not in the main window.
+- Apply changes on **Save**, the default button, after the host validates and accepts them. Cancel or closing the dialog discards unapplied edits. Accepted settings persist across restarts; shortcut hints update immediately.
+- A duplicate, unsupported or unavailable shortcut shows an inline error beside its field. Keep the dialog and entered values open for correction; rejected changes leave the saved configuration and previous bindings intact.
+- The host owns shortcut registration, persistence, sound playback and startup integration. Shortcut reassignment requires extending the host's settings contract beyond its currently documented fixed defaults (PLAN-HOST.md, Hotkeys and protocol settings); the UI does not register a second independent set of global hotkeys.
 
 ### The save location field
 
@@ -630,7 +641,8 @@ The window can be resized down to a minimum size. At that size:
 - the Save, Load and `···` row still holds together;
 - the time column doesn't truncate;
 - the row actions are reachable;
-- the bottom bar doesn't overlap itself.
+- equal-width action buttons, their bottom-attached Load caption and shortcut hints do not overlap;
+- Add custom game, Scan games and Settings stay reachable.
 
 There is no separate narrow layout.
 
@@ -643,18 +655,21 @@ UI tests run against a fake service that can simulate being busy, failing, missi
 
 - **Sidebar:**
   - card art fallbacks: no logo, no hero art, no art at all, and custom games;
-  - the running marker, including a flat list where every game is running;
-  - the install tag on the card, tooltip and header, only for games installed twice;
-    - headings only when both groups are non-empty;
+  - the running marker, including a library where every game is running;
+  - the install tag on the card, tooltip and per-game dialog title, only for games installed twice;
+    - headings for every non-empty group, including one game, all running and none running; no heading for an empty group;
     - hidden uninstalled games;
-    - the switch to the zero-games layout based on *visible* games.
+    - the switch to the zero-games layout based on *visible* games;
+    - first-card/button alignment stays unchanged when the library moves between one and two non-empty groups.
 - **Selection:**
     - external focus moves a game up and selects it;
     - a manual selection is kept when games start or close;
     - the view and the active game staying put when the active game closes.
 - **Scan:** the zero, singular and plural messages, counting only newly found known games; background scans leave the button idle while their games appear; pressing Scan during a background scan shows `Scanning…` until the requested scan finishes; showing or focusing the window sends the focus report.
-- **Status and actions:** `Running`/`Stopped` shown separately from host-provided availability (no game data, no checkpoints). Open next to the executable is disabled while the field is edited. The Flush item's size: rounding at each boundary, the OS's units, and no size when there's nothing to flush or the size is unknown; the dialog's total matching it.
+- **Actions:** game identity and running state appear only in the sidebar; Save and Load availability still comes from the host (no game data, no checkpoints). Verify card-height buttons, equal widths after reserving `···` and gaps, centered icon/title groups, bottom-attached Load captions and shortcut hints immediately above the buttons without overlap, including at minimum window size and with long labels. Open next to the executable is disabled while the field is edited. The Flush item's size: rounding at each boundary, the OS's units, and no size when there's nothing to flush or the size is unknown; the dialog's total matching it.
 - **History rows:**
+    - no visible History title; leftmost event icons, one exact time per row, no relative ages or timeline decorations, date headings and times matching the main text size;
+    - dimmed zebra backgrounds spanning complete entries, consistent when scrolling a virtualized list;
     - spinner and success states on the Load and Revert buttons;
     - Reverted rows that can themselves be reverted and deleted;
     - a Loaded row's notes: removed newer saves, Steam Cloud replacing a restored save, both together, and the Steam Cloud note arriving later without resizing the row.
@@ -675,13 +690,16 @@ UI tests run against a fake service that can simulate being busy, failing, missi
     - a failure restores the row with no retry.
 - **Midnight:** rows regroup without moving the scroll position.
 - **Dialogs:**
+    - Settings opens below Scan games in all layouts; there is no status bar;
+    - reassign both shortcuts, save and verify the hints and actual bindings, reopen and verify persistence; Cancel leaves settings unchanged;
+    - duplicate, unsupported and unavailable shortcuts show inline errors without losing the old bindings; capturing a shortcut never runs an operation;
+    - toggle sounds and launch on startup, save, reopen and verify the accepted values;
     - standard keyboard, focus, default-button and cancel behavior;
     - the custom-game dialog's validation and name autofill;
     - the save location hint always visible in both dialogs, with errors below it and the hint kept;
     - a folder, a file and a pattern all accepted in the save location field, and Browse still picking a folder;
     - host rejections shown in place: a relative path, a broad folder, a dangerous pattern, an overlap with another game;
     - known games: one and several read-only catalog locations, the list dimmed while the field overrides it, and Reset returning to the catalog.
-- **Checkpoint folder:** the current location in the tooltip, the `Moving…` state and a failed move keeping the old location.
 - **Other blocks:** collapsed and expanded instructions, including games with none, and the error block's content.
 - **Accessibility:** accessible names and keyboard access for icon-only and destructive controls.
 
