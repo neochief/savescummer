@@ -158,7 +158,7 @@ Triggers:
 | Trigger | Scan |
 |---|---|
 | Host start | full |
-| The user presses Scan games | full |
+| The user presses Scan for games | full |
 | A new catalog bundle arrives | full |
 | Every 15 minutes, including with no UI | full |
 | The UI's window is shown or gains focus (from the UI's focus report), at most once per 20 seconds | install |
@@ -171,7 +171,7 @@ Why focus: it is the moment the user looks, and the cooldown means alt-tabbing n
 Per platform:
 
 - **Windows:** folder change notifications and registry change notifications. A folder watch keeps the folder open, which would stop the user from safely removing a USB drive holding a Steam library, so the host releases a drive's watches when Windows asks to remove it and watches again when the drive returns.
-- **macOS:** FSEvents; it holds nothing open, so ejecting is never blocked. The first access to a removable or network volume, or to Documents, makes macOS ask the user for permission. Only a user action may cause that prompt (first run, Scan games, adding a game, Allow access); background scans skip locations not yet granted and list their games as inactive until the user allows access. Why: a permission dialog out of nowhere looks like the app is snooping, and one during a fullscreen game may go unseen while the read waits on it. Details in PLAN-MACOS, PRIVACY PERMISSIONS.
+- **macOS:** FSEvents; it holds nothing open, so ejecting is never blocked. The first access to a removable or network volume, or to Documents, makes macOS ask the user for permission. Only a user action may cause that prompt (first run, Scan for games, adding a game, Allow access); background scans skip locations not yet granted and list their games as inactive until the user allows access. Why: a permission dialog out of nowhere looks like the app is snooping, and one during a fullscreen game may go unseen while the read waits on it. Details in PLAN-MACOS, PRIVACY PERMISSIONS.
 - **Linux / SteamOS:** inotify; a watch is dropped automatically on unmount. New mounts (a Steam Deck SD card under `/run/media`) are watched for so their libraries are picked up.
 - **Everywhere:** network drives don't reliably report changes, and the OS may drop events under load and only say "something changed". Both are answered with a scan; focus and periodic scans remain the safety net.
 
@@ -466,7 +466,7 @@ Delete on a row removes one checkpoint: the saved checkpoint of a Saved row, or 
 
 Deletion is not immediate. The host owns a short countdown so a misclick can be undone:
 
-- Each Delete starts its own 5-second countdown with a Cancel. The same row can't be requested twice.
+- Each Delete starts its own 3-second countdown with a Cancel. The same row can't be requested twice.
 - The host decides cancel versus run. An accepted cancel guarantees nothing is deleted; a cancel that arrives too late gets the real state back.
 - When a countdown ends, the deletion waits for the game's turn (reported as *waiting*), then runs through the same per-game lock. A countdown doesn't reserve the game: Save and Load still work until the deletion actually starts, and Load still targets the latest checkpoint even if it's counting down.
 - Countdowns live only in memory. After a crash, deletions that hadn't started are simply dropped.

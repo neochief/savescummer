@@ -341,7 +341,7 @@ real machine before relying on them (5.2).
 - Interrupted save copy shows the one-line sticky notice (E-A1); a killed Load or Revert
   that ends with the live saves unchanged stays silent.
 - No hint is shown when saving while the game is running (E-X1).
-- Per-checkpoint delete uses a 5-second inline countdown with Cancel.
+- Per-checkpoint delete uses a 3-second inline countdown with Cancel.
 - Recovery is fully automatic (R1–R4); the recovery prompt and the `Recovery needed`
   status are removed from the UI. There is no manual `recover` command.
 - Load rollback reverses renames and never needs the recovery checkpoint.
