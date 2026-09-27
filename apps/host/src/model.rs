@@ -126,6 +126,8 @@ impl Default for Derived {
 }
 
 pub const SETTING_PLAY_SOUNDS: &str = "play_sounds";
+pub const SETTING_SAVE_SHORTCUT: &str = "save_shortcut";
+pub const SETTING_LOAD_SHORTCUT: &str = "load_shortcut";
 pub const SETTING_STORE: &str = "checkpoint_store";
 pub const SETTING_LAUNCH: &str = "launch_on_startup";
 pub const SETTING_COUNTER: &str = "game_counter";

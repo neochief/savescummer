@@ -12,10 +12,11 @@ use savescummer_ipc::{
     RowActions, SaveSetInfo, TargetInfo,
 };
 use savescummer_storage::{self as db, CheckpointRow};
+use savescummer_platform::integration::validate_shortcuts;
 
 use crate::checkpoints::unavailable_reason;
 use crate::host::Host;
-use crate::model::{SETTING_LAUNCH, SETTING_PLAY_SOUNDS};
+use crate::model::{SETTING_LAUNCH, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT};
 
 const DEFAULT_PAGE: usize = 50;
 const MAX_PAGE: usize = 500;
@@ -230,7 +231,17 @@ pub fn settings(
     host: &Arc<Host>,
     play_sounds: Option<bool>,
     launch: Option<bool>,
+    save_shortcut: Option<String>,
+    load_shortcut: Option<String>,
 ) -> Result<serde_json::Value, Failure> {
+    let old = host.lock().shortcuts;
+    let save = save_shortcut.unwrap_or_else(|| old[0].canonical());
+    let load = load_shortcut.unwrap_or_else(|| old[1].canonical());
+    let shortcuts = validate_shortcuts(&save, &load).map_err(|error| Failure::new(ErrorKind::InvalidRequest, error))?;
+    let changed = shortcuts != old;
+    if changed && !host.opts.no_integrations && host.integration.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
+        return Err(Failure::new(ErrorKind::InvalidRequest, "global hotkeys are unavailable"));
+    }
     if let Some(on) = launch {
         let exe = std::env::current_exe().map_err(io)?;
         if host.opts.no_integrations {
@@ -241,13 +252,30 @@ pub fn settings(
         let _ = db::set_setting(host.db().conn(), SETTING_LAUNCH, if on { "1" } else { "0" });
     }
     refresh_launch(host);
+    if changed {
+        let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(integration) = integration.as_ref() {
+            integration.rebind(shortcuts).map_err(|error| Failure::new(ErrorKind::InvalidRequest, error))?;
+        }
+        let storage = host.db();
+        let save_result = db::set_setting(storage.conn(), SETTING_SAVE_SHORTCUT, &shortcuts[0].canonical());
+        let load_result = save_result.and_then(|_| db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &shortcuts[1].canonical()));
+        if let Err(error) = load_result {
+            let _ = db::set_setting(storage.conn(), SETTING_SAVE_SHORTCUT, &old[0].canonical());
+            let _ = db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &old[1].canonical());
+            if let Some(integration) = integration.as_ref() { let _ = integration.rebind(old); }
+            return Err(io(error));
+        }
+        host.lock().shortcuts = shortcuts;
+    }
     if let Some(on) = play_sounds {
         db::set_setting(host.db().conn(), SETTING_PLAY_SOUNDS, if on { "1" } else { "0" }).map_err(io)?;
         host.lock().play_sounds = on;
     }
     let mut inner = host.lock();
     host.publish(&mut inner);
-    Ok(serde_json::json!({ "play_sounds": inner.play_sounds, "launch_on_startup": inner.launch_on_startup }))
+    Ok(serde_json::json!({ "play_sounds": inner.play_sounds, "launch_on_startup": inner.launch_on_startup,
+        "save_shortcut": inner.shortcuts[0].canonical(), "load_shortcut": inner.shortcuts[1].canonical() }))
 }
 
 /// Reads launch at login back from the OS: the user may change it in

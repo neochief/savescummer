@@ -25,6 +25,9 @@
       <sourceFolder url="file://$MODULE_DIR$/tests/integration/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests/integration/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/xtask/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/.runtime" />
+      <excludeFolder url="file://$MODULE_DIR$/build" />
+      <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

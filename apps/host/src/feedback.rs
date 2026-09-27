@@ -20,6 +20,9 @@ use crate::ops;
 /// `request_id` makes a protocol request safe to repeat; a real key press
 /// passes a fresh one.
 pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Result<Operation, Failure> {
+    if host.lock().ui.capturing_shortcut {
+        return Err(Failure::new(ErrorKind::InvalidRequest, "a shortcut is being edited"));
+    }
     // A game in front that waits for macOS's permission: fail, and never
     // fall through to another game on the stack.
     if let Some(refusal) = crate::privacy::hotkey_refusal(host) {
@@ -40,6 +43,7 @@ pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Resul
 /// Starts hotkeys and the tray.
 pub fn start(host: &Arc<Host>) {
     let weak = Arc::downgrade(host);
+    let shortcuts = host.lock().shortcuts;
     let result = integration::start(Box::new(move |signal| {
         let Some(host) = weak.upgrade() else { return };
         match signal {
@@ -58,7 +62,7 @@ pub fn start(host: &Arc<Host>) {
             }
             Signal::Exit => host.request_shutdown(),
         }
-    }));
+    }), shortcuts);
     match result {
         Ok(integration) => {
             for error in integration.hotkey_errors() {
@@ -120,6 +124,17 @@ pub fn show_ui(host: &Arc<Host>) -> Shown {
     };
     if let Some(dir) = &host.opts.data_dir {
         command.arg("--data-dir").arg(dir);
+    }
+    // A UI that restarts a development/demo host must keep its simulated
+    // machine. Otherwise it could scan the user's actual game folders.
+    if let Some(env) = &host.opts.env {
+        command.arg("--restart-env").arg(env);
+    }
+    if host.opts.demo || host.opts.no_integrations {
+        command.arg("--restart-no-integrations");
+    }
+    if host.opts.no_catalog_update {
+        command.arg("--restart-no-catalog-update");
     }
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     savescummer_platform::process::detach(&mut command);

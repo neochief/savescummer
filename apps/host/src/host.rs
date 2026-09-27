@@ -18,6 +18,7 @@ use savescummer_ipc::{
 };
 use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, CheckpointRow, Storage};
+use savescummer_platform::integration::Shortcut;
 
 use crate::model::{Derived, Game};
 use crate::options::Options;
@@ -45,6 +46,7 @@ pub struct UiReport {
     pub focused: bool,
     pub visible: bool,
     pub selected: Option<String>,
+    pub capturing_shortcut: bool,
 }
 
 /// A Delete counting down, waiting or running.
@@ -95,6 +97,7 @@ pub struct Inner {
     pub store_available: bool,
     pub store_moving: bool,
     pub play_sounds: bool,
+    pub shortcuts: [Shortcut; 2],
     pub launch_on_startup: bool,
     /// macOS: turned off in System Settings, where only the user can turn
     /// it on again.
@@ -224,6 +227,8 @@ impl Host {
             phase: inner.phase,
             settings: SettingsInfo {
                 play_sounds: inner.play_sounds,
+                save_shortcut: inner.shortcuts[0].canonical(),
+                load_shortcut: inner.shortcuts[1].canonical(),
                 launch_on_startup: inner.launch_on_startup,
                 launch_on_startup_available: savescummer_platform::autostart::available(),
                 launch_on_startup_needs_approval: inner.launch_needs_approval,
@@ -436,6 +441,8 @@ fn placeholder_state(instance: &str) -> State {
         phase: Phase::Starting,
         settings: SettingsInfo {
             play_sounds: true,
+            save_shortcut: String::new(),
+            load_shortcut: String::new(),
             launch_on_startup: false,
             launch_on_startup_available: false,
             launch_on_startup_needs_approval: false,
@@ -477,6 +484,7 @@ impl Inner {
             store_available: false,
             store_moving: false,
             play_sounds,
+            shortcuts: Shortcut::defaults(),
             launch_on_startup: false,
             launch_needs_approval: false,
             revision: 0,

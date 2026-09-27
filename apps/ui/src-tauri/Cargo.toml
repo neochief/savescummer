@@ -1,0 +1,23 @@
+[package]
+name = "savescummer-ui"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "savescummer-ui"
+path = "src/main.rs"
+
+[dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+savescummer-ipc.workspace = true
+savescummer-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri-plugin-dialog = "=2.8.0"
+
+[build-dependencies]
+tauri-build = { version = "2", default-features = false , features = [] }
+
+[dev-dependencies]
+tempfile.workspace = true

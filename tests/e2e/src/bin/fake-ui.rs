@@ -17,7 +17,7 @@ fn main() {
     let log = PathBuf::from(std::env::var_os("FAKE_UI_LOG").expect("FAKE_UI_LOG"));
     append(&log, "started");
     let mut client = Client::connect(&savescummer_ipc::endpoint(&data_dir)).expect("connect to the host");
-    client.request(None, Command::UiReport { focused: false, visible: true, selected: None }).expect("report");
+    client.request(None, Command::UiReport { focused: false, visible: true, selected: None, capturing_shortcut: Some(false) }).expect("report");
     client.request(None, Command::Watch).expect("watch");
     append(&log, "connected");
     while let Ok(Some(event)) = client.next_event() {

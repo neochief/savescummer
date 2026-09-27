@@ -9,7 +9,7 @@ use windows_sys::Win32::Foundation::{GetLastError, HWND, LPARAM, LRESULT, POINT,
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    MOD_CONTROL, MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_F5, VK_F9,
+    MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN, RegisterHotKey, UnregisterHotKey,
 };
 use windows_sys::Win32::UI::Shell::{
     NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
@@ -24,25 +24,30 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_NULL, WNDCLASSW, WS_OVERLAPPED,
 };
 
-use super::{HotkeyAction, Signal};
+use super::{HotkeyAction, Key, Shortcut, Signal};
 use crate::win::{copy_wide, wide};
 
 /// Tray callback message (see `uCallbackMessage`).
 const WM_TRAY: u32 = WM_APP + 1;
 /// Posted by `notify`; `lParam` owns a `Box<Balloon>`.
 const WM_BALLOON: u32 = WM_APP + 2;
+const WM_REBIND: u32 = WM_APP + 3;
 const TRAY_ID: u32 = 1;
 const MENU_MAIN: usize = 1;
 const MENU_EXIT: usize = 2;
 const TOOLTIP: &str = "SaveScummer";
 const ICO: &[u8] = include_bytes!("../../../../assets/icon.ico");
 
-const HOTKEYS: [(i32, HotkeyAction, u16, &str); 2] =
-    [(1, HotkeyAction::Save, VK_F5, "Ctrl+F5 (Save)"), (2, HotkeyAction::Load, VK_F9, "Ctrl+F9 (Load)")];
+const HOTKEYS: [(i32, HotkeyAction); 2] = [(1, HotkeyAction::Save), (2, HotkeyAction::Load)];
 
 struct Balloon {
     title: String,
     text: String,
+}
+
+struct Rebind {
+    shortcuts: [Shortcut; 2],
+    reply: mpsc::SyncSender<Result<(), String>>,
 }
 
 /// Lives on the UI thread for the window's lifetime; the window's
@@ -53,6 +58,7 @@ struct UiState {
     /// The tray icon, reloaded when the display scale changes.
     icon: Cell<AppIcon>,
     taskbar_created: u32,
+    shortcuts: Cell<[Shortcut; 2]>,
 }
 
 #[derive(Clone, Copy)]
@@ -79,11 +85,11 @@ pub struct Integration {
     hotkey_errors: Vec<String>,
 }
 
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>) -> Result<Integration, String> {
+pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortcut; 2]) -> Result<Integration, String> {
     let (tx, rx) = mpsc::sync_channel(1);
     let thread = std::thread::Builder::new()
         .name("savescummer-integration".into())
-        .spawn(move || ui_thread(on_signal, tx))
+        .spawn(move || ui_thread(on_signal, shortcuts, tx))
         .map_err(|e| format!("could not start the integration thread: {e}"))?;
     match rx.recv() {
         Ok(Ok((hwnd, hotkey_errors))) => Ok(Integration { hwnd, thread: Some(thread), hotkey_errors }),
@@ -115,6 +121,17 @@ impl Integration {
         self.hotkey_errors.clone()
     }
 
+    pub fn rebind(&self, shortcuts: [Shortcut; 2]) -> Result<(), String> {
+        let (reply, receiver) = mpsc::sync_channel(1);
+        let request = Box::into_raw(Box::new(Rebind { shortcuts, reply }));
+        // SAFETY: ownership passes to the window procedure only on success.
+        if unsafe { PostMessageW(self.hwnd as HWND, WM_REBIND, 0, request as LPARAM) } == 0 {
+            unsafe { drop(Box::from_raw(request)); }
+            return Err("the hotkey window is unavailable".into());
+        }
+        receiver.recv().map_err(|_| "the hotkey window closed".to_string())?
+    }
+
     /// Removes the tray icon, unregisters hotkeys and ends the thread.
     pub fn stop(self) {
         drop(self);
@@ -138,7 +155,7 @@ impl Drop for Integration {
 
 type Ready = Result<(isize, Vec<String>), String>;
 
-fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, ready: mpsc::SyncSender<Ready>) {
+fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortcut; 2], ready: mpsc::SyncSender<Ready>) {
     let class = wide("SaveScummerIntegration");
     let taskbar = wide("TaskbarCreated");
     // SAFETY: plain Win32 calls with NUL-terminated strings that outlive
@@ -181,14 +198,15 @@ fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, ready: mpsc::SyncS
             on_signal,
             icon: Cell::new(load_app_icon(small_icon_size(hwnd))),
             taskbar_created: RegisterWindowMessageW(taskbar.as_ptr()),
+            shortcuts: Cell::new(shortcuts),
         }));
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, state as isize);
 
         let mut errors = Vec::new();
-        for (id, _, vk, name) in HOTKEYS {
-            if RegisterHotKey(hwnd, id, MOD_CONTROL | MOD_NOREPEAT, vk as u32) == 0 {
+        for (index, shortcut) in shortcuts.iter().enumerate() {
+            if RegisterHotKey(hwnd, HOTKEYS[index].0, modifiers(*shortcut), key_code(shortcut.key)) == 0 {
                 let code = GetLastError();
-                errors.push(format!("{name} is unavailable: another app already uses it (error {code})"));
+                errors.push(format!("{} is unavailable: another app already uses it (error {code})", shortcut.canonical()));
             }
         }
         // If Explorer isn't running yet, TaskbarCreated adds it later.
@@ -206,6 +224,33 @@ fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, ready: mpsc::SyncS
     }
 }
 
+fn modifiers(shortcut: Shortcut) -> u32 {
+    let mut flags = MOD_NOREPEAT;
+    if shortcut.ctrl { flags |= MOD_CONTROL; }
+    if shortcut.alt { flags |= MOD_ALT; }
+    if shortcut.shift { flags |= MOD_SHIFT; }
+    if shortcut.meta { flags |= MOD_WIN; }
+    flags
+}
+
+fn key_code(key: Key) -> u32 {
+    match key {
+        Key::Function(number) => 0x70 + u32::from(number) - 1,
+        Key::Letter(letter) | Key::Digit(letter) => letter as u32,
+    }
+}
+
+fn register_pair(hwnd: HWND, shortcuts: [Shortcut; 2]) -> Result<(), String> {
+    for (index, shortcut) in shortcuts.iter().enumerate() {
+        if unsafe { RegisterHotKey(hwnd, HOTKEYS[index].0, modifiers(*shortcut), key_code(shortcut.key)) } == 0 {
+            let error = unsafe { GetLastError() };
+            for (id, _) in HOTKEYS.iter().take(index) { unsafe { UnregisterHotKey(hwnd, *id) }; }
+            return Err(format!("{} is unavailable: another app may use it (error {error})", shortcut.canonical()));
+        }
+    }
+    Ok(())
+}
+
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     // SAFETY: the pointer is either null (before setup / after the state
     // is gone) or the UiState box, which outlives the window.
@@ -215,7 +260,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     };
     match msg {
         WM_HOTKEY => {
-            if let Some(&(_, action, _, _)) = HOTKEYS.iter().find(|(id, ..)| *id as usize == wparam) {
+            if let Some(&(_, action)) = HOTKEYS.iter().find(|(id, ..)| *id as usize == wparam) {
                 emit(state, Signal::Hotkey(action));
             }
             0
@@ -233,6 +278,19 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             // SAFETY: `notify` posted a Box<Balloon> and gave up ownership.
             let balloon = unsafe { Box::from_raw(lparam as *mut Balloon) };
             show_balloon(hwnd, &balloon);
+            0
+        }
+        WM_REBIND => {
+            let request = unsafe { Box::from_raw(lparam as *mut Rebind) };
+            let old = state.shortcuts.get();
+            for (id, _) in HOTKEYS { unsafe { UnregisterHotKey(hwnd, id) }; }
+            let result = register_pair(hwnd, request.shortcuts);
+            if result.is_ok() {
+                state.shortcuts.set(request.shortcuts);
+            } else {
+                let _ = register_pair(hwnd, old);
+            }
+            let _ = request.reply.send(result);
             0
         }
         WM_DPICHANGED | WM_DISPLAYCHANGE => {

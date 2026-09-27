@@ -302,12 +302,16 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
                 .ok_or_else(|| Failure::new(ErrorKind::ShuttingDown, "the scan didn't finish"))?;
             json(result)
         }
-        Command::Settings { play_sounds, launch_on_startup } => queries::settings(host, play_sounds, launch_on_startup),
-        Command::UiReport { focused, visible, selected } => {
+        Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } =>
+            queries::settings(host, play_sounds, launch_on_startup, save_shortcut, load_shortcut),
+        Command::UiReport { focused, visible, selected, capturing_shortcut } => {
             let scan = {
                 let mut inner = host.lock();
                 let gained = focused && !inner.ui.focused;
-                inner.ui = crate::host::UiReport { focused, visible, selected };
+                inner.ui = crate::host::UiReport {
+                    focused, visible, selected,
+                    capturing_shortcut: capturing_shortcut.unwrap_or(inner.ui.capturing_shortcut),
+                };
                 // Showing or focusing the window runs an install scan, at
                 // most once per cooldown.
                 let cooldown = Duration::from_secs(host.opts.focus_scan_cooldown_secs);

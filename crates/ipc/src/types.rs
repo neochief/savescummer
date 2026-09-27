@@ -136,6 +136,10 @@ pub enum Command {
         play_sounds: Option<bool>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         launch_on_startup: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        save_shortcut: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        load_shortcut: Option<String>,
     },
     /// The UI's focus and selection, so hotkeys act on the selected game
     /// while the window is focused. A connection that sends it and watches
@@ -146,6 +150,8 @@ pub enum Command {
         visible: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         selected: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        capturing_shortcut: Option<bool>,
     },
     Open {
         target: OpenTarget,
@@ -289,7 +295,7 @@ pub struct Hello {
 pub enum OpStatus {
     Accepted,
     Running,
-    /// A Delete's 5-second countdown; it can still be cancelled.
+    /// A Delete's countdown; it can still be cancelled.
     CountingDown,
     /// A Delete waiting for the game's turn.
     Waiting,
@@ -468,6 +474,10 @@ pub struct Artwork {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettingsInfo {
     pub play_sounds: bool,
+    #[serde(default)]
+    pub save_shortcut: String,
+    #[serde(default)]
+    pub load_shortcut: String,
     pub launch_on_startup: bool,
     pub launch_on_startup_available: bool,
     /// macOS: the user turned launch at login off in System Settings; only

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "apps/host",
     "apps/cli",
+    "apps/ui/src-tauri",
     "crates/catalog",
     "crates/catalog-build",
     "crates/core",

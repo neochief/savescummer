@@ -185,6 +185,10 @@ enum Cmd {
         sounds: Option<OnOff>,
         #[arg(long)]
         launch_on_startup: Option<OnOff>,
+        #[arg(long)]
+        save_shortcut: Option<String>,
+        #[arg(long)]
+        load_shortcut: Option<String>,
     },
     /// Move the checkpoint store to another folder.
     MoveStore {
@@ -669,10 +673,12 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
                 format!("scan finished; {} new game(s)", v.get("new_games").and_then(|n| n.as_u64()).unwrap_or(0))
             }))
         }
-        Cmd::Settings { sounds, launch_on_startup } => {
+        Cmd::Settings { sounds, launch_on_startup, save_shortcut, load_shortcut } => {
             let response = s.send(Command::Settings {
                 play_sounds: sounds.map(OnOff::value),
                 launch_on_startup: launch_on_startup.map(OnOff::value),
+                save_shortcut,
+                load_shortcut,
             })?;
             Ok(s.report(&response, |v| v.to_string()))
         }
@@ -690,7 +696,7 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
             }))
         }
         Cmd::UiReport { focused, visible, selected } => {
-            let response = s.send(Command::UiReport { focused, visible, selected })?;
+            let response = s.send(Command::UiReport { focused, visible, selected, capturing_shortcut: Some(false) })?;
             Ok(s.report(&response, |_| String::new()))
         }
         Cmd::Open { kind, game, target, checkpoint, resolve_only } => {

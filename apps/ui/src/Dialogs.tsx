@@ -1,0 +1,223 @@
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
+import type { Bridge } from './bridge';
+import type { FlushPreview, Game, HostState, SaveSet } from './types';
+import { capturedShortcut, displayShortcut, shortcutError } from './shortcuts';
+
+export type DialogKind = 'settings' | 'add' | 'configure' | 'flush';
+
+function message(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function DialogFrame({ title, kind, close, children }: {
+  title: string; kind: DialogKind; close: () => void; children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  return <dialog ref={ref} className={`dialog dialog-${kind}`} aria-labelledby="dialog-title"
+    onCancel={(event) => { event.preventDefault(); close(); }}
+    onClick={(event) => { if (event.target === ref.current) close(); }}>
+    <header><h2 id="dialog-title">{title}</h2><button type="button" className="dialog-close" onClick={close} aria-label="Close dialog">×</button></header>
+    {children}
+  </dialog>;
+}
+
+function Footer({ close, submit, busy, destructive = false }: { close: () => void; submit: string; busy: boolean; destructive?: boolean }) {
+  return <footer>
+    {destructive ? <><button type="submit" name="intent" value="cancel" onClick={close}>Cancel</button><button className="dialog-primary danger" type="submit" name="intent" value="flush" disabled={busy}>{busy ? 'Working…' : submit}</button></>
+      : <><button className="dialog-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : submit}</button><button type="button" onClick={close}>Cancel</button></>}
+  </footer>;
+}
+
+export function AppDialog({ kind, game, state, bridge, close, onAdded, onFlushed }: {
+  kind: DialogKind; game?: Game; state?: HostState; bridge: Bridge; close: () => void;
+  onAdded: (id: string) => void; onFlushed: (operation: string) => void;
+}) {
+  const [name, setName] = useState(game?.kind === 'custom' ? game.name : '');
+  const [executable, setExecutable] = useState(kind === 'configure' ? game?.executable || '' : '');
+  const [resetExecutable, setResetExecutable] = useState(false);
+  const [location, setLocation] = useState('');
+  const [saveSet, setSaveSet] = useState<SaveSet>();
+  const [preview, setPreview] = useState<FlushPreview>();
+  const [details, setDetails] = useState(false);
+  const [sounds, setSounds] = useState(state?.settings?.play_sounds ?? true);
+  const [startup, setStartup] = useState(state?.settings?.launch_on_startup ?? false);
+  const [saveShortcut, setSaveShortcut] = useState(state?.settings?.save_shortcut || (navigator.platform.includes('Mac') ? 'Alt+F5' : 'Ctrl+F5'));
+  const [loadShortcut, setLoadShortcut] = useState(state?.settings?.load_shortcut || (navigator.platform.includes('Mac') ? 'Alt+F9' : 'Ctrl+F9'));
+  const [shortcutErrors, setShortcutErrors] = useState<{ save?: string; load?: string }>({});
+  const [capturing, setCapturing] = useState<'save' | 'load'>();
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const gameName = game ? `${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}` : '';
+
+  useEffect(() => {
+    if (kind !== 'settings') return;
+    return () => { bridge.capture(false).catch(() => undefined); };
+  }, [bridge, kind]);
+
+  function captureKey(event: ReactKeyboardEvent<HTMLInputElement>, which: 'save' | 'load') {
+    if (event.key === 'Tab' || event.key === 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const shortcut = capturedShortcut(event);
+    if (!shortcut) return;
+    if (which === 'save') setSaveShortcut(shortcut);
+    else setLoadShortcut(shortcut);
+    setShortcutErrors((current) => ({ ...current, [which]: undefined }));
+  }
+
+  async function browse(which: 'executable' | 'location') {
+    try {
+      const picked = await open({ title: which === 'executable' ? 'Choose game executable' : 'Choose save folder',
+        directory: which === 'location', multiple: false, fileAccessMode: 'scoped' });
+      if (typeof picked !== 'string') return;
+      if (which === 'location') setLocation(picked);
+      else {
+        setExecutable(picked);
+        setResetExecutable(false);
+        if (kind === 'add' && !name.trim()) setName(picked.split(/[/\\]/).pop()!.replace(/\.[^.]+$/, ''));
+      }
+    } catch (failure) { setError(message(failure)); }
+  }
+
+  useEffect(() => {
+    if (!game || kind !== 'configure') return;
+    let live = true;
+    bridge.request<SaveSet>({ type: 'save_set', game: game.id })
+      .then((value) => { if (live) { setSaveSet(value); setLocation(value.location || ''); } })
+      .catch((failure) => { if (live) setError(message(failure)); });
+    return () => { live = false; };
+  }, [bridge, game?.id, kind]);
+
+  useEffect(() => {
+    if (!game || kind !== 'flush') return;
+    let live = true;
+    bridge.request<FlushPreview>({ type: 'flush_preview', game: game.id, limit: 30 })
+      .then((value) => { if (live) setPreview(value); })
+      .catch((failure) => { if (live) setError(message(failure)); });
+    return () => { live = false; };
+  }, [bridge, game?.id, kind]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (kind === 'flush' && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') !== 'flush') { close(); return; }
+    if (kind === 'settings') {
+      const errors = { save: shortcutError(saveShortcut, loadShortcut), load: shortcutError(loadShortcut, saveShortcut) };
+      if (errors.save || errors.load) { setShortcutErrors(errors); return; }
+    }
+    setError(undefined);
+    setBusy(true);
+    try {
+      if (kind === 'add') {
+        if (!name.trim() || !executable.trim() || !location.trim()) throw new Error('Fill in the name, executable, and save location.');
+        const result = await bridge.request<{ game: string }>({ type: 'add_game', name: name.trim(), executable: executable.trim(), save_location: location.trim() });
+        onAdded(result.game);
+      } else if (kind === 'configure' && game) {
+        const custom = game.kind === 'custom';
+        await bridge.request({ type: 'configure', game: game.id,
+          name: custom ? name.trim() : undefined,
+          executable: !resetExecutable && executable.trim() !== (game.executable || '') ? executable.trim() : undefined,
+          save_location: location.trim() || undefined,
+          reset_executable: resetExecutable, reset_save_location: !custom && !location.trim() && Boolean(saveSet?.location),
+        });
+        close();
+      } else if (kind === 'settings') {
+        await bridge.request({ type: 'settings', play_sounds: sounds,
+          launch_on_startup: state?.settings?.launch_on_startup_available && startup !== state.settings.launch_on_startup ? startup : undefined,
+          save_shortcut: saveShortcut, load_shortcut: loadShortcut });
+        close();
+      } else if (kind === 'flush' && game) {
+        const accepted = await bridge.request<{ id: string }>({ type: 'flush', game: game.id });
+        close();
+        onFlushed(accepted.id);
+      }
+    } catch (failure) {
+      const detail = message(failure);
+      if (kind === 'settings' && detail.startsWith('Save shortcut:')) setShortcutErrors({ save: detail.slice(14).trim() });
+      else if (kind === 'settings' && detail.startsWith('Load shortcut:')) setShortcutErrors({ load: detail.slice(14).trim() });
+      else setError(detail);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const title = kind === 'settings' ? 'Settings' : kind === 'add' ? 'Add custom game'
+    : `${kind === 'configure' ? 'Configure paths' : 'Flush checkpoints'} — ${gameName}`;
+  return <DialogFrame title={title} kind={kind} close={close}>
+    <form onSubmit={submit}>
+      <div className="dialog-body">
+        {kind === 'settings' && <>
+          <div className="dialog-field"><label htmlFor="save-shortcut">Save shortcut</label><input id="save-shortcut" data-shortcut-field="save"
+            value={displayShortcut(saveShortcut)} readOnly aria-invalid={Boolean(shortcutErrors.save)} aria-describedby={shortcutErrors.save ? 'save-shortcut-error' : undefined}
+            className={capturing === 'save' ? 'capturing' : ''}
+            onFocus={() => { setCapturing('save'); bridge.capture(true).catch((failure) => setError(message(failure))); }}
+            onBlur={(event) => { setCapturing(undefined); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.shortcutField)) bridge.capture(false).catch(() => undefined); }}
+            onKeyDown={(event) => captureKey(event, 'save')} /></div>
+          {shortcutErrors.save && <p id="save-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutErrors.save}</p>}
+          <div className="dialog-field"><label htmlFor="load-shortcut">Load shortcut</label><input id="load-shortcut" data-shortcut-field="load"
+            value={displayShortcut(loadShortcut)} readOnly aria-invalid={Boolean(shortcutErrors.load)} aria-describedby={shortcutErrors.load ? 'load-shortcut-error' : undefined}
+            className={capturing === 'load' ? 'capturing' : ''}
+            onFocus={() => { setCapturing('load'); bridge.capture(true).catch((failure) => setError(message(failure))); }}
+            onBlur={(event) => { setCapturing(undefined); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.shortcutField)) bridge.capture(false).catch(() => undefined); }}
+            onKeyDown={(event) => captureKey(event, 'load')} /></div>
+          {shortcutErrors.load && <p id="load-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutErrors.load}</p>}
+          <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds</label>
+          <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
+            onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>
+          {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}
+        </>}
+        {(kind === 'add' || kind === 'configure') && <>
+          {kind === 'configure' && !saveSet && !error && <p>Loading paths…</p>}
+          {kind === 'configure' && game?.kind === 'custom' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
+          <div className="dialog-field"><label htmlFor="game-executable">Game executable</label><input id="game-executable" value={executable}
+            onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); }} required />
+            <button type="button" onClick={() => browse('executable')}>Browse…</button>
+            {kind === 'configure' && game && <button type="button" disabled={resetExecutable || executable !== (game.executable || '')}
+              onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}>Open</button>}
+            {kind === 'configure' && game?.kind !== 'custom' && <button type="button" onClick={() => { setExecutable(game?.executable || ''); setResetExecutable(true); }}>Reset</button>}
+          </div>
+          {kind === 'configure' && game?.kind !== 'custom' && saveSet?.catalog && <div className="catalog-paths"><span>Catalog save locations</span>{saveSet.catalog.map((target) => <code key={target.root}>{target.root}</code>)}</div>}
+          <div className="dialog-field"><label htmlFor="save-location">Save location</label><input id="save-location" value={location}
+            onChange={(event) => setLocation(event.target.value)} required={kind === 'add' || game?.kind === 'custom'} />
+            <button type="button" onClick={() => browse('location')}>Browse…</button>
+            {kind === 'configure' && game?.kind !== 'custom' && <button type="button" onClick={() => setLocation('')}>Reset</button>}
+          </div>
+          <p className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</p>
+          {saveSet?.catalog_problem && <p className="dialog-hint">{saveSet.catalog_problem}</p>}
+          {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
+        </>}
+        {kind === 'flush' && <>
+          <p>Permanently delete all backups and clear this game's history?<br />Your current game data will be kept.</p>
+          {preview ? <><dl className="flush-counts">
+            {preview.saved > 0 && <><dt>Saved backups</dt><dd>{preview.saved}</dd></>}
+            {preview.recovery > 0 && <><dt>Recovery points</dt><dd>{preview.recovery}</dd></>}
+            {preview.temporary > 0 && <><dt>Incomplete copies</dt><dd>{preview.temporary}</dd></>}
+            <dt>Total</dt><dd>{formatBytes(preview.size)}</dd>
+          </dl><button type="button" className="details-toggle" onClick={() => setDetails(!details)} aria-expanded={details}>{details ? '▾' : '▸'} Details</button>
+            {details && <div className="flush-details">{preview.items.map((item) => <div key={item.path}><span>{item.kind}</span> {item.path} {item.label}</div>)}
+              {preview.next && <button type="button" onClick={async () => {
+                try { const page = await bridge.request<FlushPreview>({ type: 'flush_preview', game: game!.id, cursor: preview.next, limit: 30 });
+                  setPreview({ ...page, items: [...preview.items, ...page.items] }); } catch (failure) { setError(message(failure)); }
+              }}>Show more</button>}</div>}
+          </> : !error && <p>Checking checkpoints…</p>}
+        </>}
+        {error && <p className="dialog-error" role="alert">{error}</p>}
+      </div>
+      <Footer close={close} submit={kind === 'add' ? 'Add' : kind === 'flush' ? 'Flush' : 'Save'} busy={busy || (kind === 'flush' && !preview) || (kind === 'configure' && !saveSet)} destructive={kind === 'flush'} />
+    </form>
+  </DialogFrame>;
+}
+
+export function formatBytes(bytes: number) {
+  const base = navigator.platform.includes('Win') ? 1024 : 1000;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= base && unit < units.length - 1) { value /= base; unit += 1; }
+  return `${unit === 0 ? Math.round(value) : value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+}

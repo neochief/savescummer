@@ -124,6 +124,31 @@ fn a_version_mismatch_is_refused_clearly() {
 }
 
 #[test]
+fn shortcut_settings_validate_persist_and_pause_hotkeys_during_capture() {
+    let world = World::new();
+    let mut host = world.host();
+    world.ok(&["settings", "--save-shortcut", "Alt+F6", "--load-shortcut", "Ctrl+F10"]);
+    let settings = world.state()["settings"].clone();
+    assert_eq!(settings["save_shortcut"], "Alt+F6");
+    assert_eq!(settings["load_shortcut"], "Ctrl+F10");
+
+    let duplicate = world.cli(&["settings", "--load-shortcut", "Alt+F6"]);
+    assert_eq!(duplicate.error_kind(), "invalid_request");
+    let unsupported = world.cli(&["settings", "--save-shortcut", "A"]);
+    assert_eq!(unsupported.error_kind(), "invalid_request");
+    assert_eq!(world.state()["settings"], settings, "rejected changes keep the saved bindings");
+
+    world.ok(&["raw", r#"{"v":1,"id":"capture-on","type":"ui_report","focused":true,"visible":true,"capturing_shortcut":true}"#]);
+    assert_eq!(world.cli(&["hotkey", "save"]).error_kind(), "invalid_request");
+    world.ok(&["raw", r#"{"v":1,"id":"capture-off","type":"ui_report","focused":false,"visible":true,"capturing_shortcut":false}"#]);
+
+    host.kill();
+    let _host = world.host();
+    assert_eq!(world.state()["settings"]["save_shortcut"], "Alt+F6");
+    assert_eq!(world.state()["settings"]["load_shortcut"], "Ctrl+F10");
+}
+
+#[test]
 fn an_operation_outcome_can_be_asked_for_later() {
     let world = World::new();
     let _host = world.host_with(&[], &[("SAVESCUMMER_TEST_DELAY_AT", "saved.copy:1:800")]);

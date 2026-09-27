@@ -40,7 +40,7 @@ use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, Storage};
 
 use crate::host::{CatalogState, Host, Inner};
-use crate::model::{SETTING_DRIVES, SETTING_PLAY_SOUNDS, SETTING_STORE};
+use crate::model::{SETTING_DRIVES, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT, SETTING_STORE};
 use crate::options::Options;
 
 /// The catalog built into the host, the fallback when nothing newer exists.
@@ -233,6 +233,10 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     let play_sounds = setting(SETTING_PLAY_SOUNDS).is_none_or(|v| v == "1");
     let notices = db::notices(storage.conn()).unwrap_or_default();
     let mut inner = Inner::new(store, play_sounds);
+    let defaults = savescummer_platform::integration::Shortcut::defaults();
+    let save = setting(SETTING_SAVE_SHORTCUT).unwrap_or_else(|| defaults[0].canonical());
+    let load = setting(SETTING_LOAD_SHORTCUT).unwrap_or_else(|| defaults[1].canonical());
+    inner.shortcuts = savescummer_platform::integration::validate_shortcuts(&save, &load).unwrap_or(defaults);
     for (game, kind, _) in notices {
         inner.notices.insert(game, kind);
     }

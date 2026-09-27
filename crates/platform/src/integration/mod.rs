@@ -24,8 +24,10 @@ pub enum Signal {
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
 #[cfg_attr(not(any(windows, target_os = "macos")), path = "unsupported.rs")]
 mod imp;
+mod shortcut;
 
 pub use imp::{Integration, start};
+pub use shortcut::{Key, Shortcut, validate_shortcuts};
 
 /// Runs the OS's event loop on the calling thread, which must be the main
 /// thread, until `wait` returns (the host waits for shutdown and shuts down
