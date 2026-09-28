@@ -1,0 +1,2068 @@
+{
+ "state": {
+  "instance": "host-72dc3ba5b7404e81aeaed8c1210eb6f1",
+  "revision": 491,
+  "host_version": "0.2.0",
+  "phase": "ready",
+  "settings": {
+   "play_sounds": true,
+   "save_shortcut": "Alt+F5",
+   "load_shortcut": "Alt+F9",
+   "launch_on_startup": true,
+   "launch_on_startup_available": false,
+   "launch_on_startup_needs_approval": false,
+   "checkpoint_store": "~/savescummer/.runtime/dev-demo/data/checkpoints"
+  },
+  "store": {
+   "path": "~/savescummer/.runtime/dev-demo/data/checkpoints",
+   "available": true
+  },
+  "scan": {
+   "scans": 10,
+   "full_scans": 1
+  },
+  "active_stack": [
+   "steam-212680"
+  ],
+  "hotkey_target": "steam-212680",
+  "catalog_revision": "95d9b7af64cbe3fc9585395c511aa8c17f821463",
+  "games": [
+   {
+    "id": "steam-1337520",
+    "name": "Risk of Rain Returns",
+    "kind": "known",
+    "catalog_id": "steam-1337520",
+    "store": "steam",
+    "installed": true,
+    "running": false,
+    "info": "**Context:** The desired value is protecting a powerful item build before a late teleporter, Providence route, or difficult stage.\n\n**How progress is saved:** The game does not provide normal Save & Quit for an active run.\n\n**SaveScummer value:** A file-only SaveScummer cannot restore that live build, so the main use case remains unsupported without runtime capture.",
+    "executable": "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/Risk of Rain Returns/Risk of Rain Returns.exe",
+    "save": {
+     "available": true
+    },
+    "load": {
+     "available": true
+    },
+    "latest": {
+     "id": "cp-48d3f7fd10bf45a48013152bcc8a95b4",
+     "created_at": "2026-09-28T15:16:55.060Z"
+    },
+    "has_history": true,
+    "checkpoints_size": 16592,
+    "last_result": {
+     "id": "op-99958c22db5b42ecbc340c9280da333f",
+     "request_id": "demo-6904ed80d0224b0da703462d3231c095",
+     "game": "steam-1337520",
+     "kind": "load",
+     "status": "succeeded",
+     "result": {
+      "checkpoint": "cp-48d3f7fd10bf45a48013152bcc8a95b4",
+      "recovery": "cp-b5bc95f359314210afaa6abbd621e679",
+      "removed_files": 0
+     },
+     "created_at": "2026-09-28T15:16:59.195Z",
+     "finished_at": "2026-09-28T15:16:59.237Z"
+    },
+    "labels_version": 0,
+    "artwork": {
+     "hero": "~/savescummer/.runtime/dev-demo/data/cache/artwork/1337520/hero.jpg",
+     "logo": "~/savescummer/.runtime/dev-demo/data/cache/artwork/1337520/logo.png",
+     "header": "~/savescummer/.runtime/dev-demo/data/cache/artwork/1337520/header.jpg"
+    },
+    "history_version": 26
+   },
+   {
+    "id": "steam-203770",
+    "name": "Crusader Kings II",
+    "kind": "known",
+    "catalog_id": "steam-203770",
+    "store": "steam",
+    "installed": true,
+    "running": false,
+    "info": "**Context:** CK2 achievements are tied to Ironman-compatible campaigns, where a bad succession, ruler death, or war can undo decades of setup.\n\n**How progress is saved:** Ironman continually overwrites one campaign save instead of keeping manual rollback slots.\n\n**SaveScummer value:** Checkpoint before a succession, faction revolt, risky war, imprisonment, or inheritance play. Restore the dynasty after a disastrous outcome without abandoning the achievement run.",
+    "executable": "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/Crusader Kings II/CK2game.exe",
+    "save": {
+     "available": true
+    },
+    "load": {
+     "available": true
+    },
+    "latest": {
+     "id": "cp-236b4f56b9fd4a46879f158f91b31d22",
+     "created_at": "2026-09-28T15:17:16.619Z"
+    },
+    "has_history": true,
+    "checkpoints_size": 10385,
+    "last_result": {
+     "id": "op-a5f3b71d54574bfe923f9a54f8df9dc9",
+     "request_id": "demo-952975ca03c144ba9a001d31de94e272",
+     "game": "steam-203770",
+     "kind": "load",
+     "status": "succeeded",
+     "result": {
+      "checkpoint": "cp-236b4f56b9fd4a46879f158f91b31d22",
+      "recovery": "cp-10a0094f48cc4b96a6443356db837af3",
+      "removed_files": 0
+     },
+     "created_at": "2026-09-28T15:17:20.741Z",
+     "finished_at": "2026-09-28T15:17:20.770Z"
+    },
+    "labels_version": 0,
+    "artwork": {
+     "hero": "~/savescummer/.runtime/dev-demo/data/cache/artwork/203770/hero.jpg",
+     "logo": "~/savescummer/.runtime/dev-demo/data/cache/artwork/203770/logo.png",
+     "header": "~/savescummer/.runtime/dev-demo/data/cache/artwork/203770/header.jpg"
+    },
+    "history_version": 26
+   },
+   {
+    "id": "steam-212680",
+    "name": "FTL: Faster Than Light",
+    "kind": "known",
+    "catalog_id": "steam-212680",
+    "store": "steam",
+    "installed": true,
+    "running": true,
+    "info": "**Context:** A late ship can have a rare crew, weapon package, augments, systems, and damage state that took several sectors to assemble.\n\n**How progress is saved:** FTL keeps one active-run continuation save that is overwritten as the run advances and disappears when the run ends.\n\n**SaveScummer value:** Checkpoint before a dangerous beacon, sector exit, or Flagship phase. Retry the same ship and strategy after a catastrophic fight instead of rebuilding the run.",
+    "executable": "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/FTL Faster Than Light/FTLGame.exe",
+    "save": {
+     "available": true
+    },
+    "load": {
+     "available": true
+    },
+    "latest": {
+     "id": "cp-7ae4c002baf24b2b922a2cf75b768bbe",
+     "created_at": "2026-09-28T15:17:38.188Z"
+    },
+    "has_history": true,
+    "checkpoints_size": 10105,
+    "last_result": {
+     "id": "op-075edea40bfc472594fe5718eb21b135",
+     "request_id": "demo-0752fb0b28fa4c1087e3285b9e9add5c",
+     "game": "steam-212680",
+     "kind": "load",
+     "status": "succeeded",
+     "result": {
+      "checkpoint": "cp-7ae4c002baf24b2b922a2cf75b768bbe",
+      "recovery": "cp-e4c3a81a03374e45b7a882f795579186",
+      "removed_files": 0
+     },
+     "created_at": "2026-09-28T15:17:42.307Z",
+     "finished_at": "2026-09-28T15:17:42.334Z"
+    },
+    "labels_version": 0,
+    "artwork": {
+     "hero": "~/savescummer/.runtime/dev-demo/data/cache/artwork/212680/hero.jpg",
+     "logo": "~/savescummer/.runtime/dev-demo/data/cache/artwork/212680/logo.png",
+     "header": "~/savescummer/.runtime/dev-demo/data/cache/artwork/212680/header.jpg"
+    },
+    "history_version": 25
+   },
+   {
+    "id": "steam-250900",
+    "name": "The Binding of Isaac: Rebirth",
+    "kind": "known",
+    "catalog_id": "steam-250900",
+    "store": "steam",
+    "installed": true,
+    "running": false,
+    "info": "**Context:** A rare item synergy or completion-mark run can be hard to reproduce once a late death ends it.\n\n**How progress is saved:** An active run has continuation data for Continue, but the game does not keep a reusable history of earlier run states.\n\n**SaveScummer value:** Checkpoint before a late boss, sacrifice sequence, or route decision. Restore the exact build after failure instead of rerolling until the same synergy appears again.",
+    "executable": "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/The Binding of Isaac Rebirth/isaac-ng.exe",
+    "save": {
+     "available": true
+    },
+    "load": {
+     "available": true
+    },
+    "latest": {
+     "id": "cp-873a2cb8f0be440f9bf5dba04695488a",
+     "created_at": "2026-09-28T15:15:50.179Z"
+    },
+    "has_history": true,
+    "checkpoints_size": 41134,
+    "last_result": {
+     "id": "op-914bbb17b4b9491eaebf054d80259b21",
+     "request_id": "demo-099df2c182ff4f65ba9cd7cff83160a2",
+     "game": "steam-250900",
+     "kind": "load",
+     "status": "succeeded",
+     "result": {
+      "checkpoint": "cp-873a2cb8f0be440f9bf5dba04695488a",
+      "recovery": "cp-3caa89a73888460ca3e4256ff148095f",
+      "removed_files": 0
+     },
+     "created_at": "2026-09-28T15:15:54.373Z",
+     "finished_at": "2026-09-28T15:15:54.463Z"
+    },
+    "labels_version": 0,
+    "artwork": {
+     "hero": "~/savescummer/.runtime/dev-demo/data/cache/artwork/250900/hero.jpg",
+     "logo": "~/savescummer/.runtime/dev-demo/data/cache/artwork/250900/logo.png",
+     "header": "~/savescummer/.runtime/dev-demo/data/cache/artwork/250900/header.jpg"
+    },
+    "history_version": 22
+   },
+   {
+    "id": "steam-311690",
+    "name": "Enter the Gungeon",
+    "kind": "known",
+    "catalog_id": "steam-311690",
+    "store": "steam",
+    "installed": true,
+    "running": false,
+    "info": "**Context:** A deep run can have a rare gun/passive synergy, Master Rounds, keys, health, and secret-route progress that is hard to reproduce.\n\n**How progress is saved:** The Save Button serializes the run only at floor exits and resumes on the next floor.\n\n**SaveScummer value:** Checkpoint at a floor exit before a late floor, secret route, or boss sequence. Restore the same build after death instead of rerolling the run.",
+    "executable": "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/Enter the Gungeon/EtG.exe",
+    "save": {
+     "available": true
+    },
+    "load": {
+     "available": true
+    },
+    "latest": {
+     "id": "cp-358896b27d01490faeab78ca587a973d",
+     "label": "Heart",
+     "created_at": "2026-07-26T16:42:00.000Z"
+    },
+    "has_history": true,
+    "checkpoints_size": 13423,
+    "last_result": {
+     "id": "op-efc002821c7b4e7eba30e73b3169059e",
+     "request_id": "demo-cc0eeb34621f4fb4a8c656a3a1def4f6",
+     "game": "steam-311690",
+     "kind": "save",
+     "status": "succeeded",
+     "result": {
+      "checkpoint": "cp-358896b27d01490faeab78ca587a973d"
+     },
+     "created_at": "2026-07-26T16:42:00.000Z",
+     "finished_at": "2026-07-26T16:42:00.000Z"
+    },
+    "labels_version": 0,
+    "artwork": {
+     "hero": "~/savescummer/.runtime/dev-demo/data/cache/artwork/311690/hero.jpg",
+     "logo": "~/savescummer/.runtime/dev-demo/data/cache/artwork/311690/logo.png",
+     "header": "~/savescummer/.runtime/dev-demo/data/cache/artwork/311690/header.jpg"
+    },
+    "history_version": 7
+   },
+   {
+    "id": "steam-646570",
+    "name": "Slay the Spire",
+    "kind": "known",
+    "catalog_id": "steam-646570",
+    "store": "steam",
+    "installed": true,
+    "running": false,
+    "info": "**Context:** A late deck can contain a rare card/relic engine that may take many runs to see again.\n\n**How progress is saved:** The game autosaves the current run and Save & Quit resumes it, but earlier deck/path states are normally overwritten.\n\n**SaveScummer value:** Checkpoint before an Act boss, Elite path, event, shop, or build-defining reward. Restore to retry or compare the decision without rerolling the entire deck.",
+    "executable": "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/SlayTheSpire/jre/bin/javaw.exe",
+    "save": {
+     "available": true
+    },
+    "load": {
+     "available": false,
+     "reason": "no_saves"
+    },
+    "has_history": false,
+    "checkpoints_size": 0,
+    "last_result": {
+     "id": "op-46997e4815d44551a2874262c4b26108",
+     "request_id": "demo-45b5351e4fa646b7a2c0341e927bcd52",
+     "game": "steam-646570",
+     "kind": "save",
+     "status": "failed",
+     "error": {
+      "kind": "read_failed",
+      "game": "steam-646570",
+      "paths": [
+       "~/savescummer/.runtime/dev-demo/machine/Steam/steamapps/common/SlayTheSpire/betaPreferences/save.dat"
+      ],
+      "detail": "Permission denied (os error 13)"
+     },
+     "created_at": "2026-09-28T15:16:37.569Z",
+     "finished_at": "2026-09-28T15:16:37.645Z"
+    },
+    "labels_version": 0,
+    "artwork": {
+     "hero": "~/savescummer/.runtime/dev-demo/data/cache/artwork/646570/hero.jpg",
+     "logo": "~/savescummer/.runtime/dev-demo/data/cache/artwork/646570/logo.png",
+     "header": "~/savescummer/.runtime/dev-demo/data/cache/artwork/646570/header.jpg"
+    },
+    "history_version": 1
+   }
+  ],
+  "deletes": []
+ },
+ "history": {
+  "steam-1337520": [
+   {
+    "id": "row-e1d534e7ad3d4dd38674f6333af5f53c",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:17:04.419Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-93e443d3e92244f89fbd58edc327b785",
+    "kind": "loaded",
+    "at": "2026-09-28T15:16:59.236Z",
+    "checkpoint": "cp-b5bc95f359314210afaa6abbd621e679",
+    "restored": "cp-48d3f7fd10bf45a48013152bcc8a95b4",
+    "saved_at": "2026-09-28T15:16:55.060Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-492854e4c21946fbbadf2a7db7b4cdcd",
+    "kind": "saved",
+    "at": "2026-09-28T15:16:55.060Z",
+    "checkpoint": "cp-48d3f7fd10bf45a48013152bcc8a95b4",
+    "saved_at": "2026-09-28T15:16:55.060Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-7919179f008c4257976b345f9009a5b5",
+    "kind": "saved",
+    "at": "2026-09-28T15:16:49.909Z",
+    "checkpoint": "cp-b1c98acad7114037a41b8a47d2776bc3",
+    "saved_at": "2026-09-28T15:16:49.909Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-1bcfcab82d404089889f9362dee93586",
+    "kind": "game_started",
+    "at": "2026-09-28T15:16:45.884Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-583de571d1b047a99aea481348f4e475",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:14:54.925Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-fc585156d4fb4d908a3a34ad05735160",
+    "kind": "loaded",
+    "at": "2026-09-28T15:14:49.699Z",
+    "checkpoint": "cp-eb44b64742a641bbb3fa8bab2093c052",
+    "restored": "cp-bd2909b5a6b84925b385176999888104",
+    "saved_at": "2026-09-28T15:14:45.534Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-32b2a851f3374259b49abb12883ac9e4",
+    "kind": "saved",
+    "at": "2026-09-28T15:14:45.534Z",
+    "checkpoint": "cp-bd2909b5a6b84925b385176999888104",
+    "saved_at": "2026-09-28T15:14:45.534Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-cbc29c5a5ed34a1a8d779cf6895530ca",
+    "kind": "saved",
+    "at": "2026-09-28T15:14:40.381Z",
+    "checkpoint": "cp-28d0f15142884d28b1be2454919d6643",
+    "saved_at": "2026-09-28T15:14:40.381Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-0716613b3c8a4932819bd5b58a5cd493",
+    "kind": "game_started",
+    "at": "2026-09-28T15:14:36.394Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-1b555fb5835a485a8adee1318bee7620",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:12:45.487Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-ae888eb356594d5bb6fa6e8ffa63c800",
+    "kind": "loaded",
+    "at": "2026-09-28T15:12:40.267Z",
+    "checkpoint": "cp-e9784b04a5e347ab87007eb31b19e526",
+    "restored": "cp-39c50b312d8e49ceb808899cc32f8711",
+    "label": "Floor 23",
+    "saved_at": "2026-09-28T15:12:36.096Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-824aacebd4584986a495d8ba8b4720ce",
+    "kind": "saved",
+    "at": "2026-09-28T15:12:36.096Z",
+    "checkpoint": "cp-39c50b312d8e49ceb808899cc32f8711",
+    "label": "Floor 23",
+    "saved_at": "2026-09-28T15:12:36.096Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-948f9af5815e4603a1c84ea7c347c57a",
+    "kind": "saved",
+    "at": "2026-09-28T15:12:30.955Z",
+    "checkpoint": "cp-c4a3ca3f16c04688b04c704418b5e18f",
+    "saved_at": "2026-09-28T15:12:30.955Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-6ebca764039845d9a2c9a65918a59beb",
+    "kind": "game_started",
+    "at": "2026-09-28T15:12:26.930Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-680bca2734bc4485aac904d9ecaf1c5c",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:10:35.997Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-c2246df31f3c4f4e9cc968055b6edae5",
+    "kind": "loaded",
+    "at": "2026-09-28T15:10:30.885Z",
+    "checkpoint": "cp-16061c9f78f84501a21fc6d744d263d7",
+    "restored": "cp-bfa88c77fd22444c8e48573583b1e79f",
+    "saved_at": "2026-09-28T15:10:26.720Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-1cf18d7cf8b8499ba024b2012d9aa454",
+    "kind": "saved",
+    "at": "2026-09-28T15:10:26.720Z",
+    "checkpoint": "cp-bfa88c77fd22444c8e48573583b1e79f",
+    "saved_at": "2026-09-28T15:10:26.720Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-fecaaae83485434dae149b93f334b2d5",
+    "kind": "saved",
+    "at": "2026-09-28T15:10:21.582Z",
+    "checkpoint": "cp-5a138503dfe84ac88d721344c910a3d7",
+    "saved_at": "2026-09-28T15:10:21.582Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-66e118585caa4bc8af5c77a0325c7ce2",
+    "kind": "game_started",
+    "at": "2026-09-28T15:10:17.731Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-4ef863036733427db2213bcbf84e9620",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:08:26.550Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-956d0ffa61cd4d1586e2d4c3f100ddd2",
+    "kind": "loaded",
+    "at": "2026-09-28T15:08:21.402Z",
+    "checkpoint": "cp-e6bbec933851404786195b83d25e9815",
+    "restored": "cp-7cddc1339af849ddbaa4b631c819d8d8",
+    "saved_at": "2026-09-28T15:08:17.229Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-1ed969fde0a545268d1b2cde6cfbe79f",
+    "kind": "saved",
+    "at": "2026-09-28T15:08:17.229Z",
+    "checkpoint": "cp-7cddc1339af849ddbaa4b631c819d8d8",
+    "saved_at": "2026-09-28T15:08:17.229Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-7770ac6b71cc434ebe7c92c387dfc35b",
+    "kind": "saved",
+    "at": "2026-09-28T15:08:12.066Z",
+    "checkpoint": "cp-bf952d8ad44d4a9082187f694a82894d",
+    "saved_at": "2026-09-28T15:08:12.066Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-15829f85e3624688865ade7b1b970849",
+    "kind": "game_started",
+    "at": "2026-09-28T15:08:08.022Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-b880e4f5e8314c8c820d6e3d2f413ca6",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:06:16.965Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-16f450c7d3754cec9c69d55d33beee68",
+    "kind": "loaded",
+    "at": "2026-09-28T15:06:11.770Z",
+    "checkpoint": "cp-af1df4339c104058aa9e5bdeb2b5fcb3",
+    "restored": "cp-baa3223f1d7342daa588eecdf1b87d63",
+    "saved_at": "2026-09-28T15:06:07.603Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-79e7339579364ef3ad67546d2231faa0",
+    "kind": "saved",
+    "at": "2026-09-28T15:06:07.603Z",
+    "checkpoint": "cp-baa3223f1d7342daa588eecdf1b87d63",
+    "saved_at": "2026-09-28T15:06:07.603Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-2859fd0ebae54caeb654e9ad9acbf5ce",
+    "kind": "saved",
+    "at": "2026-09-28T15:06:02.461Z",
+    "checkpoint": "cp-52c8dbb4b7d746ccaf05edc808d14c42",
+    "saved_at": "2026-09-28T15:06:02.461Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-6d2eb1556f304735bbe78f6824916ea4",
+    "kind": "game_started",
+    "at": "2026-09-28T15:05:58.432Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-4a3ee0590f5f446ab7e7815cdaaa7116",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.535Z",
+    "checkpoint": "cp-73858468c63a4cca9e19fadd5d95464d",
+    "saved_at": "2026-09-28T15:05:57.535Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-6e9bfa129a644385a053b25f75998e8d",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.472Z",
+    "checkpoint": "cp-a247810fb07b4306a56ecee403014078",
+    "saved_at": "2026-09-28T15:05:57.472Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   }
+  ],
+  "steam-203770": [
+   {
+    "id": "row-5b79dc33c2e74161b743cfb4312a4b62",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:17:26.003Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-7de4f9f0be8941aa9f824caa7f0ec56b",
+    "kind": "loaded",
+    "at": "2026-09-28T15:17:20.768Z",
+    "checkpoint": "cp-10a0094f48cc4b96a6443356db837af3",
+    "restored": "cp-236b4f56b9fd4a46879f158f91b31d22",
+    "saved_at": "2026-09-28T15:17:16.619Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-64b02844a2bd48869478f39284177106",
+    "kind": "saved",
+    "at": "2026-09-28T15:17:16.619Z",
+    "checkpoint": "cp-236b4f56b9fd4a46879f158f91b31d22",
+    "saved_at": "2026-09-28T15:17:16.619Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-5dc477f140874336abbc66b9119eea5f",
+    "kind": "saved",
+    "at": "2026-09-28T15:17:11.474Z",
+    "checkpoint": "cp-dd03ba52f7854e349b4db69a1a6103ac",
+    "saved_at": "2026-09-28T15:17:11.474Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-d8a7d24f8c2348a2ad501e8223caaedf",
+    "kind": "game_started",
+    "at": "2026-09-28T15:17:07.467Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-c761c3e616ba42caa1c0b61835bdfcee",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:15:16.508Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-6efa76862aa44f4e9dd5a4036e0790b8",
+    "kind": "loaded",
+    "at": "2026-09-28T15:15:11.225Z",
+    "checkpoint": "cp-7a175983f548413bbc4e634f656850fe",
+    "restored": "cp-0789be9df1bf4a718709ff33cf16cfe3",
+    "saved_at": "2026-09-28T15:15:07.074Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-4cdcb54bddcc42faa3bcc9ce1785072a",
+    "kind": "saved",
+    "at": "2026-09-28T15:15:07.074Z",
+    "checkpoint": "cp-0789be9df1bf4a718709ff33cf16cfe3",
+    "saved_at": "2026-09-28T15:15:07.074Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-5f0db9aeb381424fa5f6ae340dddc926",
+    "kind": "saved",
+    "at": "2026-09-28T15:15:01.927Z",
+    "checkpoint": "cp-b35e011c38714cbd8fe22d9faeb0bee2",
+    "saved_at": "2026-09-28T15:15:01.927Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-7d080ed3a8fd46469ba2628a5712922e",
+    "kind": "game_started",
+    "at": "2026-09-28T15:14:57.958Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-f937178dfe0644a186e65cf30dfea2c8",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:13:07.074Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-153aabf4b6de47ebae0af454ca7760f7",
+    "kind": "loaded",
+    "at": "2026-09-28T15:13:01.822Z",
+    "checkpoint": "cp-a05b3b59e180423299a69ed7d7e71816",
+    "restored": "cp-5e49f3e2405f449b81da36a9c9ea35f3",
+    "saved_at": "2026-09-28T15:12:57.670Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-7130deea30fe4115aafa9006b43fe24a",
+    "kind": "saved",
+    "at": "2026-09-28T15:12:57.670Z",
+    "checkpoint": "cp-5e49f3e2405f449b81da36a9c9ea35f3",
+    "saved_at": "2026-09-28T15:12:57.670Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-f1b0ac2126fe4ebf99d0918c24b2367b",
+    "kind": "saved",
+    "at": "2026-09-28T15:12:52.527Z",
+    "checkpoint": "cp-c86388cb0f0444519520e26e6378b878",
+    "saved_at": "2026-09-28T15:12:52.527Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-0679ffdc77b1414082a1ff8a073c71a1",
+    "kind": "game_started",
+    "at": "2026-09-28T15:12:48.533Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-9193c9a6c6bd438ca17eb26477197e3f",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:10:57.557Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-eb51d26d7e1e42aa8e364cf30f4eaa56",
+    "kind": "loaded",
+    "at": "2026-09-28T15:10:52.408Z",
+    "checkpoint": "cp-c2373b8cef2a4f0982666eb44bcf99af",
+    "restored": "cp-edd709c9fbb04ce3aa938b625306392e",
+    "saved_at": "2026-09-28T15:10:48.260Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-98695f77c44841998ac1c886a30ea343",
+    "kind": "saved",
+    "at": "2026-09-28T15:10:48.260Z",
+    "checkpoint": "cp-edd709c9fbb04ce3aa938b625306392e",
+    "saved_at": "2026-09-28T15:10:48.260Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-48f12628b3f04bb39464b799e1c3bf79",
+    "kind": "saved",
+    "at": "2026-09-28T15:10:43.109Z",
+    "checkpoint": "cp-965168be27bd45f9a7d240c3722c9dd3",
+    "saved_at": "2026-09-28T15:10:43.109Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-8021d439256b4e789748d111b8605f24",
+    "kind": "game_started",
+    "at": "2026-09-28T15:10:39.037Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-9bc5f8ff2bfe461491d5374f9a9920e9",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:08:48.121Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-15629c1cdda749ceab8243e09369ab7d",
+    "kind": "loaded",
+    "at": "2026-09-28T15:08:42.939Z",
+    "checkpoint": "cp-76f129b06bf64d1f98b0d4630ba20568",
+    "restored": "cp-c7fd47ba37f143b88a931d8c533078ed",
+    "label": "Floor 12",
+    "saved_at": "2026-09-28T15:08:38.793Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-4435d00938d745c49624f60cd5f08369",
+    "kind": "saved",
+    "at": "2026-09-28T15:08:38.793Z",
+    "checkpoint": "cp-c7fd47ba37f143b88a931d8c533078ed",
+    "label": "Floor 12",
+    "saved_at": "2026-09-28T15:08:38.793Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-c3d51e361cd64a0dbcc942c40656b5fd",
+    "kind": "saved",
+    "at": "2026-09-28T15:08:33.649Z",
+    "checkpoint": "cp-632ad76b1e2b4ff5a68a4eb5d93676d7",
+    "saved_at": "2026-09-28T15:08:33.649Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-99533cbb265a43e886ce6c1b21adbeb1",
+    "kind": "game_started",
+    "at": "2026-09-28T15:08:29.588Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-261dfe2916ef4626ac76106ef127ee0d",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:06:38.557Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-5cc1b2f6ae534db1851776eb262f95ab",
+    "kind": "loaded",
+    "at": "2026-09-28T15:06:33.392Z",
+    "checkpoint": "cp-a06dae543be14334bd28210fc45ae8c4",
+    "restored": "cp-57f053dd131e4c58b4295e6158f03c47",
+    "saved_at": "2026-09-28T15:06:29.220Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-7cea3e6982524766b17861f126a0017b",
+    "kind": "saved",
+    "at": "2026-09-28T15:06:29.220Z",
+    "checkpoint": "cp-57f053dd131e4c58b4295e6158f03c47",
+    "saved_at": "2026-09-28T15:06:29.220Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-33e936f893e948448f06fba9e1d5a06a",
+    "kind": "saved",
+    "at": "2026-09-28T15:06:24.061Z",
+    "checkpoint": "cp-02b5b33d08c243d88fca6d1a0a86f85f",
+    "saved_at": "2026-09-28T15:06:24.061Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-117490486f224f7cb98da0d9592ef68c",
+    "kind": "game_started",
+    "at": "2026-09-28T15:06:20.017Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-fe67bf818e95488fa6d739fd46f8c707",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.651Z",
+    "checkpoint": "cp-a7bcdafe79fe4afdbd8406571d639552",
+    "saved_at": "2026-09-28T15:05:57.651Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-08622e95b5784f609c253ca937f4f451",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.592Z",
+    "checkpoint": "cp-e98d5e0de8c143158d6aa73be037b163",
+    "saved_at": "2026-09-28T15:05:57.592Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   }
+  ],
+  "steam-212680": [
+   {
+    "id": "row-2e4ff2ee568f4a869143015fbd934b32",
+    "kind": "loaded",
+    "at": "2026-09-28T15:17:42.333Z",
+    "checkpoint": "cp-e4c3a81a03374e45b7a882f795579186",
+    "restored": "cp-7ae4c002baf24b2b922a2cf75b768bbe",
+    "saved_at": "2026-09-28T15:17:38.188Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-ffae3ae39d7444b9b101af20a7d5691c",
+    "kind": "saved",
+    "at": "2026-09-28T15:17:38.188Z",
+    "checkpoint": "cp-7ae4c002baf24b2b922a2cf75b768bbe",
+    "saved_at": "2026-09-28T15:17:38.188Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-d96afbd9210f490db203c40c4432f4a0",
+    "kind": "saved",
+    "at": "2026-09-28T15:17:33.040Z",
+    "checkpoint": "cp-24b7593ff8b44ced9c0b219036fcd678",
+    "saved_at": "2026-09-28T15:17:33.040Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-63219e39973e4f2a8b191f78779b64c2",
+    "kind": "game_started",
+    "at": "2026-09-28T15:17:29.052Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-cd165ca860ba4d4dbcb4d33131c253f7",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:15:38.096Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-5fcc543cef11413a8ef5fbb7488786e4",
+    "kind": "loaded",
+    "at": "2026-09-28T15:15:32.766Z",
+    "checkpoint": "cp-e0638ffe33604adb8ae1e8467aa0d77b",
+    "restored": "cp-4bc69f0e764544dd8c583841371adbfd",
+    "saved_at": "2026-09-28T15:15:28.615Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-1914eccbd69f4b52a6245bfad4933c6a",
+    "kind": "saved",
+    "at": "2026-09-28T15:15:28.615Z",
+    "checkpoint": "cp-4bc69f0e764544dd8c583841371adbfd",
+    "saved_at": "2026-09-28T15:15:28.615Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-cb77c33622e7442783b1383ebc9eab2f",
+    "kind": "saved",
+    "at": "2026-09-28T15:15:23.469Z",
+    "checkpoint": "cp-db2a4d9b158148a0957bd20670cd8436",
+    "saved_at": "2026-09-28T15:15:23.469Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-e76930b3d27843febbe54caddb6c9827",
+    "kind": "game_started",
+    "at": "2026-09-28T15:15:19.561Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-7977dcd6f8ea41e7b99be61a2633e297",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:13:28.668Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-f434b791959a437ca33eac8b0052235c",
+    "kind": "loaded",
+    "at": "2026-09-28T15:13:23.369Z",
+    "checkpoint": "cp-bdfa109b0376494d9037a159338dfc18",
+    "restored": "cp-f316140d31a14801bebbc9f5fb3806c4",
+    "saved_at": "2026-09-28T15:13:19.223Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-ae78bcaed033479aa2ae4c5e36dc4965",
+    "kind": "saved",
+    "at": "2026-09-28T15:13:19.223Z",
+    "checkpoint": "cp-f316140d31a14801bebbc9f5fb3806c4",
+    "saved_at": "2026-09-28T15:13:19.223Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-0e5d494da70a40bea635dd4a78e308d5",
+    "kind": "saved",
+    "at": "2026-09-28T15:13:14.072Z",
+    "checkpoint": "cp-7003dadf8d644a84ade2ee7b7257daff",
+    "saved_at": "2026-09-28T15:13:14.072Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-31d84f29d4e348628c22bcc64c4cc13c",
+    "kind": "game_started",
+    "at": "2026-09-28T15:13:10.124Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-cf01cf26ec03416199c7a108d418d4fb",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:11:19.167Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-1e487e93eb5b446cb11edb5a4001e6fb",
+    "kind": "loaded",
+    "at": "2026-09-28T15:11:13.957Z",
+    "checkpoint": "cp-8ba3d51aa2314c45924aec7cb3a5850b",
+    "restored": "cp-dfbed002123b4c358357d75885fd6074",
+    "label": "Floor 19",
+    "saved_at": "2026-09-28T15:11:09.802Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-e2ad95ce540241948e1d2e2a0dee3639",
+    "kind": "saved",
+    "at": "2026-09-28T15:11:09.802Z",
+    "checkpoint": "cp-dfbed002123b4c358357d75885fd6074",
+    "label": "Floor 19",
+    "saved_at": "2026-09-28T15:11:09.802Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-d12a18177d25484cbe0c7d06591a4fd6",
+    "kind": "saved",
+    "at": "2026-09-28T15:11:04.664Z",
+    "checkpoint": "cp-210f4ae34781477db8c94967b26a63ff",
+    "saved_at": "2026-09-28T15:11:04.664Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-ed7508294d7e4a9083422f91274451db",
+    "kind": "game_started",
+    "at": "2026-09-28T15:11:00.604Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-8eeb247bfcf343b190885156af6b5a26",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:09:09.718Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-b118ed06bd224f4a9c323c3c2475a6c3",
+    "kind": "loaded",
+    "at": "2026-09-28T15:09:04.490Z",
+    "checkpoint": "cp-01e49c5fe7c548f3a384b7565df547ea",
+    "restored": "cp-c2f481243071498db305ca9d70beab45",
+    "saved_at": "2026-09-28T15:09:00.323Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-5e292799d96346efb6d9d57306268084",
+    "kind": "saved",
+    "at": "2026-09-28T15:09:00.323Z",
+    "checkpoint": "cp-c2f481243071498db305ca9d70beab45",
+    "saved_at": "2026-09-28T15:09:00.323Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-9b1156b9ae584c58a74c2792e6a41249",
+    "kind": "saved",
+    "at": "2026-09-28T15:08:55.168Z",
+    "checkpoint": "cp-96a96708aa7c46abae0fe79b404978b6",
+    "saved_at": "2026-09-28T15:08:55.168Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-536524391f9d4afab17735dd46e803f6",
+    "kind": "game_started",
+    "at": "2026-09-28T15:08:51.165Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-8573f14d5d2143eeabee1330ff6c7040",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:07:00.171Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-0cb729f442a447c1bff6f8f264ea4a10",
+    "kind": "loaded",
+    "at": "2026-09-28T15:06:54.956Z",
+    "checkpoint": "cp-0a24acb78faf40929d5bbd94fd261cf7",
+    "restored": "cp-d05f7e594bac4ecdaf4a583ea154cd70",
+    "saved_at": "2026-09-28T15:06:50.792Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-8929817a2a9d4642ac21f96b023a9d19",
+    "kind": "saved",
+    "at": "2026-09-28T15:06:50.792Z",
+    "checkpoint": "cp-d05f7e594bac4ecdaf4a583ea154cd70",
+    "saved_at": "2026-09-28T15:06:50.792Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-fa672f38598c4137bba0890979e6cbcc",
+    "kind": "saved",
+    "at": "2026-09-28T15:06:45.645Z",
+    "checkpoint": "cp-7d2f847aff224b94ac0348fdfb2a5d2a",
+    "saved_at": "2026-09-28T15:06:45.645Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-9de1f134b9b242e68daf8580199f2213",
+    "kind": "game_started",
+    "at": "2026-09-28T15:06:41.597Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-635d1649b8754bb88ac4a5edbf358126",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.854Z",
+    "checkpoint": "cp-f0150e348c704721b6a1496566e1738b",
+    "label": "Before the boss",
+    "saved_at": "2026-09-28T15:05:57.854Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-0b09756010e149d5b52f889072c33316",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.708Z",
+    "checkpoint": "cp-85798a49871349f69aeb98dacd4b2ecb",
+    "saved_at": "2026-09-28T15:05:57.708Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   }
+  ],
+  "steam-250900": [
+   {
+    "id": "row-0a56e28e17d54d5db5eb4a140eecdead",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:15:59.689Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-4653a10a2d6d480f8d84ea89d523668b",
+    "kind": "loaded",
+    "at": "2026-09-28T15:15:54.461Z",
+    "checkpoint": "cp-3caa89a73888460ca3e4256ff148095f",
+    "restored": "cp-873a2cb8f0be440f9bf5dba04695488a",
+    "saved_at": "2026-09-28T15:15:50.179Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-1189303c705544a8a189fe60058ba6ec",
+    "kind": "saved",
+    "at": "2026-09-28T15:15:50.179Z",
+    "checkpoint": "cp-873a2cb8f0be440f9bf5dba04695488a",
+    "saved_at": "2026-09-28T15:15:50.179Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-48d7c0ac24a745c8972d5fb9d7fea103",
+    "kind": "saved",
+    "at": "2026-09-28T15:15:45.027Z",
+    "checkpoint": "cp-1e24106a835d4a348cd5f7e33115a0b8",
+    "saved_at": "2026-09-28T15:15:45.027Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-e6dd34284d1749b7a48068d5894341e0",
+    "kind": "game_started",
+    "at": "2026-09-28T15:15:41.144Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-81d199aa6d56474e9b122a333a5b9bf4",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:13:50.236Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-6cf0e6f5ce9d482e97a8d50c47069ecf",
+    "kind": "loaded",
+    "at": "2026-09-28T15:13:45.001Z",
+    "checkpoint": "cp-8c33b13425ff4eacad3236266974001c",
+    "restored": "cp-650c7bf79ddf424493c0b803fce55e38",
+    "saved_at": "2026-09-28T15:13:40.782Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-e93578dfbca0449f8b21a86086ed3e8e",
+    "kind": "saved",
+    "at": "2026-09-28T15:13:40.782Z",
+    "checkpoint": "cp-650c7bf79ddf424493c0b803fce55e38",
+    "saved_at": "2026-09-28T15:13:40.782Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-2249c98734894c98a7d85afd6768542f",
+    "kind": "saved",
+    "at": "2026-09-28T15:13:35.636Z",
+    "checkpoint": "cp-25862b2498df48b3b1703106eb152993",
+    "saved_at": "2026-09-28T15:13:35.636Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-a6e312bfbe1041eda46d3034b1dccd87",
+    "kind": "game_started",
+    "at": "2026-09-28T15:13:31.711Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-0bd45cafa12242da9d10e30fb1852983",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:11:40.739Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-f10c169370344fa080e97656fca73c82",
+    "kind": "loaded",
+    "at": "2026-09-28T15:11:35.549Z",
+    "checkpoint": "cp-061fcd336555484bb65926dd72ee7c73",
+    "restored": "cp-058c8eade7ae4bcf8e56f298557658be",
+    "saved_at": "2026-09-28T15:11:31.341Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-2aa315752c354501baa1ac7b1fcbbf3d",
+    "kind": "saved",
+    "at": "2026-09-28T15:11:31.341Z",
+    "checkpoint": "cp-058c8eade7ae4bcf8e56f298557658be",
+    "saved_at": "2026-09-28T15:11:31.341Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-5b4c63a7c0f94be98f7f783a55b56f25",
+    "kind": "saved",
+    "at": "2026-09-28T15:11:26.190Z",
+    "checkpoint": "cp-90dfd41b70f34a4891f74f550ae3e455",
+    "saved_at": "2026-09-28T15:11:26.190Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-695bc1cb09b5441eb11d41de40e2624f",
+    "kind": "game_started",
+    "at": "2026-09-28T15:11:22.200Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-7e80d6e17b614815b5ffecff34f14688",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:09:31.310Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-53e40d12834e4d60855a8c44f150bcf1",
+    "kind": "loaded",
+    "at": "2026-09-28T15:09:26.197Z",
+    "checkpoint": "cp-992875e86e154757971f2b4729c34af8",
+    "restored": "cp-fbf17418664a41e494fe8d7007378872",
+    "saved_at": "2026-09-28T15:09:21.925Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-ac248840775a4572be0df53a937c23ac",
+    "kind": "saved",
+    "at": "2026-09-28T15:09:21.925Z",
+    "checkpoint": "cp-fbf17418664a41e494fe8d7007378872",
+    "saved_at": "2026-09-28T15:09:21.925Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-e0313da13718481b9726d659c8fa988c",
+    "kind": "saved",
+    "at": "2026-09-28T15:09:16.733Z",
+    "checkpoint": "cp-47d08d37ece34dab9b4dc81b7e7d455c",
+    "saved_at": "2026-09-28T15:09:16.733Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-d6c49794a8e7476abf3d1537bfb9863c",
+    "kind": "game_started",
+    "at": "2026-09-28T15:09:12.767Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-b6b6c10721544d5694c5547f1790ec10",
+    "kind": "game_closed",
+    "at": "2026-09-28T15:07:21.791Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-17ecf5eb4203423390b2fc6f5dd286da",
+    "kind": "loaded",
+    "at": "2026-09-28T15:07:16.586Z",
+    "checkpoint": "cp-2f8114ce5ca84917964b28c5680466f9",
+    "restored": "cp-c88985ebbc2c4161905af8fcf7cea5f4",
+    "saved_at": "2026-09-28T15:07:12.374Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-2eeb9c81a0124a7795f3ecac481bae85",
+    "kind": "saved",
+    "at": "2026-09-28T15:07:12.374Z",
+    "checkpoint": "cp-c88985ebbc2c4161905af8fcf7cea5f4",
+    "saved_at": "2026-09-28T15:07:12.374Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-62e90a51f1c54bf28103f6a622a6d510",
+    "kind": "saved",
+    "at": "2026-09-28T15:07:07.224Z",
+    "checkpoint": "cp-f7fd8ae806dd4c25b2ce16c50503b192",
+    "saved_at": "2026-09-28T15:07:07.224Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-478f0ddbd0bf4f869d798fd14440e18b",
+    "kind": "game_started",
+    "at": "2026-09-28T15:07:03.219Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": false,
+     "delete": false
+    }
+   },
+   {
+    "id": "row-089ea1a6c7d34d1bb2cb0ffac7524dee",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:58.055Z",
+    "checkpoint": "cp-56a869c327c74df2af2b5e0e6720a486",
+    "saved_at": "2026-09-28T15:05:58.055Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-b237b2e256284014863dcc8ca75e6c60",
+    "kind": "saved",
+    "at": "2026-09-28T15:05:57.913Z",
+    "checkpoint": "cp-bd3ab34b6fac4cc48c70858cee6c299c",
+    "saved_at": "2026-09-28T15:05:57.913Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   }
+  ],
+  "steam-311690": [
+   {
+    "id": "row-986f2003906844698b446a92b27f85ff",
+    "kind": "saved",
+    "at": "2026-07-26T16:42:00.000Z",
+    "checkpoint": "cp-358896b27d01490faeab78ca587a973d",
+    "saved_at": "2026-07-26T16:42:00.000Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    },
+    "label": "Heart"
+   },
+   {
+    "id": "row-2debea5ee8a346f69c87a712e4e98f70",
+    "kind": "saved",
+    "at": "2026-03-26T16:25:00.000Z",
+    "checkpoint": "cp-fab2b6500b7a406da680f7ad72f93ab4",
+    "saved_at": "2026-03-26T16:25:00.000Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-9028ed115e9d4567a99abc530c368c03",
+    "kind": "loaded",
+    "at": "2026-03-25T16:08:00.000Z",
+    "checkpoint": "cp-540e9674ab9b4dd38cceca86eb467642",
+    "restored": "cp-bd8c482cd1bb4b70bcfaac81c6458eb2",
+    "saved_at": "2025-08-12T15:51:00.000Z",
+    "removed_files": 0,
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": false,
+     "revert": true,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-848312f3edbd4b19b543570a9b81c6a7",
+    "kind": "saved",
+    "at": "2025-08-12T15:51:00.000Z",
+    "checkpoint": "cp-bd8c482cd1bb4b70bcfaac81c6458eb2",
+    "saved_at": "2025-08-12T15:51:00.000Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-42abb3ce7c19446a8c6503ca31cfb1da",
+    "kind": "saved",
+    "at": "2023-09-19T15:34:00.000Z",
+    "checkpoint": "cp-23d1be32bf574d82900231867f204178",
+    "saved_at": "2023-09-19T15:34:00.000Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    }
+   },
+   {
+    "id": "row-d3677845d7994e38a9572c5ea3264a00",
+    "kind": "saved",
+    "at": "2023-09-19T15:17:00.000Z",
+    "checkpoint": "cp-17f67812def44c45b00af655ff81b0eb",
+    "saved_at": "2023-09-19T15:17:00.000Z",
+    "cloud_replaced": false,
+    "deleting": false,
+    "actions": {
+     "load": true,
+     "revert": false,
+     "delete": true
+    },
+    "label": "First win"
+   }
+  ],
+  "steam-646570": []
+ }
+}

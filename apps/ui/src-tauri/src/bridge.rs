@@ -93,6 +93,9 @@ enum UiRequest {
     },
     OpenCheckpoints {
         game: String,
+        /// Only return the folder (Configure shows it); open nothing.
+        #[serde(default)]
+        resolve_only: bool,
     },
     OpenExecutable {
         game: String,
@@ -126,8 +129,8 @@ impl UiRequest {
                 Command::FlushPreview { game, cursor, limit: limit.map(|n| n.min(200)) }
             }
             Self::Flush { game } => Command::Flush { game },
-            Self::OpenCheckpoints { game } => {
-                Command::Open { target: OpenTarget::Checkpoints { game }, resolve_only: false }
+            Self::OpenCheckpoints { game, resolve_only } => {
+                Command::Open { target: OpenTarget::Checkpoints { game }, resolve_only }
             }
             Self::OpenExecutable { game } => {
                 Command::Open { target: OpenTarget::Executable { game }, resolve_only: false }

@@ -60,13 +60,14 @@ impl Proc {
     /// The host's `--data-dir`, if it was given one.
     fn data_dir(&self) -> Option<PathBuf> {
         let args: Vec<String> = self.cmd.iter().map(|a| a.to_string_lossy().into_owned()).collect();
-        args.iter().enumerate().find_map(|(i, arg)| {
+        let root = args.iter().enumerate().find_map(|(i, arg)| {
             if arg == "--data-dir" {
                 args.get(i + 1).map(PathBuf::from)
             } else {
                 arg.strip_prefix("--data-dir=").map(PathBuf::from)
             }
-        })
+        })?;
+        Some(if args.iter().any(|arg| arg == "--demo") { root.join("data") } else { root })
     }
 
     fn describe(&self) -> String {
@@ -282,6 +283,7 @@ mod tests {
         };
         assert_eq!(proc(&["host", "--data-dir", "d"]).data_dir(), Some(PathBuf::from("d")));
         assert_eq!(proc(&["host", "--data-dir=e"]).data_dir(), Some(PathBuf::from("e")));
+        assert_eq!(proc(&["host", "--demo", "--data-dir", "d"]).data_dir(), Some(PathBuf::from("d/data")));
         assert_eq!(proc(&["host", "--minimized"]).data_dir(), None);
     }
 }

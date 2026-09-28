@@ -4,8 +4,34 @@
     {
       "name": "sidebar-cards-demo",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["C:/Users/neoch/AppData/Local/Temp/claude/C--Users-neoch-savescummer/eb6d35de-5e8a-4ba2-9d78-25f7f02fe798/scratchpad/serve.js"],
+      "runtimeArgs": [
+        "C:/Users/neoch/AppData/Local/Temp/claude/C--Users-neoch-savescummer/eb6d35de-5e8a-4ba2-9d78-25f7f02fe798/scratchpad/serve.js"
+      ],
       "port": 5178
+    },
+    {
+      "name": "ui-vite",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "apps/ui",
+        "dev"
+      ],
+      "port": 1420
+    },
+    {
+      "name": "ui-prototype",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5180",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "ui-prototype"
+      ],
+      "port": 5180
     }
   ]
 }

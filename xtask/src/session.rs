@@ -1,7 +1,7 @@
 //! The dev session (PLAN-BUILD.md XTASK): `run`, `host start` and `host stop`.
 //!
-//! The dev host runs from the dev package with `--data-dir .runtime/dev`, so
-//! development never touches the real app's data. It's recorded in
+//! The dev host runs from the dev package with data in `.runtime/dev` or
+//! `.runtime/dev-demo`, so demo resets cannot touch normal dev saves. It's recorded in
 //! `build/dev/session.json` and stopped only if its pid, start time and path
 //! all still match, so a reused pid is never killed.
 
@@ -37,7 +37,7 @@ fn session_file() -> PathBuf {
 /// `host start`: a dev build, then the dev host in the tray, without the UI.
 pub fn host_start(demo: bool) -> anyhow::Result<()> {
     let package = dev_package()?;
-    start_host(&package, demo, true)
+    start_host(&package, demo, true, false)
 }
 
 /// `host stop`.
@@ -47,7 +47,7 @@ pub fn host_stop() -> anyhow::Result<()> {
 
 /// `run`: a dev build, then the dev host, started the way a user starts the
 /// app, so the host shows the UI itself.
-pub fn run(demo: bool, stop_other_hosts: bool) -> anyhow::Result<()> {
+pub fn run(demo: bool, no_integrations: bool, stop_other_hosts: bool) -> anyhow::Result<()> {
     let package = dev_package()?;
     let others = procs::other_hosts();
     if stop_other_hosts {
@@ -59,13 +59,13 @@ pub fn run(demo: bool, stop_other_hosts: bool) -> anyhow::Result<()> {
             others.iter().map(|p| p.exe.display().to_string()).collect::<Vec<_>>().join(", ")
         );
     }
-    start_host(&package, demo, false)?;
+    start_host(&package, demo, false, no_integrations)?;
 
     if !platform::program(&package, UI).is_file() {
         println!(
             "no UI yet, so the dev host has no window to show. Drive it with\n  {} --data-dir {} status",
             paths::show(&platform::program(&package, CLI)),
-            paths::show(&paths::dev_data()),
+            paths::show(&if demo { paths::demo_data() } else { paths::dev_data() }),
         );
     }
     println!("the dev host keeps running; `cargo xtask host stop` stops it");
@@ -77,10 +77,10 @@ fn dev_package() -> anyhow::Result<PathBuf> {
     Ok(built.package.expect("packaged"))
 }
 
-fn start_host(package: &Path, demo: bool, minimized: bool) -> anyhow::Result<()> {
+fn start_host(package: &Path, demo: bool, minimized: bool, no_integrations: bool) -> anyhow::Result<()> {
     stop_recorded()?;
     let exe = platform::program(package, HOST);
-    let data_dir = paths::dev_data();
+    let data_dir = if demo { paths::demo_data() } else { paths::dev_data() };
     let logs = Mode::Dev.dir().join("logs");
     fs::create_dir_all(&logs)?;
     fs::create_dir_all(&data_dir)?;
@@ -90,6 +90,9 @@ fn start_host(package: &Path, demo: bool, minimized: bool) -> anyhow::Result<()>
     let mut args: Vec<OsString> = vec!["--data-dir".into(), data_dir.clone().into()];
     if demo {
         args.push("--demo".into());
+    }
+    if no_integrations {
+        args.push("--no-integrations".into());
     }
     if minimized {
         args.push("--minimized".into());

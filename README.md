@@ -63,7 +63,7 @@ cargo xtask check
 
 ### Run it
 
-The host runs in the Windows tray or macOS menu bar and opens the Tauri UI; the CLI is also included. Development always uses its own data in `.runtime/dev`, never your real checkpoints. Install Node.js 22 and pnpm 12.4.2 to build the UI on either platform.
+The host runs in the Windows tray or macOS menu bar and opens the Tauri UI; the CLI is also included. Development uses its own data in `.runtime/dev`, or disposable `.runtime/dev-demo` for `run --demo`, never your real checkpoints. Install Node.js 22 and pnpm 12.4.2 to build the UI on either platform.
 
 The dev package runs like the installed app, with the UI and hotkeys (Ctrl+F5 / Ctrl+F9 on Windows; ⌥F5 / ⌥F9 on macOS). macOS packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
 

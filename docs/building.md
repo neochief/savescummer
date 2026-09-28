@@ -63,8 +63,8 @@ cargo xtask setup inno
 | `cargo xtask build --test` | Also runs the Rust tests and the UI's headless tests. |
 | `cargo xtask build --package` | Also assembles the APP PACKAGE under `build/dev/package/`. |
 | `cargo xtask build --release` | Optimized, stripped release build; always packages, into `build/release/package/`. |
-| `cargo xtask run [--demo] [--stop-other-hosts]` | Dev package, then the dev host, started like a user launch, so it shows the UI. |
-| `cargo xtask host start [--demo]` | Dev package, then just the dev host, in the tray without the UI. |
+| `cargo xtask run [--demo] [--no-integrations] [--stop-other-hosts]` | Dev package, then the dev host, started like a user launch, so it shows the UI. Demo uses disposable `.runtime/dev-demo` data; `--no-integrations` disables tray, hotkeys and sounds. |
+| `cargo xtask host start [--demo]` | Dev package, then just the dev host, in the tray without the UI. Demo uses `.runtime/dev-demo`. |
 | `cargo xtask host stop` | Stops the dev host gracefully. |
 | `cargo xtask dist` | `build --release --test`, then the release file in `dist/`. |
 | `cargo xtask clean [--deep]` | Stops anything running from `target/`, `build/` or `dist/`, removes `build/` and `dist/`; `--deep` also removes `target/`. Never touches `.runtime/`. |
@@ -133,12 +133,14 @@ Qt license texts from `packaging/licenses/` ship with a Qt frontend build.
 `cargo xtask run` and `host start`:
 
 1. Build the dev package.
-2. Start its host with `--data-dir .runtime/dev`, logging to `build/dev/logs/host.log`. `host start` adds `--minimized`; `run` doesn't, so the host shows the UI itself, as it does for a user.
+2. Start its host with `--data-dir .runtime/dev` (or `.runtime/dev-demo` with `--demo`), logging to `build/dev/logs/host.log`. `host start` adds `--minimized`; `run` doesn't, so the host shows the UI itself, as it does for a user.
 3. Wait for its `"ready":true` line and record it in `build/dev/session.json`.
 
 On Windows and macOS, `run` opens the Tauri UI from the dev package.
 
 The dev host uses its own data, so development never touches the real app's data. It keeps running after `run` returns; `cargo xtask host stop` stops it (only if the recorded pid, start time and path all still match). Any build stops it too.
+
+Demo mode resets `.runtime/dev-demo` each time it starts. Its protocol data and CLI socket are in `.runtime/dev-demo/data`.
 
 If the installed app's host is running, it keeps the tray icon and global shortcuts, and xtask says so. `--stop-other-hosts` shuts it down gracefully first.
 

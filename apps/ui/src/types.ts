@@ -29,6 +29,7 @@ export interface Game {
   running: boolean;
   kind?: 'known' | 'custom';
   executable?: string;
+  executable_overridden?: boolean;
   info?: string;
   checkpoints_size?: number;
   has_history?: boolean;
@@ -107,7 +108,7 @@ export type UiRequest =
   | { type: 'settings'; play_sounds?: boolean; launch_on_startup?: boolean; save_shortcut?: string; load_shortcut?: string }
   | { type: 'flush_preview'; game: string; cursor?: string; limit?: number }
   | { type: 'flush'; game: string }
-  | { type: 'open_checkpoints'; game: string }
+  | { type: 'open_checkpoints'; game: string; resolve_only?: boolean }
   | { type: 'open_executable'; game: string };
 
 export interface HostResponse<T> {

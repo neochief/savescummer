@@ -6,6 +6,10 @@ import { capturedShortcut, displayShortcut, shortcutDescription, shortcutError, 
 
 export type DialogKind = 'settings' | 'add' | 'configure' | 'flush';
 
+function EyeIcon() {
+  return <img className="icon" src="/icons/eye.svg" alt="" aria-hidden="true" />;
+}
+
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -25,33 +29,36 @@ function DialogFrame({ title, kind, close, opener, children }: {
     const dialog = ref.current;
     const returnFocus = opener || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])')?.focus();
+    dialog?.focus();
     return () => { dialog?.close(); returnFocus?.focus(); };
   }, []);
-  return <dialog ref={ref} className={`dialog dialog-${kind}`} aria-labelledby="dialog-title"
+  return <dialog ref={ref} tabIndex={-1} className={`dialog dialog-${kind}`} aria-labelledby={`dialog-title-${kind}`}
     onCancel={(event) => { event.preventDefault(); close(); }}
     onClick={(event) => { if (event.target === ref.current) close(); }}>
-    <header><h2 id="dialog-title">{title}</h2><button type="button" className="dialog-close" onClick={close} aria-label="Close dialog">×</button></header>
+    <header><h2 id={`dialog-title-${kind}`}>{title}</h2><button type="button" className="dialog-close" onClick={close} aria-label="Close dialog">×</button></header>
     {children}
   </dialog>;
 }
 
-function Footer({ close, submit, busy, destructive = false }: { close: () => void; submit: string; busy: boolean; destructive?: boolean }) {
+function Footer({ close, submit, busy, destructive = false, extra }: { close: () => void; submit: string; busy: boolean; destructive?: boolean; extra?: ReactNode }) {
   return <footer>
+    {extra}
     {destructive ? <><button type="submit" name="intent" value="cancel" onClick={close}>Cancel</button><button className="dialog-primary danger" type="submit" name="intent" value="flush" disabled={busy}>{busy ? 'Working…' : submit}</button></>
       : <><button className="dialog-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : submit}</button><button type="button" onClick={close}>Cancel</button></>}
   </footer>;
 }
 
-export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, onFlushed }: {
+export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, onFlushed, onFlush }: {
   kind: DialogKind; game?: Game; state?: HostState; bridge: Bridge; close: () => void; opener?: HTMLElement | null;
-  onAdded: (id: string) => void; onFlushed: (operation: string) => void;
+  onAdded: (id: string) => void; onFlushed: (operation: string) => void; onFlush?: (opener: HTMLElement) => void;
 }) {
   const [name, setName] = useState(game?.kind === 'custom' ? game.name : '');
   const [executable, setExecutable] = useState(kind === 'configure' ? game?.executable || '' : '');
   const [resetExecutable, setResetExecutable] = useState(false);
   const [location, setLocation] = useState('');
+  const [focused, setFocused] = useState<'executable' | 'location'>();
   const [saveSet, setSaveSet] = useState<SaveSet>();
+  const [checkpointsPath, setCheckpointsPath] = useState<string>();
   const [preview, setPreview] = useState<FlushPreview>();
   const [details, setDetails] = useState(false);
   const [sounds, setSounds] = useState(state?.settings?.play_sounds ?? true);
@@ -102,6 +109,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     bridge.request<SaveSet>({ type: 'save_set', game: game.id })
       .then((value) => { if (live) { setSaveSet(value); setLocation(value.location || ''); } })
       .catch((failure) => { if (live) setError(message(failure)); });
+    bridge.request<{ path: string }>({ type: 'open_checkpoints', game: game.id, resolve_only: true })
+      .then((value) => { if (live) setCheckpointsPath(value.path); })
+      .catch(() => { if (live) setCheckpointsPath(''); });
     return () => { live = false; };
   }, [bridge, game?.id, kind]);
 
@@ -158,7 +168,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   }
 
   const title = kind === 'settings' ? 'Settings' : kind === 'add' ? 'Add custom game'
-    : `${kind === 'configure' ? 'Configure paths' : 'Flush checkpoints'} — ${gameName}`;
+    : `${kind === 'configure' ? 'Configure' : 'Flush checkpoints'} — ${gameName}`;
+  // Configure opens once its paths have arrived, so its contents don't rearrange while it's visible.
+  if (kind === 'configure' && !((saveSet || error) && checkpointsPath !== undefined)) return null;
   return <DialogFrame title={title} kind={kind} close={close} opener={opener}>
     <form onSubmit={submit}>
       <div className="dialog-body">
@@ -185,23 +197,36 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}
         </>}
         {(kind === 'add' || kind === 'configure') && <>
-          {kind === 'configure' && !saveSet && !error && <p>Loading paths…</p>}
           {kind === 'configure' && game?.kind === 'custom' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
-          <div className="dialog-field"><label htmlFor="game-executable">Game executable</label><input id="game-executable" value={executable}
+          <div className="dialog-field"><label htmlFor="game-executable">Game executable</label><span className="dialog-input"><input id="game-executable" value={executable}
+            onFocus={() => setFocused('executable')} onBlur={() => setFocused(undefined)}
             onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); }} required />
-            <button type="button" onClick={() => browse('executable')}>Browse…</button>
-            {kind === 'configure' && game && <button type="button" disabled={resetExecutable || executable !== (game.executable || '')}
-              onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}>Open</button>}
-            {kind === 'configure' && game?.kind !== 'custom' && <button type="button" onClick={() => { setExecutable(game?.executable || ''); setResetExecutable(true); }}>Reset</button>}
+              {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open game executable" title="Show in folder"
+                disabled={resetExecutable || executable !== (game.executable || '')}
+                onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button>}</span>
+            <button type="button" onClick={() => browse('executable')}>Change…</button>
           </div>
+          {kind === 'configure' && game && game.kind !== 'custom' && <p className="dialog-below">
+            {focused !== 'executable' && !resetExecutable && (game.executable_overridden || executable !== (game.executable || ''))
+              && <button type="button" className="dialog-reset" onClick={() => { setExecutable(game.executable || ''); setResetExecutable(true); }}>Reset</button>}
+          </p>}
           {kind === 'configure' && game?.kind !== 'custom' && saveSet?.catalog && <div className="catalog-paths"><span>Catalog save locations</span>{saveSet.catalog.map((target) => <code key={target.root}>{target.root}</code>)}</div>}
           <div className="dialog-field"><label htmlFor="save-location">Save location</label><input id="save-location" value={location}
+            onFocus={() => setFocused('location')} onBlur={() => setFocused(undefined)}
             onChange={(event) => setLocation(event.target.value)} required={kind === 'add' || game?.kind === 'custom'} />
-            <button type="button" onClick={() => browse('location')}>Browse…</button>
-            {kind === 'configure' && game?.kind !== 'custom' && <button type="button" onClick={() => setLocation('')}>Reset</button>}
+            <button type="button" onClick={() => browse('location')}>Change…</button>
           </div>
-          <p className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</p>
+          <p className="dialog-below">
+            {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</span>
+              : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
+                && <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>}
+          </p>
           {saveSet?.catalog_problem && <p className="dialog-hint">{saveSet.catalog_problem}</p>}
+          {kind === 'configure' && game && <div className="dialog-field"><label htmlFor="checkpoints-store">Checkpoints store</label>
+            <span className="dialog-input"><input id="checkpoints-store" value={checkpointsPath} disabled />
+              <button type="button" className="dialog-icon-button" aria-label="Open checkpoints store" title="Show in folder"
+                onClick={() => bridge.request({ type: 'open_checkpoints', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button></span>
+          </div>}
           {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
         </>}
         {kind === 'flush' && <>
@@ -211,8 +236,8 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
             {preview.recovery > 0 && <><dt>Recovery points</dt><dd>{preview.recovery}</dd></>}
             {preview.temporary > 0 && <><dt>Incomplete copies</dt><dd>{preview.temporary}</dd></>}
             <dt>Total</dt><dd>{formatBytes(preview.size)}</dd>
-          </dl><button type="button" className="details-toggle" onClick={() => setDetails(!details)} aria-expanded={details}>{details ? '▾' : '▸'} Details</button>
-            {details && <div className="flush-details">{preview.items.map((item) => <div key={item.path}><span>{item.kind}</span> {item.path} {item.label}</div>)}
+          </dl>{preview.items.length > 0 && <button type="button" className="details-toggle" onClick={() => setDetails(!details)} aria-expanded={details}>{details ? '▾' : '▸'} Details</button>}
+            {details && preview.items.length > 0 && <div className="flush-details">{preview.items.map((item) => <div key={item.path}><span>{item.kind}</span> {item.path} {item.label}</div>)}
               {preview.next && <button type="button" onClick={async () => {
                 try { const page = await bridge.request<FlushPreview>({ type: 'flush_preview', game: game!.id, cursor: preview.next, limit: 30 });
                   setPreview({ ...page, items: [...preview.items, ...page.items] }); } catch (failure) { setError(message(failure)); }
@@ -221,7 +246,11 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
         </>}
         {error && <p className="dialog-error" role="alert">{error}</p>}
       </div>
-      <Footer close={close} submit={kind === 'add' ? 'Add' : kind === 'flush' ? 'Flush' : 'Save'} busy={busy || (kind === 'flush' && !preview) || (kind === 'configure' && !saveSet)} destructive={kind === 'flush'} />
+      <Footer close={close} submit={kind === 'add' ? 'Add' : kind === 'flush' ? 'Flush' : 'Save'} busy={busy || (kind === 'flush' && !preview) || (kind === 'configure' && !saveSet)} destructive={kind === 'flush'}
+        extra={kind === 'configure' && game && onFlush && <button type="button" className="dialog-flush"
+          disabled={busy || Boolean(game.busy) || (!game.has_history && !game.checkpoints_size)} onClick={(event) => onFlush(event.currentTarget)}>
+          Flush checkpoints{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}…
+        </button>} />
     </form>
   </DialogFrame>;
 }

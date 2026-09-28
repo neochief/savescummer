@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App, relativeAge } from './App';
 import { displayShortcut, shortcutError, shortcutWarning } from './shortcuts';
 import type { Bridge } from './bridge';
@@ -33,6 +33,7 @@ class FakeBridge implements Bridge {
     b: { rows: [row('cp-b', 'Second checkpoint')] },
   };
   outcome: Promise<Operation> = Promise.resolve({ id: 'op-1', kind: 'save', status: 'succeeded' });
+  scanResult: Promise<{ new_games: number }> = Promise.resolve({ new_games: 0 });
   settingsError?: string;
   requests: UiRequest[] = [];
   stateListener?: (state: HostState) => void;
@@ -41,16 +42,18 @@ class FakeBridge implements Bridge {
   async request<T>(request: UiRequest): Promise<T> {
     this.requests.push(request);
     if (request.type === 'state') return this.state as T;
+    if (request.type === 'scan') return this.scanResult as Promise<T>;
     if (request.type === 'history') return this.pages[request.game] as T;
     if (request.type === 'save' || request.type === 'load' || request.type === 'delete' || request.type === 'revert') {
       return { id: 'op-1', kind: request.type, status: 'accepted' } as T;
     }
     if (request.type === 'cancel_delete' || request.type === 'set_label') return {} as T;
     if (request.type === 'add_game') return { game: 'custom-1' } as T;
+    if (request.type === 'open_checkpoints') return { path: `/store/${request.game}`, opened: !request.resolve_only } as T;
     if (request.type === 'save_set') return { location: '/old/saves', active: [{ root: '/old/saves' }] } as T;
     if (request.type === 'flush_preview') return { saved: 1, recovery: 0, temporary: 0, size: 4096, items: [] } as T;
     if (request.type === 'settings' && this.settingsError) throw new Error(this.settingsError);
-    if (request.type === 'settings' || request.type === 'configure' || request.type === 'open_checkpoints') return {} as T;
+    if (request.type === 'settings' || request.type === 'configure') return {} as T;
     return this.outcome as Promise<T>;
   }
   report = vi.fn(async () => undefined);
@@ -138,6 +141,25 @@ test('host rejection is shown on the initiating control', async () => {
   expect(screen.getByRole('alert').textContent).toContain('copy failed');
 });
 
+test('a disabled Save has no shortcut and guarded app data has a readable error', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].save = { available: false, reason: 'access_needed' };
+  bridge.state.games[0].blocked = { kind: 'access_needed', detail: 'app_data' };
+  render(<App bridge={bridge} />);
+  const button = await screen.findByRole('button', { name: 'save Game A' });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+  expect(button.closest('.action-slot')?.querySelector('.shortcut-tab')).toBeNull();
+  expect(screen.getByRole('alert').textContent).toBe("SaveScummer needs permission to access other apps' data.");
+});
+
+test('an access error from an operation is translated for the error block', async () => {
+  const bridge = new FakeBridge();
+  bridge.outcome = Promise.resolve({ id: 'op-1', kind: 'save', status: 'failed', error: { kind: 'access_needed', detail: 'app_data' } });
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'save Game A' }));
+  expect((await screen.findByRole('alert')).textContent).toBe("SaveScummer needs permission to access other apps' data.");
+});
+
 test('relative age uses five-second steps and stops at 24 hours', () => {
   const now = new Date('2026-09-27T12:00:00').getTime();
   const before = (seconds: number) => new Date(now - seconds * 1000);
@@ -187,44 +209,62 @@ test('Add custom game submits entered paths through the host bridge', async () =
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'add_game', name: 'Example', executable: '/games/example', save_location: '/games/example/saves' }));
 });
 
-test('More menu opens checkpoints folder through host and configures paths', async () => {
+test('the card cog configures that card, not the selected game, and shows its checkpoints store', async () => {
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
-  fireEvent.click(await screen.findByRole('button', { name: 'More game actions' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Open checkpoints folder' }));
-  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'open_checkpoints', game: 'a' }));
-  fireEvent.click(screen.getByRole('button', { name: 'More game actions' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Configure paths…' }));
-  expect(await screen.findByRole('dialog', { name: 'Configure paths — Game A' })).toBeTruthy();
-  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'save_set', game: 'a' }));
+  const cog = screen.getByRole('button', { name: 'Configure Game B' });
+  fireEvent.click(cog);
+  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game B' });
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'save_set', game: 'b' }));
+  const store = within(dialog).getByLabelText('Checkpoints store') as HTMLInputElement;
+  await waitFor(() => expect(store.value).toBe('/store/b'));
+  expect(store.disabled).toBe(true);
+  expect(bridge.requests).not.toContainEqual({ type: 'open_checkpoints', game: 'b' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Open checkpoints store' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'open_checkpoints', game: 'b' }));
+  expect(screen.getByText('First checkpoint')).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+  expect(document.activeElement).toBe(cog);
 });
 
-test('More menu supports arrow navigation and Escape returns focus', async () => {
+test('Configure offers Reset only where a path differs from the default', async () => {
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
-  const opener = await screen.findByRole('button', { name: 'More game actions' });
-  opener.focus();
-  fireEvent.keyDown(opener, { key: 'ArrowDown' });
-  const first = screen.getByRole('menuitem', { name: 'Open checkpoints folder' });
-  fireEvent.keyDown(opener, { key: 'ArrowDown' });
-  expect(document.activeElement).toBe(first);
-  fireEvent.keyDown(first, { key: 'ArrowDown' });
-  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Configure paths…' }));
-  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-  expect(screen.queryByRole('menu')).toBeNull();
-  expect(document.activeElement).toBe(opener);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const location = within(dialog).getByLabelText('Save location') as HTMLInputElement;
+  await waitFor(() => expect(location.value).toBe('/old/saves'));
+  const resets = () => within(dialog).queryAllByRole('button', { name: 'Reset' });
+  expect(resets()).toHaveLength(1);
+  fireEvent.click(resets()[0]);
+  expect(location.value).toBe('');
+  expect(resets()).toHaveLength(0);
+  fireEvent.change(within(dialog).getByLabelText('Game executable'), { target: { value: '/games/a.exe' } });
+  expect(resets()).toHaveLength(1);
+  fireEvent.click(resets()[0]);
+  expect(resets()).toHaveLength(0);
 });
 
-test('a pointer-opened More menu closes on Escape', async () => {
+test('Configure offers executable Reset when the host reports an override', async () => {
   const bridge = new FakeBridge();
+  bridge.state.games[0] = { ...bridge.state.games[0], executable: '/custom/a.exe', executable_overridden: true };
   render(<App bridge={bridge} />);
-  const opener = await screen.findByRole('button', { name: 'More game actions' });
-  fireEvent.click(opener);
-  expect(document.activeElement).toBe(opener);
-  expect(screen.getByRole('menu')).toBeTruthy();
-  fireEvent.keyDown(document, { key: 'Escape' });
-  expect(screen.queryByRole('menu')).toBeNull();
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  await waitFor(() => expect((within(dialog).getByLabelText('Save location') as HTMLInputElement).value).toBe('/old/saves'));
+  expect(within(dialog).getAllByRole('button', { name: 'Reset' })).toHaveLength(2);
+});
+
+test('only the most recent save row is primary; other rows are muted', async () => {
+  const bridge = new FakeBridge();
+  bridge.pages.a = { rows: [row('cp-a', 'Latest'), row('cp-old', 'Older')] };
+  const { container } = render(<App bridge={bridge} />);
+  await screen.findByText('Older');
+  const rows = [...container.querySelectorAll('.history-row')];
+  expect(rows.map((element) => element.classList.contains('primary'))).toEqual([true, false]);
 });
 
 test('closing a dialog restores focus to its opener', async () => {
@@ -232,18 +272,8 @@ test('closing a dialog restores focus to its opener', async () => {
   render(<App bridge={bridge} />);
   const opener = await screen.findByRole('button', { name: 'Settings' });
   fireEvent.click(opener);
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close dialog' }));
+  expect(document.activeElement).toBe(screen.getByRole('dialog'));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(document.activeElement).toBe(opener);
-});
-
-test('closing Configure returns focus to the More button after its menu unmounts', async () => {
-  const bridge = new FakeBridge();
-  render(<App bridge={bridge} />);
-  const opener = await screen.findByRole('button', { name: 'More game actions' });
-  fireEvent.click(opener);
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Configure paths…' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Close dialog' }));
   expect(document.activeElement).toBe(opener);
 });
 
@@ -345,17 +375,27 @@ test('large histories mount only the visible rows', async () => {
   expect(container.querySelectorAll('.history-row').length).toBeLessThan(30);
 });
 
-test('Flush previews host data and sends only the game after confirmation', async () => {
+test('Flush opens over Configure, previews host data, and sends only the game after confirmation', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].has_history = true;
   render(<App bridge={bridge} />);
   expect(await screen.findByText('First checkpoint')).toBeTruthy();
-  fireEvent.click(await screen.findByRole('button', { name: 'More game actions' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Flush checkpoints…' }));
-  expect(await screen.findByText('Saved backups')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
+  const configure = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const flushButton = within(configure).getByRole('button', { name: 'Flush checkpoints…' });
+  fireEvent.click(flushButton);
+  const flush = await screen.findByRole('dialog', { name: 'Flush checkpoints — Game A' });
+  expect(await within(flush).findByText('Saved backups')).toBeTruthy();
   expect(bridge.requests).toContainEqual({ type: 'flush_preview', game: 'a', limit: 30 });
   expect(bridge.requests.some((request) => request.type === 'flush')).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Flush' }));
+  fireEvent.click(within(flush).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog', { name: 'Flush checkpoints — Game A' })).toBeNull();
+  expect(screen.getByRole('dialog', { name: 'Configure — Game A' })).toBeTruthy();
+  expect(document.activeElement).toBe(flushButton);
+  fireEvent.click(flushButton);
+  const again = await screen.findByRole('dialog', { name: 'Flush checkpoints — Game A' });
+  await within(again).findByText('Saved backups');
+  fireEvent.click(within(again).getByRole('button', { name: 'Flush' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'flush', game: 'a' }));
 });
 
@@ -368,4 +408,66 @@ test('no-games layout keeps Scan, Add, Settings in keyboard order', async () => 
   expect([...container.querySelectorAll('.library-controls button')].map((button) => button.textContent)).toEqual([
     'Scan for games', 'Add custom game', 'Settings',
   ]);
+});
+
+test('running games surface to the top of the one list in active-stack order with a badge', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games = [game('a', 'Game A'), game('b', 'Game B'), game('c', 'Game C'), game('d', 'Game D')];
+  bridge.state.games[1].running = true;
+  bridge.state.games[3].running = true;
+  bridge.state.active_stack = ['d', 'b'];
+  bridge.pages = { a: { rows: [] }, b: { rows: [] }, c: { rows: [] }, d: { rows: [] } };
+  const { container } = render(<App bridge={bridge} />);
+  await screen.findByRole('button', { name: 'Game D' });
+  const cards = [...container.querySelectorAll('.library-panel .game-card-wrap')];
+  expect(cards.map((card) => card.querySelector('.game-card')!.getAttribute('aria-label'))).toEqual([
+    'Game D', 'Game B', 'Game A, Not running', 'Game C, Not running',
+  ]);
+  expect(cards.map((card) => Boolean(card.querySelector('.running-badge')))).toEqual([true, true, false, false]);
+  expect(container.querySelectorAll('.sidebar h2')).toHaveLength(1);
+});
+
+test('the game list scrolls and its indicator follows scrolling', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].running = true;
+  const { container } = render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  const scroller = container.querySelector('.sidebar-content') as HTMLDivElement;
+  const track = container.querySelector('.sidebar-scrollbar') as HTMLDivElement;
+  expect(scroller.querySelector('.library-panel')).toBeTruthy();
+  expect(scroller.contains(container.querySelector('.library-controls'))).toBe(false);
+
+  Object.defineProperties(scroller, {
+    clientHeight: { configurable: true, value: 300 },
+    scrollHeight: { configurable: true, value: 900 },
+    scrollTop: { configurable: true, writable: true, value: 0 },
+  });
+  Object.defineProperty(track, 'clientHeight', { configurable: true, value: 160 });
+  fireEvent.resize(window);
+  const thumb = await waitFor(() => {
+    const value = track.querySelector('.sidebar-scrollbar-thumb') as HTMLDivElement;
+    expect(value).toBeTruthy();
+    return value;
+  });
+  expect(parseFloat(thumb.style.height)).toBeCloseTo(160 / 3);
+  scroller.scrollTop = 300;
+  fireEvent.scroll(scroller);
+  expect(parseFloat(thumb.style.top)).toBeCloseTo((160 - 160 / 3) / 2);
+});
+
+test('Scan icon spins only while a manual scan is running', async () => {
+  const bridge = new FakeBridge();
+  let finish!: (result: { new_games: number }) => void;
+  bridge.scanResult = new Promise((resolve) => { finish = resolve; });
+  render(<App bridge={bridge} />);
+
+  const button = await screen.findByRole('button', { name: 'Scan for games' });
+  expect(button.classList.contains('scanning')).toBe(false);
+  fireEvent.click(button);
+  expect(button.classList.contains('scanning')).toBe(true);
+  expect(button.textContent).toBe('Scanning…');
+
+  finish({ new_games: 0 });
+  await waitFor(() => expect(button.classList.contains('scanning')).toBe(false));
+  expect(button.textContent).toBe('No new games');
 });

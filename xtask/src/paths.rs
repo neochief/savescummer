@@ -42,6 +42,11 @@ pub fn dev_data() -> PathBuf {
     runtime().join("dev")
 }
 
+/// Disposable data for the simulated dev host, separate from normal dev saves.
+pub fn demo_data() -> PathBuf {
+    runtime().join("dev-demo")
+}
+
 pub fn packaging() -> PathBuf {
     root().join("packaging")
 }

@@ -105,7 +105,7 @@ Every command validates its inputs up front.
 `cargo xtask run`:
 
 1. Does a dev build.
-2. Starts the dev host with `--data-dir .runtime/dev`, and records it in `build/dev/session.json`.
+2. Starts the dev host with `--data-dir .runtime/dev` (or `.runtime/dev-demo` with `--demo`), and records it in `build/dev/session.json`.
 3. Waits for the host's `"ready":true` line. The host shows the UI itself, as it does for a user.
 
 The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
@@ -316,7 +316,7 @@ The host and CLI get version resources (see VERSION) and `assets/icon.ico`; the 
 
 1. `clean` stops recorded and output processes and removes `build/` and `dist/`; `--deep` also removes `target/`; `.runtime/` is untouched.
 2. Any build while a host, CLI, UI or test binary runs from `target/`, `build/` or `dist/` first stops it (hosts gracefully), then succeeds; nothing is left running old code.
-3. `run` builds and runs against `.runtime/dev`, recording `build/dev/session.json`; an installed host keeps running unless `--stop-other-hosts` is passed.
+3. `run` builds and runs against `.runtime/dev`, or `.runtime/dev-demo` with `--demo`, recording `build/dev/session.json`; an installed host keeps running unless `--stop-other-hosts` is passed.
 4. `dist` leaves exactly one file in `dist/`, the `-setup.exe`. The release package under `build/release/package/` has the UI, `SHA256SUMS.txt`, Rust and web third-party license files, and no PDBs.
 5. Every binary's version resource (file properties → Details) shows the Cargo version.
 6. Installing needs no admin, puts the binaries under `%LOCALAPPDATA%\Programs\SaveScummer\bin`.

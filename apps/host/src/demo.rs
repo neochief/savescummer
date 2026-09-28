@@ -9,6 +9,11 @@
 //!   the games one after another: each "runs" for a while, takes focus,
 //!   saves progress twice through the real Save, dies and loads the latest
 //!   checkpoint through the real Load, then closes.
+//! - The last game is never played: its save file can't be read (Unix;
+//!   on Windows it has no save files), so its one Save fails and it has no
+//!   history, for the error state.
+//! - The one before it is never played either: it only has a few
+//!   checkpoints from months and years ago, for the UI's old date cards.
 //! - Everything else (scans, checkpoints, history, the protocol) is the real
 //!   host. The data folder is `<data folder>\demo` unless `--data-dir` names
 //!   one; it is wiped at every start, and a folder that isn't empty and
@@ -25,6 +30,7 @@ use savescummer_catalog::Bundle;
 use savescummer_core::Filter;
 use savescummer_ipc::Phase;
 use savescummer_monitor::{Proc, ProcessSource};
+use savescummer_storage as db;
 
 use crate::host::{Host, new_id};
 use crate::ops;
@@ -250,14 +256,79 @@ fn operate(host: &Arc<Host>, game: &str, request: ops::Request) {
     }
 }
 
+/// Leaves the game without history: its only Save fails on a save file
+/// it may not read.
+fn break_game(host: &Arc<Host>, game: &DemoGame) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        write_progress(game, &format!("{}: unreadable", game.id));
+        for file in &game.files {
+            let _ = fs::set_permissions(file, fs::Permissions::from_mode(0o000));
+        }
+    }
+    operate(host, &game.id, ops::Request::Save { label: None });
+}
+
+/// How many days ago each of the old game's rows happened, oldest first.
+const OLD_DAYS: [i64; 6] = [1105, 1105, 412, 187, 186, 64];
+
+/// Gives the game a short history, then moves it (rows and checkpoints) back
+/// in time by [`OLD_DAYS`].
+fn age_game(host: &Arc<Host>, game: &DemoGame) {
+    for (floor, label) in [(1, Some("First win")), (2, None), (3, None)] {
+        write_progress(game, &format!("{}: old run, floor {floor}", game.id));
+        operate(host, &game.id, ops::Request::Save { label: label.map(Into::into) });
+    }
+    write_progress(game, &format!("{}: old run, dead", game.id));
+    operate(host, &game.id, ops::Request::Load { checkpoint: None });
+    for (floor, label) in [(4, None), (5, Some("Heart"))] {
+        write_progress(game, &format!("{}: old run, floor {floor}", game.id));
+        operate(host, &game.id, ops::Request::Save { label: label.map(Into::into) });
+    }
+
+    let now = chrono::Utc::now();
+    let _ = host.db().write(|c| {
+        let mut rows = db::history_page(c, &game.id, None, usize::MAX >> 1)?;
+        rows.reverse();
+        for (n, row) in rows.iter().enumerate() {
+            let days = OLD_DAYS[n.min(OLD_DAYS.len() - 1)];
+            let at = (now - chrono::Duration::days(days) + chrono::Duration::minutes(n as i64 * 17))
+                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            c.execute("UPDATE history SET at = ?1 WHERE id = ?2", [&at, &row.id])?;
+            for checkpoint in [&row.checkpoint_id, &row.recovery_id].into_iter().flatten() {
+                c.execute(
+                    "UPDATE checkpoints SET created_at = ?1 WHERE id = ?2 AND created_at > ?1",
+                    [&at, checkpoint],
+                )?;
+            }
+        }
+        Ok(())
+    });
+    let mut inner = host.lock();
+    host.refresh_cache(&mut inner, &game.id);
+    host.bump_history(&mut inner, &game.id);
+    host.publish(&mut inner);
+}
+
 /// Gives every game saves and a short history, then plays them forever.
 pub fn drive(host: Arc<Host>, processes: DemoProcesses) {
-    let games = games(&host);
+    let mut games = games(&host);
+    if games.len() > 1
+        && let Some(broken) = games.pop()
+    {
+        break_game(&host, &broken);
+    }
+    if games.len() > 1
+        && let Some(old) = games.pop()
+    {
+        age_game(&host, &old);
+    }
     for (n, game) in games.iter().enumerate() {
         write_progress(game, &format!("{}: a fresh run", game.id));
-        operate(&host, &game.id, ops::Request::Save { label: Some("Fresh run".into()) });
+        operate(&host, &game.id, ops::Request::Save { label: None });
         write_progress(game, &format!("{}: floor 3", game.id));
-        operate(&host, &game.id, ops::Request::Save { label: (n % 2 == 0).then(|| "Before the boss".into()) });
+        operate(&host, &game.id, ops::Request::Save { label: (n == 0).then(|| "Before the boss".into()) });
     }
     let mut pid = 40_000;
     let mut floor = 4;
@@ -273,7 +344,11 @@ pub fn drive(host: Arc<Host>, processes: DemoProcesses) {
                 }
                 && {
                     write_progress(game, &format!("{}: floor {}", game.id, floor + 1));
-                    operate(&host, &game.id, ops::Request::Save { label: Some(format!("Floor {}", floor + 1)) });
+                    operate(
+                        &host,
+                        &game.id,
+                        ops::Request::Save { label: (floor % 7 == 0).then(|| format!("Floor {}", floor + 1)) },
+                    );
                     pause(&host, Duration::from_secs(4))
                 }
                 && {

@@ -259,6 +259,7 @@ impl Host {
             running: inner.stack.contains(&game.id),
             info: game.info.clone(),
             executable: game.main_executable().map(|p| p.to_string_lossy().into_owned()),
+            executable_overridden: game.executable.is_some(),
             save,
             load,
             config_error: derived.active.as_ref().err().cloned(),

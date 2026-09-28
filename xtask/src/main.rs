@@ -68,6 +68,9 @@ enum Task {
         /// Simulated games and operations.
         #[arg(long)]
         demo: bool,
+        /// Disable tray, hotkeys, sounds and sign-in changes.
+        #[arg(long)]
+        no_integrations: bool,
         /// Gracefully stop other running hosts (e.g. the installed app's).
         #[arg(long)]
         stop_other_hosts: bool,
@@ -118,7 +121,7 @@ enum Task {
 
 #[derive(Subcommand)]
 enum HostAction {
-    /// Dev build, then start the dev host with .runtime/dev as its data.
+    /// Dev build, then start the dev host with isolated data.
     Start {
         /// Simulated games and operations.
         #[arg(long)]
@@ -148,7 +151,7 @@ fn main() -> ExitCode {
         }
         Task::Check => build::check(),
         Task::Build { release, test, package } => build::build(&build::Options { release, test, package }).map(drop),
-        Task::Run { demo, stop_other_hosts } => session::run(demo, stop_other_hosts),
+        Task::Run { demo, no_integrations, stop_other_hosts } => session::run(demo, no_integrations, stop_other_hosts),
         Task::Host { action: HostAction::Start { demo } } => session::host_start(demo),
         Task::Host { action: HostAction::Stop } => session::host_stop(),
         Task::Dist => build::dist(),

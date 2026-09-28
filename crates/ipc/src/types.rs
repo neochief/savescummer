@@ -423,6 +423,9 @@ pub struct GameSummary {
     pub info: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub executable: Option<String>,
+    /// The executable is the user's choice rather than the catalog's.
+    #[serde(default)]
+    pub executable_overridden: bool,
     pub save: Availability,
     pub load: Availability,
     #[serde(default, skip_serializing_if = "Option::is_none")]
