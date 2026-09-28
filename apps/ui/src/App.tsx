@@ -45,26 +45,15 @@ function Brand() {
   </div>;
 }
 
-// Windows runs undecorated (tauri.windows.conf.json), so the window bar draws its own caption buttons.
+// Windows runs undecorated (tauri.windows.conf.json), so the window bar draws its own caption buttons. There is no
+// Maximize: the window's width is capped (maxWidth), so it can't fill the screen.
 function WindowControls() {
-  const [maximized, setMaximized] = useState(false);
-  useEffect(() => {
-    if (!('__TAURI_INTERNALS__' in window)) return;
-    const current = getCurrentWindow();
-    const sync = () => current.isMaximized().then(setMaximized, () => undefined);
-    sync();
-    const unlisten = current.onResized(sync);
-    return () => { unlisten.then((stop) => stop()); };
-  }, []);
-  const run = (action: 'minimize' | 'toggleMaximize' | 'close') => () => {
+  const run = (action: 'minimize' | 'close') => () => {
     if ('__TAURI_INTERNALS__' in window) getCurrentWindow()[action]().catch(() => undefined);
   };
   return <div className="window-controls">
     <button aria-label="Minimize window" onClick={run('minimize')}>
       <svg viewBox="0 0 10 10"><path d="M0 5.5h10" /></svg>
-    </button>
-    <button aria-label={maximized ? 'Restore window' : 'Maximize window'} onClick={run('toggleMaximize')}>
-      <svg viewBox="0 0 10 10">{maximized ? <path d="M2.5 2.5V.5h7v7h-2M.5 2.5h7v7h-7z" /> : <path d="M.5.5h9v9h-9z" />}</svg>
     </button>
     <button className="close" aria-label="Close window" onClick={run('close')}>
       <svg viewBox="0 0 10 10"><path d="M.5.5l9 9M9.5.5l-9 9" /></svg>
