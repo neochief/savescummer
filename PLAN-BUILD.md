@@ -2,13 +2,13 @@
 
 I want building, packaging and releasing the app to be boring: one command to build, one command to cut a release, and one file per platform for users to download.
 
-**Current implementation (2026-09-28):** Windows uses Tauri/WebView2. `cargo xtask dist` builds and packages the UI, host and CLI in an Inno Setup installer; it fails if the UI source or packaged binary is missing. This passed locally on Windows. CI is configured to build that installer, and the tag workflow is configured to create a draft GitHub Release with it; a tag-triggered release has not yet been verified here. macOS CI builds and tests a host/CLI bundle without a UI; the tag workflow does not publish a macOS artifact. Linux packaging remains planned. Use [docs/building.md](docs/building.md) for current commands.
+**Current implementation (2026-09-28):** Windows builds the UI, host and CLI in an Inno Setup installer. macOS builds the same three programs in an ad hoc signed app bundle and DMG. CI calls `cargo xtask dist` on both platforms; the tag workflow uploads both files to a draft GitHub Release. A tag-triggered release has not yet been verified here. Linux packaging remains planned. Use [docs/building.md](docs/building.md) for current commands.
 
 This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN-HOST.md and PLAN-UI.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
 
 This plan contains both implemented behavior and future platform targets. The status above and [docs/building.md](docs/building.md) identify what works today; the macOS and Linux release descriptions below are acceptance targets.
 
-Windows builds the complete Tauri UI installer. macOS packaging is implemented without a UI source yet; Linux packaging is future work. The shared build machinery keeps platform details in modules:
+Windows builds the complete Tauri UI installer; macOS builds the complete Tauri UI disk image. Linux packaging is future work. The shared build machinery keeps platform details in modules:
 
 - shared code stays platform-neutral
 - platform logic lives in its own module
@@ -27,10 +27,10 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 
 - **One build tool, in Rust.** All automation is `cargo xtask`: no PowerShell, bash or Python scripts, no just/make. It runs the same on every OS. Besides Rust, it needs only what the build itself needs: the UI frontend's toolchain (see TOOLCHAINS) and `gh` for publishing.
 - **CI runs the same build commands developers run.** Workflows install prerequisites and call `cargo xtask` for checks, builds, packaging and publishing.
-- **One release version, in `Cargo.toml`.** The Windows UI's Tauri and npm versions are checked against it and updated by `cargo xtask release`.
+- **One release version, in `Cargo.toml`.** The Tauri and npm versions are checked against it and updated by `cargo xtask release`.
 - **One file per platform per release,** in the friendliest format that platform has. Users never have to pick, and nothing else is uploaded.
 - **Fixed executable names.** Platforms change how the programs are packaged, never what they're called.
-- **Pin build inputs.** `cargo xtask setup` installs pinned packaging tools. Windows also needs Node.js and the pnpm version declared in `apps/ui/package.json`; `pnpm install --frozen-lockfile` fetches the locked frontend dependencies. The installed app may fetch WebView2 during setup if the runtime is absent.
+- **Pin build inputs.** `cargo xtask setup` installs pinned packaging tools. Windows and macOS also need Node.js and the pnpm version declared in `apps/ui/package.json`; `pnpm install --frozen-lockfile` fetches the locked frontend dependencies. The Windows installer may fetch WebView2 during setup if the runtime is absent.
 - **User data is sacred.** No install, upgrade, uninstall or clean ever touches the app's data directory or the checkpoint store, wherever the user has moved it: checkpoints are the user's saves.
 - **Only a human publishes.** Tooling makes draft releases; I look at them and press publish.
 - **Every failure says what to run next,** e.g. a missing Tauri build prerequisite names pnpm or the relevant `cargo xtask setup` command.
@@ -41,7 +41,7 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 The app is three programs:
 
 - **Host** — Rust; the app itself and its entry point (SQLite, monitoring, operations, tray, hotkeys)
-- **UI** — Tauri/WebView2 on Windows, started by the host; macOS UI packaging and Linux support remain to be completed
+- **UI** — Tauri/WebView2 on Windows and Tauri/WebKit on macOS, started by the host; Linux support remains to be completed
 - **CLI** — Rust command-line client
 
 The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.exe` and `SaveScummer.CLI.exe`. Other platforms use the same program names where their UI is implemented. Every launcher, shortcut and sign-in entry points at `SaveScummer`.
@@ -49,7 +49,7 @@ The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.
 | Platform | Release file | Why this format |
 | --- | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<ver>-setup.exe` | What Windows users expect; installs per-user, no admin |
-| macOS 13+, Apple Silicon (planned release) | `SaveScummer-macos-arm64-<ver>.dmg` | The standard drag-to-Applications install once the UI is packaged |
+| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<ver>.dmg` | The standard drag-to-Applications install |
 | Linux x86_64, glibc 2.35+ (planned) | `SaveScummer-linux-x86_64-<ver>.AppImage` | One file to run without root or installation |
 
 These minimums are recorded here and in xtask platform constants. Future build flags, `Info.plist`, Linux build system, CI runners and test machines must follow them.
@@ -64,7 +64,7 @@ bin\SaveScummer.UI.exe           UI
 bin\SaveScummer.CLI.exe          CLI
 ```
 
-**macOS target** — `SaveScummer.app` in Applications. The current CI bundle contains the host and CLI; it does not contain `SaveScummer.UI`:
+**macOS** — `SaveScummer.app` in Applications:
 
 ```text
 Contents/MacOS/SaveScummer       host (the bundle's main executable)
@@ -110,7 +110,7 @@ Every command validates its inputs up front.
 
 The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
 
-The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. On Windows, `run` opens the packaged Tauri UI.
+The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. On Windows and macOS, `run` opens the packaged Tauri UI.
 
 xtask honors `CARGO_TARGET_DIR` like Cargo, so it can build next to another checkout's running binaries.
 
@@ -121,7 +121,7 @@ The version lives in `Cargo.toml` → `[workspace.package] version`. The git tag
 Everything else reads it:
 
 - **xtask** parses `Cargo.toml` with the `toml` crate — no pattern matching.
-- **Windows Tauri UI** has matching versions in `apps/ui/package.json` and `apps/ui/src-tauri/tauri.conf.json`; `cargo xtask release` updates both, and the build checks the Tauri version.
+- **Tauri UI** has matching versions in `apps/ui/package.json` and `apps/ui/src-tauri/tauri.conf.json`; `cargo xtask release` updates both, and the build checks the Tauri version.
 - **CMake** on Qt platforms gets it from xtask as `-DSAVESCUMMER_VERSION=<ver>`.
 - **Windows version resources** come from `winresource` in `build.rs` for the host and CLI (using the version Cargo passes to the build).
 - **The host's manifest** (also from `build.rs`) declares per-monitor DPI awareness, so the tray icon and its menu are drawn at the screen's real resolution instead of being stretched blurry on scaled displays.
@@ -173,18 +173,18 @@ The APP PACKAGE is the assembled, runnable app under `build/<mode>/package/`: a 
 
 Every current package contains:
 
-- the host and CLI executables, with their platform runtime files; Windows packages also require the UI executable
+- the host and CLI executables, with their platform runtime files; Windows and macOS packages also require the UI executable
 - the Qt license texts when a Qt frontend is packaged
 - `THIRD-PARTY-LICENSES.html`
-- `WEB-THIRD-PARTY-LICENSES.html` for Windows JavaScript production dependencies
+- `WEB-THIRD-PARTY-LICENSES.html` for Windows and macOS JavaScript production dependencies
 - `.savescummer-package.json` (mode, version, platform, UI toolkit, configuration, creation time), which marks it as generated output
 - `SHA256SUMS.txt`
 
-`THIRD-PARTY-LICENSES.html` is generated by cargo-about from the packaged Rust crates, including the Windows Tauri UI, for the platform's own target, and merged into one page listing each license text once. A crate under a license not in `about.toml` fails packaging, so licensing is checked on every build rather than at release time. The app's own crates are `publish = false` and ignored as private, so they need no license of their own.
+`THIRD-PARTY-LICENSES.html` is generated by cargo-about from the packaged Rust crates, including the Tauri UI, for the platform's own target, and merged into one page listing each license text once. A crate under a license not in `about.toml` fails packaging, so licensing is checked on every build rather than at release time. The app's own crates are `publish = false` and ignored as private, so they need no license of their own.
 
-Each platform module declares what its package must contain, and packaging fails if anything required is missing. Windows requires all three executables; macOS currently requires the host and CLI.
+Each platform module declares what its package must contain, and packaging fails if anything required is missing. Windows and macOS require all three executables.
 
-On Windows the Tauri UI is required. The frontend build uses `pnpm install --frozen-lockfile`, runs the UI tests under `build --test` or `dist`, embeds the Vite assets and stages `SaveScummer.UI.exe` beside the host. The package and installer fail if that executable is absent. Other platforms may still omit the UI until their frontend is implemented.
+On Windows and macOS the Tauri UI is required. The frontend build uses `pnpm install --frozen-lockfile`, runs the UI tests under `build --test` or `dist`, embeds the Vite assets and stages `SaveScummer.UI` beside the host. Packaging fails if that executable is absent. Linux may still omit the UI until its frontend is implemented.
 
 Cargo can't put dots in binary names, so Cargo builds `savescummer-host` and `savescummer-cli`, and packaging renames them to the fixed names.
 
@@ -328,7 +328,7 @@ The host and CLI get version resources (see VERSION) and `assets/icon.ico`; the 
 
 ## macOS release target
 
-The current `cargo xtask build --test --package` produces a host/CLI bundle for CI. The UI, complete-app DMG and release job below are pending. See [PLAN-MACOS.md](PLAN-MACOS.md) for the remaining work.
+`cargo xtask dist` produces the complete app bundle and DMG with the Tauri UI. See [PLAN-MACOS.md](PLAN-MACOS.md) for platform behavior and manual acceptance checks.
 
 Apple Silicon (M1 or later) only, on the minimum macOS or later. Intel Macs aren't supported, and xtask refuses to build on one.
 
@@ -337,25 +337,25 @@ Apple Silicon (M1 or later) only, on the minimum macOS or later. Intel Macs aren
 Built on an Apple Silicon Mac. The whole app agrees on its minimum OS:
 
 - Rust: `MACOSX_DEPLOYMENT_TARGET` (the build machine is Apple Silicon, so the native target is already arm64)
-- The future UI: its deployment target and arm64 build must match the Rust bundle
+- The Tauri UI: its deployment target and arm64 build must match the Rust bundle
 - `Info.plist`: `LSMinimumSystemVersion`
 
-The host, CLI, future UI and bundle must agree on the minimum macOS.
+The host, CLI, UI and bundle must agree on the minimum macOS.
 
 ### App package
 
 `build/<mode>/package/SaveScummer.app`:
 
 - Bundle ID `com.savescummer.SaveScummer`, fixed forever, because macOS keys permissions and settings on it.
-- The target bundle has three executables side by side in `Contents/MacOS/`; the current bundle has the host and CLI only. The host, `SaveScummer`, is the bundle's main executable. The bundle has no Dock icon of its own (`LSUIElement`): the host lives in the menu bar, and a future UI must manage its Dock presence while open.
+- The bundle has three executables side by side in `Contents/MacOS/`. The host, `SaveScummer`, is the bundle's main executable. The bundle has no Dock icon of its own (`LSUIElement`): the host lives in the menu bar, and the UI manages its window while open.
 - `Contents/Info.plist` from `packaging/macos/Info.plist.in`: `CFBundleExecutable` `SaveScummer`, `LSUIElement`, `CFBundleShortVersionString` and `CFBundleVersion` from the Cargo version, the minimum macOS, the icon.
-- Licenses, notices, manifest and checksums in `Contents/Resources/`; the UI runtime and its notices must be added when the UI is packaged.
+- Licenses, notices, manifest and checksums in `Contents/Resources/`, including the UI's web dependency licenses.
 - Ad-hoc signed (`codesign --force --deep --sign -`) as the last step, after all packaged binaries and runtimes have been staged.
 
 ### Release file
 
 - A DMG made with `hdiutil create -format UDZO` from a folder holding the app and an `Applications` link, so installing is drag-and-drop.
-- Unsigned and not notarized, so macOS blocks the first launch; the user opens it via *System Settings → Privacy & Security → Open Anyway*. The README and release notes show this with screenshots.
+- Ad hoc signed and not notarized, so macOS blocks the first launch; the user opens it via *System Settings → Privacy & Security → Open Anyway*. The README and release notes show this with screenshots.
 
 ### Integration
 
@@ -437,13 +437,13 @@ Two workflows in `.github/workflows/`. Setup actions install toolchains and cach
 - Runs on branch pushes, pull requests and manual runs; not tags.
 - A concurrency group per ref cancels superseded runs.
 - A Windows job on `windows-latest`: checkout, Rust cache, Node.js 22, pnpm from `apps/ui/package.json`, packaging tool caches, `setup cargo-about`, `setup inno`, `check`, then `dist`. This compiles and tests the Tauri UI and produces the real installer on every CI run.
-- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Qt and tool caches where applicable, `setup cargo-about`, `check`, `build --test --package`. It remains a CI target but is not published until the UI is packaged. The Linux job is still future work. Packaging in CI means an unaccepted license fails the pull request.
+- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Node.js 22, pnpm, tool cache, `setup cargo-about`, `check`, `dist`. The Linux job is still future work. Packaging in CI means an unaccepted license fails the pull request.
 
-**release.yml** — currently builds one Windows installer into a draft GitHub Release:
+**release.yml** — builds the Windows installer and macOS disk image into a draft GitHub Release:
 
 - Runs on `v*` tags only, with a concurrency group that never cancels, so a release is never half-built.
-- The Windows build job: checkout with full history and caches, Node.js/pnpm and packaging tools, `dist`, upload its installer from `dist/` (`if-no-files-found: error`). Add the macOS release job when its UI package is complete.
-- A final publish job (`needs:` the Windows build job, `contents: write`) downloads the installer into `dist/`, fetches the tag and runs `cargo xtask publish` with `GH_TOKEN`.
+- The Windows and macOS build jobs: checkout with full history and caches, Node.js/pnpm and packaging tools, `dist`, upload their release files from `dist/` (`if-no-files-found: error`).
+- A final publish job (`needs:` both build jobs, `contents: write`) downloads the files into `dist/`, fetches the tag and runs `cargo xtask publish` with `GH_TOKEN`.
 
 
 ## RELEASING
@@ -461,7 +461,7 @@ The tag starts release.yml.
 
 ### Publishing
 
-`cargo xtask publish` works the same locally and in CI:
+`cargo xtask publish` works the same locally and in CI. A local publish needs the other platform's release file copied into `dist/` after `dist` runs:
 
 1. Checks that `gh` is installed and logged in, `origin` exists, and tag `v<version>` exists and points at `HEAD`.
 2. Checks that `dist/` holds exactly one release file for that version per supported platform, and nothing else.

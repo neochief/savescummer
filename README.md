@@ -22,10 +22,10 @@ Depending on the game, restoring progress may require returning to the main menu
 | Platform | Download |
 | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
-| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` (UI packaging in progress) |
+| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` |
 | Linux x86_64 (glibc 2.35+) | `SaveScummer-linux-x86_64-<version>.AppImage` (coming) |
 
-Get the Windows installer from [Releases](https://github.com/neochief/savescummer/releases). macOS and Linux packages will be published when their UIs are ready. The packages aren't code-signed, so each OS may ask before first launch:
+Get the Windows installer or macOS disk image from [Releases](https://github.com/neochief/savescummer/releases). Linux packages will be published when its UI is ready. Windows is unsigned; macOS uses an ad hoc signature, so each OS may ask before first launch:
 
 - **Windows:** run the installer. SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It installs for your user only (no admin), into `%LOCALAPPDATA%\Programs\SaveScummer`, and offers to launch at sign-in.
   - **Upgrade:** run the new installer; it closes the running app safely and keeps your settings.
@@ -59,13 +59,13 @@ cd savescummer
 cargo xtask check
 ```
 
-`check` runs Rust format, clippy and tests plus the catalog gate. To build and test the full Windows UI installer, run `cargo xtask dist`.
+`check` runs Rust format, clippy and tests plus the catalog gate. To build and test the full installer or disk image, run `cargo xtask dist` on its platform.
 
 ### Run it
 
-On Windows, the host runs in the tray and opens the Tauri UI; the CLI is also included. Development always uses its own data in `.runtime/dev`, never your real checkpoints. Install Node.js and pnpm to build the Windows UI.
+The host runs in the Windows tray or macOS menu bar and opens the Tauri UI; the CLI is also included. Development always uses its own data in `.runtime/dev`, never your real checkpoints. Install Node.js 22 and pnpm 12.4.2 to build the UI on either platform.
 
-On Windows, the dev package runs like the installed app, with the tray icon, UI and hotkeys (Ctrl+F5 / Ctrl+F9). The macOS dev package currently has the menu-bar host and hotkeys (⌥F5 / ⌥F9) but its UI is not yet staged by xtask. macOS packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
+The dev package runs like the installed app, with the UI and hotkeys (Ctrl+F5 / Ctrl+F9 on Windows; ⌥F5 / ⌥F9 on macOS). macOS packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
 
 ```bash
 cargo xtask setup cargo-about

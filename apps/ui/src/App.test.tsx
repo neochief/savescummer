@@ -304,11 +304,13 @@ test('Settings blocks major conflicts and shows a savable warning for minor conf
   const mac = navigator.platform.includes('Mac');
   fireEvent.keyDown(save, { code: 'KeyC', key: 'c', ctrlKey: !mac, metaKey: mac });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-  expect(screen.getByText(/reserved for Copy/)).toBeTruthy();
+  expect(screen.getByRole('alert').textContent).toContain('reserved for Copy');
+  expect(screen.getByText('Copy', { selector: 'strong' })).toBeTruthy();
   expect(bridge.requests.some((request) => request.type === 'settings')).toBe(false);
 
   fireEvent.keyDown(save, { code: mac ? 'KeyN' : 'KeyG', key: mac ? 'n' : 'g', metaKey: true });
   expect(screen.getByText(/May interfere with/).textContent).toContain(mac ? 'New window' : 'Game Bar');
+  expect(screen.getByText(mac ? 'New window or document' : 'Open Game Bar', { selector: 'strong' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(bridge.requests.some((request) => request.type === 'settings')).toBe(true));
 });

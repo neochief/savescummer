@@ -15,9 +15,7 @@ pub struct Platform {
 }
 
 pub const WINDOWS: Platform = Platform { os: "windows", arch: "x64", suffix: Some("setup"), ext: "exe", ships: true };
-// The macOS package does not yet include the Tauri UI; keep it in CI but do
-// not publish an incomplete app.
-pub const MACOS: Platform = Platform { os: "macos", arch: "arm64", suffix: None, ext: "dmg", ships: false };
+pub const MACOS: Platform = Platform { os: "macos", arch: "arm64", suffix: None, ext: "dmg", ships: true };
 pub const LINUX: Platform = Platform { os: "linux", arch: "x86_64", suffix: None, ext: "AppImage", ships: false };
 
 pub const ALL: [Platform; 3] = [WINDOWS, MACOS, LINUX];

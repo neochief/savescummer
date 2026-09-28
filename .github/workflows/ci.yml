@@ -1,7 +1,7 @@
 # CI (PLAN-BUILD.md CI): nothing merges that breaks a platform.
 #
 # Build commands are `cargo xtask` commands, so failures reproduce locally.
-# Windows ships the Tauri UI; macOS still uses Qt when its UI project exists.
+# Windows and macOS both ship the Tauri UI.
 name: CI
 
 on:
@@ -70,12 +70,15 @@ jobs:
       - name: Rust toolchain
         run: cargo --version
       - uses: Swatinem/rust-cache@v2
-      - name: Cache Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        uses: actions/cache@v6
+      - uses: pnpm/action-setup@v6
         with:
-          path: .runtime/Qt
-          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+          package_json_file: apps/ui/package.json
+          cache: true
+          cache_dependency_path: apps/ui/pnpm-lock.yaml
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
       - name: Cache cargo-about
         uses: actions/cache@v6
         with:
@@ -84,12 +87,15 @@ jobs:
       # The app icon is rendered from assets/icon.svg.
       - name: Install librsvg
         run: brew install librsvg
-      - name: Set up Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        run: cargo xtask setup qt
       - name: Set up cargo-about
         run: cargo xtask setup cargo-about
       - name: Check
         run: cargo xtask check
-      - name: Build and test
-        run: cargo xtask build --test --package
+      - name: Build and test the disk image
+        run: cargo xtask dist
+      - name: Upload macOS disk image
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-dmg
+          path: dist/*.dmg
+          if-no-files-found: error

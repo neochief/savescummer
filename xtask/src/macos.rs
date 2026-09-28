@@ -9,7 +9,7 @@ use anyhow::{Context, bail};
 
 use crate::naming::{self, CLI, HOST, UI};
 use crate::package::{self, Inputs, Layout};
-use crate::{cmd, frontend, paths, pins};
+use crate::{cmd, paths, pins};
 
 pub use crate::unix::{ask_to_close, hide_window, spawn_detached};
 
@@ -35,12 +35,6 @@ pub fn check_build_machine() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn cmake_args() -> Vec<String> {
-    vec!["-DCMAKE_OSX_ARCHITECTURES=arm64".into(), format!("-DCMAKE_OSX_DEPLOYMENT_TARGET={}", pins::MIN_MACOS)]
-}
-
-pub fn qt_runtime_env(_command: &mut Command, _kit: &Path) {}
-
 /// Where the program with the fixed executable name `name` is in a package.
 pub fn program(package: &Path, name: &str) -> PathBuf {
     package.join("Contents").join("MacOS").join(name)
@@ -49,7 +43,7 @@ pub fn program(package: &Path, name: &str) -> PathBuf {
 /// ```text
 /// Contents/Info.plist
 /// Contents/MacOS/SaveScummer        host: the main executable, what opening the app runs
-/// Contents/MacOS/SaveScummer.UI     UI, with Qt in Contents/Frameworks (once it exists)
+/// Contents/MacOS/SaveScummer.UI     embedded Tauri/WebKit UI
 /// Contents/MacOS/SaveScummer.CLI    CLI
 /// Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist
 /// Contents/Resources/SaveScummer.icns, then licenses, manifest and checksums
@@ -63,15 +57,19 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
     let resources = contents.join("Resources");
     let agent = contents.join("Library").join("LaunchAgents").join(LOGIN_AGENT);
     let icns = resources.join("SaveScummer.icns");
-    let mut required =
-        vec![contents.join("Info.plist"), macos.join(HOST), macos.join(CLI), agent.clone(), icns.clone()];
+    let required = vec![
+        contents.join("Info.plist"),
+        macos.join(HOST),
+        macos.join(CLI),
+        macos.join(UI),
+        agent.clone(),
+        icns.clone(),
+    ];
 
     package::copy_file(&inputs.host, &program(root, HOST))?;
     package::copy_file(&inputs.cli, &program(root, CLI))?;
-    if let Some(ui) = inputs.ui {
-        deploy_ui(root, &ui.install)?;
-        required.push(macos.join(UI));
-    }
+    let ui = inputs.ui.context("macOS packages require the Tauri UI")?;
+    package::copy_file(&ui.install.join("bin").join(UI), &program(root, UI))?;
 
     let plist = fs::read_to_string(paths::packaging().join("macos").join("Info.plist.in"))
         .context("reading packaging/macos/Info.plist.in")?
@@ -95,32 +93,23 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
 /// and checks it the way macOS will.
 ///
 /// Signing order: `fill_package` already signed everything once, and ad-hoc
-/// signing is deterministic, so this pass leaves nested code (the CLI, the UI,
-/// Qt) byte for byte as summed. Only the main executable and
+/// signing is deterministic, so this pass leaves the CLI and UI byte for byte
+/// as summed. Only the main executable and
 /// `_CodeSignature/` change, since they seal SHA256SUMS.txt itself; they're
 /// left out of it, and the signature covers them instead.
 pub fn finish_package(root: &Path) -> anyhow::Result<()> {
     sign(root)?;
+    for name in [HOST, CLI, UI] {
+        let binary = program(root, name);
+        let architectures = cmd::output(Command::new("lipo").arg("-archs").arg(&binary))?;
+        anyhow::ensure!(architectures == "arm64", "{} must be arm64, found {architectures}", binary.display());
+        cmd::run(Command::new("codesign").args(["--verify", "--strict"]).arg(&binary))?;
+    }
     cmd::run(Command::new("codesign").args(["--verify", "--deep", "--strict"]).arg(root))
 }
 
 fn sign(bundle: &Path) -> anyhow::Result<()> {
     cmd::run(Command::new("codesign").args(["--force", "--deep", "--sign", "-"]).arg(bundle))
-}
-
-/// The UI next to the host, and the Qt it needs deployed by `macdeployqt`.
-/// Expects the UI's `cmake --install` to put a plain executable in `bin/`.
-fn deploy_ui(root: &Path, install: &Path) -> anyhow::Result<()> {
-    let ui = program(root, UI);
-    package::copy_file(&install.join("bin").join(UI), &ui)?;
-    let macdeployqt = cmd::tool(
-        &frontend::kit().join("bin").join("macdeployqt"),
-        &format!("macdeployqt (Qt {})", pins::QT_VERSION),
-        "qt",
-    )?;
-    let mut command = Command::new(macdeployqt);
-    command.arg(root).arg(format!("-executable={}", ui.display()));
-    cmd::run(&mut command)
 }
 
 /// The full-color Dock and Finder icon, rendered from `assets/icon.svg` at

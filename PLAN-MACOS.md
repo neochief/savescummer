@@ -4,7 +4,7 @@ Everything needed to make the host, the CLI, packaging and CI fully work on macO
 
 The target is the one PLAN-BUILD.md already fixes: macOS 13+, Apple Silicon only, one `SaveScummer-macos-arm64-<ver>.dmg`. This plan doesn't change any rule in PLAN-HOST.md: it lists the macOS adapters and fixes, and the few places where macOS forces a decision.
 
-Status (2026-09-28): the macOS host, CLI, bundle and CI job are implemented. The Tauri UI has been exercised on a Mac, but `cargo xtask` still packages a bundle without it. The release workflow therefore ships Windows only until macOS UI packaging is complete. The implementation checklist below records the original macOS port; use `docs/building.md` for current commands. FTL, Into the Breach and Six Ages (Steam) are found and their macOS save folders resolve; Six Ages waits for access to other apps' data.
+Status (2026-09-28): the macOS host, CLI, Tauri UI bundle, DMG and CI job are implemented. The release workflow builds the macOS disk image alongside the Windows installer. The implementation checklist below records the original macOS port; use `docs/building.md` for current commands. FTL, Into the Breach and Six Ages (Steam) are found and their macOS save folders resolve; Six Ages waits for access to other apps' data.
 
 
 ## PRINCIPLES
@@ -21,7 +21,7 @@ Every OS adapter already has its own file, chosen with `#[cfg_attr(..., path = "
 
 ## THE APP BUNDLE
 
-There's one bundle, with the host as its main executable. The current `SaveScummer.app/Contents/MacOS/` holds `SaveScummer` (the host, `CFBundleExecutable`) and `SaveScummer.CLI`. Adding `SaveScummer.UI` is the remaining release packaging task. There's no nested helper app: one bundle means one identity, one signature, one "Open Anyway", one name in notifications and permission prompts. Nested helpers were mostly needed for Apple's old login-item API, which `SMAppService` (macOS 13) replaced.
+There's one bundle, with the host as its main executable. `SaveScummer.app/Contents/MacOS/` holds `SaveScummer` (the host, `CFBundleExecutable`), `SaveScummer.UI` and `SaveScummer.CLI`. There's no nested helper app: one bundle means one identity, one signature, one "Open Anyway", one name in notifications and permission prompts. Nested helpers were mostly needed for Apple's old login-item API, which `SMAppService` (macOS 13) replaced.
 
 - **Opening the app** starts the host, which shows the UI. Opening it again while the host runs doesn't start a second process: macOS sends "reopen" to the running host, which shows the UI (PLAN-HOST, PROCESSES). The login agent runs the host with `--minimized` (LAUNCH AT LOGIN).
 - **Dock icon target.** The bundle is `LSUIElement`, so the host has no Dock icon. Validate that the packaged Tauri UI gets a Dock icon while its window is open, then hides it when closed.
@@ -226,7 +226,7 @@ Done when `cargo xtask check` passes on an Apple Silicon Mac.
 
 ## BUILD AND PACKAGING
 
-`xtask/src/macos.rs` builds the host/CLI bundle and DMG. The remaining release task is to stage the Tauri UI and its runtime in that bundle, verify it on macOS, and then re-enable the macOS release job. The following records the completed host/CLI packaging work:
+`xtask/src/macos.rs` builds the host, CLI and Tauri UI bundle and DMG. The following records the packaging work:
 
 - **Build flags:** set `MACOSX_DEPLOYMENT_TARGET` from `pins::MIN_MACOS` for every Rust build.
 - **The bundle:** `SaveScummer.app` with the layout from THE APP BUNDLE, `packaging/macos/Info.plist.in` (`CFBundleExecutable` `SaveScummer`, `LSUIElement`), the login agent's plist (LAUNCH AT LOGIN), the app icon as `.icns` generated from `assets/icon.svg` (the full-color Dock and Finder icon; the menu-bar template in `assets/macos/` is a separate asset), licenses, manifest and checksums in `Contents/Resources/`.
@@ -235,7 +235,7 @@ Done when `cargo xtask check` passes on an Apple Silicon Mac.
 - **Dev session:** `run` and `host start` start the host from the dev bundle; `procs` stopping must recognize the host inside a bundle.
 - **Version resources:** `apps/host/build.rs` and `apps/cli/build.rs` use `winresource`; they must stay no-ops on macOS (they are today) while `Info.plist` carries the version.
 
-For a release-ready macOS build, add the UI and its licenses to the bundle, test host/UI launch and reopen from the installed app, verify signatures and minimum-OS compatibility on a clean Mac, then satisfy the macOS release acceptance checks in PLAN-BUILD.md.
+The bundle contains the UI and its licenses. Verify host/UI launch and reopen from the installed app, signatures and minimum-OS compatibility on a clean Mac against the macOS acceptance checks in PLAN-BUILD.md.
 
 
 ## SLEEP AND RESUME
@@ -245,8 +245,8 @@ Rust's `Instant` doesn't advance while a Mac sleeps, so the 15-minute scan and a
 
 ## CI AND DOCS
 
-- **CI:** the `macos-latest` job runs `check` and `build --test --package`. Add the macOS job back to `release.yml` when the UI is included and tested in the DMG.
-- **docs/building.md:** keep macOS prerequisites, current host/CLI bundle scope and release availability accurate when the UI lands.
+- **CI:** the `macos-latest` job runs `check` and `dist`; `release.yml` builds and uploads the DMG alongside Windows.
+- **docs/building.md:** keep macOS prerequisites, bundle contents and release availability accurate.
 - **README:** the macOS install section already exists; add the hotkeys and the fn note (HOTKEYS), permission prompts and re-allowing access after each update (PRIVACY PERMISSIONS), and screenshots for *Open Anyway*.
 - **PLAN-HOST.md:** fill in the macOS column of "Per OS" and the PLATFORMS table in PLAN.md.
 
@@ -265,4 +265,4 @@ Each step leaves the host more usable on its own:
 8. GOG and Epic on macOS.
 9. CI and docs.
 
-The host/CLI port used this order. Remaining release work is the UI packaging and installed-app validation described above.
+The host/CLI port used this order. Installed-app validation against the acceptance checks above remains.

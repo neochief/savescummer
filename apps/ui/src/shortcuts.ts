@@ -11,6 +11,10 @@ function shortcutConflict(shortcut: string, platform: Platform) {
   return conflicts[platform].find((entry) => entry.key === shortcut);
 }
 
+export function shortcutDescription(shortcut: string): string | undefined {
+  return shortcutConflict(shortcut, currentPlatform())?.description;
+}
+
 export function capturedShortcut(event: KeyPress): string | undefined {
   const key = /^(F(?:[1-9]|1[0-2])|Key[A-Z]|Digit[0-9])$/.exec(event.code)?.[1];
   if (!key) return undefined;

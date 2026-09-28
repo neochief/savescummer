@@ -1,5 +1,5 @@
-//! The UI frontend layer: Tauri on Windows, and the earlier Qt build on
-//! platforms where it still exists.
+//! The UI frontend layer: Tauri on Windows and macOS. The earlier Qt build
+//! remains available on platforms with a Qt project.
 //! Nothing outside this module (and the platform steps that deploy its
 //! runtime) assumes either.
 //!
@@ -10,8 +10,8 @@
 //! - a test step that runs headless against the freshly built host
 //! - its license texts, shipped in every package
 //!
-//! Windows requires the Tauri UI. Other platforms still allow the frontend to
-//! be absent while their UI packaging is implemented.
+//! Windows and macOS require the Tauri UI. Linux still allows the frontend to
+//! be absent while its UI packaging is implemented.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -35,11 +35,11 @@ pub fn source() -> PathBuf {
 
 /// Whether the platform's UI source is present.
 pub fn present() -> bool {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         source().join("package.json").is_file() && source().join("src-tauri").join("Cargo.toml").is_file()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
         source().join("CMakeLists.txt").is_file()
     }
@@ -47,22 +47,22 @@ pub fn present() -> bool {
 
 /// License texts for a frontend with separately shipped runtime libraries.
 pub fn licenses() -> Option<PathBuf> {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         None
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
         Some(paths::packaging().join("licenses"))
     }
 }
 
 pub fn version() -> &'static str {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         "Tauri 2"
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
         pins::QT_VERSION
     }
@@ -74,14 +74,14 @@ pub fn kit() -> PathBuf {
 }
 
 pub fn configuration(mode: Mode) -> &'static str {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         match mode {
             Mode::Dev => "debug",
             Mode::Release => "release",
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     match mode {
         Mode::Dev => "RelWithDebInfo",
         Mode::Release => "Release",
@@ -89,7 +89,7 @@ pub fn configuration(mode: Mode) -> &'static str {
 }
 
 /// Configures, builds, optionally tests, and installs the UI.
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 pub fn build(mode: Mode, version: &str, test: bool, host: &Path) -> anyhow::Result<Ui> {
     let kit = kit();
     if !kit.join("lib").is_dir() {
@@ -144,8 +144,8 @@ pub fn build(mode: Mode, version: &str, test: bool, host: &Path) -> anyhow::Resu
     Ok(Ui { install })
 }
 
-/// Build the embedded WebView2 UI and stage it under the fixed package name.
-#[cfg(windows)]
+/// Build the Tauri UI and stage it under the fixed package name.
+#[cfg(any(windows, target_os = "macos"))]
 pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Result<Ui> {
     let source = source();
     let config: serde_json::Value = serde_json::from_slice(&fs::read(source.join("src-tauri/tauri.conf.json"))?)?;
@@ -153,7 +153,24 @@ pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Res
         config["version"].as_str() == Some(version),
         "Tauri UI version must match the workspace version {version}"
     );
+    #[cfg(target_os = "macos")]
+    anyhow::ensure!(
+        config["bundle"]["macOS"]["minimumSystemVersion"].as_str() == Some(pins::MIN_MACOS),
+        "Tauri UI minimum macOS version must be {}",
+        pins::MIN_MACOS
+    );
     let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
+    let manifest: serde_json::Value = serde_json::from_slice(&fs::read(source.join("package.json"))?)?;
+    let required_pnpm = manifest["packageManager"]
+        .as_str()
+        .and_then(|value| value.strip_prefix("pnpm@"))
+        .context("apps/ui/package.json must specify a pnpm version")?;
+    let installed_pnpm = cmd::output(Command::new(&pnpm).arg("--version"))?;
+    anyhow::ensure!(
+        installed_pnpm == required_pnpm,
+        "the Tauri UI needs pnpm {required_pnpm}, but {} is {installed_pnpm}",
+        paths::show(&pnpm)
+    );
     cmd::run(Command::new(&pnpm).current_dir(&source).args(["install", "--frozen-lockfile"]))?;
     if test {
         cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;

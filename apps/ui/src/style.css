@@ -11,10 +11,11 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .icon { display: block; width: 24px; height: 24px; object-fit: contain; filter: brightness(0) saturate(100%) invert(88%) sepia(9%) saturate(273%) hue-rotate(341deg) brightness(93%); flex: none; }
 .app { display: flex; height: 100%; min-width: 700px; background: #1c1918; }
 .app.is-busy { cursor: wait; }
-.sidebar { width: 248px; flex: none; display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; overflow: hidden; }
+.sidebar { position: relative; width: 248px; flex: none; display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; overflow: hidden; }
 .app.no-games .sidebar { width: 100%; align-items: center; justify-content: center; gap: 16px; }
 .app.no-games .sidebar .titlebar { justify-content: center; }
 .app.no-games .library-panel { width: 260px; margin: 0; padding: 0; background: transparent; overflow: visible; }
+.app.no-games .sidebar-surface { flex: none; width: 260px; background: none; overflow: visible; }
 .app.no-games .library-controls { display: flex; flex-direction: column; padding: 0; }
 .app.no-games .library-controls button { justify-content: center; }
 .app.no-games .main { flex: 0 0 0; width: 0; padding: 0; overflow: hidden; visibility: hidden; }
@@ -27,10 +28,12 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .running-panel { position: relative; padding: 0 8px; background: linear-gradient(#2c2623, transparent); border-radius: 12px 12px 0 0; }
 .running-panel h2 { position: relative; }
 .running-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f51e2b; margin-right: 7px; box-shadow: 0 0 8px #f51e2b; animation: pulse 3s ease-in-out infinite; }
+.sidebar-surface { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; background: #2c2623; }
+.sidebar-content { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-color: #5b4c4280 transparent; scrollbar-width: thin; }
 .library-panel { margin-top: 0; padding: 0 8px 8px; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-color: #5b4c42 transparent; scrollbar-width: thin; border-radius: 12px; background: #2c2623; }
-.library-panel::-webkit-scrollbar, .history::-webkit-scrollbar, .instructions::-webkit-scrollbar { width: 8px; }
-.library-panel::-webkit-scrollbar-track, .history::-webkit-scrollbar-track, .instructions::-webkit-scrollbar-track { background: transparent; }
-.library-panel::-webkit-scrollbar-thumb, .history::-webkit-scrollbar-thumb, .instructions::-webkit-scrollbar-thumb { background: #5b4c42; border-radius: 8px; }
+.library-panel::-webkit-scrollbar, .sidebar-content::-webkit-scrollbar, .history::-webkit-scrollbar, .game-info-content::-webkit-scrollbar { width: 8px; }
+.library-panel::-webkit-scrollbar-track, .sidebar-content::-webkit-scrollbar-track, .history::-webkit-scrollbar-track, .game-info-content::-webkit-scrollbar-track { background: transparent; }
+.library-panel::-webkit-scrollbar-thumb, .sidebar-content::-webkit-scrollbar-thumb, .history::-webkit-scrollbar-thumb, .game-info-content::-webkit-scrollbar-thumb { background: #5b4c42; border-radius: 8px; }
 .running-panel + .library-panel { margin-top: 16px; }
 .library-panel:has(h2:first-child):not(:has(.game-card)) { margin-top: 0; }
 .game-card { position: relative; display: block; width: 216px; height: 96px; overflow: hidden; border: 0; border-radius: 10px; padding: 0; background: #3c302d; color: white; text-align: center; margin: 0 0 8px; transition: transform .15s ease, filter .15s ease; }
@@ -42,17 +45,19 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .game-logo { position: relative; display: block; width: 75%; height: 80%; margin: 10px auto; object-fit: contain; }
 .game-fallback { position: relative; display: grid; place-items: center; height: 100%; font: 700 22px Chakra Petch, sans-serif; padding: 8px; }
 .install-tag { position: absolute; right: 7px; bottom: 5px; color: #fff; font-size: 10px; background: rgba(13,7,7,.7); border-radius: 3px; padding: 2px 4px; }
-.library-controls { padding-top: 8px; }
+.library-controls { flex: none; padding: 8px; }
 .library-controls button { width: 100%; height: 40px; border: 0; border-radius: 8px; padding: 8px; display: flex; align-items: center; gap: 8px; background: transparent; color: #e4d7c9; text-align: left; font-size: 14px; }
 .library-controls button:not(:disabled):hover { background: #3a322e; }
 .library-controls button:disabled { opacity: .55; }
 .main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 16px; }
 .main-title { padding: 0; }
-.macos .sidebar { padding-top: 56px; overflow: visible; }
-.macos .sidebar .titlebar { position: absolute; left: 80px; top: 0; width: 320px; height: 56px; z-index: 1; }
-.macos .app.no-games .sidebar .titlebar { position: static; width: auto; }
+.macos .app:not(.no-games) .sidebar { padding-top: 84px; }
+.macos .app:not(.no-games) .sidebar .titlebar { position: absolute; left: 8px; top: 32px; width: calc(100% - 16px); height: 48px; }
+.macos .app:not(.no-games) .app-icon { width: 36px; height: 36px; }
+.macos .app:not(.no-games) .wordmark { font-size: 19px; -webkit-text-stroke-width: 2px; }
 .connection { position: absolute; top: 8px; right: 20px; margin: 0; color: #f3eee7; background: #3a322e; border-radius: 8px; padding: 9px 12px; font-size: 13px; z-index: 5; }
 .action-band { display: flex; height: 136px; flex: none; gap: 8px; align-items: flex-start; padding-top: 40px; position: relative; }
+.action-band.has-load-label { height: 156px; }
 .action-slot { flex: 1; min-width: 0; height: 96px; position: relative; }
 .shortcut-tab { position: absolute; top: -32px; left: 50%; transform: translateX(-50%); height: 40px; min-width: 72px; padding: 4px 12px; text-align: center; border-radius: 8px 8px 0 0; background: #5b4c42; color: #f3eee7; font: 600 18px/24px Chakra Petch, sans-serif; }
 .main-button { position: relative; width: 100%; height: 96px; border-radius: 12px; border: 0; display: flex; align-items: center; justify-content: center; gap: 16px; font: 700 clamp(24px, 3vw, 36px) Chakra Petch, sans-serif; }
@@ -74,7 +79,7 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .more-menu button:hover:not(:disabled) { background: #3a322e; }
 .more-menu button:disabled { opacity: .45; }
 .more-menu hr { border: 0; border-top: 1px solid #463830; margin: 8px; }
-.load-badge { position: absolute; left: 50%; transform: translateX(-50%); bottom: -16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid #cfc2b3; border-radius: 4px; background: #f3eee7; color: #76675b; padding: 3px 8px; font-size: 11px; z-index: 2; }
+.load-badge { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% - 22px); display: flex; flex-direction: column; align-items: center; justify-content: center; max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid #cfc2b3; border-radius: 4px; background: #f3eee7; color: #76675b; padding: 2px 8px; font-size: 11px; line-height: 16px; z-index: 2; }
 .badge-time, .badge-label { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; }
 .badge-age { display: inline-block; min-width: 54px; text-align: left; }
 .load-badge .icon { width: 12px; height: 12px; filter: brightness(0) saturate(100%) invert(44%) sepia(13%) saturate(414%) hue-rotate(343deg); }
@@ -85,22 +90,22 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .load-badge:is(:hover, :focus-visible) .badge-crosshairs, .label-chip:is(:hover, :focus-visible) .chip-crosshairs { display: block; }
 .badge-label { overflow: hidden; text-overflow: ellipsis; border-top: 1px solid #cfc2b3; padding-top: 2px; }
 .action-error-block { margin: 16px 0 0; color: #ffb5b8; background: #482427; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
-.instructions { position: relative; max-height: 100px; margin-top: 16px; overflow: hidden; color: #cfc4b8; font-size: 13px; line-height: 1.45; }
-.instructions:not(.expanded) { mask-image: linear-gradient(black 62%, transparent); }
-.instructions.expanded { max-height: 40vh; overflow-y: auto; }
-.instructions-text { white-space: pre-wrap; user-select: text; padding: 0 32px 12px 0; }
-.instructions-text p { margin: 0 0 8px; }
-.instructions-text ol, .instructions-text ul { margin: 0 0 8px; padding-left: 22px; }
-.instructions-text li { margin: 0 0 3px; }
-.instructions button { position: sticky; bottom: 4px; left: calc(100% - 28px); width: 28px; height: 28px; border: 0; border-radius: 5px; background: #3a322e; }
-.instructions button .icon { width: 16px; height: 16px; }
+.game-info { flex: none; margin: 8px 0 0; color: #cfc4b8; font-size: 13px; line-height: 1.45; }
+.game-info > button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 10px; border: 0; border-radius: 6px; background: #3a322e; color: #f3eee7; }
+.game-info > button:hover { background: #51423a; }
+.game-info > button .icon { width: 16px; height: 16px; }
+.game-info-content { max-height: 45vh; overflow-y: auto; margin-top: 8px; padding: 12px; border-radius: 8px; background: #2c2623; user-select: text; }
+.game-info-content p { margin: 0 0 8px; }
+.game-info-content p:last-child { margin-bottom: 0; }
+.game-info-content ol, .game-info-content ul { margin: 0 0 8px; padding-left: 22px; }
+.game-info-content li { margin: 0 0 3px; }
 .history { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 16px; scrollbar-color: #5b4c42 transparent; }
 .history.fade-top { mask-image: linear-gradient(to bottom, transparent, black 20px, black); }
 .history.fade-bottom { mask-image: linear-gradient(to bottom, black, black calc(100% - 20px), transparent); }
 .history.fade-top.fade-bottom { mask-image: linear-gradient(to bottom, transparent, black 20px, black calc(100% - 20px), transparent); }
 .history-virtual { position: relative; }
 .virtual-item { position: absolute; left: 0; right: 0; height: 64px; }
-.day h2 { margin: 16px 0 8px; }
+.day h2 { margin: 16px 8px 8px 0; text-align: right; }
 .history-row { display: flex; align-items: center; gap: 8px; height: 56px; padding: 8px; border-radius: 8px; background: #221d1b; }
 .history-row.flash { animation: row-flash 1.8s ease-out; }
 .history-time { flex: none; width: 66px; font-size: 13px; color: #c6b9ac; font-variant-numeric: tabular-nums; }

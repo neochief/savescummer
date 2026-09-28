@@ -1,6 +1,6 @@
 # Save Scummer UI
 
-This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Windows now builds and packages the Tauri/WebView2 UI from `apps/ui` in the full installer. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
+This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Windows packages the Tauri/WebView2 UI from `apps/ui` in the installer, and macOS packages the Tauri/WebKit UI in the DMG. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 
 The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is an activity log listing every event, newest first.
 
@@ -19,7 +19,7 @@ Keep the existing process boundary:
 
 **Windows implementation:** the host launches the Tauri window, the UI connects to the real host, and Save and Load have been exercised through an installed package against simulated game data. Closing and reopening the UI and restarting the host were also exercised. The remaining controls, dialogs, deletion flow, virtualization and accessibility rules in this plan are product work beyond the Windows packaging gate.
 
-**Remaining cross-platform gate:** Validate macOS WKWebView and Linux WebKitGTK before adding their Tauri UI packages. Neither platform currently packages a Qt UI. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the earlier proof-of-concept numbers. macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md).
+**Remaining cross-platform validation:** The macOS Tauri UI is packaged; validate its WKWebView behavior in the installed app before publishing the draft release. Validate Linux WebKitGTK before adding its UI package. Neither platform packages a Qt UI. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the earlier proof-of-concept numbers. macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md).
 
 
 ## PROTOTYPE DECISIONS

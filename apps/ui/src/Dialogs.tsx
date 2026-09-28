@@ -2,12 +2,19 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as Reac
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Bridge } from './bridge';
 import type { FlushPreview, Game, HostState, SaveSet } from './types';
-import { capturedShortcut, displayShortcut, shortcutError, shortcutWarning } from './shortcuts';
+import { capturedShortcut, displayShortcut, shortcutDescription, shortcutError, shortcutWarning } from './shortcuts';
 
 export type DialogKind = 'settings' | 'add' | 'configure' | 'flush';
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function shortcutMessage(text: string, shortcut: string) {
+  const description = shortcutDescription(shortcut);
+  const at = description ? text.indexOf(description) : -1;
+  if (!description || at < 0) return text;
+  return <>{text.slice(0, at)}<strong>{description}</strong>{text.slice(at + description.length)}</>;
 }
 
 function DialogFrame({ title, kind, close, opener, children }: {
@@ -162,16 +169,16 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
             onFocus={() => { setCapturing('save'); bridge.capture(true).catch((failure) => setError(message(failure))); }}
             onBlur={(event) => { setCapturing(undefined); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.shortcutField)) bridge.capture(false).catch(() => undefined); }}
             onKeyDown={(event) => captureKey(event, 'save')} /></div>
-          {shortcutErrors.save && <p id="save-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutErrors.save}</p>}
-          {saveWarning && <p id="save-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{saveWarning}</p>}
+          {shortcutErrors.save && <p id="save-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutMessage(shortcutErrors.save, saveShortcut)}</p>}
+          {saveWarning && <p id="save-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{shortcutMessage(saveWarning, saveShortcut)}</p>}
           <div className="dialog-field"><label htmlFor="load-shortcut">Load shortcut</label><input id="load-shortcut" data-shortcut-field="load"
             value={displayShortcut(loadShortcut)} readOnly aria-invalid={Boolean(shortcutErrors.load)} aria-describedby={shortcutErrors.load ? 'load-shortcut-error' : loadWarning ? 'load-shortcut-warning' : undefined}
             className={capturing === 'load' ? 'capturing' : ''}
             onFocus={() => { setCapturing('load'); bridge.capture(true).catch((failure) => setError(message(failure))); }}
             onBlur={(event) => { setCapturing(undefined); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.shortcutField)) bridge.capture(false).catch(() => undefined); }}
             onKeyDown={(event) => captureKey(event, 'load')} /></div>
-          {shortcutErrors.load && <p id="load-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutErrors.load}</p>}
-          {loadWarning && <p id="load-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{loadWarning}</p>}
+          {shortcutErrors.load && <p id="load-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutMessage(shortcutErrors.load, loadShortcut)}</p>}
+          {loadWarning && <p id="load-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{shortcutMessage(loadWarning, loadShortcut)}</p>}
           <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds</label>
           <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
             onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>

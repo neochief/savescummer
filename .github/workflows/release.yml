@@ -1,8 +1,7 @@
-# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag builds the complete Windows
-# installer into a draft GitHub release. A human publishes it.
+# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag builds the Windows
+# installer and macOS disk image into a draft GitHub release. A human publishes it.
 #
-# Build commands are `cargo xtask` commands. A build job is added for a
-# platform after its complete UI package is ready to ship.
+# Build commands are `cargo xtask` commands.
 name: Release
 
 on:
@@ -57,9 +56,46 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  macos:
+    name: macOS disk image
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: apps/ui/package.json
+          cache: true
+          cache_dependency_path: apps/ui/pnpm-lock.yaml
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Cache cargo-about
+        uses: actions/cache@v6
+        with:
+          path: .runtime/tools/cargo-about
+          key: cargo-about-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Install librsvg
+        run: brew install librsvg
+      - name: Set up cargo-about
+        run: cargo xtask setup cargo-about
+      - name: Build the disk image
+        run: cargo xtask dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
   publish:
     name: Draft release
-    needs: [windows]
+    needs: [windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
