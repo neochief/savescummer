@@ -169,10 +169,13 @@ fn unique_folder(label: &str, used: &mut BTreeSet<String>) -> String {
 
 /// Publishes a finished copy under a free name: never overwrites, even if a
 /// folder appears there at the last moment.
-pub fn publish(temp: &Path, parent: &Path, name: &str) -> Result<PathBuf, Failure> {
+pub fn publish(temp: &Path, parent: &Path, name: &str, budget: &crate::retry::Budget) -> Result<PathBuf, Failure> {
     for n in 1.. {
         let candidate = if n == 1 { parent.join(name) } else { parent.join(format!("{name} ({n})")) };
-        match fsx::rename_noreplace(temp, &candidate) {
+        // Windows can briefly deny a directory move while another process
+        // inspects a file just copied into it. Share the operation's retry
+        // budget instead of leaving a finished checkpoint unpublished.
+        match budget.run(|| fsx::rename_noreplace(temp, &candidate)) {
             Ok(()) => return Ok(candidate),
             Err(e) if fs::symlink_metadata(&candidate).is_ok() => {
                 let _ = e;
@@ -360,7 +363,8 @@ mod tests {
         let store = tempfile::tempdir().unwrap();
         fs::create_dir(store.path().join("name")).unwrap();
         fs::create_dir(store.path().join("tmp")).unwrap();
-        let published = publish(&store.path().join("tmp"), store.path(), "name").unwrap();
+        let published =
+            publish(&store.path().join("tmp"), store.path(), "name", &Budget::new(crate::retry::FORWARD)).unwrap();
         assert_eq!(published, store.path().join("name (2)"));
     }
 

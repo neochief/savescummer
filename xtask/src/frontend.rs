@@ -1,4 +1,5 @@
-//! The UI frontend layer (PLAN-BUILD.md TOOLCHAINS): today Qt and C++.
+//! The UI frontend layer: Tauri on Windows, and the earlier Qt build on
+//! platforms where it still exists.
 //! Nothing outside this module (and the platform steps that deploy its
 //! runtime) assumes either.
 //!
@@ -35,16 +36,37 @@ pub fn source() -> PathBuf {
 
 /// Whether there is a UI to build yet.
 pub fn present() -> bool {
-    source().join("CMakeLists.txt").is_file()
+    #[cfg(windows)]
+    {
+        source().join("package.json").is_file() && source().join("src-tauri").join("Cargo.toml").is_file()
+    }
+    #[cfg(not(windows))]
+    {
+        source().join("CMakeLists.txt").is_file()
+    }
 }
 
-/// Qt's license texts, shipped with every package that contains the UI.
-pub fn licenses() -> PathBuf {
-    paths::packaging().join("licenses")
+/// License texts for a frontend with separately shipped runtime libraries.
+pub fn licenses() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        None
+    }
+    #[cfg(not(windows))]
+    {
+        Some(paths::packaging().join("licenses"))
+    }
 }
 
 pub fn version() -> &'static str {
-    pins::QT_VERSION
+    #[cfg(windows)]
+    {
+        "Tauri 2"
+    }
+    #[cfg(not(windows))]
+    {
+        pins::QT_VERSION
+    }
 }
 
 /// `.runtime/Qt/<version>/<kit>/`, installed by `setup qt`.
@@ -53,6 +75,14 @@ pub fn kit() -> PathBuf {
 }
 
 pub fn configuration(mode: Mode) -> &'static str {
+    #[cfg(windows)]
+    {
+        return match mode {
+            Mode::Dev => "debug",
+            Mode::Release => "release",
+        };
+    }
+    #[cfg(not(windows))]
     match mode {
         Mode::Dev => "RelWithDebInfo",
         Mode::Release => "Release",
@@ -60,6 +90,7 @@ pub fn configuration(mode: Mode) -> &'static str {
 }
 
 /// Configures, builds, optionally tests, and installs the UI.
+#[cfg(not(windows))]
 pub fn build(mode: Mode, version: &str, test: bool, host: &Path) -> anyhow::Result<Ui> {
     let kit = kit();
     if !kit.join("lib").is_dir() {
@@ -111,5 +142,38 @@ pub fn build(mode: Mode, version: &str, test: bool, host: &Path) -> anyhow::Resu
     let mut deploy = Command::new(&cmake);
     deploy.arg("--install").arg(&dir).args(["--config", config, "--prefix"]).arg(&install);
     cmd::run(&mut deploy)?;
+    Ok(Ui { install })
+}
+
+/// Build the embedded WebView2 UI and stage it under the fixed package name.
+#[cfg(windows)]
+pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Result<Ui> {
+    let source = source();
+    let config: serde_json::Value = serde_json::from_slice(&fs::read(source.join("src-tauri/tauri.conf.json"))?)?;
+    anyhow::ensure!(
+        config["version"].as_str() == Some(version),
+        "Tauri UI version must match the workspace version {version}"
+    );
+    let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
+    cmd::run(Command::new(&pnpm).current_dir(&source).args(["install", "--frozen-lockfile"]))?;
+    if test {
+        cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;
+    }
+    let mut build = Command::new(&pnpm);
+    build.current_dir(&source).args(["tauri", "build", "--no-bundle"]);
+    if mode == Mode::Dev {
+        build.arg("--debug");
+    }
+    cmd::run(&mut build)?;
+
+    let binary = mode.cargo_out().join(crate::naming::exe("savescummer-ui"));
+    anyhow::ensure!(binary.is_file(), "the Tauri build did not create {}", paths::show(&binary));
+    let install = mode.dir().join("ui-install");
+    if install.exists() {
+        fs::remove_dir_all(&install).with_context(|| format!("removing {}", install.display()))?;
+    }
+    let staged = install.join("bin").join(crate::naming::exe(crate::naming::UI));
+    fs::create_dir_all(staged.parent().expect("bin has a parent"))?;
+    fs::copy(&binary, &staged).with_context(|| format!("staging {}", paths::show(&binary)))?;
     Ok(Ui { install })
 }

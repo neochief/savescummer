@@ -145,12 +145,17 @@ fn a_hotkey_in_front_of_a_waiting_game_fails_and_changes_nothing() {
     let exe = world.steam.join("steamapps").join("common").join("Docs One").join("DocsOne.exe");
     guard(&world, &world.documents, "granted");
     let _host = world.host();
-    let _running = launch(&exe, &["--window"]);
+    let activate = world.root.join("activate-game");
+    let _running = launch(&exe, &["--window", "--activate-file", activate.to_str().unwrap()]);
     wait_for("the game in front", Duration::from_secs(20), || {
         world.host_log().contains("game started, waiting for access").then_some(())
     });
-    std::thread::sleep(Duration::from_millis(800));
-    let out = world.cli(&["hotkey", "save"]);
+    let out = wait_for("the waiting game in front", Duration::from_secs(10), || {
+        write(&activate, "");
+        std::thread::sleep(Duration::from_millis(300));
+        let out = world.cli(&["hotkey", "save"]);
+        (out.error_kind() == "access_needed").then_some(out)
+    });
     assert_eq!(out.error_kind(), "access_needed", "{}", out.stdout);
     assert_eq!(out.last()["error"]["game"], game.as_str());
     assert!(world.state()["active_stack"].as_array().unwrap().is_empty(), "never on the stack");

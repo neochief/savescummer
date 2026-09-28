@@ -58,7 +58,7 @@ mod tests {
     #[test]
     #[ignore = "needs a desktop session; run by hand"]
     fn starts_notifies_and_stops() {
-        let integration = start(Box::new(|_| {})).expect("started");
+        let integration = start(Box::new(|_| {}), Shortcut::defaults()).expect("started");
         eprintln!("hotkey errors: {:?}", integration.hotkey_errors());
         integration.notify("SaveScummer test", "Integration test notification");
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -66,7 +66,7 @@ mod tests {
 
         // Dropping without stop() must clean up too, and a second start in
         // the same process must work (class already registered).
-        let again = start(Box::new(|_| {})).expect("started again");
+        let again = start(Box::new(|_| {}), Shortcut::defaults()).expect("started again");
         drop(again);
     }
 }

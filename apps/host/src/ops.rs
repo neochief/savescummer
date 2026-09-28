@@ -554,7 +554,7 @@ fn make_checkpoint(
         return Err(failure);
     }
     host.crash_point(&format!("{kind}.copied"), 1);
-    let final_path = snap::publish(&temp, &folder, &format!("{} {kind}", local_stamp()))?;
+    let final_path = snap::publish(&temp, &folder, &format!("{} {kind}", local_stamp()), budget)?;
     host.crash_point(&format!("{kind}.published"), 1);
     let signature =
         snap::signature(&final_path).map_err(|e| Failure::new(ErrorKind::Io, e.to_string()).path(&final_path))?;

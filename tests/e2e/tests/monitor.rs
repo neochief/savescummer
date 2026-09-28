@@ -81,7 +81,8 @@ fn a_launcher_that_starts_the_game_and_exits() {
     let quit_engine = world.root.join("quit-engine");
     let mut launched = launch(
         &launcher,
-        &["--launch", engine.to_str().unwrap(), "--quit-file", quit_engine.to_str().unwrap(), "--", "--run-ms", "600"],
+        // Keep the launcher alive through a full background process scan.
+        &["--launch", engine.to_str().unwrap(), "--quit-file", quit_engine.to_str().unwrap(), "--", "--run-ms", "1600"],
     );
     world.wait_game(&a, "running", |g| g["running"] == true);
     launched.wait_exit();

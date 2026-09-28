@@ -97,9 +97,8 @@ impl Table {
         if self.is_empty() || !path.is_absolute() {
             return None;
         }
-        let mut pending: Vec<PathBuf> = components(path);
+        let (mut current, mut pending) = components(path);
         pending.reverse();
-        let mut current = PathBuf::from("/");
         let mut hops = 0;
         while let Some(name) = pending.pop() {
             if let Some(category) = self.lexical(&current) {
@@ -124,10 +123,10 @@ impl Table {
                 return self.lexical(&next);
             }
             let resolved = if target.is_absolute() { target } else { current.join(target) };
-            let mut again = components(&resolved);
+            let (root, mut again) = components(&resolved);
             again.reverse();
             pending.extend(again);
-            current = PathBuf::from("/");
+            current = root;
         }
         self.lexical(&current)
     }
@@ -159,7 +158,8 @@ impl Table {
 }
 
 /// `path`'s normal components, `..` applied.
-fn components(path: &Path) -> Vec<PathBuf> {
+fn components(path: &Path) -> (PathBuf, Vec<PathBuf>) {
+    let mut root = PathBuf::new();
     let mut out: Vec<PathBuf> = Vec::new();
     for component in path.components() {
         match component {
@@ -167,10 +167,11 @@ fn components(path: &Path) -> Vec<PathBuf> {
             Component::ParentDir => {
                 out.pop();
             }
-            _ => {}
+            Component::Prefix(_) | Component::RootDir => root.push(component.as_os_str()),
+            Component::CurDir => {}
         }
     }
-    out
+    (root, out)
 }
 
 /// What reading a guarded location found.

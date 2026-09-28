@@ -74,11 +74,12 @@ pub fn assemble(inputs: &Inputs) -> anyhow::Result<PathBuf> {
     let layout = platform::fill_package(&staging, inputs)?;
     fs::create_dir_all(&layout.resources)?;
     if inputs.ui.is_some() {
-        let licenses = frontend::licenses();
-        if !has_files(&licenses) {
-            bail!("the UI's license texts are missing from {}", paths::show(&licenses));
+        if let Some(licenses) = frontend::licenses() {
+            if !has_files(&licenses) {
+                bail!("the UI's license texts are missing from {}", paths::show(&licenses));
+            }
+            copy_dir(&licenses, &layout.resources.join("licenses"))?;
         }
-        copy_dir(&licenses, &layout.resources.join("licenses"))?;
     }
     third_party_licenses(&layout.resources.join(THIRD_PARTY))?;
     write_manifest(&layout.resources.join(MANIFEST), inputs)?;
@@ -154,7 +155,7 @@ fn write_manifest(path: &Path, inputs: &Inputs) -> anyhow::Result<()> {
         "mode": inputs.mode.name(),
         "version": inputs.version,
         "platform": platform::PLATFORM.stem(),
-        "qt": inputs.ui.map(|_| frontend::version()),
+        "ui_toolkit": inputs.ui.map(|_| frontend::version()),
         "configuration": {
             "rust": match inputs.mode { Mode::Dev => "dev", Mode::Release => "release" },
             "ui": inputs.ui.map(|_| frontend::configuration(inputs.mode)),
@@ -227,7 +228,7 @@ pub fn copy_dir(from: &Path, to: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Generates `THIRD-PARTY-LICENSES.html` for the crates the host and CLI
+/// Generates `THIRD-PARTY-LICENSES.html` for the crates the host, CLI and UI
 /// link. A crate under a license `about.toml` doesn't accept fails the build.
 fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
     let tool = cmd::tool(
@@ -239,7 +240,11 @@ fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
     let scratch = paths::scratch();
     fs::create_dir_all(&scratch)?;
     let mut reports = Vec::new();
-    for app in ["host", "cli"] {
+    let mut manifests = vec![("host", root.join("apps/host/Cargo.toml")), ("cli", root.join("apps/cli/Cargo.toml"))];
+    if frontend::present() {
+        manifests.push(("ui", root.join("apps/ui/src-tauri/Cargo.toml")));
+    }
+    for (app, manifest) in manifests {
         let json = scratch.join(format!("licenses-{app}.json"));
         let mut command = Command::new(&tool);
         command
@@ -249,7 +254,7 @@ fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
             .arg("-c")
             .arg(root.join("about.toml"))
             .arg("-m")
-            .arg(root.join("apps").join(app).join("Cargo.toml"))
+            .arg(manifest)
             .arg("-o")
             .arg(&json);
         cmd::run(&mut command)
@@ -282,7 +287,7 @@ fn render_licenses(reports: &[Value]) -> String {
     let mut html = String::from(
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>SaveScummer third-party licenses</title>\n\
          <style>body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em}pre{white-space:pre-wrap;background:#f4f4f4;padding:1em}</style>\n\
-         </head>\n<body>\n<h1>Third-party licenses</h1>\n<p>SaveScummer's host and command-line programs include these Rust crates.</p>\n",
+         </head>\n<body>\n<h1>Third-party licenses</h1>\n<p>SaveScummer includes these Rust crates.</p>\n",
     );
     for ((name, text), crates) in &licenses {
         html.push_str(&format!(

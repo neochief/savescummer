@@ -33,18 +33,6 @@ pub fn check_build_machine() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn cmake_args() -> Vec<String> {
-    Vec::new()
-}
-
-/// Lets freshly built Qt programs find the kit's DLLs.
-pub fn qt_runtime_env(command: &mut Command, kit: &Path) {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    let mut dirs = vec![kit.join("bin")];
-    dirs.extend(std::env::split_paths(&path));
-    command.env("PATH", std::env::join_paths(dirs).expect("PATH entries are valid"));
-}
-
 /// Where the program with the fixed executable name `name` is in a package.
 pub fn program(package: &Path, name: &str) -> PathBuf {
     package.join("bin").join(naming::exe(name))
@@ -184,7 +172,7 @@ pub fn ask_to_close(pid: u32) {
 
 /// ```text
 /// bin\SaveScummer.exe        host: the app, what the Start menu runs
-/// bin\SaveScummer.UI.exe     UI, with Qt DLLs (once it exists)
+/// bin\SaveScummer.UI.exe     embedded Tauri/WebView2 UI
 /// bin\SaveScummer.CLI.exe    CLI
 /// bin\vcruntime140.dll …     Visual C++ runtime, so no redistributable is needed
 /// README.txt
@@ -240,18 +228,14 @@ pub fn finish_package(_root: &Path) -> anyhow::Result<()> {
 
 fn readme(inputs: &Inputs) -> String {
     let template = paths::packaging().join("windows").join("README.txt");
-    let qt = paths::packaging().join("windows").join("README-qt.txt");
     let mut text = fs::read_to_string(&template).unwrap_or_default();
     if inputs.ui.is_some() {
         text.push('\n');
-        text.push_str(&fs::read_to_string(&qt).unwrap_or_default());
+        text.push_str("UI\n--\n\nThe window uses Tauri and the Microsoft Edge WebView2 Runtime.\n");
     }
     let ui =
         if inputs.ui.is_some() { "  SaveScummer.UI.exe     the main window, started by SaveScummer.exe\n" } else { "" };
-    text.replace("{ui}", ui)
-        .replace("{version}", inputs.version)
-        .replace("{qt_version}", pins::QT_VERSION)
-        .replace('\n', "\r\n")
+    text.replace("{ui}", ui).replace("{version}", inputs.version).replace('\n', "\r\n")
 }
 
 /// The Visual C++ runtime DLLs of the newest Visual Studio (found with vswhere).

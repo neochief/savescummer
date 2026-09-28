@@ -36,8 +36,13 @@ pub fn on_path(name: &str, hint: &str) -> anyhow::Result<PathBuf> {
 }
 
 pub fn find_on_path(name: &str) -> Option<PathBuf> {
-    let exe = format!("{name}{}", std::env::consts::EXE_SUFFIX);
-    std::env::split_paths(&std::env::var_os("PATH")?).map(|dir| dir.join(&exe)).find(|p| p.is_file())
+    let paths = std::env::var_os("PATH")?;
+    #[cfg(windows)]
+    let names = [format!("{name}.exe"), format!("{name}.cmd")];
+    #[cfg(not(windows))]
+    let names = [name.to_owned()];
+    std::env::split_paths(&paths)
+        .find_map(|dir| names.iter().map(|candidate| dir.join(candidate)).find(|p| p.is_file()))
 }
 
 /// `path` must exist, or the error names the setup command that makes it.
