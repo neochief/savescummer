@@ -33,11 +33,19 @@ impl Shortcut {
                         (1..=12).contains(&number).then_some(Key::Function(number))
                     } else if part.len() == 1 {
                         let ch = part.chars().next().unwrap();
-                        if ch.is_ascii_uppercase() { Some(Key::Letter(ch)) }
-                        else if ch.is_ascii_digit() { Some(Key::Digit(ch)) }
-                        else { None }
-                    } else { None };
-                    if key.is_none() { return Err("use F1–F12, A–Z, or 0–9".into()); }
+                        if ch.is_ascii_uppercase() {
+                            Some(Key::Letter(ch))
+                        } else if ch.is_ascii_digit() {
+                            Some(Key::Digit(ch))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    if key.is_none() {
+                        return Err("use F1–F12, A–Z, or 0–9".into());
+                    }
                 }
                 _ => return Err("use one key and each modifier at most once".into()),
             }
@@ -47,17 +55,20 @@ impl Shortcut {
             return Err("letters and numbers need Ctrl, Alt, or Meta".into());
         }
         #[cfg(target_os = "macos")]
-        if (shortcut.ctrl && !shortcut.alt && !shortcut.shift && !shortcut.meta
-            && shortcut.key == Key::Function(5))
-            || (shortcut.meta && !shortcut.ctrl && !shortcut.alt
+        if (shortcut.ctrl && !shortcut.alt && !shortcut.shift && !shortcut.meta && shortcut.key == Key::Function(5))
+            || (shortcut.meta
+                && !shortcut.ctrl
+                && !shortcut.alt
                 && matches!(shortcut.key, Key::Letter('Q') | Key::Function(3)))
         {
             return Err("this shortcut is reserved by macOS".into());
         }
         #[cfg(windows)]
-        if (shortcut.alt && !shortcut.ctrl && !shortcut.shift && !shortcut.meta
-            && shortcut.key == Key::Function(4))
-            || (shortcut.meta && !shortcut.ctrl && !shortcut.alt && !shortcut.shift
+        if (shortcut.alt && !shortcut.ctrl && !shortcut.shift && !shortcut.meta && shortcut.key == Key::Function(4))
+            || (shortcut.meta
+                && !shortcut.ctrl
+                && !shortcut.alt
+                && !shortcut.shift
                 && matches!(shortcut.key, Key::Letter('L') | Key::Letter('D')))
         {
             return Err("this shortcut is reserved by Windows".into());
@@ -67,10 +78,18 @@ impl Shortcut {
 
     pub fn canonical(self) -> String {
         let mut parts = Vec::new();
-        if self.ctrl { parts.push("Ctrl".to_string()); }
-        if self.alt { parts.push("Alt".to_string()); }
-        if self.shift { parts.push("Shift".to_string()); }
-        if self.meta { parts.push("Meta".to_string()); }
+        if self.ctrl {
+            parts.push("Ctrl".to_string());
+        }
+        if self.alt {
+            parts.push("Alt".to_string());
+        }
+        if self.shift {
+            parts.push("Shift".to_string());
+        }
+        if self.meta {
+            parts.push("Meta".to_string());
+        }
         parts.push(match self.key {
             Key::Function(number) => format!("F{number}"),
             Key::Letter(letter) | Key::Digit(letter) => letter.to_string(),
@@ -87,7 +106,9 @@ impl Shortcut {
 pub fn validate_shortcuts(save: &str, load: &str) -> Result<[Shortcut; 2], String> {
     let save = Shortcut::parse(save).map_err(|error| format!("Save shortcut: {error}"))?;
     let load = Shortcut::parse(load).map_err(|error| format!("Load shortcut: {error}"))?;
-    if save == load { return Err("Load shortcut: choose a different shortcut from Save".into()); }
+    if save == load {
+        return Err("Load shortcut: choose a different shortcut from Save".into());
+    }
     Ok([save, load])
 }
 

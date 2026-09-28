@@ -17,7 +17,7 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .app.no-games .library-panel { width: 260px; margin: 0; padding: 0; background: transparent; overflow: visible; }
 .app.no-games .library-controls { display: flex; flex-direction: column; padding: 0; }
 .app.no-games .library-controls button { justify-content: center; }
-.app.no-games .main { display: none; }
+.app.no-games .main { flex: 0 0 0; width: 0; padding: 0; overflow: hidden; visibility: hidden; }
 .titlebar { height: 56px; flex: none; display: flex; align-items: center; padding: 0 8px; }
 .sidebar .titlebar { padding: 0 8px; }
 .app-icon { width: 40px; height: 40px; flex: none; pointer-events: none; }
@@ -80,6 +80,9 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .load-badge .icon { width: 12px; height: 12px; filter: brightness(0) saturate(100%) invert(44%) sepia(13%) saturate(414%) hue-rotate(343deg); }
 .load-badge.unavailable { background: #1c1918; border: 2px solid #3a322e; color: #685a51; }
 .load-badge:not(:disabled):hover, .load-badge:not(:disabled):focus-visible { white-space: normal; overflow: visible; max-width: min(360px, 95%); }
+.badge-crosshairs, .chip-crosshairs { display: none; }
+.load-badge:is(:hover, :focus-visible) .badge-tag, .label-chip:is(:hover, :focus-visible) .chip-tag { display: none; }
+.load-badge:is(:hover, :focus-visible) .badge-crosshairs, .label-chip:is(:hover, :focus-visible) .chip-crosshairs { display: block; }
 .badge-label { overflow: hidden; text-overflow: ellipsis; border-top: 1px solid #cfc2b3; padding-top: 2px; }
 .action-error-block { margin: 16px 0 0; color: #ffb5b8; background: #482427; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
 .instructions { position: relative; max-height: 100px; margin-top: 16px; overflow: hidden; color: #cfc4b8; font-size: 13px; line-height: 1.45; }
@@ -92,6 +95,9 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .instructions button { position: sticky; bottom: 4px; left: calc(100% - 28px); width: 28px; height: 28px; border: 0; border-radius: 5px; background: #3a322e; }
 .instructions button .icon { width: 16px; height: 16px; }
 .history { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 16px; scrollbar-color: #5b4c42 transparent; }
+.history.fade-top { mask-image: linear-gradient(to bottom, transparent, black 20px, black); }
+.history.fade-bottom { mask-image: linear-gradient(to bottom, black, black calc(100% - 20px), transparent); }
+.history.fade-top.fade-bottom { mask-image: linear-gradient(to bottom, transparent, black 20px, black calc(100% - 20px), transparent); }
 .history-virtual { position: relative; }
 .virtual-item { position: absolute; left: 0; right: 0; height: 64px; }
 .day h2 { margin: 16px 0 8px; }
@@ -163,4 +169,12 @@ dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
 @keyframes pulse { 50% { opacity: .35; box-shadow: 0 0 2px #f51e2b; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes row-flash { 0% { background: #582428; box-shadow: 0 0 0 2px #f51e2b; } 100% { background: #221d1b; box-shadow: none; } }
+@keyframes history-down { from { opacity: .45; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes history-up { from { opacity: .45; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar { transition: width .2s ease; }
+  .main { transition: flex-basis .2s ease, padding .2s ease; }
+  .history-down .history-virtual { animation: history-down .18s ease-out; }
+  .history-up .history-virtual { animation: history-up .18s ease-out; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

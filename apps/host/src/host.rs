@@ -16,9 +16,9 @@ use savescummer_ipc::{
     AccessInfo, Availability, CheckpointBrief, EventBody, GameKind, GameSummary, OpStatus, Operation, Phase, ScanInfo,
     SettingsInfo, State, StoreInfo,
 };
+use savescummer_platform::integration::Shortcut;
 use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, CheckpointRow, Storage};
-use savescummer_platform::integration::Shortcut;
 
 use crate::model::{Derived, Game};
 use crate::options::Options;

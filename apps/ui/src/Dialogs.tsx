@@ -16,8 +16,10 @@ function DialogFrame({ title, kind, close, children }: {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog?.showModal();
-    return () => dialog?.close();
+    dialog?.querySelector<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])')?.focus();
+    return () => { dialog?.close(); opener?.focus(); };
   }, []);
   return <dialog ref={ref} className={`dialog dialog-${kind}`} aria-labelledby="dialog-title"
     onCancel={(event) => { event.preventDefault(); close(); }}

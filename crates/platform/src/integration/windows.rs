@@ -126,7 +126,9 @@ impl Integration {
         let request = Box::into_raw(Box::new(Rebind { shortcuts, reply }));
         // SAFETY: ownership passes to the window procedure only on success.
         if unsafe { PostMessageW(self.hwnd as HWND, WM_REBIND, 0, request as LPARAM) } == 0 {
-            unsafe { drop(Box::from_raw(request)); }
+            unsafe {
+                drop(Box::from_raw(request));
+            }
             return Err("the hotkey window is unavailable".into());
         }
         receiver.recv().map_err(|_| "the hotkey window closed".to_string())?
@@ -155,7 +157,11 @@ impl Drop for Integration {
 
 type Ready = Result<(isize, Vec<String>), String>;
 
-fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortcut; 2], ready: mpsc::SyncSender<Ready>) {
+fn ui_thread(
+    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    shortcuts: [Shortcut; 2],
+    ready: mpsc::SyncSender<Ready>,
+) {
     let class = wide("SaveScummerIntegration");
     let taskbar = wide("TaskbarCreated");
     // SAFETY: plain Win32 calls with NUL-terminated strings that outlive
@@ -206,7 +212,10 @@ fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortc
         for (index, shortcut) in shortcuts.iter().enumerate() {
             if RegisterHotKey(hwnd, HOTKEYS[index].0, modifiers(*shortcut), key_code(shortcut.key)) == 0 {
                 let code = GetLastError();
-                errors.push(format!("{} is unavailable: another app already uses it (error {code})", shortcut.canonical()));
+                errors.push(format!(
+                    "{} is unavailable: another app already uses it (error {code})",
+                    shortcut.canonical()
+                ));
             }
         }
         // If Explorer isn't running yet, TaskbarCreated adds it later.
@@ -226,10 +235,18 @@ fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortc
 
 fn modifiers(shortcut: Shortcut) -> u32 {
     let mut flags = MOD_NOREPEAT;
-    if shortcut.ctrl { flags |= MOD_CONTROL; }
-    if shortcut.alt { flags |= MOD_ALT; }
-    if shortcut.shift { flags |= MOD_SHIFT; }
-    if shortcut.meta { flags |= MOD_WIN; }
+    if shortcut.ctrl {
+        flags |= MOD_CONTROL;
+    }
+    if shortcut.alt {
+        flags |= MOD_ALT;
+    }
+    if shortcut.shift {
+        flags |= MOD_SHIFT;
+    }
+    if shortcut.meta {
+        flags |= MOD_WIN;
+    }
     flags
 }
 
@@ -244,7 +261,9 @@ fn register_pair(hwnd: HWND, shortcuts: [Shortcut; 2]) -> Result<(), String> {
     for (index, shortcut) in shortcuts.iter().enumerate() {
         if unsafe { RegisterHotKey(hwnd, HOTKEYS[index].0, modifiers(*shortcut), key_code(shortcut.key)) } == 0 {
             let error = unsafe { GetLastError() };
-            for (id, _) in HOTKEYS.iter().take(index) { unsafe { UnregisterHotKey(hwnd, *id) }; }
+            for (id, _) in HOTKEYS.iter().take(index) {
+                unsafe { UnregisterHotKey(hwnd, *id) };
+            }
             return Err(format!("{} is unavailable: another app may use it (error {error})", shortcut.canonical()));
         }
     }
@@ -283,7 +302,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         WM_REBIND => {
             let request = unsafe { Box::from_raw(lparam as *mut Rebind) };
             let old = state.shortcuts.get();
-            for (id, _) in HOTKEYS { unsafe { UnregisterHotKey(hwnd, id) }; }
+            for (id, _) in HOTKEYS {
+                unsafe { UnregisterHotKey(hwnd, id) };
+            }
             let result = register_pair(hwnd, request.shortcuts);
             if result.is_ok() {
                 state.shortcuts.set(request.shortcuts);

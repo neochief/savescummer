@@ -135,26 +135,34 @@ impl Integration {
     }
 
     pub fn rebind(&self, shortcuts: [Shortcut; 2]) -> Result<(), String> {
-        run_on_main(move |_| MAIN.with(|main| {
-            let mut main = main.borrow_mut();
-            let state = main.as_mut().ok_or("hotkeys are not running")?;
-            let manager = state.hotkeys.as_ref().ok_or("hotkeys are unavailable")?;
-            let old = state.shortcuts;
-            for shortcut in old { let _ = manager.unregister(native_shortcut(shortcut)); }
-            let mut registered = Vec::new();
-            for shortcut in shortcuts {
-                let hotkey = native_shortcut(shortcut);
-                if let Err(error) = manager.register(hotkey) {
-                    for hotkey in registered { let _ = manager.unregister(hotkey); }
-                    for shortcut in old { let _ = manager.register(native_shortcut(shortcut)); }
-                    return Err(format!("{} is unavailable: {error}", shortcut.canonical()));
+        run_on_main(move |_| {
+            MAIN.with(|main| {
+                let mut main = main.borrow_mut();
+                let state = main.as_mut().ok_or("hotkeys are not running")?;
+                let manager = state.hotkeys.as_ref().ok_or("hotkeys are unavailable")?;
+                let old = state.shortcuts;
+                for shortcut in old {
+                    let _ = manager.unregister(native_shortcut(shortcut));
                 }
-                registered.push(hotkey);
-            }
-            state.shortcuts = shortcuts;
-            *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
-            Ok(())
-        }))
+                let mut registered = Vec::new();
+                for shortcut in shortcuts {
+                    let hotkey = native_shortcut(shortcut);
+                    if let Err(error) = manager.register(hotkey) {
+                        for hotkey in registered {
+                            let _ = manager.unregister(hotkey);
+                        }
+                        for shortcut in old {
+                            let _ = manager.register(native_shortcut(shortcut));
+                        }
+                        return Err(format!("{} is unavailable: {error}", shortcut.canonical()));
+                    }
+                    registered.push(hotkey);
+                }
+                state.shortcuts = shortcuts;
+                *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
+                Ok(())
+            })
+        })
     }
 
     /// Removes the menu-bar item and unregisters the hotkeys.
@@ -354,10 +362,18 @@ fn register_hotkeys(shortcuts: [Shortcut; 2]) -> (Option<GlobalHotKeyManager>, V
 
 fn native_shortcut(shortcut: Shortcut) -> HotKey {
     let mut modifiers = Modifiers::empty();
-    if shortcut.ctrl { modifiers |= Modifiers::CONTROL; }
-    if shortcut.alt { modifiers |= Modifiers::ALT; }
-    if shortcut.shift { modifiers |= Modifiers::SHIFT; }
-    if shortcut.meta { modifiers |= Modifiers::SUPER; }
+    if shortcut.ctrl {
+        modifiers |= Modifiers::CONTROL;
+    }
+    if shortcut.alt {
+        modifiers |= Modifiers::ALT;
+    }
+    if shortcut.shift {
+        modifiers |= Modifiers::SHIFT;
+    }
+    if shortcut.meta {
+        modifiers |= Modifiers::SUPER;
+    }
     let name = match shortcut.key {
         Key::Function(number) => format!("F{number}"),
         Key::Letter(letter) => format!("Key{letter}"),
@@ -389,7 +405,9 @@ fn hotkey_action(event: GlobalHotKeyEvent) -> Option<HotkeyAction> {
         return None;
     }
     let shortcuts = lock(&ACTIVE_SHORTCUTS).unwrap_or_else(Shortcut::defaults);
-    shortcuts.iter().position(|shortcut| native_shortcut(*shortcut).id() == event.id)
+    shortcuts
+        .iter()
+        .position(|shortcut| native_shortcut(*shortcut).id() == event.id)
         .map(|index| if index == 0 { HotkeyAction::Save } else { HotkeyAction::Load })
 }
 

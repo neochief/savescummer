@@ -119,8 +119,9 @@ impl UiRequest {
                 Command::Configure { game, name, executable, save_location, reset_executable, reset_save_location }
             }
             Self::SaveSet { game } => Command::SaveSet { game },
-            Self::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } =>
-                Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut },
+            Self::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } => {
+                Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut }
+            }
             Self::FlushPreview { game, cursor, limit } => {
                 Command::FlushPreview { game, cursor, limit: limit.map(|n| n.min(200)) }
             }
@@ -155,7 +156,8 @@ async fn report_ui(bridge: tauri::State<'_, Bridge>, selected: Option<String>, f
     bridge.focused.store(focused, Ordering::Relaxed);
     let endpoint = bridge.endpoint.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        request_host(&endpoint, Command::UiReport { focused, visible: true, selected, capturing_shortcut: None }).map(|_| ())
+        request_host(&endpoint, Command::UiReport { focused, visible: true, selected, capturing_shortcut: None })
+            .map(|_| ())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -168,7 +170,11 @@ async fn set_shortcut_capture(bridge: tauri::State<'_, Bridge>, capturing: bool)
     let focused = bridge.focused.load(Ordering::Relaxed);
     let endpoint = bridge.endpoint.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        request_host(&endpoint, Command::UiReport { focused, visible: true, selected, capturing_shortcut: Some(capturing) }).map(|_| ())
+        request_host(
+            &endpoint,
+            Command::UiReport { focused, visible: true, selected, capturing_shortcut: Some(capturing) },
+        )
+        .map(|_| ())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -258,7 +264,15 @@ fn watch_host(app: tauri::AppHandle, bridge: Bridge) {
                         let capturing_shortcut = bridge.shortcut_capture.load(Ordering::Relaxed);
                         accepted(
                             client
-                                .request(None, Command::UiReport { focused, visible: true, selected, capturing_shortcut: Some(capturing_shortcut) })
+                                .request(
+                                    None,
+                                    Command::UiReport {
+                                        focused,
+                                        visible: true,
+                                        selected,
+                                        capturing_shortcut: Some(capturing_shortcut),
+                                    },
+                                )
                                 .map_err(|e| e.to_string())?,
                         )?;
                         accepted(client.request(None, Command::Watch).map_err(|e| e.to_string())?)?;

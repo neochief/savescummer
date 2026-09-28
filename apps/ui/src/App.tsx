@@ -10,7 +10,7 @@ type Feedback = { game: string; action: Action; target?: string; phase: 'busy' |
 
 const icons: Record<string, string> = {
   save: 'flag', load: 'rotate-left', saved: 'flag', loaded: 'rotate-left', reverted: 'rotate-left',
-  game_started: 'circle', game_closed: 'circle', tag: 'tag', more: 'ellipsis', scan: 'arrows-rotate',
+  game_started: 'circle-play', game_closed: 'circle-stop', tag: 'tag', more: 'ellipsis', scan: 'arrows-rotate',
   add: 'plus', settings: 'gear', success: 'check', busy: 'arrows-rotate', clock: 'clock',
 };
 
@@ -78,9 +78,13 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [dialog, setDialog] = useState<DialogKind>();
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [historyDirection, setHistoryDirection] = useState<'up' | 'down'>('down');
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [historyHeight, setHistoryHeight] = useState(0);
 
   useEffect(() => { setMoreOpen(false); }, [selected]);
   useEffect(() => {
@@ -132,13 +136,14 @@ export function App({ bridge }: { bridge: Bridge }) {
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
-    const measure = () => setViewportHeight(element.clientHeight || 600);
+    const measure = () => { setViewportHeight(element.clientHeight || 600); setHistoryHeight(element.scrollHeight); };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
   }, [selectedGame?.id]);
+  useEffect(() => { if (scrollRef.current) setHistoryHeight(scrollRef.current.scrollHeight); }, [virtualItems.length, next, selectedGame?.id]);
   useEffect(() => {
     if (!state) return;
     const active = state.active_stack[0];
@@ -188,9 +193,12 @@ export function App({ bridge }: { bridge: Bridge }) {
   }, [bridge, selected, next]);
 
   const selectGame = useCallback((id: string) => {
+    const oldPosition = visibleGames.findIndex((game) => game.id === selected);
+    const newPosition = visibleGames.findIndex((game) => game.id === id);
+    setHistoryDirection(newPosition < oldPosition ? 'up' : 'down');
     setSelected(id);
     setFeedback(undefined);
-  }, []);
+  }, [selected, visibleGames]);
 
   const jumpToCheckpoint = useCallback(async (checkpoint: string) => {
     if (!selectedGame) return;
@@ -330,9 +338,21 @@ export function App({ bridge }: { bridge: Bridge }) {
             <ActionButton action="load" game={selectedGame} feedback={feedback} busy={busy} now={now}
               shortcut={state?.settings?.load_shortcut} onClick={() => runAction('load')}
               onJump={() => selectedGame.latest && jumpToCheckpoint(selectedGame.latest.id)} />
-            <div className="more-wrap" ref={moreRef} onKeyDown={(event) => { if (event.key === 'Escape') { setMoreOpen(false); event.stopPropagation(); } }}>
-              <button className="more-button" onClick={() => setMoreOpen(!moreOpen)} aria-label="More game actions" aria-expanded={moreOpen} title="More game actions"><Icon name="more" /></button>
-              {moreOpen && <div className="more-menu" role="menu">
+            <div className="more-wrap" ref={moreRef} onKeyDown={(event) => {
+              if (event.key === 'Escape' && moreOpen) { setMoreOpen(false); moreButtonRef.current?.focus(); event.stopPropagation(); }
+              if (moreOpen && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                const items = Array.from(moreMenuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || []);
+                if (!items.length) return;
+                const current = items.indexOf(document.activeElement as HTMLButtonElement);
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+                  : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                items[next].focus(); event.preventDefault();
+              }
+            }}>
+              <button ref={moreButtonRef} className="more-button" onClick={() => setMoreOpen(!moreOpen)}
+                onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp'].includes(event.key) && !moreOpen) { setMoreOpen(true); event.preventDefault(); } }}
+                aria-label="More game actions" aria-expanded={moreOpen} aria-haspopup="menu" title="More game actions"><Icon name="more" /></button>
+              {moreOpen && <div className="more-menu" role="menu" ref={moreMenuRef}>
                 <button role="menuitem" disabled={busy} onClick={() => {
                   setMoreOpen(false);
                   bridge.request({ type: 'open_checkpoints', game: selectedGame.id }).catch((error) =>
@@ -355,7 +375,8 @@ export function App({ bridge }: { bridge: Bridge }) {
               aria-label={`${expandedInfo[selectedGame.id] ? 'Collapse' : 'Expand'} game instructions`}
               aria-expanded={Boolean(expandedInfo[selectedGame.id])}><Icon name={expandedInfo[selectedGame.id] ? 'angle-up' : 'angle-down'} /></button>
           </div>}
-          <div className="history" ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+          <div key={selectedGame.id} className={`history history-${historyDirection} ${scrollTop > 0 ? 'fade-top' : ''} ${scrollTop + viewportHeight < historyHeight - 1 ? 'fade-bottom' : ''}`}
+            ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
             {historyError && <p className="history-error" role="alert">{historyError}</p>}
             {virtualItems.length === 0 && !historyError && <p className="empty-history">Saves will appear here.</p>}
             <div className="history-virtual" style={{ height: virtualItems.length * 64 + (next ? 52 : 0) }}>
@@ -406,7 +427,7 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
     {action === 'load' && <button className={`load-badge ${!available ? 'unavailable' : ''}`}
       onClick={onJump} disabled={!game.latest} aria-label="Jump to latest checkpoint">
       {game.latest ? <><span className="badge-time"><Icon name="clock" />{formatBadgeTime(game.latest.created_at, now)}<span className="badge-age">{relativeAge(new Date(game.latest.created_at), now)}</span></span>
-        {game.latest.label && <span className="badge-label"><Icon name="tag" />{game.latest.label}</span>}</> : 'No saves yet'}
+        {game.latest.label && <span className="badge-label"><Icon name="tag" className="badge-tag" /><Icon name="crosshairs" className="badge-crosshairs" />{game.latest.label}</span>}</> : 'No saves yet'}
     </button>}
   </div>;
 }
@@ -432,7 +453,7 @@ function HistoryRow({ row, busy, now, bridge, feedback, flash, deleteOperation, 
       <div className="history-main"><Icon name={row.kind} /><span>{name}</span>
         {row.kind === 'saved' && row.checkpoint && <LabelChip bridge={bridge} checkpoint={row.checkpoint} label={row.label} />}
         {row.kind !== 'saved' && chip && (row.restored
-          ? <button className="label-chip" onClick={onJump} title={chip} aria-label={`Jump to ${chip}`}><Icon name="tag" />{chip}</button>
+          ? <button className="label-chip" onClick={onJump} title={chip} aria-label={`Jump to ${chip}`}><Icon name="tag" className="chip-tag" /><Icon name="crosshairs" className="chip-crosshairs" />{chip}</button>
           : <span className="label-chip" title={chip}><Icon name="tag" />{chip}</span>)}
       </div>
       {row.kind === 'loaded' && <div className="history-note">

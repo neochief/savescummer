@@ -44,25 +44,28 @@ pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Resul
 pub fn start(host: &Arc<Host>) {
     let weak = Arc::downgrade(host);
     let shortcuts = host.lock().shortcuts;
-    let result = integration::start(Box::new(move |signal| {
-        let Some(host) = weak.upgrade() else { return };
-        match signal {
-            Signal::Hotkey(action) => {
-                let action = match action {
-                    integration::HotkeyAction::Save => HotkeyAction::Save,
-                    integration::HotkeyAction::Load => HotkeyAction::Load,
-                };
-                // Never block the UI thread with file work.
-                std::thread::spawn(move || {
-                    let _ = hotkey(&host, &new_id("hotkey"), action);
-                });
+    let result = integration::start(
+        Box::new(move |signal| {
+            let Some(host) = weak.upgrade() else { return };
+            match signal {
+                Signal::Hotkey(action) => {
+                    let action = match action {
+                        integration::HotkeyAction::Save => HotkeyAction::Save,
+                        integration::HotkeyAction::Load => HotkeyAction::Load,
+                    };
+                    // Never block the UI thread with file work.
+                    std::thread::spawn(move || {
+                        let _ = hotkey(&host, &new_id("hotkey"), action);
+                    });
+                }
+                Signal::OpenMainWindow => {
+                    show_ui(&host);
+                }
+                Signal::Exit => host.request_shutdown(),
             }
-            Signal::OpenMainWindow => {
-                show_ui(&host);
-            }
-            Signal::Exit => host.request_shutdown(),
-        }
-    }), shortcuts);
+        }),
+        shortcuts,
+    );
     match result {
         Ok(integration) => {
             for error in integration.hotkey_errors() {

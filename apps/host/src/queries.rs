@@ -11,8 +11,8 @@ use savescummer_ipc::{
     CatalogInfo, FlushItem, FlushPreview, HistoryEntry, HistoryPage, HostRun, HostRuns, OpStatus, OpenTarget, Opened,
     RowActions, SaveSetInfo, TargetInfo,
 };
-use savescummer_storage::{self as db, CheckpointRow};
 use savescummer_platform::integration::validate_shortcuts;
+use savescummer_storage::{self as db, CheckpointRow};
 
 use crate::checkpoints::unavailable_reason;
 use crate::host::Host;
@@ -255,15 +255,27 @@ pub fn settings(
     if changed {
         let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(integration) = integration.as_ref() {
-            integration.rebind(shortcuts).map_err(|error| Failure::new(ErrorKind::InvalidRequest, error))?;
+            integration.rebind(shortcuts).map_err(|error| {
+                let field = if error.contains(&shortcuts[1].canonical()) {
+                    "Load shortcut"
+                } else if error.contains(&shortcuts[0].canonical()) {
+                    "Save shortcut"
+                } else {
+                    "Shortcuts"
+                };
+                Failure::new(ErrorKind::InvalidRequest, format!("{field}: {error}"))
+            })?;
         }
         let storage = host.db();
         let save_result = db::set_setting(storage.conn(), SETTING_SAVE_SHORTCUT, &shortcuts[0].canonical());
-        let load_result = save_result.and_then(|_| db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &shortcuts[1].canonical()));
+        let load_result =
+            save_result.and_then(|_| db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &shortcuts[1].canonical()));
         if let Err(error) = load_result {
             let _ = db::set_setting(storage.conn(), SETTING_SAVE_SHORTCUT, &old[0].canonical());
             let _ = db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &old[1].canonical());
-            if let Some(integration) = integration.as_ref() { let _ = integration.rebind(old); }
+            if let Some(integration) = integration.as_ref() {
+                let _ = integration.rebind(old);
+            }
             return Err(io(error));
         }
         host.lock().shortcuts = shortcuts;

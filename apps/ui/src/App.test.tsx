@@ -181,6 +181,33 @@ test('More menu opens checkpoints folder through host and configures paths', asy
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'save_set', game: 'a' }));
 });
 
+test('More menu supports arrow navigation and Escape returns focus', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  const opener = await screen.findByRole('button', { name: 'More game actions' });
+  opener.focus();
+  fireEvent.keyDown(opener, { key: 'ArrowDown' });
+  const first = screen.getByRole('menuitem', { name: 'Open checkpoints folder' });
+  fireEvent.keyDown(opener, { key: 'ArrowDown' });
+  expect(document.activeElement).toBe(first);
+  fireEvent.keyDown(first, { key: 'ArrowDown' });
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Configure paths…' }));
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(document.activeElement).toBe(opener);
+});
+
+test('closing a dialog restores focus to its opener', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  const opener = await screen.findByRole('button', { name: 'Settings' });
+  opener.focus();
+  fireEvent.click(opener);
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close dialog' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(document.activeElement).toBe(opener);
+});
+
 test('Settings captures, saves, and shows host-owned shortcuts', async () => {
   const bridge = new FakeBridge();
   bridge.state.settings = { play_sounds: true, launch_on_startup: false, launch_on_startup_available: true,

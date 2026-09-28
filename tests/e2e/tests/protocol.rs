@@ -138,9 +138,15 @@ fn shortcut_settings_validate_persist_and_pause_hotkeys_during_capture() {
     assert_eq!(unsupported.error_kind(), "invalid_request");
     assert_eq!(world.state()["settings"], settings, "rejected changes keep the saved bindings");
 
-    world.ok(&["raw", r#"{"v":1,"id":"capture-on","type":"ui_report","focused":true,"visible":true,"capturing_shortcut":true}"#]);
+    world.ok(&[
+        "raw",
+        r#"{"v":1,"id":"capture-on","type":"ui_report","focused":true,"visible":true,"capturing_shortcut":true}"#,
+    ]);
     assert_eq!(world.cli(&["hotkey", "save"]).error_kind(), "invalid_request");
-    world.ok(&["raw", r#"{"v":1,"id":"capture-off","type":"ui_report","focused":false,"visible":true,"capturing_shortcut":false}"#]);
+    world.ok(&[
+        "raw",
+        r#"{"v":1,"id":"capture-off","type":"ui_report","focused":false,"visible":true,"capturing_shortcut":false}"#,
+    ]);
 
     host.kill();
     let _host = world.host();
