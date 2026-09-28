@@ -34,6 +34,10 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
     let mode = if options.release { Mode::Release } else { Mode::Dev };
     let version = version::current()?;
     platform::check_build_machine()?;
+    #[cfg(windows)]
+    if !frontend::present() {
+        bail!("the Windows Tauri UI source is missing from {}", paths::show(&frontend::source()));
+    }
     // A clean rebuild: nothing keeps running from the outputs we're replacing.
     procs::stop_outputs()?;
 
@@ -53,7 +57,9 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
 
     if options.test {
         // Tests always build as dev: they check dev-only behavior too.
-        cmd::run(cargo().args(["test", "--workspace"]).args(locked))?;
+        // Several end-to-end tests use the foreground desktop. Keep test
+        // cases serial so another case cannot take focus during one of them.
+        cmd::run(cargo().args(["test", "--workspace"]).args(locked).args(["--", "--test-threads=1"]))?;
     }
 
     let ui = if frontend::present() {
@@ -101,7 +107,7 @@ pub fn check() -> anyhow::Result<()> {
     procs::stop_outputs()?;
     cmd::run(cargo().args(["fmt", "--all", "--check"]))?;
     cmd::run(cargo().args(["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"]))?;
-    cmd::run(cargo().args(["test", "--workspace", "--locked"]))?;
+    cmd::run(cargo().args(["test", "--workspace", "--locked", "--", "--test-threads=1"]))?;
     // Not xtask itself: workspace-wide feature unification would relink the
     // running xtask.exe, which Windows can't replace. It's already built, and
     // clippy and the tests above cover it.

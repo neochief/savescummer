@@ -79,6 +79,42 @@ Filename: "{app}\bin\SaveScummer.exe"; Description: "Launch SaveScummer"; Flags:
 Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart off"; Flags: runhidden waituntilterminated; RunOnceId: "AutostartOff"
 
 [Code]
+{ WebView2 is present on most Windows machines, but is required for the UI.
+  Check both per-user and per-machine Evergreen installations. }
+function HasWebView2(): Boolean;
+var
+  Version: String;
+  Key: String;
+begin
+  Key := 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  Result :=
+    (RegQueryStringValue(HKCU, Key, 'pv', Version) and
+      (Version <> '') and (Version <> '0.0.0.0')) or
+    (RegQueryStringValue(HKLM32, Key, 'pv', Version) and
+      (Version <> '') and (Version <> '0.0.0.0'));
+end;
+
+function EnsureWebView2(): String;
+var
+  ResultCode: Integer;
+  Installer: String;
+begin
+  Result := '';
+  if HasWebView2() then
+    Exit;
+  try
+    DownloadTemporaryFile(
+      'https://go.microsoft.com/fwlink/p/?LinkId=2124703',
+      'MicrosoftEdgeWebview2Setup.exe', '', nil);
+    Installer := ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe');
+    if not Exec(Installer, '/silent /install', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+      Result := 'The Microsoft Edge WebView2 Runtime could not be installed.';
+  except
+    Result := 'The Microsoft Edge WebView2 Runtime could not be downloaded: ' + GetExceptionMessage;
+  end;
+end;
+
 { Asks a running host to shut down, so an in-flight save finishes before its
   files are replaced or removed. The CLI returns once the host has exited. }
 procedure ShutDownHost();
@@ -94,7 +130,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   ShutDownHost();
-  Result := '';
+  Result := EnsureWebView2();
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

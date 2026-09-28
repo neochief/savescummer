@@ -2,6 +2,7 @@
 //! (PLAN-BUILD.md VERSION). Only `cargo xtask release` changes it.
 
 use std::fs;
+use std::path::Path;
 
 use anyhow::{Context, bail};
 
@@ -21,13 +22,39 @@ pub fn current() -> anyhow::Result<String> {
         .context("Cargo.toml has no [workspace.package] version")
 }
 
-/// Writes `version` into `Cargo.toml`, keeping its formatting.
+/// Writes the workspace and UI versions for a release.
 pub fn set(version: &str) -> anyhow::Result<()> {
-    let path = paths::root().join("Cargo.toml");
-    let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    let mut doc: toml_edit::DocumentMut = text.parse().with_context(|| format!("parsing {}", path.display()))?;
+    let root = paths::root();
+    let cargo = root.join("Cargo.toml");
+    let tauri = root.join("apps/ui/src-tauri/tauri.conf.json");
+    let package = root.join("apps/ui/package.json");
+
+    // Prepare every file before writing any of them. The release command
+    // restores all four version files if a later write or check fails.
+    let text = fs::read_to_string(&cargo).with_context(|| format!("reading {}", cargo.display()))?;
+    let mut doc: toml_edit::DocumentMut = text.parse().with_context(|| format!("parsing {}", cargo.display()))?;
     doc["workspace"]["package"]["version"] = toml_edit::value(version);
-    fs::write(&path, doc.to_string()).with_context(|| format!("writing {}", path.display()))
+    let tauri_text = updated_json_version(&tauri, version)?;
+    let package_text = updated_json_version(&package, version)?;
+
+    for (path, text) in [(&cargo, doc.to_string()), (&tauri, tauri_text), (&package, package_text)] {
+        fs::write(path, text).with_context(|| format!("writing {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn updated_json_version(path: &Path, version: &str) -> anyhow::Result<String> {
+    let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    update_json_version(&text, version).with_context(|| format!("updating {}", path.display()))
+}
+
+fn update_json_version(text: &str, version: &str) -> anyhow::Result<String> {
+    let mut json: serde_json::Value = serde_json::from_str(text)?;
+    if !json.get("version").is_some_and(serde_json::Value::is_string) {
+        bail!("JSON has no string version");
+    }
+    json["version"] = serde_json::Value::String(version.to_owned());
+    Ok(serde_json::to_string_pretty(&json)? + "\n")
 }
 
 /// Accepts `1.2.3` or `v1.2.3` and returns `1.2.3`.
@@ -62,5 +89,24 @@ mod tests {
     #[test]
     fn reads_the_workspace_version() {
         assert_eq!(current().unwrap(), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn ui_versions_match_the_workspace() {
+        let version = current().unwrap();
+        for path in ["apps/ui/src-tauri/tauri.conf.json", "apps/ui/package.json"] {
+            let text = fs::read_to_string(paths::root().join(path)).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(json["version"], version, "{path}");
+        }
+    }
+
+    #[test]
+    fn updates_a_json_version_without_changing_other_fields() {
+        let input = r#"{"name":"savescummer-ui","version":"0.2.0","private":true}"#;
+        let updated: serde_json::Value = serde_json::from_str(&update_json_version(input, "0.3.0").unwrap()).unwrap();
+        assert_eq!(updated["version"], "0.3.0");
+        assert_eq!(updated["name"], "savescummer-ui");
+        assert_eq!(updated["private"], true);
     }
 }

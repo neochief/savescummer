@@ -2,11 +2,13 @@
 
 I want building, packaging and releasing the app to be boring: one command to build, one command to cut a release, and one file per platform for users to download.
 
+**Windows implementation (2026-09-28):** The Windows frontend is Tauri/WebView2. `cargo xtask dist` builds and packages it with the host and CLI in the Inno Setup installer. A Windows build fails if the UI source or packaged UI binary is missing. The release workflow publishes Windows only until macOS UI packaging is complete. Qt sections below apply to the other platforms where their Qt UI project exists; use [docs/building.md](docs/building.md) for current commands.
+
 This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN-HOST.md and PLAN-UI.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
 
 This is the target design: where the code disagrees, the code changes.
 
-Windows should already work. macOS and Linux aren't implemented yet, but everything is built with them in mind, so adding a platform means adding a module, not reworking the shared parts:
+Windows builds the complete Tauri UI installer. macOS packaging is implemented without a UI source yet; Linux packaging is future work. The shared build machinery keeps platform details in modules:
 
 - shared code stays platform-neutral
 - platform logic lives in its own module
@@ -25,13 +27,13 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 
 - **One build tool, in Rust.** All automation is `cargo xtask`: no PowerShell, bash or Python scripts, no just/make. It runs the same on every OS. Besides Rust, it needs only what the build itself needs: the UI frontend's toolchain (see TOOLCHAINS) and `gh` for publishing.
 - **CI runs what developers run.** Workflows only call `cargo xtask`, so a CI failure can always be reproduced locally.
-- **One version, in `Cargo.toml`.** Every binary, the installer, the bundle and the git tag read it, so they can't drift apart.
+- **One release version, in `Cargo.toml`.** The Windows UI's Tauri and npm versions are checked against it and updated by `cargo xtask release`.
 - **One file per platform per release,** in the friendliest format that platform has. Users never have to pick, and nothing else is uploaded.
 - **Fixed executable names.** Platforms change how the programs are packaged, never what they're called.
 - **Nothing is downloaded silently.** Tools come only from `cargo xtask setup …`, at pinned versions, so developers and CI build with the same tools.
 - **User data is sacred.** No install, upgrade, uninstall or clean ever touches the app's data directory or the checkpoint store, wherever the user has moved it: checkpoints are the user's saves.
 - **Only a human publishes.** Tooling makes draft releases; I look at them and press publish.
-- **Every failure says what to run next,** e.g. "Qt kit not found — run `cargo xtask setup qt`".
+- **Every failure says what to run next,** e.g. a missing Tauri build prerequisite names pnpm, and a missing Qt kit names `cargo xtask setup qt`.
 
 
 ## WHAT USERS GET
@@ -39,15 +41,15 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 The app is three programs:
 
 - **Host** — Rust; the app itself and its entry point (SQLite, monitoring, operations, tray, hotkeys)
-- **UI** — C++/Qt 6 window, started by the host
+- **UI** — Tauri/WebView2 on Windows, started by the host; the other platform paths still support Qt where implemented
 - **CLI** — Rust command-line client
 
-The build always produces `SaveScummer` (the host), `SaveScummer.UI` and `SaveScummer.CLI` (`.exe` on Windows). Every launcher, shortcut and sign-in entry points at `SaveScummer`.
+The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.exe` and `SaveScummer.CLI.exe`. Other platforms use the same program names where their UI is implemented. Every launcher, shortcut and sign-in entry points at `SaveScummer`.
 
 | Platform | Release file | Why this format |
 | --- | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<ver>-setup.exe` | What Windows users expect; installs per-user, no admin |
-| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<ver>.dmg` | The standard drag-to-Applications install |
+| macOS 13+, Apple Silicon (not yet shipped) | `SaveScummer-macos-arm64-<ver>.dmg` | The standard drag-to-Applications install once the UI is packaged |
 | Linux x86_64, glibc 2.35+ (Ubuntu 22.04) | `SaveScummer-linux-x86_64-<ver>.AppImage` | One file runs on every distro, no root, nothing to install |
 
 These minimums are written down only here and as xtask constants next to the Qt pin. Everything else follows them: build flags, `Info.plist`, the Linux build system, CI runners and test machines. The rest of this plan says "the minimum macOS" and "the oldest supported Ubuntu" instead of repeating numbers.
@@ -108,7 +110,7 @@ Every command validates its inputs up front.
 
 The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
 
-The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. Until the UI exists, the host has no window to show, and `run` prints the CLI command for driving the dev host.
+The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. On Windows, `run` opens the packaged Tauri UI.
 
 xtask honors `CARGO_TARGET_DIR` like Cargo, so it can build next to another checkout's running binaries.
 
@@ -119,8 +121,9 @@ The version lives in `Cargo.toml` → `[workspace.package] version`. The git tag
 Everything else reads it:
 
 - **xtask** parses `Cargo.toml` with the `toml` crate — no pattern matching.
-- **CMake** gets it from xtask as `-DSAVESCUMMER_VERSION=<ver>` and fails to configure without it. It never parses `Cargo.toml` itself, so there's only one parser.
-- **Windows version resources** come from `winresource` in `build.rs` for the host and CLI (using the version Cargo passes to the build), and from CMake-filled `.rc.in` templates for the UI.
+- **Windows Tauri UI** has matching versions in `apps/ui/package.json` and `apps/ui/src-tauri/tauri.conf.json`; `cargo xtask release` updates both, and the build checks the Tauri version.
+- **CMake** on Qt platforms gets it from xtask as `-DSAVESCUMMER_VERSION=<ver>`.
+- **Windows version resources** come from `winresource` in `build.rs` for the host and CLI (using the version Cargo passes to the build).
 - **The host's manifest** (also from `build.rs`) declares per-monitor DPI awareness, so the tray icon and its menu are drawn at the screen's real resolution instead of being stretched blurry on scaled displays.
 - **macOS `Info.plist`** is filled from it.
 
@@ -144,8 +147,8 @@ savescummer/
 |-- xtask/               the build program
 |-- docs/building.md     the how-to
 |-- packaging/
-|   |-- licenses/        Qt license texts, shipped on every platform
-|   |-- windows/         savescummer.iss, README.txt (+ README-qt.txt once the UI ships)
+|   |-- licenses/        Qt license texts for Qt platform packages
+|   |-- windows/         savescummer.iss, README.txt
 |   |-- macos/           Info.plist.in, com.savescummer.SaveScummer.host.plist (login agent)
 |   `-- linux/           AppRun, SaveScummer.desktop
 |-- assets/              icons, sounds, asset tooling
@@ -156,7 +159,7 @@ savescummer/
 |   `-- tmp/             scratch
 |-- dist/
 `-- .runtime/
-    |-- Qt/<ver>/<kit>/  Qt SDK
+    |-- Qt/<ver>/<kit>/  Qt SDK for Qt platforms
     |-- tools/           aqtinstall venv, Inno Setup, linuxdeploy, appimagetool
     `-- dev/             dev app data (the dev host's --data-dir)
 ```
@@ -170,17 +173,18 @@ The APP PACKAGE is the assembled, runnable app under `build/<mode>/package/`: a 
 
 Every package contains:
 
-- the three executables and the Qt libraries they need
-- the Qt license texts from `packaging/licenses/`
+- the host, CLI and UI executables, with their platform runtime files
+- the Qt license texts when a Qt frontend is packaged
 - `THIRD-PARTY-LICENSES.html`
-- `.savescummer-package.json` (mode, version, platform, Qt version, configuration, creation time), which marks it as generated output
+- `WEB-THIRD-PARTY-LICENSES.html` for Windows JavaScript production dependencies
+- `.savescummer-package.json` (mode, version, platform, UI toolkit, configuration, creation time), which marks it as generated output
 - `SHA256SUMS.txt`
 
 `THIRD-PARTY-LICENSES.html` is generated by cargo-about from the crates the host and CLI link, for the platform's own target, and merged into one page listing each license text once. A crate under a license not in `about.toml` fails packaging, so licensing is checked on every build rather than at release time. The app's own crates are `publish = false` and ignored as private, so they need no license of their own.
 
 Each platform module declares what its package must contain (at least the three executables), and packaging fails if anything is missing.
 
-**Until the UI exists** (`apps/ui/CMakeLists.txt`), the frontend step is skipped with a note, and packages and installers carry only the host and CLI. Everything else, from licensing to the installer, already runs for real. Once the UI exists it's required: packaging fails without `SaveScummer.UI`.
+On Windows the Tauri UI is required. The frontend build uses `pnpm install --frozen-lockfile`, runs the UI tests under `build --test` or `dist`, embeds the Vite assets and stages `SaveScummer.UI.exe` beside the host. The package and installer fail if that executable is absent. Other platforms may still omit the UI until their frontend is implemented.
 
 Cargo can't put dots in binary names, so Cargo builds `savescummer-host` and `savescummer-cli`, and packaging renames them to the fixed names.
 
@@ -208,9 +212,9 @@ It's used for:
 The toolchains come in two layers, so the UI frontend can be replaced without touching anything else:
 
 - **Core** — Rust and the packaging tools. The host, CLI, xtask, packaging and releases depend only on these.
-- **UI frontend** — whatever the UI is built with. Today that's Qt and C++; nothing outside the frontend assumes either.
+- **UI frontend** — Tauri, Node.js and pnpm on Windows; Qt and C++ on platforms with a Qt UI project.
 
-Every tool, in either layer, is installed only by its setup command, into `.runtime/`, and xtask uses it from there.
+The packaging tools are installed by setup commands into `.runtime/`. Windows UI builds use Node.js and the version of pnpm pinned in `apps/ui/package.json` from `PATH`; CI installs them explicitly.
 
 ### Core
 
@@ -228,14 +232,14 @@ All pins, and the supported-platform minimums, live in `xtask/src/pins.rs`; CI c
 
 Whatever the frontend is built with, it plugs into xtask the same way:
 
-- **a setup command** for its pinned SDK, following the same rules as every other tool
+- **its prerequisites:** Windows uses Node.js and pinned pnpm from `PATH`; Qt platforms use `setup qt` for a pinned SDK
 - **a build step** that takes the mode and the version and produces the `SaveScummer.UI` executable, plus the runtime files it needs, for the APP PACKAGE
-- **a test step** that runs headless against the freshly built host, so tests run the same locally and in CI
-- **its license texts,** shipped in every package
+- **a test step** that runs in CI (`pnpm test` for Windows; the Qt test target where present)
+- **its license notices,** shipped in every package
 
 Replacing the frontend means replacing this layer: its setup command, its build step, and the platform packaging steps that deploy its runtime (e.g. `macdeployqt`, linuxdeploy's Qt plugin). The core, the release files and the executable names stay the same.
 
-### The current frontend: Qt
+### Qt frontend on other platforms
 
 **Qt follows the latest minor release,** with the exact version pinned in one xtask constant, the only place it's written down. Open-source Qt only patches its newest minor, so staying current is the only way to get fixes:
 
@@ -248,7 +252,7 @@ Replacing the frontend means replacing this layer: its setup command, its build 
 
 **C++,** needed only for the Qt frontend:
 
-- Windows: MSVC from Visual Studio 2022+. No CMake generator is passed, so CMake picks the newest Visual Studio.
+- Windows builds still need MSVC from Visual Studio 2022+ for Rust and the Tauri UI; CMake is not used for the Windows UI.
 - macOS: Apple Clang from Xcode 15+
 - Linux: GCC 11+
 - CMake 3.21+, from PATH (Visual Studio, Xcode command-line tools or the distro provide it)
@@ -270,7 +274,7 @@ Tests always build as dev, even under `build --release --test`: they check dev-o
 
 1. `cargo fmt --all --check`
 2. `cargo clippy --workspace --all-targets --locked -- -D warnings`
-3. `cargo test --workspace --locked`
+3. `cargo test --workspace --locked -- --test-threads=1` (desktop focus tests run serially)
 4. `cargo build --workspace --exclude xtask --locked` (rebuilding xtask would relink the running `xtask.exe`, which Windows can't replace; clippy and the tests already cover it)
 5. `cargo xtask catalog --check`
 
@@ -283,13 +287,12 @@ UI tests are not part of `check`; they run with `build --test`.
 
 `build/<mode>/package/SaveScummer-windows-x64/`, containing:
 
-- the `cmake --install` deploy, with Qt DLLs in `bin/`
-- `SaveScummer.exe` (the host) and `SaveScummer.CLI.exe`
+- `SaveScummer.exe` (the host), `SaveScummer.UI.exe` (the Tauri UI with embedded web assets) and `SaveScummer.CLI.exe` in `bin/`
 - the Visual C++ runtime DLLs, copied next to the app from the newest Visual Studio (found with vswhere), so users don't need to install a redistributable
-- `README.txt` with the LGPL attribution, source links, and the note that the Qt DLLs may be replaced with interface-compatible builds
+- `README.txt`, Rust `THIRD-PARTY-LICENSES.html` and JavaScript `WEB-THIRD-PARTY-LICENSES.html`
 - dev only: the PDBs
 
-Every binary gets a version resource (see VERSION) and `assets/icon.ico`.
+The host and CLI get version resources (see VERSION) and `assets/icon.ico`; the Tauri binary uses its own icon and version configuration.
 
 ### Installer
 
@@ -301,7 +304,8 @@ Every binary gets a version resource (see VERSION) and `assets/icon.ico`.
 - **Before replacing files,** `PrepareToInstall` runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes. Inno's Restart Manager (`CloseApplications=yes`) closes the UI.
 - **User data is never touched:** `%LOCALAPPDATA%\SaveScummer`, and the checkpoint store if the user moved it elsewhere.
 - **Upgrades replace `bin\` wholesale,** so no file from an older version lingers. Only the app's own folder is cleared.
-- **A Start menu entry and a "Launch SaveScummer" finish-page checkbox,** both running `SaveScummer.exe`, the same as a user launch: the host starts, or the running one is reached, and the UI shows. Until the UI exists, that starts the host in the tray.
+- **A Start menu entry and a "Launch SaveScummer" finish-page checkbox,** both running `SaveScummer.exe`, the same as a user launch: the host starts, or the running one is reached, and the UI shows.
+- **WebView2 prerequisite:** if the Evergreen Runtime is absent, the installer downloads and installs it before installing the app.
 - **Unsigned.** SmartScreen shows "More info → Run anyway"; the README and release notes say so.
 
 `dist` fails if Inno Setup is missing: there's nothing to ship without it.
@@ -311,7 +315,7 @@ Every binary gets a version resource (see VERSION) and `assets/icon.ico`.
 1. `clean` stops recorded and output processes and removes `build/` and `dist/`; `--deep` also removes `target/`; `.runtime/` is untouched.
 2. Any build while a host, CLI, UI or test binary runs from `target/`, `build/` or `dist/` first stops it (hosts gracefully), then succeeds; nothing is left running old code.
 3. `run` builds and runs against `.runtime/dev`, recording `build/dev/session.json`; an installed host keeps running unless `--stop-other-hosts` is passed.
-4. `dist` leaves exactly one file in `dist/`, the `-setup.exe`. The release package under `build/release/package/` has `SHA256SUMS.txt` and `THIRD-PARTY-LICENSES.html`, and no PDBs.
+4. `dist` leaves exactly one file in `dist/`, the `-setup.exe`. The release package under `build/release/package/` has the UI, `SHA256SUMS.txt`, Rust and web third-party license files, and no PDBs.
 5. Every binary's version resource (file properties → Details) shows the Cargo version.
 6. Installing needs no admin, puts the binaries under `%LOCALAPPDATA%\Programs\SaveScummer\bin`.
 7. The sign-in task is checked on first install and keeps the user's choice on upgrade. When it's checked, sign-in starts the host in the tray with no window.
@@ -426,12 +430,13 @@ Two workflows in `.github/workflows/`, every step a `cargo xtask` command.
 
 - Runs on branch pushes, pull requests and manual runs; not tags.
 - A concurrency group per ref cancels superseded runs.
-- One required job each on `windows-latest`, `macos-latest` (Apple Silicon) and the oldest supported Ubuntu: checkout, Rust cache, Qt and tool caches, `setup qt` (only once the UI exists; Linux also `setup linux-tools`), `setup cargo-about`, `check`, `build --test --package`. Packaging in CI means a dependency with an unaccepted license fails the pull request, not the release.
+- A Windows job on `windows-latest`: checkout, Rust cache, Node.js 22, pnpm from `apps/ui/package.json`, packaging tool caches, `setup cargo-about`, `setup inno`, `check`, then `dist`. This compiles and tests the Tauri UI and produces the real installer on every CI run.
+- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Qt and tool caches where applicable, `setup cargo-about`, `check`, `build --test --package`. It remains a CI target but is not published until the UI is packaged. The Linux job is still future work. Packaging in CI means an unaccepted license fails the pull request.
 
 **release.yml** — builds every platform's file into one draft release:
 
 - Runs on `v*` tags only, with a concurrency group that never cancels, so a release is never half-built.
-- One build job per platform: checkout with full history, caches, `setup qt` and `setup cargo-about` (plus `setup inno` on Windows, `setup linux-tools` on Linux), `dist`, upload its one file from `dist/` (`if-no-files-found: error`).
+- The Windows build job: checkout with full history and caches, Node.js/pnpm and packaging tools, `dist`, upload its installer from `dist/` (`if-no-files-found: error`). Add the macOS release job when its UI package is complete.
 - A final publish job (`needs:` every build job, `contents: write`) downloads their files into `dist/`, fetches the tag and runs `cargo xtask publish` with `GH_TOKEN`.
 
 
@@ -442,7 +447,7 @@ Two workflows in `.github/workflows/`, every step a `cargo xtask` command.
 `cargo xtask release <version>`:
 
 1. Checks that the version has three parts (a leading `v` is fine), I'm on a branch, the tree is clean, the version differs from the current one, and tag `v<version>` exists neither locally nor on origin.
-2. Writes the version into `Cargo.toml` with `toml_edit` (formatting preserved) and refreshes `Cargo.lock` (`cargo update --workspace`).
+2. Writes the version into `Cargo.toml`, `apps/ui/package.json` and `apps/ui/src-tauri/tauri.conf.json`, then refreshes `Cargo.lock` (`cargo update --workspace`).
 3. Runs `cargo xtask check` (`--skip-checks` for emergencies). If it fails, the bump is undone and the tree is left clean.
 4. Commits "Release <version>", creates the annotated tag `v<version>`, and pushes both (`--no-push` prints the two commands instead).
 

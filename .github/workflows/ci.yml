@@ -1,8 +1,7 @@
 # CI (PLAN-BUILD.md CI): nothing merges that breaks a platform.
 #
-# Every step is a `cargo xtask` command, so a failure here can always be
-# reproduced locally. A job is added per platform as it lands; today that's
-# Windows and macOS. Qt is installed only once the UI exists (apps/ui).
+# Build commands are `cargo xtask` commands, so failures reproduce locally.
+# Windows ships the Tauri UI; macOS still uses Qt when its UI project exists.
 name: CI
 
 on:
@@ -30,26 +29,30 @@ jobs:
       - name: Rust toolchain
         run: cargo --version
       - uses: Swatinem/rust-cache@v2
-      - name: Cache Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: apps/ui/package.json
+          cache: true
+          cache_dependency_path: apps/ui/pnpm-lock.yaml
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Cache tools
         uses: actions/cache@v6
         with:
-          path: .runtime/Qt
-          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
-      - name: Cache cargo-about
-        uses: actions/cache@v6
-        with:
-          path: .runtime/tools/cargo-about
-          key: cargo-about-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
-      - name: Set up Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        run: cargo xtask setup qt
+          path: |
+            .runtime/tools/cargo-about
+            .runtime/tools/inno-setup
+          key: tools-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
       - name: Set up cargo-about
         run: cargo xtask setup cargo-about
+      - name: Set up Inno Setup
+        run: cargo xtask setup inno
       - name: Check
         run: cargo xtask check
-      - name: Build and test
-        run: cargo xtask build --test --package
+      - name: Build and test the installer
+        run: cargo xtask dist
 
   macos:
     name: macOS

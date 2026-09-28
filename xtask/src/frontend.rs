@@ -5,13 +5,13 @@
 //!
 //! The frontend plugs in through:
 //!
-//! - a setup command for its pinned SDK (`setup qt`)
+//! - a setup command for any SDK it needs (`setup qt` on Qt platforms)
 //! - a build step producing the `SaveScummer.UI` executable and its runtime files
 //! - a test step that runs headless against the freshly built host
 //! - its license texts, shipped in every package
 //!
-//! Until `apps/ui` exists the frontend is skipped and packages carry only
-//! the host and CLI; once it exists it's required.
+//! Windows requires the Tauri UI. Other platforms still allow the frontend to
+//! be absent while their UI packaging is implemented.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,8 +24,7 @@ use crate::{cmd, pins, platform};
 
 /// A built UI, ready to be packaged.
 pub struct Ui {
-    /// The `cmake --install` output. Read by the platform packaging, which
-    /// Linux doesn't have yet.
+    /// Files staged for packaging (`cmake --install` output on Qt platforms).
     #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub install: PathBuf,
 }
@@ -34,7 +33,7 @@ pub fn source() -> PathBuf {
     paths::root().join("apps").join("ui")
 }
 
-/// Whether there is a UI to build yet.
+/// Whether the platform's UI source is present.
 pub fn present() -> bool {
     #[cfg(windows)]
     {
@@ -77,10 +76,10 @@ pub fn kit() -> PathBuf {
 pub fn configuration(mode: Mode) -> &'static str {
     #[cfg(windows)]
     {
-        return match mode {
+        match mode {
             Mode::Dev => "debug",
             Mode::Release => "release",
-        };
+        }
     }
     #[cfg(not(windows))]
     match mode {

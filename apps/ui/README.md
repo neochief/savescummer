@@ -1,4 +1,4 @@
-# Tauri UI trial
+# Tauri UI
 
 This is a separate Tauri 2 process over the existing `savescummer-ipc` v1 host protocol. The Rust bridge in `src-tauri/src/bridge.rs` is the only layer that connects to the host or reads its cached artwork. The webview has no shell or general filesystem capability.
 
@@ -15,7 +15,7 @@ The host launches the UI on startup. To raise the same window later, use `target
 
 For a macOS WebKit bundle smoke test, build an unsigned trial app from `apps/ui` with `pnpm tauri build --debug --bundles app --no-sign --config '{"bundle":{"active":true}}'`. Point `SAVESCUMMER_UI_EXE` at `target/debug/bundle/macos/SaveScummer.app/Contents/MacOS/savescummer-ui` when launching the demo host. This bundle is for local inspection; its `com.savescummer.ui.trial` identity is deliberately separate from the host's eventual app identity.
 
-On Windows, run `pnpm tauri build --debug --no-bundle` from `apps/ui`, then point `SAVESCUMMER_UI_EXE` at the repository's `target/debug/savescummer-ui.exe`. For an optimized executable, use `pnpm tauri build --no-bundle` and `cargo build --release -p savescummer-host -p savescummer-cli --locked`, then use the three binaries in `target/release`. The Tauri build embeds the Vite assets in the executable. A plain `cargo build -p savescummer-ui` builds the development executable, which expects the Vite server and otherwise shows a connection error. The Tauri Windows build also requires `src-tauri/icons/icon.ico`.
+On Windows, `cargo xtask dist` builds and tests the host, CLI and Tauri UI, assembles the package, and produces the Inno Setup installer in `dist/`. For a standalone debug UI binary, run `pnpm tauri build --debug --no-bundle` from `apps/ui`. The Tauri build embeds the Vite assets in the executable. A plain `cargo build -p savescummer-ui` builds the development executable, which expects the Vite server and otherwise shows a connection error. The Tauri Windows build also requires `src-tauri/icons/icon.ico`.
 
 ## Checks
 
@@ -25,7 +25,7 @@ Run `pnpm test` and `pnpm build` in `apps/ui`, then `cargo test -p savescummer-u
 
 The main game and virtualized history view, Save/Load/Revert, labels, deletion, scan, Add, Configure, Settings preferences, More, and Flush use the host protocol. The installed artwork is returned only from the host's cache. The web assets, fonts, and icons are bundled locally.
 
-The trial is not yet a replacement for Qt. Shortcut reassignment, exact Whiteboard event-icon parity, cross-engine visual and screen-reader validation, release bundle identity and packaging, and packaged cold-open/full memory measurements remain. Native Browse dialogs choose file and folder paths; the host validates the resulting text. The Settings dialog shows the host's current fixed shortcut defaults as read-only. Windows WebView2 has been checked on Windows; Linux WebKitGTK still needs a Linux machine. `PLAN-BUILD.md` and `PLAN-MACOS.md` remain unchanged until the gate passes.
+Windows packaging now includes this UI. Exact Whiteboard event-icon parity, cross-engine visual and screen-reader validation, and packaged cold-open/full memory measurements remain. Native Browse dialogs choose file and folder paths; the host validates the resulting text. Windows WebView2 has been checked on Windows; Linux WebKitGTK still needs a Linux machine. The macOS and Linux release packaging paths have not been migrated to Tauri.
 
 The unsigned macOS debug app was inspected in WKWebView against the isolated demo host: local game art, fonts, history, Settings, Add, Configure, and More loaded, with native controls over the dark title area. The Add form initially inherited the selected executable path; this was corrected after inspection. The package has not been signed, notarized, or run through the cross-platform trial gate.
 
@@ -38,6 +38,10 @@ An isolated host with system integrations and catalog updates disabled detected 
 The Windows Tauri debug build rendered in WebView2 and connected to an isolated demo host. Save and Load succeeded from the UI. Closing the UI left the host running; `show-ui` reopened it, and the UI restarted a stopped host against the same isolated data directory.
 
 An isolated real host detected the local Steam FTL installation and its Windows save set, including a redirected `Documents/My Games` folder. FTL launched from Steam and the host reported it running. Save from the UI created a checkpoint without changing the live `continue.sav` hash. For Load, the host was configured through the UI to use a copy of the FTL profile. After changing only the copy's `continue.sav`, Load restored its original hash; the live file stayed unchanged. FTL and the isolated host were then closed. This checked the debug executable, not a Windows installer or release package.
+
+### Windows installer check (2026-09-28)
+
+`cargo xtask dist` built the optimized Windows host, CLI and Tauri UI, ran the Rust and UI suites, assembled a checked package, and produced the Inno Setup installer. A silent per-user install into an isolated test location placed all three executables. Launching the installed host opened its sibling UI; Save and Load succeeded against simulated game data. The test install was uninstalled afterward. The installer is unsigned; the WebView2 download path was compiled but not exercised because this machine already has the Runtime.
 
 ### Mac debug-build process sample (2026-09-27)
 

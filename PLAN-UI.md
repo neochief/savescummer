@@ -1,13 +1,13 @@
 # Save Scummer UI
 
-This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. The next UI implementation is a Tauri and web-frontend trial. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
+This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Windows now builds and packages the Tauri/WebView2 UI from `apps/ui` in the full installer. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 
 The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is an activity log listing every event, newest first.
 
 
 ## IMPLEMENTATION TRIAL: TAURI AND WEB UI
 
-Build the next UI iteration as a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The prototype in [`ui-prototype/`](ui-prototype/) is the visual and interaction reference, not the application source: move its styles, artwork and behavior into maintainable components, and replace demo data and simulated operations with host state. A packaged UI loads local bundled assets without a development server.
+The Windows UI is a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The prototype in [`ui-prototype/`](ui-prototype/) is the visual and interaction reference, not the application source. A packaged UI loads local bundled assets without a development server.
 
 Keep the existing process boundary:
 
@@ -17,9 +17,9 @@ Keep the existing process boundary:
 - The host remains authoritative for busy rejection, deletion deadlines, operation results and current game state. The frontend may format time, manage selection/editing, animate and scroll, but never invents a successful operation or executes one on a local timer.
 - Game artwork is supplied by the host and exposed to the webview through a narrowly scoped local asset path or bridge response. Choose that path in the trial without letting web content address arbitrary files.
 
-**Build a vertical slice first:** launch the Tauri window from the host; connect and show the real game list and history; switch games; send Save and Load; show busy, success and error responses; close and reopen the window; then kill and restart the host to verify reconnection. Use the fake service for deterministic UI states and the real host for the process boundary. Once this works, implement the remaining controls, dialogs, deletion flow, virtualization and accessibility rules in this plan.
+**Windows implementation:** the host launches the Tauri window, the UI connects to the real host, and Save and Load have been exercised through an installed package against simulated game data. Closing and reopening the UI and restarting the host were also exercised. The remaining controls, dialogs, deletion flow, virtualization and accessibility rules in this plan are product work beyond the Windows packaging gate.
 
-**Trial gate:** run the slice on Windows WebView2, macOS WKWebView and Linux WebKitGTK before replacing the Qt build path. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the current proof-of-concept numbers, recording results rather than setting a new budget from the prototype. The build and packaging changes belong in [`PLAN-BUILD.md`](PLAN-BUILD.md), and macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md). Those plans still describe Qt until this trial passes.
+**Remaining cross-platform gate:** Windows packaging has moved to Tauri. Validate macOS WKWebView and Linux WebKitGTK before replacing their Qt build paths. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the current proof-of-concept numbers. macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md).
 
 
 ## PROTOTYPE DECISIONS

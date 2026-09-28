@@ -1,4 +1,4 @@
-# Licenses a crate linked into the host or CLI may use (PLAN-BUILD.md APP
+# Licenses a crate linked into the host, CLI or Tauri UI may use (PLAN-BUILD.md APP
 # PACKAGE). Packaging fails on anything else, so licensing is checked on
 # every build rather than at release time. Adding one is a deliberate choice.
 accepted = [
@@ -8,6 +8,7 @@ accepted = [
     "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
+    "MPL-2.0",
     "Unicode-3.0",
     "Zlib",
 ]

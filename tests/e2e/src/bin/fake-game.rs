@@ -166,7 +166,7 @@ fn show_window() {
             instance,
             std::ptr::null(),
         );
-        SetForegroundWindow(hwnd);
+        bring_to_front(hwnd);
     }
 }
 
@@ -177,7 +177,36 @@ fn activate() {
     // SAFETY: finds our own window and brings it to the front.
     unsafe {
         let hwnd = FindWindowW(class.as_ptr(), std::ptr::null());
+        bring_to_front(hwnd);
+    }
+}
+
+#[cfg(windows)]
+unsafe fn bring_to_front(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, SW_RESTORE, SetForegroundWindow, ShowWindow,
+    };
+
+    if hwnd.is_null() {
+        return;
+    }
+    // Tests launched from a background terminal can be denied foreground
+    // activation. Temporarily join the current foreground input queue while
+    // activating this fake game's window, then detach immediately.
+    let foreground = unsafe { GetForegroundWindow() };
+    let other_thread =
+        if foreground.is_null() { 0 } else { unsafe { GetWindowThreadProcessId(foreground, std::ptr::null_mut()) } };
+    let ours = unsafe { GetCurrentThreadId() };
+    let attached =
+        other_thread != 0 && other_thread != ours && unsafe { AttachThreadInput(ours, other_thread, 1) } != 0;
+    unsafe {
+        ShowWindow(hwnd, SW_RESTORE);
+        BringWindowToTop(hwnd);
         SetForegroundWindow(hwnd);
+        if attached {
+            AttachThreadInput(ours, other_thread, 0);
+        }
     }
 }
 

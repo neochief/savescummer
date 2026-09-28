@@ -2,7 +2,7 @@
 
 All build automation is `cargo xtask`: one Rust program that runs the same on every OS, locally and in CI. There are no PowerShell, bash or Python build scripts. The design and the reasons behind it are in [PLAN-BUILD.md](../PLAN-BUILD.md); this guide is the how-to.
 
-Windows and macOS are implemented ([PLAN-MACOS.md](../PLAN-MACOS.md) has what's macOS-specific). Linux packaging isn't yet and fails with a clear message.
+Windows builds and ships a complete installer with the Tauri UI. macOS host/CLI packaging is implemented but its UI is not yet included in the release bundle, so macOS is tested in CI but not published. Linux packaging isn't yet implemented.
 
 
 ## Prerequisites
@@ -16,6 +16,7 @@ Every platform:
 Windows:
 
 - **Visual Studio 2022+ or its Build Tools** with "Desktop development with C++". Rust links with it, and the Visual C++ runtime DLLs shipped in the package come from it.
+- **Node.js 22 and pnpm 10.11.0** on `PATH` to build and test the Tauri UI. `apps/ui/package.json` pins pnpm; CI installs both tools.
 
 macOS (13+, Apple Silicon only):
 
@@ -24,19 +25,19 @@ macOS (13+, Apple Silicon only):
 - Every Rust build targets the oldest supported macOS: `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET`, kept equal to `pins::MIN_MACOS` by a test.
 - The end-to-end tests that switch between windows need an unlocked desktop session; while the screen is locked they say so and pass.
 
-UI frontend (only once `apps/ui` exists; until then builds contain the host and CLI only):
+The older Qt frontend setup still applies where a Qt UI project is present:
 
 - **CMake 3.21+** on `PATH` (Visual Studio, Xcode command-line tools or the distro provide it).
 - **Python 3.9+**, only to install Qt.
 - **Qt**, installed with `cargo xtask setup qt`.
 
-Pinned tools are installed into `.runtime/` by their setup commands. Nothing else downloads tools, and every missing tool error names the command to run:
+Pinned packaging tools are installed into `.runtime/` by their setup commands. Windows UI builds also need Node.js and pnpm on `PATH`; CI sets these up before running xtask. Missing packaging tools name the setup command to run:
 
 | Command | Installs | Needed for |
 | --- | --- | --- |
 | `cargo xtask setup cargo-about` | cargo-about (`THIRD-PARTY-LICENSES.html`) | any package: `build --package`, `run`, `dist` |
 | `cargo xtask setup inno` | Inno Setup, portable, into `.runtime/tools/inno-setup/` | `dist` on Windows |
-| `cargo xtask setup qt` | the Qt kit into `.runtime/Qt/<version>/<kit>/` | the UI |
+| `cargo xtask setup qt` | the Qt kit into `.runtime/Qt/<version>/<kit>/` | a Qt UI build |
 | `cargo xtask setup linux-tools` | linuxdeploy and appimagetool | `dist` on Linux (not yet) |
 
 All versions and checksums are pinned in [`xtask/src/pins.rs`](../xtask/src/pins.rs). Setup commands are safe to re-run.
@@ -56,8 +57,8 @@ cargo xtask setup inno
 
 | Command | What it does |
 | --- | --- |
-| `cargo xtask check` | The quality gate: `cargo fmt --check`, clippy with `-D warnings`, tests, build, `catalog --check`. Stops at the first failure. |
-| `cargo xtask build` | Dev build of the host and CLI (and the UI, once it exists). |
+| `cargo xtask check` | The quality gate: `cargo fmt --check`, clippy with `-D warnings`, serial tests (some need desktop focus), build, `catalog --check`. Stops at the first failure. |
+| `cargo xtask build` | Dev build of the host, CLI and Windows Tauri UI. |
 | `cargo xtask build --test` | Also runs the Rust tests and the UI's headless tests. |
 | `cargo xtask build --package` | Also assembles the APP PACKAGE under `build/dev/package/`. |
 | `cargo xtask build --release` | Optimized, stripped release build; always packages, into `build/release/package/`. |
@@ -82,20 +83,21 @@ xtask honors `CARGO_TARGET_DIR` like Cargo does.
 | `target/` | Cargo's cache | `clean --deep` |
 | `build/` | everything regenerable: packages, UI build trees, logs, `session.json` | `clean` |
 | `dist/` | the release file and nothing else | `clean`, and emptied by every `dist` |
-| `.runtime/` | pinned tools, the Qt SDK, dev data | never |
+| `.runtime/` | pinned tools, any Qt SDK, dev data | never |
 
 The APP PACKAGE is the runnable app, exactly what the release file wraps:
 
 ```text
 build/<mode>/package/SaveScummer-windows-x64/
   bin/SaveScummer.exe             host: the app, what the Start menu runs
-  bin/SaveScummer.UI.exe          UI (once it exists), with Qt DLLs
+  bin/SaveScummer.UI.exe          embedded Tauri/WebView2 UI
   bin/SaveScummer.CLI.exe         CLI
   bin/vcruntime140.dll …          Visual C++ runtime
   bin/*.pdb                       dev only
   README.txt
   THIRD-PARTY-LICENSES.html
-  .savescummer-package.json       mode, version, platform, Qt, configuration, creation time
+  WEB-THIRD-PARTY-LICENSES.html
+  .savescummer-package.json       mode, version, platform, UI toolkit, configuration, creation time
   SHA256SUMS.txt
 ```
 
@@ -120,9 +122,9 @@ A package is assembled in a `.staging-<uuid>` folder and swapped in only when co
 
 ## Licenses
 
-`THIRD-PARTY-LICENSES.html` lists every crate the host and CLI link, generated by cargo-about. [`about.toml`](../about.toml) lists the accepted licenses: a dependency under any other license fails packaging, so adding a license is a deliberate edit there. The app's own crates are `publish = false` and are left out.
+`THIRD-PARTY-LICENSES.html` lists every crate the host, CLI and Windows UI link, generated by cargo-about. `WEB-THIRD-PARTY-LICENSES.html` lists production JavaScript dependencies and their license texts. [`about.toml`](../about.toml) lists the accepted Rust licenses: a dependency under any other license fails packaging, so adding a license is a deliberate edit there. The app's own crates are `publish = false` and are left out.
 
-Once the UI exists, Qt's license texts from `packaging/licenses/` ship in every package.
+Qt license texts from `packaging/licenses/` ship with a Qt frontend build.
 
 
 ## Dev session
@@ -133,7 +135,7 @@ Once the UI exists, Qt's license texts from `packaging/licenses/` ship in every 
 2. Start its host with `--data-dir .runtime/dev`, logging to `build/dev/logs/host.log`. `host start` adds `--minimized`; `run` doesn't, so the host shows the UI itself, as it does for a user.
 3. Wait for its `"ready":true` line and record it in `build/dev/session.json`.
 
-Until the UI exists, `run` prints the CLI command to drive the dev host instead.
+On Windows, `run` opens the Tauri UI from the dev package.
 
 The dev host uses its own data, so development never touches the real app's data. It keeps running after `run` returns; `cargo xtask host stop` stops it (only if the recorded pid, start time and path all still match). Any build stops it too.
 
@@ -166,6 +168,7 @@ Every build (so also `run`, `host start` and `dist`), `check` and `clean` first 
 - Per-user install into `%LOCALAPPDATA%\Programs\SaveScummer`, no admin prompt; upgrades replace in place (stable `AppId`).
 - "Launch at sign-in" task: checked on first install, the user's choice kept on upgrade. It runs `SaveScummer.exe --autostart on|off`, so the host stays the only writer of the sign-in entry. Uninstalling runs `--autostart off`.
 - Before replacing or removing files, it runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes.
+- If WebView2 is absent, the installer downloads and installs Microsoft's Evergreen Runtime before installing the app. This requires an internet connection on those machines.
 - The Start menu entry and the last page's "Launch SaveScummer" run `SaveScummer.exe`: the host starts, or the running one is reached, and shows the UI.
 - User data (`%LOCALAPPDATA%\SaveScummer` and a moved checkpoint store) is never touched.
 - Unsigned: SmartScreen shows "More info → Run anyway".
@@ -184,9 +187,9 @@ Version resources: `apps/host/build.rs` and `apps/cli/build.rs` embed the Cargo 
 
 ## RELEASING
 
-1. `cargo xtask release 1.2.3` on a clean branch: checks the version is new and the tag free (locally and on origin), writes the version into `Cargo.toml`, refreshes `Cargo.lock`, runs `check` (`--skip-checks` for emergencies), commits "Release 1.2.3", tags `v1.2.3` and pushes both. `--no-push` prints the two push commands instead. If anything fails before the commit, the bump is undone.
-2. The tag starts `.github/workflows/release.yml`: one job per platform runs `cargo xtask dist` and uploads its file; a final job runs `cargo xtask publish`.
-3. `publish` checks that `gh` is logged in, the tag points at `HEAD`, and `dist/` holds exactly one file per shipping platform. It creates a draft release (or re-uploads to an existing draft), and refuses if the release is already published.
+1. `cargo xtask release 1.2.3` on a clean branch: checks the version is new and the tag free (locally and on origin), writes it into `Cargo.toml`, the Tauri config and the UI package manifest, refreshes `Cargo.lock`, runs `check` (`--skip-checks` for emergencies), commits "Release 1.2.3", tags `v1.2.3` and pushes both. `--no-push` prints the two push commands instead. If anything fails before the commit, the bump is undone.
+2. The tag starts `.github/workflows/release.yml`: the Windows job runs `cargo xtask dist` and uploads its installer; a final job runs `cargo xtask publish`. macOS remains in CI until its UI can be packaged.
+3. `publish` checks that `gh` is logged in, the tag points at `HEAD`, and `dist/` holds exactly the Windows installer. It creates a draft release (or re-uploads to an existing draft), and refuses if the release is already published.
 4. Review the draft on GitHub and publish it by hand.
 
 A published release never changes; fixes ship as a new version. To rebuild a draft from another commit, delete the tag locally and on origin and push it again.
@@ -196,10 +199,10 @@ A published release never changes; fixes ship as a new version. To rebuild a dra
 
 ## CI
 
-- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. On Windows and macOS (Apple Silicon runners): `setup cargo-about` (and `setup qt` once the UI exists), `check`, `build --test --package`; macOS also installs librsvg for the icon. Superseded runs are cancelled.
-- [`release.yml`](../.github/workflows/release.yml): `v*` tags. Never cancelled.
+- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. Windows installs Node.js and pnpm, runs `check`, then `dist` to build and test the full Tauri UI package and Inno Setup installer. macOS runs `check` and `build --test --package`; it installs Qt only if a Qt UI project is present, plus librsvg for the icon. Superseded runs are cancelled.
+- [`release.yml`](../.github/workflows/release.yml): `v*` tags build and draft the Windows installer. Never cancelled.
 
-Qt and the pinned tools are cached, keyed on `xtask/src/pins.rs`. Every step is a `cargo xtask` command, so a CI failure reproduces locally with the same command.
+The Windows pnpm store is cached using `apps/ui/pnpm-lock.yaml`; the pinned packaging tools are cached using `xtask/src/pins.rs`. Run the listed `cargo xtask` commands locally to reproduce build failures.
 
 
 ## VS Code

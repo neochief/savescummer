@@ -179,12 +179,13 @@ pub fn ask_to_close(pid: u32) {
 /// ```
 pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
     let bin = root.join("bin");
-    let mut required = vec![PathBuf::from("bin").join(naming::exe(HOST)), PathBuf::from("bin").join(naming::exe(CLI))];
-
-    if let Some(ui) = inputs.ui {
-        package::copy_dir(&ui.install, root)?;
-        required.push(PathBuf::from("bin").join(naming::exe(UI)));
-    }
+    let ui = inputs.ui.context("Windows packages require the Tauri UI")?;
+    let mut required = vec![
+        PathBuf::from("bin").join(naming::exe(HOST)),
+        PathBuf::from("bin").join(naming::exe(CLI)),
+        PathBuf::from("bin").join(naming::exe(UI)),
+    ];
+    package::copy_dir(&ui.install, root)?;
     package::copy_file(&inputs.host, &bin.join(naming::exe(HOST)))?;
     package::copy_file(&inputs.cli, &bin.join(naming::exe(CLI)))?;
 
@@ -229,13 +230,11 @@ pub fn finish_package(_root: &Path) -> anyhow::Result<()> {
 fn readme(inputs: &Inputs) -> String {
     let template = paths::packaging().join("windows").join("README.txt");
     let mut text = fs::read_to_string(&template).unwrap_or_default();
-    if inputs.ui.is_some() {
-        text.push('\n');
-        text.push_str("UI\n--\n\nThe window uses Tauri and the Microsoft Edge WebView2 Runtime.\n");
-    }
-    let ui =
-        if inputs.ui.is_some() { "  SaveScummer.UI.exe     the main window, started by SaveScummer.exe\n" } else { "" };
-    text.replace("{ui}", ui).replace("{version}", inputs.version).replace('\n', "\r\n")
+    text.push('\n');
+    text.push_str("UI\n--\n\nThe window uses Tauri and the Microsoft Edge WebView2 Runtime.\n");
+    text.replace("{ui}", "  SaveScummer.UI.exe     the main window, started by SaveScummer.exe\n")
+        .replace("{version}", inputs.version)
+        .replace('\n', "\r\n")
 }
 
 /// The Visual C++ runtime DLLs of the newest Visual Studio (found with vswhere).

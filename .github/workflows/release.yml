@@ -1,8 +1,8 @@
-# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag builds every platform's
-# release file into one draft GitHub release. A human publishes it.
+# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag builds the complete Windows
+# installer into a draft GitHub release. A human publishes it.
 #
-# Every step is a `cargo xtask` command. A build job is added per platform
-# as it lands; `publish` requires exactly one file per shipping platform.
+# Build commands are `cargo xtask` commands. A build job is added for a
+# platform after its complete UI package is ready to ship.
 name: Release
 
 on:
@@ -29,12 +29,15 @@ jobs:
       - name: Rust toolchain
         run: cargo --version
       - uses: Swatinem/rust-cache@v2
-      - name: Cache Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        uses: actions/cache@v6
+      - uses: pnpm/action-setup@v6
         with:
-          path: .runtime/Qt
-          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
+          package_json_file: apps/ui/package.json
+          cache: true
+          cache_dependency_path: apps/ui/pnpm-lock.yaml
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
       - name: Cache tools
         uses: actions/cache@v6
         with:
@@ -42,9 +45,6 @@ jobs:
             .runtime/tools/cargo-about
             .runtime/tools/inno-setup
           key: tools-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
-      - name: Set up Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        run: cargo xtask setup qt
       - name: Set up cargo-about
         run: cargo xtask setup cargo-about
       - name: Set up Inno Setup
@@ -57,46 +57,9 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  macos:
-    name: macOS disk image
-    runs-on: macos-latest
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Rust toolchain
-        run: cargo --version
-      - uses: Swatinem/rust-cache@v2
-      - name: Cache Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        uses: actions/cache@v6
-        with:
-          path: .runtime/Qt
-          key: qt-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
-      - name: Cache tools
-        uses: actions/cache@v6
-        with:
-          path: .runtime/tools/cargo-about
-          key: tools-${{ runner.os }}-${{ hashFiles('xtask/src/pins.rs') }}
-      - name: Install librsvg
-        run: brew install librsvg
-      - name: Set up Qt
-        if: hashFiles('apps/ui/CMakeLists.txt') != ''
-        run: cargo xtask setup qt
-      - name: Set up cargo-about
-        run: cargo xtask setup cargo-about
-      - name: Build the disk image
-        run: cargo xtask dist
-      - uses: actions/upload-artifact@v7
-        with:
-          name: macos
-          path: dist/*
-          if-no-files-found: error
-
   publish:
     name: Draft release
-    needs: [windows, macos]
+    needs: [windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write

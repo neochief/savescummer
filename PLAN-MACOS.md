@@ -4,7 +4,7 @@ Everything needed to make the host, the CLI, packaging and CI fully work on macO
 
 The target is the one PLAN-BUILD.md already fixes: macOS 13+, Apple Silicon only, one `SaveScummer-macos-arm64-<ver>.dmg`. This plan doesn't change any rule in PLAN-HOST.md: it lists the macOS adapters and fixes, and the few places where macOS forces a decision.
 
-Status (2026-09-25): every section below has its adapter, and `cargo xtask check` passes on an M-series Mac with nothing ignored for want of one. FTL, Into the Breach and Six Ages (Steam) are found and their macOS save folders resolve; Six Ages waits for access to other apps' data. What's left is by hand with real games (the "Done when" items that name FTL, Into the Breach, Six Ages, logout or System Settings), the UI's part (PLAN-UI), and the findings noted in each section.
+Status (2026-09-28): the macOS host, CLI, bundle and CI job are implemented. The Tauri UI has been exercised on a Mac, but `cargo xtask` still packages a bundle without it. The release workflow therefore ships Windows only until macOS UI packaging is complete. The implementation checklist below records the original macOS port; use `docs/building.md` for current commands. FTL, Into the Breach and Six Ages (Steam) are found and their macOS save folders resolve; Six Ages waits for access to other apps' data.
 
 
 ## PRINCIPLES
@@ -226,7 +226,7 @@ Done when `cargo xtask check` passes on an Apple Silicon Mac.
 
 ## BUILD AND PACKAGING
 
-`xtask/src/macos.rs`: `fill_package` and `release_file` are `bail!(NOT_YET)`, so `build --package`, `run`, `host start` and `dist` all fail. PLAN-BUILD.md (macOS) already describes what to build; the work is:
+`xtask/src/macos.rs` now builds the host/CLI bundle and DMG. The remaining release task is to stage the Tauri UI and its runtime in that bundle, verify it on macOS, and then re-enable the macOS release job. The original implementation checklist was:
 
 - **Build flags:** set `MACOSX_DEPLOYMENT_TARGET` from `pins::MIN_MACOS` for every Rust build.
 - **The bundle:** `SaveScummer.app` with the layout from THE APP BUNDLE, `packaging/macos/Info.plist.in` (`CFBundleExecutable` `SaveScummer`, `LSUIElement`), the login agent's plist (LAUNCH AT LOGIN), the app icon as `.icns` generated from `assets/icon.svg` (the full-color Dock and Finder icon; the menu-bar template in `assets/macos/` is a separate asset), licenses, manifest and checksums in `Contents/Resources/`.
@@ -245,7 +245,7 @@ Rust's `Instant` doesn't advance while a Mac sleeps, so the 15-minute scan and a
 
 ## CI AND DOCS
 
-- **CI:** add the `macos-latest` job to `ci.yml` (`check`, `build --test --package`) and the macOS build job to `release.yml`. PLAN-BUILD already lists both.
+- **CI:** the `macos-latest` job runs `check` and `build --test --package`. Add the macOS job back to `release.yml` when the UI is included and tested in the DMG.
 - **docs/building.md:** macOS prerequisites (Xcode command-line tools, rustup), and remove "macOS modules are stubbed".
 - **README:** the macOS install section already exists; add the hotkeys and the fn note (HOTKEYS), permission prompts and re-allowing access after each update (PRIVACY PERMISSIONS), and screenshots for *Open Anyway*.
 - **PLAN-HOST.md:** fill in the macOS column of "Per OS" and the PLATFORMS table in PLAN.md.

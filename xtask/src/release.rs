@@ -41,18 +41,37 @@ pub fn release(input: &str, skip_checks: bool, no_push: bool) -> anyhow::Result<
     }
 
     println!("releasing {version} (was {current}) from {branch}");
-    version::set(&version)?;
-    let prepared = cmd::run(
-        Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())).args(["update", "--workspace"]),
-    )
-    .and_then(|()| if skip_checks { Ok(()) } else { build::check() });
+    let prepared = version::set(&version)
+        .and_then(|()| {
+            cmd::run(
+                Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
+                    .args(["update", "--workspace"]),
+            )
+        })
+        .and_then(|()| if skip_checks { Ok(()) } else { build::check() });
     if let Err(e) = prepared {
-        // The tree was clean, so restoring these two leaves it clean again.
-        let _ = cmd::run(git().args(["checkout", "--", "Cargo.toml", "Cargo.lock"]));
+        // The tree was clean, so restoring the version files leaves it clean again.
+        let _ = cmd::run(git().args([
+            "checkout",
+            "--",
+            "Cargo.toml",
+            "Cargo.lock",
+            "apps/ui/src-tauri/tauri.conf.json",
+            "apps/ui/package.json",
+        ]));
         return Err(e.context(format!("release {version} abandoned; the version bump was undone")));
     }
 
-    cmd::run(git().args(["commit", "-m", &format!("Release {version}"), "--", "Cargo.toml", "Cargo.lock"]))?;
+    cmd::run(git().args([
+        "commit",
+        "-m",
+        &format!("Release {version}"),
+        "--",
+        "Cargo.toml",
+        "Cargo.lock",
+        "apps/ui/src-tauri/tauri.conf.json",
+        "apps/ui/package.json",
+    ]))?;
     cmd::run(git().args(["tag", "-a", &tag, "-m", &format!("Release {version}")]))?;
     let push_branch = format!("git push origin {branch}");
     let push_tag = format!("git push origin {tag}");

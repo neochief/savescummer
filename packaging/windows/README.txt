@@ -19,3 +19,4 @@ choose "More info", then "Run anyway".
 Source code, issues and releases: https://github.com/neochief/savescummer
 
 Third-party licenses are listed in THIRD-PARTY-LICENSES.html.
+Web UI dependency licenses are listed in WEB-THIRD-PARTY-LICENSES.html.

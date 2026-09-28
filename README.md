@@ -22,10 +22,10 @@ Depending on the game, restoring progress may require returning to the main menu
 | Platform | Download |
 | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
-| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` |
+| macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` (UI packaging in progress) |
 | Linux x86_64 (glibc 2.35+) | `SaveScummer-linux-x86_64-<version>.AppImage` (coming) |
 
-Get it from [Releases](https://github.com/neochief/savescummer/releases). The downloads aren't code-signed, so each OS asks once:
+Get the Windows installer from [Releases](https://github.com/neochief/savescummer/releases). macOS and Linux packages will be published when their UIs are ready. The packages aren't code-signed, so each OS may ask before first launch:
 
 - **Windows:** run the installer. SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It installs for your user only (no admin), into `%LOCALAPPDATA%\Programs\SaveScummer`, and offers to launch at sign-in.
   - **Upgrade:** run the new installer; it closes the running app safely and keeps your settings.
@@ -63,9 +63,9 @@ cargo xtask check
 
 ### Run it
 
-The window (the UI) isn't written yet, so for now SaveScummer is the host, which runs in the tray, plus the CLI to talk to it. Development always uses its own data in `.runtime/dev`, never your real checkpoints.
+On Windows, the host runs in the tray and opens the Tauri UI; the CLI is also included. Development always uses its own data in `.runtime/dev`, never your real checkpoints. Install Node.js and pnpm to build the Windows UI.
 
-On Windows and macOS, the dev package runs just like the installed app, tray (menu-bar) icon and hotkeys included (Ctrl+F5 / Ctrl+F9, or ⌥F5 / ⌥F9 on a Mac). On macOS, packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
+On Windows, the dev package runs like the installed app, with the tray icon, UI and hotkeys (Ctrl+F5 / Ctrl+F9). The macOS dev package currently has the menu-bar host and hotkeys (⌥F5 / ⌥F9) but its UI is not yet staged by xtask. macOS packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
 
 ```bash
 cargo xtask setup cargo-about
