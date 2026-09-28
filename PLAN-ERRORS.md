@@ -254,11 +254,11 @@ real machine before relying on them (5.2).
 - **Unit (snapshots):** `crates/snapshots` tests against real temporary directories.
   Covers target filters and excludes, reserved suffixes, the four Load stages and their
   rollback, deleting newer matched files, disposal-delete and reparse rejection.
-- **Integration (Rust, Windows):** `tests/integration` with the `tests/fake-game`
+- **Integration (Rust):** `tests/e2e/tests` with the `tests/e2e/src/bin/fake-game.rs`
   fixture and temp data. Covers real OS faults and durable phases.
-- **Qt (fake service):** `apps/ui/tests/ui_test.cpp`. Covers error block
-  content, button wiring, sticky behavior, countdown, instructions block, the Loaded row
-  notes and configuration validation messages.
+- **UI (typed bridge fixtures):** `apps/ui/src/App.test.tsx` runs with Vitest.
+  Extend those tests for the error block, button wiring, sticky behavior, countdown,
+  instructions, Loaded row notes and configuration validation messages as each UI flow lands.
 - **Manual (Windows compatibility):** antivirus interference, fullscreen focus,
   removable drives.
 - **Manual (Steam Cloud, real machine):** Isaac (cloud API), Slay the Spire
@@ -309,9 +309,9 @@ real machine before relying on them (5.2).
 | E-C5 / E-N3 | manual + integration | unknown presence refuses operations; a remembered drive detached, gone or left as an empty folder | VHD detach / bad UNC / disk image detach (macOS) |
 | E-C6 / E-L3 | snapshots unit + integration | reparse rejection | mklink /J, ln -s |
 | E-C7 | integration | changed checkpoint row | edit checkpoint |
-| E-C8 / E-N10 | core unit + Qt | checkpoint of another save set | fixture state, account switch |
-| E-C9 | core unit + Qt | safety recheck before an operation | fixture state |
-| E-C14 / E-N11 | integration + Qt | store unavailable for all games | detached VHD |
+| E-C8 / E-N10 | core unit + UI | checkpoint of another save set | fixture state, account switch |
+| E-C9 | core unit + UI | safety recheck before an operation | fixture state |
+| E-C14 / E-N11 | integration + UI | store unavailable for all games | detached VHD |
 | E-C15 | integration | stage 3 rollback | name created mid-Load |
 | E-D4 | integration | Flush deletes what exists at confirm time | mutate between preview/confirm |
 | E-C11 | host test | shutdown admission | host shutdown |
@@ -323,15 +323,15 @@ real machine before relying on them (5.2).
 | E-L1 | integration | symlinked/junction target root | mklink /J, ln -s |
 | E-L2 | integration | repointed/broken link | recreate link |
 | E-L4 | integration | checkpoint replaced by link | mklink /J over checkpoint |
-| E-N1 | core unit + Qt | `No game data yet` for missing and empty targets | fixture state |
+| E-N1 | core unit + UI | `No game data yet` for missing and empty targets | fixture state |
 | E-N2 | core unit | Load refused when a root with data is missing | fixture state |
-| E-N4 | Qt | hidden uninstalled games | fixture state |
-| E-N5 | Qt | disconnected state | fake service |
+| E-N4 | UI | hidden uninstalled games | fixture state |
+| E-N5 | UI | disconnected state | typed bridge fixture |
 | E-N6 | integration | protocol version mismatch | mismatched fixture |
 | E-N7 / E-N8 | snapshots unit | absent target left alone; empty-match target emptied again | fixture state |
 | E-N9 | integration | cross-drive copies, same-folder renames | store on another drive |
-| E-V1–E-V7 | core unit + Qt | validation rules and messages | fixture paths |
-| E-M1–E-M2 | snapshots unit + Qt | newer saves removed, Revert exact; Loaded row text | fixture state |
+| E-V1–E-V7 | core unit + UI | validation rules and messages | fixture paths |
+| E-M1–E-M2 | snapshots unit + UI | newer saves removed, Revert exact; Loaded row text | fixture state |
 | E-S1–E-S3 | manual | Steam Cloud outcomes and the Loaded row note | real machine |
 | E-X1 | manual | checkpoint taken while game writes | real game |
 | E-X2–E-X4 | out of scope | documented limitation | — |

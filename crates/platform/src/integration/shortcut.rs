@@ -99,15 +99,15 @@ fn validate_shortcuts_for_platform(save: &str, load: &str, platform: &str) -> Re
         return Err("Load shortcut: choose a different shortcut from Save".into());
     }
     for (label, shortcut) in [("Save", save), ("Load", load)] {
-        if let Some(conflict) = shortcut_conflict(platform, shortcut) {
-            if conflict.severity == "major" {
-                return Err(format!(
-                    "{label} shortcut: {} is reserved for {} on {}",
-                    shortcut.canonical(),
-                    conflict.description,
-                    if platform == "macos" { "macOS" } else { "Windows" }
-                ));
-            }
+        if let Some(conflict) = shortcut_conflict(platform, shortcut)
+            && conflict.severity == "major"
+        {
+            return Err(format!(
+                "{label} shortcut: {} is reserved for {} on {}",
+                shortcut.canonical(),
+                conflict.description,
+                if platform == "macos" { "macOS" } else { "Windows" }
+            ));
         }
     }
     Ok([save, load])

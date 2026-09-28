@@ -21,10 +21,10 @@ Every OS adapter already has its own file, chosen with `#[cfg_attr(..., path = "
 
 ## THE APP BUNDLE
 
-There's one bundle, with the host as its main executable. `SaveScummer.app/Contents/MacOS/` holds `SaveScummer` (the host, `CFBundleExecutable`), `SaveScummer.UI` and `SaveScummer.CLI`, as in PLAN-BUILD.md. There's no nested helper app: one bundle means one identity, one signature, one "Open Anyway", one name in notifications and permission prompts. Nested helpers were mostly needed for Apple's old login-item API, which `SMAppService` (macOS 13) replaced.
+There's one bundle, with the host as its main executable. The current `SaveScummer.app/Contents/MacOS/` holds `SaveScummer` (the host, `CFBundleExecutable`) and `SaveScummer.CLI`. Adding `SaveScummer.UI` is the remaining release packaging task. There's no nested helper app: one bundle means one identity, one signature, one "Open Anyway", one name in notifications and permission prompts. Nested helpers were mostly needed for Apple's old login-item API, which `SMAppService` (macOS 13) replaced.
 
 - **Opening the app** starts the host, which shows the UI. Opening it again while the host runs doesn't start a second process: macOS sends "reopen" to the running host, which shows the UI (PLAN-HOST, PROCESSES). The login agent runs the host with `--minimized` (LAUNCH AT LOGIN).
-- **Dock icon.** The bundle is `LSUIElement`, so the host has no Dock icon. The UI switches itself to a regular app while its window is open, so the Dock icon exists exactly while the window does. Qt has no public API for this; it's a few lines of Objective-C++.
+- **Dock icon target.** The bundle is `LSUIElement`, so the host has no Dock icon. Validate that the packaged Tauri UI gets a Dock icon while its window is open, then hides it when closed.
 - **Starting the UI.** The host runs `SaveScummer.UI` directly. Asking macOS to open the bundle would reach the host again.
 - **Starting the host from the CLI.** Privacy permissions go to the process macOS holds responsible, and a child inherits it. The host is responsible when a user or launchd starts it, so the CLI starts a missing host through LaunchServices (`open -g -j -a … --args --minimized`), not as its own child. Dev hosts with `--data-dir` can keep being run directly, so tooling still reads the ready line.
 - **To verify early:** two processes using AppKit under one bundle ID behave as described, in particular who receives "reopen" while the UI is also open. Either answer is fine as long as both show the window.
@@ -226,7 +226,7 @@ Done when `cargo xtask check` passes on an Apple Silicon Mac.
 
 ## BUILD AND PACKAGING
 
-`xtask/src/macos.rs` now builds the host/CLI bundle and DMG. The remaining release task is to stage the Tauri UI and its runtime in that bundle, verify it on macOS, and then re-enable the macOS release job. The original implementation checklist was:
+`xtask/src/macos.rs` builds the host/CLI bundle and DMG. The remaining release task is to stage the Tauri UI and its runtime in that bundle, verify it on macOS, and then re-enable the macOS release job. The following records the completed host/CLI packaging work:
 
 - **Build flags:** set `MACOSX_DEPLOYMENT_TARGET` from `pins::MIN_MACOS` for every Rust build.
 - **The bundle:** `SaveScummer.app` with the layout from THE APP BUNDLE, `packaging/macos/Info.plist.in` (`CFBundleExecutable` `SaveScummer`, `LSUIElement`), the login agent's plist (LAUNCH AT LOGIN), the app icon as `.icns` generated from `assets/icon.svg` (the full-color Dock and Finder icon; the menu-bar template in `assets/macos/` is a separate asset), licenses, manifest and checksums in `Contents/Resources/`.
@@ -235,7 +235,7 @@ Done when `cargo xtask check` passes on an Apple Silicon Mac.
 - **Dev session:** `run` and `host start` start the host from the dev bundle; `procs` stopping must recognize the host inside a bundle.
 - **Version resources:** `apps/host/build.rs` and `apps/cli/build.rs` use `winresource`; they must stay no-ops on macOS (they are today) while `Info.plist` carries the version.
 
-Done when PLAN-BUILD.md macOS "Done when" items 1–4 and 6 pass.
+For a release-ready macOS build, add the UI and its licenses to the bundle, test host/UI launch and reopen from the installed app, verify signatures and minimum-OS compatibility on a clean Mac, then satisfy the macOS release acceptance checks in PLAN-BUILD.md.
 
 
 ## SLEEP AND RESUME
@@ -246,12 +246,12 @@ Rust's `Instant` doesn't advance while a Mac sleeps, so the 15-minute scan and a
 ## CI AND DOCS
 
 - **CI:** the `macos-latest` job runs `check` and `build --test --package`. Add the macOS job back to `release.yml` when the UI is included and tested in the DMG.
-- **docs/building.md:** macOS prerequisites (Xcode command-line tools, rustup), and remove "macOS modules are stubbed".
+- **docs/building.md:** keep macOS prerequisites, current host/CLI bundle scope and release availability accurate when the UI lands.
 - **README:** the macOS install section already exists; add the hotkeys and the fn note (HOTKEYS), permission prompts and re-allowing access after each update (PRIVACY PERMISSIONS), and screenshots for *Open Anyway*.
 - **PLAN-HOST.md:** fill in the macOS column of "Per OS" and the PLATFORMS table in PLAN.md.
 
 
-## ORDER
+## ORIGINAL PORT ORDER
 
 Each step leaves the host more usable on its own:
 
@@ -265,4 +265,4 @@ Each step leaves the host more usable on its own:
 8. GOG and Epic on macOS.
 9. CI and docs.
 
-The work is done when every "Done when" above passes on an Apple Silicon Mac with the minimum macOS, and the checks in PLAN-HOST's "By hand" list pass with FTL and Into the Breach.
+The host/CLI port used this order. Remaining release work is the UI packaging and installed-app validation described above.

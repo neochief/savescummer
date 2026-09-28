@@ -903,7 +903,7 @@ missing case is visible in the test list. Beyond the cases:
 - `apps/host` — embeds the bundle, runs discovery, calls `resolve` per install,
   stores game records with their save sets, publishes state. No decision logic.
 
-Integration tests (`tests/integration/catalog.rs`) use fixture bundles and
+Integration tests (`tests/e2e/tests/catalog.rs`) use fixture bundles and
 temporary directories, never real game libraries or the network.
 
 ## 8. Non-goals (v1)

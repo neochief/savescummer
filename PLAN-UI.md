@@ -5,7 +5,7 @@ This is the main window, `SaveScummer.UI`. The host starts it when the user laun
 The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is an activity log listing every event, newest first.
 
 
-## IMPLEMENTATION TRIAL: TAURI AND WEB UI
+## WINDOWS FRONTEND: TAURI AND WEB UI
 
 The Windows UI is a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The prototype in [`ui-prototype/`](ui-prototype/) is the visual and interaction reference, not the application source. A packaged UI loads local bundled assets without a development server.
 
@@ -15,11 +15,11 @@ Keep the existing process boundary:
 - The Tauri Rust layer is a **thin client** of the existing versioned local JSON protocol. Reuse `savescummer-ipc` where it fits. It connects, watches host events, sends requests, reports window focus, and handles reconnect/start-host behavior as the CLI does. It owns no game rules, database, catalog resolution or checkpoint files.
 - The web frontend calls a small typed bridge in the Tauri layer and subscribes to state/events. It never opens the host socket or receives arbitrary filesystem access. Keep Tauri capabilities scoped to that bridge and the window features actually used; do not enable general shell or file access in the webview.
 - The host remains authoritative for busy rejection, deletion deadlines, operation results and current game state. The frontend may format time, manage selection/editing, animate and scroll, but never invents a successful operation or executes one on a local timer.
-- Game artwork is supplied by the host and exposed to the webview through a narrowly scoped local asset path or bridge response. Choose that path in the trial without letting web content address arbitrary files.
+- Game artwork is supplied by the host and exposed to the webview through a narrowly scoped local asset path or bridge response, without letting web content address arbitrary files.
 
 **Windows implementation:** the host launches the Tauri window, the UI connects to the real host, and Save and Load have been exercised through an installed package against simulated game data. Closing and reopening the UI and restarting the host were also exercised. The remaining controls, dialogs, deletion flow, virtualization and accessibility rules in this plan are product work beyond the Windows packaging gate.
 
-**Remaining cross-platform gate:** Windows packaging has moved to Tauri. Validate macOS WKWebView and Linux WebKitGTK before replacing their Qt build paths. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the current proof-of-concept numbers. macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md).
+**Remaining cross-platform gate:** Validate macOS WKWebView and Linux WebKitGTK before adding their Tauri UI packages. Neither platform currently packages a Qt UI. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the earlier proof-of-concept numbers. macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md).
 
 
 ## PROTOTYPE DECISIONS
@@ -749,7 +749,7 @@ Accessibility: icon-only controls (`···`, history Delete buttons and label ch
 
 ## TESTING
 
-For the Tauri trial, test React views against a fake typed bridge that can simulate busy, failing, missing snapshots, pending deletions and a disconnected host. Test the Rust bridge against a fake protocol server, including request/response matching, pushed events, host restart and version mismatch. A packaged-window smoke test checks launch, close, reopen, focus and local asset loading on each supported WebView engine. The UI behavior tests focus on the rules that are easy to break:
+For the Tauri UI, test React views against a fake typed bridge that can simulate busy, failing, missing snapshots, pending deletions and a disconnected host. Test the Rust bridge against a fake protocol server, including request/response matching, pushed events, host restart and version mismatch. A packaged-window smoke test checks launch, close, reopen, focus and local asset loading on each supported WebView engine. The UI behavior tests focus on the rules that are easy to break:
 
 - **Presentation:** compact 56 px title bar, no extra top padding before the 40 px hotkey band, and matching 16 px section gaps; Installed/day headings align; selected borders and raised edges stay inside control bounds; 16 px side gutters and 8 px row padding; footer and popup commands have identical 24 px icons, 8 px insets and gaps, and 40 px heights; every history row has consistent action-column geometry; Chakra Petch on the title, main controls, shortcut hints and history Load/Revert buttons; Inter on content and dates; Whiteboard Semibold icons with the Duotone crosshairs exception; seamless title bar with usable native controls and dragging in focused and unfocused states.
 - **Sidebar:**

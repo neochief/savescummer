@@ -248,29 +248,25 @@ pub fn settings(
     let exe = launch.map(|_| std::env::current_exe().map_err(io)).transpose()?;
     let old_launch = exe.as_ref().map(|exe| savescummer_platform::autostart::is_enabled(exe));
     let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
-    if changed {
-        if let Some(integration) = integration.as_ref() {
-            integration.rebind(shortcuts).map_err(|error| {
-                let field = if error.contains(&shortcuts[1].canonical()) {
-                    "Load shortcut"
-                } else if error.contains(&shortcuts[0].canonical()) {
-                    "Save shortcut"
-                } else {
-                    "Shortcuts"
-                };
-                Failure::new(ErrorKind::InvalidRequest, format!("{field}: {error}"))
-            })?;
-        }
+    if changed && let Some(integration) = integration.as_ref() {
+        integration.rebind(shortcuts).map_err(|error| {
+            let field = if error.contains(&shortcuts[1].canonical()) {
+                "Load shortcut"
+            } else if error.contains(&shortcuts[0].canonical()) {
+                "Save shortcut"
+            } else {
+                "Shortcuts"
+            };
+            Failure::new(ErrorKind::InvalidRequest, format!("{field}: {error}"))
+        })?;
     }
-    if let (Some(on), Some(exe)) = (launch, exe.as_ref()) {
-        if let Err(error) = savescummer_platform::autostart::set(on, exe, host.opts.data_dir.as_deref()) {
-            if changed {
-                if let Some(integration) = integration.as_ref() {
-                    let _ = integration.rebind(old);
-                }
-            }
-            return Err(Failure::new(ErrorKind::InvalidRequest, error));
+    if let (Some(on), Some(exe)) = (launch, exe.as_ref())
+        && let Err(error) = savescummer_platform::autostart::set(on, exe, host.opts.data_dir.as_deref())
+    {
+        if changed && let Some(integration) = integration.as_ref() {
+            let _ = integration.rebind(old);
         }
+        return Err(Failure::new(ErrorKind::InvalidRequest, error));
     }
     let write_result = host.db().write(|conn| {
         if changed {
@@ -289,10 +285,8 @@ pub fn settings(
         if let (Some(was_on), Some(exe)) = (old_launch, exe.as_ref()) {
             let _ = savescummer_platform::autostart::set(was_on, exe, host.opts.data_dir.as_deref());
         }
-        if changed {
-            if let Some(integration) = integration.as_ref() {
-                let _ = integration.rebind(old);
-            }
+        if changed && let Some(integration) = integration.as_ref() {
+            let _ = integration.rebind(old);
         }
         return Err(io(error));
     }

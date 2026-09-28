@@ -27,7 +27,7 @@ These decide the cases this document doesn't cover:
 - **Only an explicit user action deletes.** Save, restarts, scans, game exits and failures never delete checkpoints or history. Only Delete on a row and Flush do. Why: a backup tool that loses backups is worse than none.
 - **One operation per game, and reject rather than queue.** A second request for a busy game is refused, not stored for later. Other games stay fully usable. Why: a replayed hotkey press minutes later would load a save the user no longer wants.
 - **Deterministic recovery.** An interrupted operation is resolved by fixed rules at startup, never by asking the user to choose. Why: the user can't judge half-finished filesystem states, and there may be no UI.
-- **Portable core, thin platform adapters.** Game and operation rules know nothing about Windows, Qt, SQLite or the protocol. Each OS feature (process watching, hotkeys, tray, sounds, sign-in, file watching, the local transport, file identity) is a small replaceable adapter, and each OS's version lives in its own file with a stub for OSes not done yet. Shared code never branches on the OS. Why: macOS and Linux should be new files, not edits scattered through the core.
+- **Portable core, thin platform adapters.** Game and operation rules know nothing about Windows, the UI toolkit, SQLite or the protocol. Each OS feature (process watching, hotkeys, tray, sounds, sign-in, file watching, the local transport, file identity) is a small replaceable adapter, and each OS's version lives in its own file with a stub for OSes not done yet. Shared code never branches on the OS. Why: macOS and Linux should be new files, not edits scattered through the core.
 
 
 ## PROCESSES

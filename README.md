@@ -59,7 +59,7 @@ cd savescummer
 cargo xtask check
 ```
 
-`check` is the full quality gate (format, clippy, tests, catalog). If it passes, everything builds.
+`check` runs Rust format, clippy and tests plus the catalog gate. To build and test the full Windows UI installer, run `cargo xtask dist`.
 
 ### Run it
 

@@ -25,7 +25,7 @@ macOS (13+, Apple Silicon only):
 - Every Rust build targets the oldest supported macOS: `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET`, kept equal to `pins::MIN_MACOS` by a test.
 - The end-to-end tests that switch between windows need an unlocked desktop session; while the screen is locked they say so and pass.
 
-The older Qt frontend setup still applies where a Qt UI project is present:
+The old Qt frontend setup is dormant because this tree has no Qt UI project. It is not needed for the current Windows or macOS build:
 
 - **CMake 3.21+** on `PATH` (Visual Studio, Xcode command-line tools or the distro provide it).
 - **Python 3.9+**, only to install Qt.
@@ -40,7 +40,7 @@ Pinned packaging tools are installed into `.runtime/` by their setup commands. W
 | `cargo xtask setup qt` | the Qt kit into `.runtime/Qt/<version>/<kit>/` | a Qt UI build |
 | `cargo xtask setup linux-tools` | linuxdeploy and appimagetool | `dist` on Linux (not yet) |
 
-All versions and checksums are pinned in [`xtask/src/pins.rs`](../xtask/src/pins.rs). Setup commands are safe to re-run.
+Packaging tool versions and checksums are pinned in [`xtask/src/pins.rs`](../xtask/src/pins.rs). Node.js is selected by CI, and pnpm is pinned in `apps/ui/package.json`; frontend dependencies are locked in `apps/ui/pnpm-lock.yaml`. Setup commands are safe to re-run.
 
 A first Windows setup:
 

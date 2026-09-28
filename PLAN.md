@@ -33,7 +33,7 @@ The app is three programs:
 | Program | Role |
 | --- | --- |
 | `SaveScummer` | The host (Rust): the app itself and what the user launches. One per user. Owns every rule, all state, all file operations, and everything that works without a window: the tray, hotkeys, sounds, game monitoring. |
-| `SaveScummer.UI` | The main window (C++/Qt). The host starts it when the user wants to see the app; closing it ends only the window. |
+| `SaveScummer.UI` | The main window (Tauri/WebView2 on Windows). The host starts it when the user wants to see the app; closing it ends only the window. macOS UI packaging remains in progress. |
 | `SaveScummer.CLI` | A console client (Rust) for scripts, testing and diagnostics. It can drive the host in nearly every way the UI can. |
 
 ```text
@@ -97,7 +97,7 @@ These hold across every part:
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Status | First target | Implemented, 13+ on Apple Silicon (PLAN-MACOS) | Planned (SteamOS in mind) |
+| Status | Full Tauri UI and installer built locally; Windows CI and release pipeline configured | Host, CLI, bundle and CI implemented on Apple Silicon; UI absent from the package and release | Planned (SteamOS in mind) |
 | Game monitoring | Yes | Yes | To investigate |
 | Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 | To investigate |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
@@ -106,11 +106,11 @@ These hold across every part:
 ## TECHNOLOGY
 
 - **Rust** for the host, CLI and every backend module. Why: one safe, fast, portable language for the part that touches the user's files.
-- **Qt 6 Widgets (C++)** for the UI, in its own process. Why: a native-feeling, lightweight window, kept apart so it can be replaced without touching the rules, and so it takes no memory while closed, which is most of the time.
+- **Tauri 2, React and TypeScript** for the Windows UI, in its own process with bundled web assets. The host can keep running after the window closes. macOS and Linux UI packaging still needs implementation and validation.
 - **SQLite**, owned only by the host, for configuration, checkpoint records, history and the operation journal.
-- **A versioned local JSON protocol** over named pipes (Windows) and Unix sockets (macOS, Linux) between the host and its clients. No direct Rust/C++ bindings.
+- **A versioned local JSON protocol** over named pipes (Windows) and Unix sockets (macOS, Linux) between the host and its clients. The Tauri bridge uses this protocol to reach the host.
 
-This stack was chosen after a small Windows proof of concept showed host/UI communication, busy rejection, progress, UI reconnection and an operation surviving the UI being killed. It used about 51 MiB of combined working set and reopened the UI in about 150 ms. Those were demo numbers without real copying, SQLite or scanning, not budgets.
+An earlier Qt proof of concept showed host/UI communication, busy rejection, progress, UI reconnection and an operation surviving the UI being killed. It used about 51 MiB of combined working set and reopened the UI in about 150 ms. Those historical demo numbers did not include real copying, SQLite or scanning and are not budgets for the Tauri UI.
 
 
 ## REPOSITORY
@@ -120,14 +120,14 @@ This stack was chosen after a small Windows proof of concept showed host/UI comm
 | `apps/host`, `apps/cli` | The host and CLI programs | HOST |
 | `crates/` | Backend modules: core rules, snapshots, storage, scanner, monitor, platform adapters, IPC | HOST |
 | `crates/catalog`, `crates/catalog-build`, `catalog/` | The catalog resolver, builder and data | CATALOG |
-| `protocol/` | The protocol's schemas and shared example messages, tested by both Rust and C++ | HOST |
-| `apps/ui` | The Qt UI and its tests | UI |
+| `protocol/` | The protocol's schemas and shared example messages | HOST |
+| `apps/ui` | The Tauri/React UI, Rust bridge and frontend tests | UI |
 | `tests/` | Cross-module tests and the fake-game program | HOST |
 | `xtask/`, `packaging/`, `.github/` | Build, packaging, CI and release tooling | BUILD |
 | `assets/` | Icons and sounds | — |
 
 Module rules:
 
-- The core rules know nothing about Qt, SQLite, the protocol or the OS; the host wires in the real implementations.
+- The core rules know nothing about the UI toolkit, SQLite, the protocol or the OS; the host wires in the real implementations.
 - Each backend module can be built and tested on its own. Dependencies between modules never form a cycle.
 - The UI never links backend code, opens the database or touches game files.

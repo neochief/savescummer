@@ -53,6 +53,12 @@ jobs:
         run: cargo xtask check
       - name: Build and test the installer
         run: cargo xtask dist
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
 
   macos:
     name: macOS
