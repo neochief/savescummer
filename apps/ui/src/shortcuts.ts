@@ -1,4 +1,15 @@
+import conflicts from './shortcut-conflicts.json';
+
 type KeyPress = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'>;
+type Platform = 'windows' | 'macos';
+
+function currentPlatform(): Platform {
+  return navigator.platform.includes('Mac') ? 'macos' : 'windows';
+}
+
+function shortcutConflict(shortcut: string, platform: Platform) {
+  return conflicts[platform].find((entry) => entry.key === shortcut);
+}
 
 export function capturedShortcut(event: KeyPress): string | undefined {
   const key = /^(F(?:[1-9]|1[0-2])|Key[A-Z]|Digit[0-9])$/.exec(event.code)?.[1];
@@ -18,11 +29,21 @@ export function displayShortcut(shortcut: string): string {
     .replaceAll('Shift+', '⇧').replaceAll('Meta+', '⌘');
 }
 
-export function shortcutError(shortcut: string, other: string): string | undefined {
+export function shortcutError(shortcut: string, other: string, platform = currentPlatform()): string | undefined {
   if (!shortcut) return 'Press a shortcut.';
   if (shortcut === other) return 'Choose a different shortcut.';
   if (/^[A-Z0-9]$/.test(shortcut) || /^Shift\+[A-Z0-9]$/.test(shortcut)) {
     return 'Letters and numbers need Ctrl, Alt, or Meta.';
   }
+  const conflict = shortcutConflict(shortcut, platform);
+  if (conflict?.severity === 'major') {
+    return `This shortcut is reserved for ${conflict.description} on ${platform === 'macos' ? 'macOS' : 'Windows'}.`;
+  }
   return undefined;
+}
+
+export function shortcutWarning(shortcut: string, platform = currentPlatform()): string | undefined {
+  const conflict = shortcutConflict(shortcut, platform);
+  if (conflict?.severity !== 'minor') return undefined;
+  return `May interfere with ${conflict.description} on ${platform === 'macos' ? 'macOS' : 'Windows'}. You can still choose it.`;
 }

@@ -242,18 +242,13 @@ pub fn settings(
     if changed && !host.opts.no_integrations && host.integration.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
         return Err(Failure::new(ErrorKind::InvalidRequest, "global hotkeys are unavailable"));
     }
-    if let Some(on) = launch {
-        let exe = std::env::current_exe().map_err(io)?;
-        if host.opts.no_integrations {
-            return Err(Failure::new(ErrorKind::InvalidRequest, "sign-in changes are off (--no-integrations)"));
-        }
-        savescummer_platform::autostart::set(on, &exe, host.opts.data_dir.as_deref())
-            .map_err(|e| Failure::new(ErrorKind::InvalidRequest, e))?;
-        let _ = db::set_setting(host.db().conn(), SETTING_LAUNCH, if on { "1" } else { "0" });
+    if launch.is_some() && host.opts.no_integrations {
+        return Err(Failure::new(ErrorKind::InvalidRequest, "sign-in changes are off (--no-integrations)"));
     }
-    refresh_launch(host);
+    let exe = launch.map(|_| std::env::current_exe().map_err(io)).transpose()?;
+    let old_launch = exe.as_ref().map(|exe| savescummer_platform::autostart::is_enabled(exe));
+    let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
     if changed {
-        let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(integration) = integration.as_ref() {
             integration.rebind(shortcuts).map_err(|error| {
                 let field = if error.contains(&shortcuts[1].canonical()) {
@@ -266,22 +261,47 @@ pub fn settings(
                 Failure::new(ErrorKind::InvalidRequest, format!("{field}: {error}"))
             })?;
         }
-        let storage = host.db();
-        let save_result = db::set_setting(storage.conn(), SETTING_SAVE_SHORTCUT, &shortcuts[0].canonical());
-        let load_result =
-            save_result.and_then(|_| db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &shortcuts[1].canonical()));
-        if let Err(error) = load_result {
-            let _ = db::set_setting(storage.conn(), SETTING_SAVE_SHORTCUT, &old[0].canonical());
-            let _ = db::set_setting(storage.conn(), SETTING_LOAD_SHORTCUT, &old[1].canonical());
+    }
+    if let (Some(on), Some(exe)) = (launch, exe.as_ref()) {
+        if let Err(error) = savescummer_platform::autostart::set(on, exe, host.opts.data_dir.as_deref()) {
+            if changed {
+                if let Some(integration) = integration.as_ref() {
+                    let _ = integration.rebind(old);
+                }
+            }
+            return Err(Failure::new(ErrorKind::InvalidRequest, error));
+        }
+    }
+    let write_result = host.db().write(|conn| {
+        if changed {
+            db::set_setting(conn, SETTING_SAVE_SHORTCUT, &shortcuts[0].canonical())?;
+            db::set_setting(conn, SETTING_LOAD_SHORTCUT, &shortcuts[1].canonical())?;
+        }
+        if let Some(on) = launch {
+            db::set_setting(conn, SETTING_LAUNCH, if on { "1" } else { "0" })?;
+        }
+        if let Some(on) = play_sounds {
+            db::set_setting(conn, SETTING_PLAY_SOUNDS, if on { "1" } else { "0" })?;
+        }
+        Ok(())
+    });
+    if let Err(error) = write_result {
+        if let (Some(was_on), Some(exe)) = (old_launch, exe.as_ref()) {
+            let _ = savescummer_platform::autostart::set(was_on, exe, host.opts.data_dir.as_deref());
+        }
+        if changed {
             if let Some(integration) = integration.as_ref() {
                 let _ = integration.rebind(old);
             }
-            return Err(io(error));
         }
+        return Err(io(error));
+    }
+    drop(integration);
+    refresh_launch(host);
+    if changed {
         host.lock().shortcuts = shortcuts;
     }
     if let Some(on) = play_sounds {
-        db::set_setting(host.db().conn(), SETTING_PLAY_SOUNDS, if on { "1" } else { "0" }).map_err(io)?;
         host.lock().play_sounds = on;
     }
     let mut inner = host.lock();

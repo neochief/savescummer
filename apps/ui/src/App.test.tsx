@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App, relativeAge } from './App';
-import { displayShortcut } from './shortcuts';
+import { displayShortcut, shortcutError, shortcutWarning } from './shortcuts';
 import type { Bridge } from './bridge';
 import type { Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
 
@@ -33,6 +33,7 @@ class FakeBridge implements Bridge {
     b: { rows: [row('cp-b', 'Second checkpoint')] },
   };
   outcome: Promise<Operation> = Promise.resolve({ id: 'op-1', kind: 'save', status: 'succeeded' });
+  settingsError?: string;
   requests: UiRequest[] = [];
   stateListener?: (state: HostState) => void;
   statusListener?: (status: string) => void;
@@ -48,6 +49,7 @@ class FakeBridge implements Bridge {
     if (request.type === 'add_game') return { game: 'custom-1' } as T;
     if (request.type === 'save_set') return { location: '/old/saves', active: [{ root: '/old/saves' }] } as T;
     if (request.type === 'flush_preview') return { saved: 1, recovery: 0, temporary: 0, size: 4096, items: [] } as T;
+    if (request.type === 'settings' && this.settingsError) throw new Error(this.settingsError);
     if (request.type === 'settings' || request.type === 'configure' || request.type === 'open_checkpoints') return {} as T;
     return this.outcome as Promise<T>;
   }
@@ -67,6 +69,23 @@ test('selecting another game reads that game’s real history page', async () =>
   expect(await screen.findByText('Second checkpoint')).toBeTruthy();
   expect(screen.queryByText('First checkpoint')).toBeNull();
   expect(bridge.requests).toContainEqual({ type: 'history', game: 'b', limit: 100 });
+});
+
+test('Info reveals the full game instructions only when requested', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].info = 'Context: Keep this run.\n\nHow progress is saved: The save is overwritten.';
+  render(<App bridge={bridge} />);
+  const button = await screen.findByRole('button', { name: 'Info' });
+  expect(button.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByText(/How progress is saved/)).toBeNull();
+
+  fireEvent.click(button);
+  expect(button.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByText(/How progress is saved: The save is overwritten/)).toBeTruthy();
+
+  fireEvent.click(button);
+  expect(button.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByText(/How progress is saved/)).toBeNull();
 });
 
 test('a game starting or closing does not replace the selected view', async () => {
@@ -197,14 +216,34 @@ test('More menu supports arrow navigation and Escape returns focus', async () =>
   expect(document.activeElement).toBe(opener);
 });
 
+test('a pointer-opened More menu closes on Escape', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  const opener = await screen.findByRole('button', { name: 'More game actions' });
+  fireEvent.click(opener);
+  expect(document.activeElement).toBe(opener);
+  expect(screen.getByRole('menu')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
 test('closing a dialog restores focus to its opener', async () => {
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
   const opener = await screen.findByRole('button', { name: 'Settings' });
-  opener.focus();
   fireEvent.click(opener);
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close dialog' }));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(document.activeElement).toBe(opener);
+});
+
+test('closing Configure returns focus to the More button after its menu unmounts', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  const opener = await screen.findByRole('button', { name: 'More game actions' });
+  fireEvent.click(opener);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Configure paths…' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Close dialog' }));
   expect(document.activeElement).toBe(opener);
 });
 
@@ -243,6 +282,49 @@ test('Settings rejects duplicate shortcuts and Cancel keeps saved values', async
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   expect((screen.getByRole('textbox', { name: 'Save shortcut' }) as HTMLInputElement).value).toBe(displayShortcut('Ctrl+F5'));
+});
+
+test('shortcut conflicts block major keys and warn for minor keys on both platforms', () => {
+  expect(shortcutError('Ctrl+C', 'Ctrl+F9', 'windows')).toContain('Copy');
+  expect(shortcutError('Meta+L', 'Ctrl+F9', 'windows')).toContain('Lock');
+  expect(shortcutError('Meta+Q', 'Alt+F9', 'macos')).toContain('Quit');
+  expect(shortcutError('Shift+Meta+4', 'Alt+F9', 'macos')).toContain('Capture');
+  expect(shortcutError('Meta+G', 'Ctrl+F9', 'windows')).toBeUndefined();
+  expect(shortcutWarning('Meta+G', 'windows')).toContain('Game Bar');
+  expect(shortcutError('Meta+N', 'Alt+F9', 'macos')).toBeUndefined();
+  expect(shortcutWarning('Meta+N', 'macos')).toContain('New window');
+});
+
+test('Settings blocks major conflicts and shows a savable warning for minor conflicts', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+  const save = screen.getByRole('textbox', { name: 'Save shortcut' });
+  fireEvent.focus(save);
+  const mac = navigator.platform.includes('Mac');
+  fireEvent.keyDown(save, { code: 'KeyC', key: 'c', ctrlKey: !mac, metaKey: mac });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(screen.getByText(/reserved for Copy/)).toBeTruthy();
+  expect(bridge.requests.some((request) => request.type === 'settings')).toBe(false);
+
+  fireEvent.keyDown(save, { code: mac ? 'KeyN' : 'KeyG', key: mac ? 'n' : 'g', metaKey: true });
+  expect(screen.getByText(/May interfere with/).textContent).toContain(mac ? 'New window' : 'Game Bar');
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(bridge.requests.some((request) => request.type === 'settings')).toBe(true));
+});
+
+test('host rejection stays beside the shortcut and keeps Settings open', async () => {
+  const bridge = new FakeBridge();
+  bridge.settingsError = 'Save shortcut: Alt+F6 is unavailable: another app uses it';
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+  const save = screen.getByRole('textbox', { name: 'Save shortcut' });
+  fireEvent.focus(save);
+  fireEvent.keyDown(save, { code: 'F6', key: 'F6', altKey: true });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(await screen.findByText('Alt+F6 is unavailable: another app uses it')).toBeTruthy();
+  expect(save.getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
 });
 
 test('large histories mount only the visible rows', async () => {

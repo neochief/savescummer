@@ -3061,6 +3061,7 @@ dependencies = [
  "objc2-service-management",
  "objc2-user-notifications",
  "serde",
+ "serde_json",
  "tempfile",
  "windows-sys 0.61.2",
 ]

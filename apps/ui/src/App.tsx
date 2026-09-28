@@ -12,10 +12,15 @@ const icons: Record<string, string> = {
   save: 'flag', load: 'rotate-left', saved: 'flag', loaded: 'rotate-left', reverted: 'rotate-left',
   game_started: 'circle-play', game_closed: 'circle-stop', tag: 'tag', more: 'ellipsis', scan: 'arrows-rotate',
   add: 'plus', settings: 'gear', success: 'check', busy: 'arrows-rotate', clock: 'clock',
+  info: 'circle-info',
 };
 
 function Icon({ name, className = '' }: { name: string; className?: string }) {
   return <img className={`icon ${className}`} src={`/icons/${icons[name] || name}.svg`} alt="" aria-hidden="true" />;
+}
+
+function scrollMotion(): ScrollBehavior {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 }
 
 function useArtwork(bridge: Bridge, game: Game, kind: 'hero' | 'logo' | 'header') {
@@ -49,7 +54,7 @@ function GameCard({ bridge, game, selected, onSelect }: {
     <button className={`game-card ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`}
       onClick={onSelect} aria-current={selected ? 'true' : undefined}
       aria-label={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ', Not running'}`}
-      title={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ' — Not running'}`}>
+      data-tooltip={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ' — Not running'}`}>
       {hero && <img className="game-art" src={hero} alt="" />}
       <span className="game-shade" />
       {logo ? <img className="game-logo" src={logo} alt="" /> : <span className="game-fallback">{game.name}</span>}
@@ -71,11 +76,14 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [now, setNow] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const arrivalTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const historyGame = useRef<string | undefined>(undefined);
   const previousActiveStack = useRef<string[]>([]);
   const deleteDeadlines = useRef(new Map<string, number>());
   const [flash, setFlash] = useState<string>();
+  const [arrived, setArrived] = useState<string>();
   const [dialog, setDialog] = useState<DialogKind>();
+  const dialogOpener = useRef<HTMLElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -86,14 +94,27 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [viewportHeight, setViewportHeight] = useState(600);
   const [historyHeight, setHistoryHeight] = useState(0);
 
+  const openDialog = (kind: DialogKind, opener: HTMLElement | null) => {
+    dialogOpener.current = opener;
+    setDialog(kind);
+  };
+
   useEffect(() => { setMoreOpen(false); }, [selected]);
   useEffect(() => {
     if (!moreOpen) return;
     const outside = (event: PointerEvent) => {
       if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMoreOpen(false);
+        moreButtonRef.current?.focus();
+        event.preventDefault();
+      }
+    };
     document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [moreOpen]);
 
   useEffect(() => {
@@ -121,7 +142,7 @@ export function App({ bridge }: { bridge: Bridge }) {
       else items.forEach((unlisten) => unlisten());
       return bridge.request<HostState>({ type: 'state' });
     }).then((value) => { if (live) { setState(value); setStatus('connected'); } }).catch(() => undefined);
-    return () => { live = false; unlisteners.forEach((unlisten) => unlisten()); clearTimeout(feedbackTimer.current); };
+    return () => { live = false; unlisteners.forEach((unlisten) => unlisten()); clearTimeout(feedbackTimer.current); clearTimeout(arrivalTimer.current); };
   }, [bridge]);
 
   const visibleGames = useMemo(() => state?.games.filter((game) => game.installed) || [], [state]);
@@ -154,7 +175,10 @@ export function App({ bridge }: { bridge: Bridge }) {
       && visibleGames.some((game) => game.id === formerTop && game.running);
     if (selected && !known(selected)) setSelected(undefined);
     else if (!selected && known(active)) setSelected(active);
-    else if (focusedAnotherRunningGame && known(active)) setSelected(active);
+    else if (focusedAnotherRunningGame && known(active)) {
+      setHistoryDirection(visibleGames.findIndex((game) => game.id === active) < visibleGames.findIndex((game) => game.id === selected) ? 'up' : 'down');
+      setSelected(active);
+    }
     previousActiveStack.current = state.active_stack;
   }, [state, selected, visibleGames]);
 
@@ -198,6 +222,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     setHistoryDirection(newPosition < oldPosition ? 'up' : 'down');
     setSelected(id);
     setFeedback(undefined);
+    setArrived(undefined);
   }, [selected, visibleGames]);
 
   const jumpToCheckpoint = useCallback(async (checkpoint: string) => {
@@ -218,7 +243,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     const top = items.indexOf(target.id) * 64;
     const viewport = scrollRef.current;
     if (viewport && (top < viewport.scrollTop || top + 64 > viewport.scrollTop + viewport.clientHeight)) {
-      viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: 'smooth' });
+      viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
     }
     setTimeout(() => setFlash(undefined), 1800);
   }, [bridge, history, next, selectedGame]);
@@ -227,6 +252,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     if (!selectedGame) return;
     clearTimeout(feedbackTimer.current);
     const game = selectedGame.id;
+    const knownRows = new Set(history.map((row) => row.id));
     setFeedback({ game, action, target: checkpoint, phase: 'busy' });
     try {
       const request: UiRequest = action === 'save'
@@ -237,12 +263,24 @@ export function App({ bridge }: { bridge: Bridge }) {
       const outcome = await bridge.request<Operation>({ type: 'outcome', operation: accepted.id });
       if (outcome.status !== 'succeeded') throw new Error(outcome.error?.detail || outcome.error?.kind || `${action} failed`);
       setFeedback({ game, action, target: checkpoint, phase: 'success' });
-      scrollRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+      const kind = action === 'save' ? 'saved' : action === 'load' ? 'loaded' : 'reverted';
+      bridge.request<HistoryPage>({ type: 'history', game, limit: 100 }).then((page) => {
+        if (historyGame.current !== game) return;
+        setHistory(page.rows);
+        setNext(page.next);
+        const latest = page.rows.find((row) => row.kind === kind && !knownRows.has(row.id));
+        if (latest) {
+          clearTimeout(arrivalTimer.current);
+          setArrived(latest.id);
+          arrivalTimer.current = setTimeout(() => setArrived(undefined), 3000);
+        }
+      }).catch(() => undefined);
+      scrollRef.current?.scrollTo?.({ top: 0, behavior: scrollMotion() });
       feedbackTimer.current = setTimeout(() => setFeedback(undefined), 1600);
     } catch (error) {
       setFeedback({ game, action, target: checkpoint, phase: 'error', message: String(error instanceof Error ? error.message : error) });
     }
-  }, [bridge, selectedGame]);
+  }, [bridge, selectedGame, history]);
 
   const scan = useCallback(async () => {
     setScanFeedback('Scanning…');
@@ -301,7 +339,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   const busy = Boolean(selectedGame?.busy) || (feedback?.game === selected && feedback?.phase === 'busy');
   const hostError = selectedGame?.blocked || selectedGame?.config_error ||
     (selectedGame?.last_result?.status === 'failed' ? selectedGame.last_result.error : undefined);
-  const addControl = <button key="add" onClick={() => setDialog('add')}><Icon name="add" />Add custom game</button>;
+  const addControl = <button key="add" onClick={(event) => openDialog('add', event.currentTarget)}><Icon name="add" />Add custom game</button>;
   const scanControl = <button key="scan" onClick={scan} disabled={scanFeedback === 'Scanning…'}>
     <Icon name={scanFeedback === 'Scanning…' ? 'busy' : 'scan'} />{scanFeedback || 'Scan for games'}
   </button>;
@@ -310,29 +348,33 @@ export function App({ bridge }: { bridge: Bridge }) {
     <div className={`app ${busy ? 'is-busy' : ''} ${state && visibleGames.length === 0 ? 'no-games' : ''}`}>
       <aside className="sidebar">
         <div className="titlebar" data-tauri-drag-region>
-          <img className="app-icon" src="/app-icon.svg" alt="" />
-          <span className="wordmark"><span>Save</span><strong>Scummer</strong></span>
+          <img className="app-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
+          <span className="wordmark" aria-hidden="true"><span>Save</span><strong>Scummer</strong></span>
         </div>
         {running.length > 0 && <div className="running-panel">
           <h2><span className="running-dot" />RUNNING</h2>
           {running.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected} onSelect={() => selectGame(game.id)} />)}
         </div>}
-        <div className="library-panel">
-          {installed.length > 0 && <>
-            <h2>INSTALLED</h2>
-            {installed.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected} onSelect={() => selectGame(game.id)} />)}
-          </>}
+        <div className="sidebar-surface">
+          <div className="sidebar-content">
+            {installed.length > 0 && <div className="library-panel">
+              <h2>INSTALLED</h2>
+              {installed.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected} onSelect={() => selectGame(game.id)} />)}
+            </div>}
+          </div>
           <div className="library-controls">
             {visibleGames.length ? [addControl, scanControl] : [scanControl, addControl]}
-            <button onClick={() => setDialog('settings')}><Icon name="settings" />Settings</button>
+            <button onClick={(event) => openDialog('settings', event.currentTarget)}><Icon name="settings" />Settings</button>
           </div>
         </div>
       </aside>
       <main className="main">
         <div className="main-title titlebar" data-tauri-drag-region />
+        <p className="sr-only" role="status">{feedback?.phase === 'busy' ? `${feedback.action} in progress`
+          : feedback?.phase === 'success' ? `${feedback.action} complete` : ''}</p>
         {status !== 'connected' && <p className="connection" role="status">{status.startsWith('reconnecting') ? 'Reconnecting to host…' : 'Connecting to host…'}</p>}
         {selectedGame ? <>
-          <div className="action-band" aria-label="Checkpoint actions">
+          <div className={`action-band ${selectedGame.latest?.label ? 'has-load-label' : ''}`} aria-label="Checkpoint actions">
             <ActionButton action="save" game={selectedGame} feedback={feedback} busy={busy} now={now}
               shortcut={state?.settings?.save_shortcut} onClick={() => runAction('save')} />
             <ActionButton action="load" game={selectedGame} feedback={feedback} busy={busy} now={now}
@@ -349,18 +391,18 @@ export function App({ bridge }: { bridge: Bridge }) {
                 items[next].focus(); event.preventDefault();
               }
             }}>
-              <button ref={moreButtonRef} className="more-button" onClick={() => setMoreOpen(!moreOpen)}
+              <button ref={moreButtonRef} className="more-button" onClick={(event) => { event.currentTarget.focus(); setMoreOpen(!moreOpen); }}
                 onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp'].includes(event.key) && !moreOpen) { setMoreOpen(true); event.preventDefault(); } }}
-                aria-label="More game actions" aria-expanded={moreOpen} aria-haspopup="menu" title="More game actions"><Icon name="more" /></button>
+                aria-label="More game actions" aria-expanded={moreOpen} aria-haspopup="menu" data-tooltip="More game actions"><Icon name="more" /></button>
               {moreOpen && <div className="more-menu" role="menu" ref={moreMenuRef}>
                 <button role="menuitem" disabled={busy} onClick={() => {
                   setMoreOpen(false);
                   bridge.request({ type: 'open_checkpoints', game: selectedGame.id }).catch((error) =>
                     setFeedback({ game: selectedGame.id, action: 'flush', phase: 'error', message: String(error) }));
                 }}><Icon name="folder" />Open checkpoints folder</button>
-                <button role="menuitem" disabled={busy} onClick={() => { setMoreOpen(false); setDialog('configure'); }}><Icon name="sliders" />Configure paths…</button>
+                <button role="menuitem" disabled={busy} onClick={() => { setMoreOpen(false); openDialog('configure', moreButtonRef.current); }}><Icon name="sliders" />Configure paths…</button>
                 <hr />
-                <button role="menuitem" disabled={busy || (!selectedGame.has_history && !selectedGame.checkpoints_size)} onClick={() => { setMoreOpen(false); setDialog('flush'); }}>
+                <button role="menuitem" disabled={busy || (!selectedGame.has_history && !selectedGame.checkpoints_size)} onClick={() => { setMoreOpen(false); openDialog('flush', moreButtonRef.current); }}>
                   <Icon name="trash-can" />Flush checkpoints{selectedGame.checkpoints_size ? ` (${formatBytes(selectedGame.checkpoints_size)})` : ''}…
                 </button>
               </div>}
@@ -369,11 +411,14 @@ export function App({ bridge }: { bridge: Bridge }) {
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
             <p className="action-error-block" role="alert">{hostError.detail || hostError.kind}</p>}
-          {selectedGame.info && <div className={`instructions ${expandedInfo[selectedGame.id] ? 'expanded' : ''}`}>
-            <div className="instructions-text"><Markdown>{selectedGame.info}</Markdown></div>
+          {selectedGame.info && <div className="game-info">
             <button onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
-              aria-label={`${expandedInfo[selectedGame.id] ? 'Collapse' : 'Expand'} game instructions`}
-              aria-expanded={Boolean(expandedInfo[selectedGame.id])}><Icon name={expandedInfo[selectedGame.id] ? 'angle-up' : 'angle-down'} /></button>
+              aria-expanded={Boolean(expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
+              <Icon name="info" />Info
+            </button>
+            {expandedInfo[selectedGame.id] && <div id={`game-info-${selectedGame.id}`} className="game-info-content">
+              <Markdown>{selectedGame.info}</Markdown>
+            </div>}
           </div>}
           <div key={selectedGame.id} className={`history history-${historyDirection} ${scrollTop > 0 ? 'fade-top' : ''} ${scrollTop + viewportHeight < historyHeight - 1 ? 'fade-bottom' : ''}`}
             ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
@@ -385,7 +430,7 @@ export function App({ bridge }: { bridge: Bridge }) {
                 if (!row) return <div className="day virtual-item" style={{ top }} key={key}><h2>{dayHeading(day, now)}</h2></div>;
                 const pending = state?.deletes.find((item) => item.checkpoint === row.checkpoint && item.game === selected);
                 return <div className="virtual-item" style={{ top }} key={key}><HistoryRow row={row} busy={busy} now={now} bridge={bridge}
-                  flash={flash === row.id} deleteOperation={pending} deadline={pending && deleteDeadlines.current.get(pending.id)}
+                  flash={flash === row.id} arrived={arrived === row.id} deleteOperation={pending} deadline={pending && deleteDeadlines.current.get(pending.id)}
                   feedback={feedback?.game === selected ? feedback : undefined}
                   onLoad={() => row.checkpoint && runAction('load', row.checkpoint)}
                   onRevert={() => row.checkpoint && runAction('revert', row.checkpoint)}
@@ -398,7 +443,7 @@ export function App({ bridge }: { bridge: Bridge }) {
           </div>
         </> : <div className="empty-library">{!state ? 'Waiting for the host…' : visibleGames.length ? 'No known games are running.' : 'No games found.'}</div>}
       </main>
-      {dialog && <AppDialog key={`${dialog}-${selectedGame?.id || ''}`} kind={dialog} game={selectedGame} state={state} bridge={bridge}
+      {dialog && <AppDialog key={`${dialog}-${selectedGame?.id || ''}`} kind={dialog} game={selectedGame} state={state} bridge={bridge} opener={dialogOpener.current}
         close={() => setDialog(undefined)} onAdded={(id) => { setDialog(undefined); setSelected(id); }} onFlushed={finishFlush} />}
     </div>
   );
@@ -432,9 +477,9 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   </div>;
 }
 
-function HistoryRow({ row, busy, now, bridge, feedback, flash, deleteOperation, deadline,
+function HistoryRow({ row, busy, now, bridge, feedback, flash, arrived, deleteOperation, deadline,
   onLoad, onRevert, onJump, onDelete, onCancelDelete }: {
-  row: HistoryEntry; busy: boolean; now: number; bridge: Bridge; feedback?: Feedback; flash: boolean;
+  row: HistoryEntry; busy: boolean; now: number; bridge: Bridge; feedback?: Feedback; flash: boolean; arrived: boolean;
   deleteOperation?: Operation; deadline?: number;
   onLoad: () => void; onRevert: () => void; onJump: () => void; onDelete: () => void; onCancelDelete: () => void;
 }) {
@@ -447,7 +492,7 @@ function HistoryRow({ row, busy, now, bridge, feedback, flash, deleteOperation, 
   const chip = row.label || (row.kind === 'loaded' && row.saved_at ? new Date(row.saved_at).toLocaleTimeString(undefined, { hour12: false }) : undefined)
     || (row.kind === 'reverted' && row.reverted_at ? new Date(row.reverted_at).toLocaleTimeString(undefined, { hour12: false }) : undefined);
   const count = Math.max(1, Math.ceil(((deadline || Date.now() + (deleteOperation?.remaining_ms || 0)) - now) / 1000));
-  return <div id={`entry-${row.id}`} className={`history-row ${flash ? 'flash' : ''}`}>
+  return <div id={`entry-${row.id}`} className={`history-row ${flash ? 'flash' : ''} ${arrived ? 'arrived' : ''}`}>
     <div className="history-time"><time dateTime={row.at}>{date.toLocaleTimeString(undefined, { hour12: false })}</time><small>{relativeAge(date, now)}</small></div>
     <div className="history-description">
       <div className="history-main"><Icon name={row.kind} /><span>{name}</span>

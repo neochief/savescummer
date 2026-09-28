@@ -142,10 +142,12 @@ dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
 .dialog-field { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
 .dialog-field label { width: 128px; flex: none; }
 .dialog-field input { flex: 1; min-width: 0; height: 32px; padding: 5px 8px; border: 1px solid #5b4c42; border-radius: 5px; background: #1c1918; color: #faf8ee; user-select: text; }
+.dialog-settings .dialog-field input[data-shortcut-field] { flex: 0 1 180px; }
 .dialog-field input:focus { outline: 1px solid #f51e2b; border-color: #f51e2b; }
 .dialog-field input.capturing { border-color: #f51e2b; }
 .dialog-field input[aria-invalid="true"] { border-color: #ff7a80; }
-.dialog-error.shortcut-error { margin-top: -9px; }
+.dialog-error.shortcut-error, .dialog-warning.shortcut-warning { margin: -9px 0 14px 136px; }
+.dialog-warning.shortcut-warning { color: #f4c77d; font-size: 12px; }
 .dialog-field button, .dialog footer button { height: 32px; padding: 0 14px; border: 0; border-radius: 5px; background: #463830; color: #faf8ee; }
 .dialog-check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
 .dialog-check input { accent-color: #f51e2b; }
