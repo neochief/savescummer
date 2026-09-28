@@ -125,6 +125,9 @@ pub enum Command {
         /// Known games: return the save set to the catalog's.
         #[serde(default)]
         reset_save_location: bool,
+        /// Refuse Save, Load and Revert while the game runs.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        wait_for_exit: Option<bool>,
     },
     Scan {
         /// A full scan re-checks every checkpoint on disk too.
@@ -216,7 +219,8 @@ impl Command {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum OpenTarget {
-    /// A target's root (for a pattern, the folder before the wildcard).
+    /// The folder a target covers: its exact entry, or for a pattern the
+    /// folder before the wildcard.
     TargetRoot {
         game: String,
         #[serde(default)]
@@ -419,6 +423,10 @@ pub struct GameSummary {
     pub store: Option<String>,
     pub installed: bool,
     pub running: bool,
+    /// Save, Load and Revert are refused while the game runs (`game_running`):
+    /// it writes its progress to disk only when it exits.
+    #[serde(default)]
+    pub wait_for_exit: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub info: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -25,6 +25,7 @@ fn a_stuck_scan_delays_neither_requests_nor_monitoring() {
     write(&install.join("saves/run.sav"), "floor 3");
     let (key, value) = stuck_scan(10_000);
     let _host = world.host_with(&[], &[(key, &value)]);
+    world.no_exit_wait("steam-1001");
 
     let mut scan = world.cli_background(&["scan"]);
     user_scan_running(&world);

@@ -278,6 +278,7 @@ pub fn scan(host: &Arc<Host>, full: bool, reason: &str) -> usize {
                 install_tag: None,
                 executable: None,
                 location: None,
+                wait_for_exit: true,
                 created: counter,
             }
         });
@@ -484,6 +485,7 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
         install_tag: None,
         executable: Some(exe),
         location: Some(location),
+        wait_for_exit: true,
         created: counter,
     };
     validate_candidate(host, &mut inner, game.clone())?;
@@ -545,6 +547,7 @@ pub struct ConfigureRequest<'a> {
     pub save_location: Option<&'a str>,
     pub reset_executable: bool,
     pub reset_save_location: bool,
+    pub wait_for_exit: Option<bool>,
 }
 
 /// Changes a game's configuration. Applied only after every new value
@@ -585,6 +588,9 @@ pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> R
     }
     if let Some(location) = request.save_location {
         game.location = Some(user_location(location)?);
+    }
+    if let Some(wait) = request.wait_for_exit {
+        game.wait_for_exit = wait;
     }
     validate_candidate(host, &mut inner, game.clone())?;
     persist_game(host, &game)?;

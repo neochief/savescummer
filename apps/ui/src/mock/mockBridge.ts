@@ -1,7 +1,7 @@
 // Dev-only in-browser stand-in for the Tauri host bridge (`pnpm dev` in a plain browser).
 // Serves a snapshot of the dev demo host: demo-snapshot.json and art/<game id>/<kind>.*.
 import type { Bridge } from '../bridge';
-import type { HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from '../types';
+import type { HistoryEntry, HistoryPage, HostState, Operation, SaveTarget, UiRequest } from '../types';
 import snapshot from './demo-snapshot.json';
 
 const files = import.meta.glob<string>('./art/*/*', { eager: true, import: 'default', query: '?url' });
@@ -40,6 +40,14 @@ export function createMockBridge(): Bridge {
     return { id, game, kind: 'delete', status: 'accepted' };
   };
 
+  // Like the host: a running game that writes its progress on exit can't be saved or loaded.
+  const lock = (g: HostState['games'][number]) => {
+    if (!g.running || g.wait_for_exit === false) return;
+    g.save = { available: false, reason: 'game_running' };
+    g.load = { available: false, reason: 'game_running' };
+  };
+  state.games.forEach(lock);
+
   return {
     async request<T>(request: UiRequest): Promise<T> {
       console.debug('[mock bridge]', request);
@@ -77,6 +85,16 @@ export function createMockBridge(): Bridge {
           publish();
           return { id: `op-${++seq}`, game: g.id, kind: request.type, status: 'accepted' } as T;
         }
+        case 'configure': {
+          if (request.wait_for_exit !== undefined) {
+            const g = find(request.game);
+            g.wait_for_exit = request.wait_for_exit;
+            if (g.wait_for_exit) lock(g);
+            else { g.save = { available: true }; g.load = { available: Boolean(g.latest) }; }
+            publish();
+          }
+          return { game: request.game } as T;
+        }
         case 'outcome': {
           const pending = deletes.get(request.operation);
           if (pending) return await pending.done as T;
@@ -97,7 +115,16 @@ export function createMockBridge(): Bridge {
           publish();
           return { game: id } as T;
         }
-        case 'save_set': return { location: '~/Documents/Saves', active: [{ root: '~/Documents/Saves' }] } as T;
+        case 'save_set': {
+          if (state.games.find((g) => g.id === request.game)?.kind === 'custom') {
+            return { location: '~/Documents/Saves', active: [{ root: '~/Documents', filter: { kind: 'exact', value: 'Saves' } }] } as T;
+          }
+          const catalog: SaveTarget[] = [
+            { root: '~/Documents/My Games/Example', filter: { kind: 'pattern', value: 'Players/*.plr' } },
+            { root: '~/Library/Application Support', filter: { kind: 'exact', value: 'example' }, excludes: ['example/settings.ini'] },
+          ];
+          return { catalog, active: catalog } as T;
+        }
         case 'flush_preview': return { saved: 12, recovery: 3, temporary: 1, size: 48_000_000, items: [] } as T;
         case 'settings': {
           const { type: _, ...changes } = request;

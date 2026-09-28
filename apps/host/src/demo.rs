@@ -314,6 +314,17 @@ fn age_game(host: &Arc<Host>, game: &DemoGame) {
 /// Gives every game saves and a short history, then plays them forever.
 pub fn drive(host: Arc<Host>, processes: DemoProcesses) {
     let mut games = games(&host);
+    // The scripted games write their progress as they go, so Save and Load
+    // don't wait for them to close.
+    {
+        let mut inner = host.lock();
+        for game in &games {
+            if let Some(record) = inner.games.get_mut(&game.id) {
+                record.wait_for_exit = false;
+            }
+        }
+        host.publish(&mut inner);
+    }
     if games.len() > 1
         && let Some(broken) = games.pop()
     {

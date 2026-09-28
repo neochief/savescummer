@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [{
+      "title": "SaveScummer",
+      "width": 800,
+      "height": 680,
+      "minWidth": 700,
+      "maxWidth": 800,
+      "minHeight": 480,
+      "backgroundColor": "#1c1918",
+      "theme": "Dark",
+      "decorations": false,
+      "center": true
+    }]
+  }
+}

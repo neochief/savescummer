@@ -68,6 +68,40 @@ fn a_run_is_saved_loaded_and_reverted_while_playing() {
 }
 
 #[test]
+fn a_game_that_saves_on_exit_is_locked_while_it_runs() {
+    let world = World::new();
+    let saves = world.home.join("Saves").join("Quitter");
+    let slot = saves.join("slot.sav");
+    write(&slot, "sector 1");
+    let _host = world.host();
+    let (game, exe) = world.custom_game_waiting("Quitter", &saves);
+    assert_eq!(world.game(&game)["wait_for_exit"], true, "the lock is on by default");
+    world.ok(&["save", &game]);
+
+    // While it runs, Save, Load and the hotkeys are refused before anything is created.
+    let mut running = launch(&exe, &[]);
+    let summary = world.wait_game(&game, "the game is running", |g| g["running"] == true);
+    assert_eq!(summary["save"]["reason"], "game_running");
+    assert_eq!(summary["load"]["reason"], "game_running");
+    for args in
+        [vec!["save", game.as_str()], vec!["load", game.as_str()], vec!["hotkey", "save"], vec!["hotkey", "load"]]
+    {
+        let out = world.cli(&args);
+        assert_eq!(out.error_kind(), "game_running", "{args:?}: {}", out.stdout);
+    }
+    assert_eq!(world.kinds(&game), vec!["saved"], "nothing happened");
+
+    // The game writes its progress as it exits; from then on everything works at once.
+    write(&slot, "sector 4");
+    running.quit();
+    world.wait_game(&game, "the game exited", |g| g["save"]["available"] == true);
+    let saved = world.ok(&["save", &game]);
+    write(&slot, "sector 6");
+    world.ok(&["load", &game, "--checkpoint", &s(&saved["result"]["checkpoint"])]);
+    assert_eq!(read(&slot), "sector 4");
+}
+
+#[test]
 fn load_this_save_restores_an_exact_older_checkpoint() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Picker");

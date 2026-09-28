@@ -173,6 +173,9 @@ enum Cmd {
         reset_exe: bool,
         #[arg(long)]
         reset_saves: bool,
+        /// Refuse saves and loads while the game runs (it writes its progress on exit).
+        #[arg(long)]
+        wait_for_exit: Option<OnOff>,
     },
     /// Scan for games (and re-check checkpoints with --full).
     Scan {
@@ -655,7 +658,7 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
             let response = s.send(Command::AddGame { name, executable: exe, save_location: saves })?;
             Ok(s.report(&response, |v| format!("added {}", v.get("game").and_then(|g| g.as_str()).unwrap_or_default())))
         }
-        Cmd::Configure { game, name, exe, saves, reset_exe, reset_saves } => {
+        Cmd::Configure { game, name, exe, saves, reset_exe, reset_saves, wait_for_exit } => {
             let response = s.send(Command::Configure {
                 game,
                 name,
@@ -663,6 +666,7 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
                 save_location: saves,
                 reset_executable: reset_exe,
                 reset_save_location: reset_saves,
+                wait_for_exit: wait_for_exit.map(OnOff::value),
             })?;
             Ok(s.report(&response, |_| "configured".into()))
         }

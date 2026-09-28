@@ -27,6 +27,8 @@ export interface Game {
   install_tag?: string;
   installed: boolean;
   running: boolean;
+  /** Save, Load and Revert are refused while the game runs (`game_running`): it writes its progress only on exit. */
+  wait_for_exit?: boolean;
   kind?: 'known' | 'custom';
   executable?: string;
   executable_overridden?: boolean;
@@ -56,10 +58,16 @@ export interface HostState {
     checkpoint_store: string; save_shortcut?: string; load_shortcut?: string };
 }
 
+export interface SaveTarget {
+  root: string;
+  filter: { kind: 'all' } | { kind: 'exact' | 'pattern'; value: string };
+  excludes?: string[];
+}
+
 export interface SaveSet {
-  catalog?: Array<{ root: string }>;
+  catalog?: SaveTarget[];
   location?: string;
-  active: Array<{ root: string }>;
+  active: SaveTarget[];
   catalog_problem?: string;
 }
 
@@ -103,13 +111,14 @@ export type UiRequest =
   | { type: 'scan' }
   | { type: 'outcome'; operation: string }
   | { type: 'add_game'; name: string; executable: string; save_location: string }
-  | { type: 'configure'; game: string; name?: string; executable?: string; save_location?: string; reset_executable: boolean; reset_save_location: boolean }
+  | { type: 'configure'; game: string; name?: string; executable?: string; save_location?: string; reset_executable: boolean; reset_save_location: boolean; wait_for_exit?: boolean }
   | { type: 'save_set'; game: string }
   | { type: 'settings'; play_sounds?: boolean; launch_on_startup?: boolean; save_shortcut?: string; load_shortcut?: string }
   | { type: 'flush_preview'; game: string; cursor?: string; limit?: number }
   | { type: 'flush'; game: string }
   | { type: 'open_checkpoints'; game: string; resolve_only?: boolean }
-  | { type: 'open_executable'; game: string };
+  | { type: 'open_executable'; game: string }
+  | { type: 'open_saves'; game: string; target: number };
 
 export interface HostResponse<T> {
   v: number;

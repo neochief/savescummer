@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { App, relativeAge } from './App';
 import { displayShortcut, shortcutError, shortcutWarning } from './shortcuts';
 import type { Bridge } from './bridge';
-import type { Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
+import type { Game, HistoryEntry, HistoryPage, HostState, Operation, SaveSet, SaveTarget, UiRequest } from './types';
 
 afterEach(cleanup);
 beforeAll(() => {
@@ -50,12 +50,13 @@ class FakeBridge implements Bridge {
     if (request.type === 'cancel_delete' || request.type === 'set_label') return {} as T;
     if (request.type === 'add_game') return { game: 'custom-1' } as T;
     if (request.type === 'open_checkpoints') return { path: `/store/${request.game}`, opened: !request.resolve_only } as T;
-    if (request.type === 'save_set') return { location: '/old/saves', active: [{ root: '/old/saves' }] } as T;
+    if (request.type === 'save_set') return this.saveSet as T;
     if (request.type === 'flush_preview') return { saved: 1, recovery: 0, temporary: 0, size: 4096, items: [] } as T;
     if (request.type === 'settings' && this.settingsError) throw new Error(this.settingsError);
     if (request.type === 'settings' || request.type === 'configure') return {} as T;
     return this.outcome as Promise<T>;
   }
+  saveSet: SaveSet = { location: '/old/saves', active: [{ root: '/old', filter: { kind: 'exact', value: 'saves' } }] };
   report = vi.fn(async () => undefined);
   capture = vi.fn(async () => undefined);
   artwork = vi.fn(async () => 'blob:fake');
@@ -129,6 +130,37 @@ test('Save stays busy until the host outcome succeeds', async () => {
   expect(screen.queryByText('DONE')).toBeNull();
   finish({ id: 'op-1', kind: 'save', status: 'succeeded' });
   expect(await screen.findByText('DONE')).toBeTruthy();
+});
+
+test('a running game that saves on exit covers the actions and hides row loads until it has exited', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  const locked = { available: false, reason: 'game_running' };
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
+    games: bridge.state.games.map((game) => game.id === 'a' ? { ...game, running: true, save: locked, load: locked } : game) }));
+  const panel = screen.getByRole('status', { name: 'Exit the game first' });
+  expect(within(panel).getByText('Save and Exit the game')).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'save Game A' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(document.querySelectorAll('.row-button:not(.locked)')).toHaveLength(0);
+
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3 }));
+  expect(screen.queryByRole('status', { name: 'Exit the game first' })).toBeNull();
+  expect(document.querySelectorAll('.row-button.locked')).toHaveLength(0);
+});
+
+test('Configure turns waiting for the game to close off', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0] = { ...bridge.state.games[0], executable: '/games/a.exe', wait_for_exit: true };
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const check = within(dialog).getByRole('checkbox', { name: /Wait for the game to close/ }) as HTMLInputElement;
+  expect(check.checked).toBe(true);
+  fireEvent.click(check);
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual(expect.objectContaining({ type: 'configure', game: 'a', wait_for_exit: false })));
 });
 
 test('host rejection is shown on the initiating control', async () => {
@@ -247,6 +279,25 @@ test('Configure offers Reset only where a path differs from the default', async 
   expect(resets()).toHaveLength(0);
 });
 
+test('Configure lists the catalog save paths when no location is set', async () => {
+  const bridge = new FakeBridge();
+  const catalog: SaveTarget[] = [
+    { root: '/lib/Application Support', filter: { kind: 'exact', value: 'game' }, excludes: ['game/settings.ini'] },
+    { root: '/docs/Game', filter: { kind: 'pattern', value: 'Worlds/*.wld' } },
+  ];
+  bridge.saveSet = { catalog, active: catalog };
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const paths = () => within(dialog).queryAllByLabelText('Save location').map((input) => (input as HTMLInputElement).value);
+  await waitFor(() => expect(paths()).toEqual(['/lib/Application Support/game', '/docs/Game/Worlds/*.wld']));
+  expect(within(dialog).getByText('Except settings.ini')).toBeTruthy();
+  fireEvent.click(within(dialog).getAllByRole('button', { name: 'Open save location' })[1]);
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'open_saves', game: 'a', target: 1 }));
+  expect(within(dialog).queryByRole('button', { name: 'Reset' })).toBeNull();
+});
+
 test('Configure offers executable Reset when the host reports an override', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0] = { ...bridge.state.games[0], executable: '/custom/a.exe', executable_overridden: true };
@@ -258,13 +309,14 @@ test('Configure offers executable Reset when the host reports an override', asyn
   expect(within(dialog).getAllByRole('button', { name: 'Reset' })).toHaveLength(2);
 });
 
-test('only the most recent save row is primary; other rows are muted', async () => {
+test('only the most recent save row is primary; loads and other rows are muted', async () => {
   const bridge = new FakeBridge();
-  bridge.pages.a = { rows: [row('cp-a', 'Latest'), row('cp-old', 'Older')] };
+  const loaded: HistoryEntry = { ...row('cp-recovery', 'Loaded one'), kind: 'loaded', actions: { load: false, revert: true, delete: true } };
+  bridge.pages.a = { rows: [loaded, row('cp-a', 'Latest'), row('cp-old', 'Older')] };
   const { container } = render(<App bridge={bridge} />);
   await screen.findByText('Older');
   const rows = [...container.querySelectorAll('.history-row')];
-  expect(rows.map((element) => element.classList.contains('primary'))).toEqual([true, false]);
+  expect(rows.map((element) => element.classList.contains('primary'))).toEqual([false, true, false]);
 });
 
 test('closing a dialog restores focus to its opener', async () => {

@@ -165,6 +165,10 @@ pub fn submit(
             Ok(op) if op.kind == "load" => cue(host, Cue::LoadStart),
             Ok(_) => {}
             Err(f) if f.kind == ErrorKind::Busy => cue(host, Cue::Busy),
+            Err(f) if f.kind == ErrorKind::GameRunning => {
+                cue(host, Cue::Busy);
+                notify_exit_first(host, f.game.as_deref().unwrap_or(game));
+            }
             Err(f) => {
                 cue(host, Cue::Failed);
                 notify_failure(host, f);
@@ -370,6 +374,11 @@ fn preflight(host: &Arc<Host>, game_id: &str, request: &Request) -> Result<Prepa
         );
     }
     let derived = inner.derived.get(game_id).cloned().unwrap_or_default();
+    if matches!(request, Request::Save { .. } | Request::Load { .. } | Request::Revert { .. })
+        && crate::host::exit_first(&inner, game_id)
+    {
+        return Err(Failure::new(ErrorKind::GameRunning, "exit the game first: it writes its progress when it exits"));
+    }
     match request {
         Request::Delete { checkpoint } => {
             let record = db::checkpoint(host.db().conn(), checkpoint)
@@ -1120,6 +1129,15 @@ fn notify_failure(host: &Host, failure: &Failure) {
     if let Some(integration) = host.integration.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
         let game = failure.game.clone().unwrap_or_default();
         integration.notify("SaveScummer", &format!("{game}: {}", failure.kind.as_str().replace('_', " ")));
+    }
+}
+
+/// A hotkey press while the game runs: the user is in the game and sees no
+/// window.
+fn notify_exit_first(host: &Host, game_id: &str) {
+    let name = host.lock().games.get(game_id).map(|g| g.name.clone()).unwrap_or_default();
+    if let Some(integration) = host.integration.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        integration.notify("SaveScummer", &format!("Save and exit {name} to save or load checkpoints."));
     }
 }
 

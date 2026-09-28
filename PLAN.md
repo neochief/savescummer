@@ -72,6 +72,7 @@ The app is three programs:
 | [PLAN-BUILD.md](PLAN-BUILD.md) | Builds, packaging, installers, CI and releases. | The few things the app must provide, listed there |
 | [PLAN-MACOS.md](PLAN-MACOS.md) | What macOS needs beyond the shared design: its adapters, its packaging and the decisions macOS forces. | PLAN-HOST, PLAN-BUILD |
 | [PLAN-ERRORS.md](PLAN-ERRORS.md) | A catalog of failure and interruption scenarios: what the host detects, what the user sees, how to test it. Spans host and UI. | PLAN-HOST, PLAN-UI |
+| [PLAN-LOCKDOWN.md](PLAN-LOCKDOWN.md) | When a game's Save or Load is impossible for the game's own reasons (running, no saves, save location problems), the panel that explains each, and the checkpoint kept when a game exits. | PLAN-HOST, PLAN-UI |
 
 Rules for the plans:
 

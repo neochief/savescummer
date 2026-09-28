@@ -257,6 +257,7 @@ impl Host {
             store: game.store().map(str::to_string),
             installed: game.installed,
             running: inner.stack.contains(&game.id),
+            wait_for_exit: game.wait_for_exit,
             info: game.info.clone(),
             executable: game.main_executable().map(|p| p.to_string_lossy().into_owned()),
             executable_overridden: game.executable.is_some(),
@@ -380,6 +381,12 @@ pub fn latest_usable<'a>(
         .max_by(|a, b| a.created_at.cmp(&b.created_at).then(a.seq.cmp(&b.seq)))
 }
 
+/// The game runs and writes its progress only when it exits, so nothing on
+/// disk is worth a Save, and a Load would be overwritten when it exits.
+pub fn exit_first(inner: &Inner, game_id: &str) -> bool {
+    inner.games.get(game_id).is_some_and(|g| g.wait_for_exit) && inner.stack.contains(game_id)
+}
+
 /// Why Save and Load are or aren't available right now.
 pub fn availability(inner: &Inner, game: &Game, derived: &Derived, cache: &GameCache) -> (Availability, Availability) {
     let common = || -> Option<ErrorKind> {
@@ -400,6 +407,9 @@ pub fn availability(inner: &Inner, game: &Game, derived: &Derived, cache: &GameC
         }
         if inner.busy.contains_key(&game.id) {
             return Some(ErrorKind::Busy);
+        }
+        if exit_first(inner, &game.id) {
+            return Some(ErrorKind::GameRunning);
         }
         if let Ok(targets) = &derived.active
             && targets.iter().any(|t| t.presence == Presence::Unknown)

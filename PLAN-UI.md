@@ -352,6 +352,8 @@ App-wide preferences belong to the Settings dialog, opened by `⚙ Settings` bel
 
 While a save, load, revert, deletion or Flush is running for a game, every control that could start another operation *for that game* is disabled: Save, Load, the history row actions and the `···` commands. The sidebar and other games stay fully usable. A deletion countdown that is still pending does not make the game busy, and its Cancel stays usable even while another operation runs.
 
+While the host reports `game_running` for Save and Load (a game with *wait for the game to close* on is running), a panel covers Save and Load, lined up with the first game card, and the buttons behind it are blurred and unclickable: `Save and Exit the game` (large), `to save or load any checkpoints` (smaller), and `We can only intercept the game progress after the game saves it to disk.` The history's Load and Revert buttons are hidden, keeping their space. The panel goes away as soon as the host reports the game exited.
+
 The control that started a Save, Load or Revert shows a rotating `arrows-rotate` icon and a progressive label (`SAVING`, `LOADING`, or `REVERTING`), whether it's a main or history-row button. There is no progress bar or percentage. The cursor is `wait` over the window while busy. On success, the control briefly shows a check and becomes clickable again. There is no success dialog.
 
 
@@ -386,6 +388,7 @@ Details that are easy to get wrong:
 - Keep day headings for scanning: `Today 2026-09-27`, `Yesterday 2026-09-26`, the full localized weekday plus date for recent days, and `yyyy-MM-dd` alone for older dates. Use centered 12 px/600 uppercase headings aligned with `INSTALLED`; the date is quieter. Show the date once per section, never in its event rows. Retain full timestamps in the data and associate each row with its section heading for accessibility.
 - Give every entry the same borderless background, 8 px radius, 8 px inner padding and 8 px gap. Day headings remain outside the boxes. Virtualization must preserve these dimensions.
 - The time column fits all eight characters without truncation. Exact event times never change as entries age; only the optional age line updates. Long chips truncate before the fixed action column while keeping the tag icon visible. Labels remain white in every state. Separate dates, labels and times with spacing; do not insert decorative middle dots.
+- Only the row of the latest checkpoint, the one the main Load restores, keeps full contrast and the hover background at rest; every other row is muted and gets the background only on hover. Only a deliberate Save produces that checkpoint: Loaded and Reverted rows, and their recovery points, are never highlighted, even when they are newer.
 - At local midnight, recalculate the day groups without moving the scroll position or resizing rows.
 - User-created Save, Load, row Load and Revert entries slide in and glow red for about 3 seconds, and the history scrolls to the top. Background entries and midnight regrouping preserve the user's scroll position.
 
@@ -649,6 +652,7 @@ Custom game:
 - **Custom games** have an editable Name, the save location field directly (no catalog list) and no Reset.
 - **Open** next to the executable opens the folder holding the saved executable, through the host like every other folder. Why: it's the quickest way to check which install the app watches (Steam's or GOG's) or to reach the game's files. While the field differs from the saved value, Open is disabled with the tooltip `Save to open this folder`. Why not open the typed path: clients never pass the host a path to act on, and opening the old folder instead would look like a bug.
 - Changing the save location changes which checkpoints apply. Checkpoints made with the old location stay on disk but can't be loaded until the game uses that location again.
+- **Wait for the game to close before saving or loading**, a checkbox, on by default, below the paths. Below it, one line of yellow description text: most games write progress to disk only on Save & Quit, and this makes sure it's there before a checkpoint is made or loaded.
 - Changes are applied only after the host validates them. If validation fails, the error appears in the dialog like in Add custom game, the saved configuration doesn't change, and the entered values stay for the user to fix.
 - **Save** is the default button.
 

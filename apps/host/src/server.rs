@@ -279,7 +279,15 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             let id = library::add_custom(host, &name, &executable, &save_location)?;
             json(serde_json::json!({ "game": id }))
         }
-        Command::Configure { game, name, executable, save_location, reset_executable, reset_save_location } => {
+        Command::Configure {
+            game,
+            name,
+            executable,
+            save_location,
+            reset_executable,
+            reset_save_location,
+            wait_for_exit,
+        } => {
             let game = host.find_game(&host.lock(), &game)?;
             library::configure(
                 host,
@@ -290,6 +298,7 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
                     save_location: save_location.as_deref(),
                     reset_executable,
                     reset_save_location,
+                    wait_for_exit,
                 },
             )?;
             json(serde_json::json!({ "game": game }))

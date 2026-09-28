@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Bridge } from './bridge';
 import type { Failure, Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
 import { AppDialog, formatBytes, type DialogKind } from './Dialogs';
@@ -35,6 +36,42 @@ function Icon({ name, className = '' }: { name: string; className?: string }) {
 }
 
 // Scroll shadows fade in over the first 20px of scroll distance (0.1 at 1px, full at 20px).
+const mac = navigator.platform.includes('Mac');
+
+function Brand() {
+  return <div className="brand">
+    <img className="app-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
+    <span className="wordmark" aria-hidden="true"><span>Save</span><strong>Scummer</strong></span>
+  </div>;
+}
+
+// Windows runs undecorated (tauri.windows.conf.json), so the window bar draws its own caption buttons.
+function WindowControls() {
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    if (!('__TAURI_INTERNALS__' in window)) return;
+    const current = getCurrentWindow();
+    const sync = () => current.isMaximized().then(setMaximized, () => undefined);
+    sync();
+    const unlisten = current.onResized(sync);
+    return () => { unlisten.then((stop) => stop()); };
+  }, []);
+  const run = (action: 'minimize' | 'toggleMaximize' | 'close') => () => {
+    if ('__TAURI_INTERNALS__' in window) getCurrentWindow()[action]().catch(() => undefined);
+  };
+  return <div className="window-controls">
+    <button aria-label="Minimize window" onClick={run('minimize')}>
+      <svg viewBox="0 0 10 10"><path d="M0 5.5h10" /></svg>
+    </button>
+    <button aria-label={maximized ? 'Restore window' : 'Maximize window'} onClick={run('toggleMaximize')}>
+      <svg viewBox="0 0 10 10">{maximized ? <path d="M2.5 2.5V.5h7v7h-2M.5 2.5h7v7h-7z" /> : <path d="M.5.5h9v9h-9z" />}</svg>
+    </button>
+    <button className="close" aria-label="Close window" onClick={run('close')}>
+      <svg viewBox="0 0 10 10"><path d="M.5.5l9 9M9.5.5l-9 9" /></svg>
+    </button>
+  </div>;
+}
+
 function fadeStyle(above: number, below: number) {
   const opacity = (distance: number) => distance < 1 ? 0 : Math.min(1, 0.1 + 0.9 * (distance - 1) / 19);
   return { '--fade-top': opacity(above), '--fade-bottom': opacity(below) } as React.CSSProperties;
@@ -191,6 +228,15 @@ export function App({ bridge }: { bridge: Bridge }) {
   const { tops: itemTop, total: historyTotal } = useMemo(() => itemTops(virtualItems.map((item) => item.row)), [virtualItems]);
   const firstVisible = Math.max(0, itemAt(itemTop, scrollTop) - 5);
   const lastVisible = Math.min(virtualItems.length, itemAt(itemTop, scrollTop + viewportHeight) + 6);
+  // Each day gets a lane spanning its rows, so its header can stick until the next day's lane pushes it out.
+  const dayLanes = useMemo(() => {
+    const lanes: Array<{ key: string; day: string; start: number; end: number }> = [];
+    virtualItems.forEach((item, index) => {
+      if (!item.row) lanes.push({ key: item.key, day: item.day, start: index, end: index + 1 });
+      else lanes[lanes.length - 1].end = index + 1;
+    });
+    return lanes;
+  }, [virtualItems]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -471,7 +517,12 @@ export function App({ bridge }: { bridge: Bridge }) {
     const above = event.clientY < event.currentTarget.getBoundingClientRect().top + sidebarThumbTop;
     scroller.scrollBy({ top: (above ? -1 : 1) * scroller.clientHeight * 0.9, behavior: scrollMotion() });
   };
-  const busy = Boolean(selectedGame?.busy) || (feedback?.game === selected && feedback?.phase === 'busy');
+  // The host refuses Save, Load and Revert while a game that writes its progress only on exit runs: the actions give
+  // way to a panel until it has exited.
+  const exitFirst = selectedGame?.save.reason === 'game_running' || selectedGame?.load.reason === 'game_running';
+  const working = Boolean(selectedGame?.busy) || (feedback?.game === selected && feedback?.phase === 'busy');
+  // The lockdown disables the actions like an operation would, but nothing is working, so no wait cursor.
+  const busy = exitFirst || working;
   const hostError = selectedGame?.blocked || selectedGame?.config_error ||
     (selectedGame?.last_result?.status === 'failed' ? selectedGame.last_result.error : undefined);
   const dialogTarget = (dialogGame && state?.games.find((game) => game.id === dialogGame)) || selectedGame;
@@ -481,13 +532,16 @@ export function App({ bridge }: { bridge: Bridge }) {
     <Icon name="scan" />{scanFeedback || 'Scan for games'}
   </button>;
 
+  const noGames = !!state && visibleGames.length === 0;
+
   return (
-    <div className={`app ${busy ? 'is-busy' : ''} ${state && visibleGames.length === 0 ? 'no-games' : ''}`}>
+    <div className={`app ${working ? 'is-busy' : ''} ${noGames ? 'no-games' : ''}`}>
+      <header className="window-bar" data-tauri-drag-region>
+        {!noGames && <Brand />}
+        {!mac && <WindowControls />}
+      </header>
       <aside className="sidebar">
-        <div className="titlebar" data-tauri-drag-region>
-          <img className="app-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
-          <span className="wordmark" aria-hidden="true"><span>Save</span><strong>Scummer</strong></span>
-        </div>
+        {noGames && <Brand />}
         <div className="sidebar-surface">
           {installed.length > 0 && <h2 className="library-heading">INSTALLED</h2>}
           <div className={`library-scroll ${installed.length ? 'has-games' : ''}`} style={fadeStyle(sidebarScroll.top, sidebarScrollable ? sidebarScroll.content - sidebarScroll.viewport - sidebarScroll.top : 0)}>
@@ -511,17 +565,17 @@ export function App({ bridge }: { bridge: Bridge }) {
         </div>
       </aside>
       <main className="main">
-        <div className="main-title titlebar" data-tauri-drag-region />
         <p className="sr-only" role="status">{feedback?.phase === 'busy' ? `${feedback.action} in progress`
           : feedback?.phase === 'success' ? `${feedback.action} complete` : ''}</p>
         {status !== 'connected' && <p className="connection" role="status">{status.startsWith('reconnecting') ? 'Reconnecting to host…' : 'Connecting to host…'}</p>}
         {selectedGame ? <>
-          <div className="action-band" aria-label="Checkpoint actions">
+          <div className={`action-band ${exitFirst ? 'exit-first' : ''}`} aria-label="Checkpoint actions">
             <ActionButton action="save" game={selectedGame} feedback={feedback} busy={busy} now={now}
               shortcut={state?.settings?.save_shortcut} onClick={() => runAction('save')} />
             <ActionButton action="load" game={selectedGame} feedback={feedback} busy={busy} now={now}
               shortcut={state?.settings?.load_shortcut} onClick={() => runAction('load')}
               onJump={() => selectedGame.latest && jumpToCheckpoint(selectedGame.latest.id)} />
+            {exitFirst && <ExitFirst />}
           </div>
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
@@ -541,12 +595,19 @@ export function App({ bridge }: { bridge: Bridge }) {
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
               {virtualItems.length === 0 && !historyError && <p className="empty-history">Saves will appear here.</p>}
               <div className="history-virtual" style={{ height: historyTotal + (next ? 52 : 0) }}>
-                {virtualItems.slice(firstVisible, lastVisible).map(({ key, day, row }, offset) => {
+                {dayLanes.filter((lane) => lane.end > firstVisible && lane.start < lastVisible).map(({ key, day, start, end }) => {
+                  const top = itemTop[start];
+                  const reveal = { '--reveal-index': Math.min(Math.max(start - firstVisible, 0), 12) } as React.CSSProperties;
+                  return <div className="day-lane virtual-item" style={{ top, height: (itemTop[end] ?? historyTotal) - top, ...reveal }} key={key}>
+                    <div className="day" style={{ height: itemHeight() }}><h2>{dayHeading(day, now)}</h2></div>
+                  </div>;
+                })}
+                {virtualItems.slice(firstVisible, lastVisible).map(({ key, row }, offset) => {
                   const top = itemTop[firstVisible + offset];
                   const reveal = { '--reveal-index': Math.min(offset, 12) } as React.CSSProperties;
-                  if (!row) return <div className="day virtual-item" style={{ top, height: itemHeight(), ...reveal }} key={key}><h2>{dayHeading(day, now)}</h2></div>;
+                  if (!row) return null;
                   const pending = state?.deletes.find((item) => item.checkpoint === row.checkpoint && item.game === selected);
-                  return <div className="virtual-item" style={{ top, height: itemHeight(row), ...reveal }} key={key}><HistoryRow row={row} busy={busy} now={now} bridge={bridge}
+                  return <div className="virtual-item" style={{ top, height: itemHeight(row), ...reveal }} key={key}><HistoryRow row={row} busy={busy} locked={exitFirst} now={now} bridge={bridge}
                     primary={row.kind === 'saved' && row.checkpoint === selectedGame.latest?.id}
                     flash={flash === row.id} arrived={arrived.has(row.id)} deleteOperation={pending} deadline={pending && deleteDeadlines.current.get(pending.id)}
                     feedback={feedback?.game === selected ? feedback : undefined}
@@ -580,10 +641,12 @@ function CheckpointCard({ at, now, fullDate = false, label, labelSlot, action, t
   at: string; now: number; fullDate?: boolean; label?: string; labelSlot?: React.ReactNode;
   action?: CardAction; title?: string; className?: string;
 }) {
+  const time = new Date(at).toLocaleTimeString(undefined, { hour12: false });
+  const day = fullDate ? badgeDay(at, now) : undefined;
   const content = <>
-    <span className="checkpoint-when">
-      <time dateTime={at}>{fullDate ? formatBadgeTime(at, now) : new Date(at).toLocaleTimeString(undefined, { hour12: false })}</time>
-      <small>{relativeAge(new Date(at), now)}</small>
+    <span className={`checkpoint-when ${day ? 'dated' : ''}`}>
+      <time dateTime={at}>{day ?? time}</time>
+      <small>{day ? time : relativeAge(new Date(at), now)}</small>
     </span>
     {(labelSlot || label) && <span className="checkpoint-label">{labelSlot ?? <span className="checkpoint-label-text">{label}</span>}</span>}
   </>;
@@ -601,10 +664,7 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   const available = game[action].available;
   const current: Feedback | undefined = feedback?.game === game.id && feedback.action === action && !feedback.target ? feedback
     : game.busy?.kind === action ? { game: game.id, action, phase: 'busy' } : undefined;
-  const label = current?.phase === 'busy' ? `${action === 'save' ? 'SAVING' : 'LOADING'}…`
-    : current?.phase === 'success' ? 'DONE'
-    : current?.phase === 'error' ? 'FAILED'
-    : action.toUpperCase();
+  const label = current?.phase === 'error' ? 'FAILED' : action.toUpperCase();
   const reason = game[action].reason;
   const title = current?.message || (reason === 'access_needed'
     ? failureMessage(game.config_error || game.blocked, 'SaveScummer needs permission to access this game’s files.')
@@ -623,14 +683,17 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   }, [action]);
   return <div className="action-slot" style={action === 'load' ? { '--card-width': `${cardWidth}px` } as React.CSSProperties : undefined}>
     {available && <span className="shortcut-tab">
-      {displayShortcut(shortcut || `${navigator.platform.includes('Mac') ? 'Alt' : 'Ctrl'}+${action === 'save' ? 'F5' : 'F9'}`)}
+      {displayShortcut(shortcut || `${mac ? 'Alt' : 'Ctrl'}+${action === 'save' ? 'F5' : 'F9'}`)}
     </span>}
     <button className={`main-button ${action} ${current?.phase || ''}`} disabled={!available || busy}
       onClick={onClick} title={title || undefined} aria-label={`${action} ${game.name}`}>
       {/* The hidden widest labels keep the button from resizing as SAVE turns into SAVING… or FAILED,
           while the visible icon and text stay centered together at a fixed gap. */}
       <span className="main-content" data-busy={`${action === 'save' ? 'SAVING' : 'LOADING'}…`} data-failed="FAILED">
-        <span className="main-face"><Icon name={current?.phase === 'busy' ? 'busy' : current?.phase === 'success' ? 'success' : action} />{label}</span>
+        {/* Busy shows only a spinning icon, then a checkmark that pops in once done. */}
+        {current?.phase === 'busy' || current?.phase === 'success'
+          ? <span className="main-face icon-only" key={current.phase}><Icon name={current.phase} /></span>
+          : <span className="main-face"><Icon name={action} />{label}</span>}
       </span>
     </button>
     {action === 'load' && <span className="load-card" ref={cardRef}>{game.latest
@@ -640,9 +703,18 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   </div>;
 }
 
-function HistoryRow({ row, primary, busy, now, bridge, feedback, flash, arrived, deleteOperation, deadline,
+/** Covers Save and Load while the game runs: its progress reaches the disk only when it exits. */
+function ExitFirst() {
+  return <section className="exit-first-panel" role="status" aria-label="Exit the game first">
+    <strong>Save and Exit the game</strong>
+    <span className="exit-first-sub">to save or load any checkpoints</span>
+    <p>We can only intercept the game progress after the game saves it to disk.</p>
+  </section>;
+}
+
+function HistoryRow({ row, primary, busy, locked, now, bridge, feedback, flash, arrived, deleteOperation, deadline,
   onLoad, onRevert, onJump, onDelete, onCancelDelete }: {
-  row: HistoryEntry; primary: boolean; busy: boolean; now: number; bridge: Bridge; feedback?: Feedback; flash: boolean; arrived: boolean;
+  row: HistoryEntry; primary: boolean; busy: boolean; locked: boolean; now: number; bridge: Bridge; feedback?: Feedback; flash: boolean; arrived: boolean;
   deleteOperation?: Operation; deadline?: number;
   onLoad: () => void; onRevert: () => void; onJump: () => void; onDelete: () => void; onCancelDelete: () => void;
 }) {
@@ -655,35 +727,38 @@ function HistoryRow({ row, primary, busy, now, bridge, feedback, flash, arrived,
   }
   const active = feedback?.target === row.checkpoint && (feedback?.action === 'load' || feedback?.action === 'revert') ? feedback : undefined;
   const operation = row.actions.load ? 'load' : 'revert';
-  const rowLabel = active?.phase === 'busy' ? `${operation === 'load' ? 'LOADING' : 'REVERTING'}…`
-    : active?.phase === 'success' ? 'DONE' : active?.phase === 'error' ? 'FAILED' : operation.toUpperCase();
+  const rowLabel = active?.phase === 'error' ? 'FAILED' : operation.toUpperCase();
   const chip = row.label || (row.kind === 'loaded' && row.saved_at ? new Date(row.saved_at).toLocaleTimeString(undefined, { hour12: false }) : undefined)
     || (row.kind === 'reverted' && row.reverted_at ? new Date(row.reverted_at).toLocaleTimeString(undefined, { hour12: false }) : undefined);
   const count = Math.max(1, Math.ceil(((deadline || Date.now() + (deleteOperation?.remaining_ms || 0)) - now) / 1000));
   return <div id={`entry-${row.id}`} className={`history-row ${primary ? 'primary' : 'secondary'} ${flash ? 'flash' : ''} ${arrived ? 'arrived' : ''}`}>
-    <div className="history-main"><Icon name={row.kind} /><span>{name}</span></div>
     <div className="history-stamp">
       {row.kind === 'saved' && row.checkpoint
         ? <EditableCheckpointCard bridge={bridge} checkpoint={row.checkpoint} at={row.at} now={now} label={row.label} />
         : <CheckpointCard at={row.at} now={now} label={row.label}
           action={row.restored ? { icon: 'crosshairs', text: 'Locate', ariaLabel: `Jump to ${chip}`, onClick: onJump } : undefined} />}
     </div>
+    <div className="history-main"><Icon name={row.kind} /><span>{name}</span></div>
+    <div className="history-note">
+      {row.kind === 'loaded' && row.removed_files ? `Removed ${row.removed_files} newer save${row.removed_files === 1 ? '' : 's'}, kept in the recovery point` : ''}
+      {row.kind === 'loaded' && row.removed_files && row.cloud_replaced ? '; ' : ''}
+      {row.kind === 'loaded' && row.cloud_replaced ? 'Steam Cloud replaced the restored save' : ''}
+    </div>
     <div className={`history-actions ${deleteOperation ? 'deleting' : ''}`}>
-      {deleteOperation?.status === 'counting_down' && <><span>Deleting in {count}</span><button className="cancel-delete" onClick={onCancelDelete}>CANCEL</button></>}
-      {deleteOperation?.status === 'waiting' && <><span>Waiting to delete…</span><button className="cancel-delete" onClick={onCancelDelete}>CANCEL</button></>}
-      {deleteOperation?.status === 'running' && <span><Icon name="busy" />Deleting…</span>}
-      {!deleteOperation && (row.actions.load || row.actions.revert) && <button disabled={busy} className={`row-button ${row.actions.load ? '' : 'revert'}`}
+      {(row.actions.load || row.actions.revert) && <button disabled={busy || !!deleteOperation} className={`row-button ${row.actions.load ? '' : 'revert'} ${locked ? 'locked' : ''}`}
         onClick={row.actions.load ? onLoad : onRevert}
         aria-label={`${row.actions.load ? 'Load save' : 'Revert restore'} from ${date.toLocaleString()}`}>
-        <Icon name={active?.phase === 'busy' ? 'busy' : active?.phase === 'success' ? 'success' : 'load'} />{rowLabel}
+        {active?.phase === 'busy' || active?.phase === 'success'
+          ? <Icon key={active.phase} name={active.phase} className="icon-only" />
+          : <><Icon name="load" />{rowLabel}</>}
       </button>}
-      {row.kind === 'loaded' && (row.removed_files || row.cloud_replaced) && <div className="history-note">
-        {row.removed_files ? `Removed ${row.removed_files} newer save${row.removed_files === 1 ? '' : 's'}, kept in the recovery point` : ''}
-        {row.removed_files && row.cloud_replaced ? '; ' : ''}
-        {row.cloud_replaced ? 'Steam Cloud replaced the restored save' : ''}
-      </div>}
-      {!deleteOperation && row.actions.delete && <button disabled={busy} className="delete-button" onClick={onDelete}
+      {row.actions.delete && <button disabled={busy || !!deleteOperation} className="delete-button" onClick={onDelete}
         aria-label={`Delete checkpoint from ${date.toLocaleString()}`} title="Delete checkpoint"><Icon name="trash-can" /></button>}
+      {deleteOperation && <div className="delete-status">
+        {deleteOperation.status === 'counting_down' && <><span>Deleting in {count}</span><button className="cancel-delete" onClick={onCancelDelete}>CANCEL</button></>}
+        {deleteOperation.status === 'waiting' && <><span>Waiting to delete…</span><button className="cancel-delete" onClick={onCancelDelete}>CANCEL</button></>}
+        {deleteOperation.status === 'running' && <span><Icon name="busy" />Deleting…</span>}
+      </div>}
     </div>
   </div>;
 }
@@ -785,13 +860,12 @@ export function relativeAge(date: Date, now: number): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-function formatBadgeTime(value: string, now: number) {
+/** The day of a checkpoint older than today, shown above its time; undefined for today's, which show their age instead. */
+function badgeDay(value: string, now: number) {
   const date = new Date(value);
-  const time = date.toLocaleTimeString(undefined, { hour12: false });
   const today = new Date(now);
-  if (date.toDateString() === today.toDateString()) return time;
+  if (date.toDateString() === today.toDateString()) return undefined;
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-  const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  return `${day} ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }

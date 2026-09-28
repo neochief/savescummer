@@ -388,7 +388,22 @@ impl World {
     }
 
     /// Adds a custom game whose executable is a copy of the fake game.
+    /// A custom game played by the fake game, which writes its saves as it
+    /// goes: Save and Load don't wait for it to close.
     pub fn custom_game(&self, name: &str, saves: &Path) -> (String, PathBuf) {
+        let (game, exe) = self.custom_game_waiting(name, saves);
+        self.no_exit_wait(&game);
+        (game, exe)
+    }
+
+    /// The fake game writes its saves as it goes: Save and Load while it runs
+    /// don't wait for it to close.
+    pub fn no_exit_wait(&self, game: &str) {
+        self.ok(&["configure", game, "--wait-for-exit", "off"]);
+    }
+
+    /// A custom game as added: Save and Load wait for it to close.
+    pub fn custom_game_waiting(&self, name: &str, saves: &Path) -> (String, PathBuf) {
         let exe = self.root.join("games").join(name).join(format!("{name}.exe"));
         copy_game(&exe);
         let added =

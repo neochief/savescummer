@@ -328,7 +328,7 @@ pub fn open(host: &Arc<Host>, target: &OpenTarget, resolve_only: bool) -> Result
                 match derived.active {
                     Ok(targets) => targets
                         .get(*target)
-                        .map(|t| t.root.clone())
+                        .map(|t| t.claim())
                         .ok_or_else(|| Failure::new(ErrorKind::NotFound, "no such target"))?,
                     Err(f) => f.paths.first().map(PathBuf::from).ok_or(f)?,
                 }

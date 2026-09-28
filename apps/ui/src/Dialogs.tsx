@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Bridge } from './bridge';
-import type { FlushPreview, Game, HostState, SaveSet } from './types';
+import type { FlushPreview, Game, HostState, SaveSet, SaveTarget } from './types';
 import { capturedShortcut, displayShortcut, shortcutDescription, shortcutError, shortcutWarning } from './shortcuts';
 
 export type DialogKind = 'settings' | 'add' | 'configure' | 'flush';
@@ -12,6 +12,13 @@ function EyeIcon() {
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The full path a save target covers: its root plus the exact name or glob. */
+function targetPath({ root, filter }: SaveTarget) {
+  if (filter.kind === 'all') return root;
+  const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/';
+  return root.replace(/[\\/]+$/, '') + sep + filter.value.replaceAll('/', sep);
 }
 
 function shortcutMessage(text: string, shortcut: string) {
@@ -35,7 +42,7 @@ function DialogFrame({ title, kind, close, opener, children }: {
   return <dialog ref={ref} tabIndex={-1} className={`dialog dialog-${kind}`} aria-labelledby={`dialog-title-${kind}`}
     onCancel={(event) => { event.preventDefault(); close(); }}
     onClick={(event) => { if (event.target === ref.current) close(); }}>
-    <header><h2 id={`dialog-title-${kind}`}>{title}</h2><button type="button" className="dialog-close" onClick={close} aria-label="Close dialog">×</button></header>
+    <header><h2 id={`dialog-title-${kind}`}>{title}</h2><button type="button" className="dialog-close" onClick={close} aria-label="Close dialog"><img className="icon" src="/icons/xmark.svg" alt="" aria-hidden="true" /></button></header>
     {children}
   </dialog>;
 }
@@ -55,6 +62,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [name, setName] = useState(game?.kind === 'custom' ? game.name : '');
   const [executable, setExecutable] = useState(kind === 'configure' ? game?.executable || '' : '');
   const [resetExecutable, setResetExecutable] = useState(false);
+  const [waitForExit, setWaitForExit] = useState(game?.wait_for_exit !== false);
   const [location, setLocation] = useState('');
   const [focused, setFocused] = useState<'executable' | 'location'>();
   const [saveSet, setSaveSet] = useState<SaveSet>();
@@ -71,6 +79,14 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [capturing, setCapturing] = useState<'save' | 'load'>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  // A catalog game with no location of its own shows the catalog's paths, read-only.
+  const catalogTargets = kind === 'configure' && game?.kind !== 'custom' && location === '' && focused !== 'location' && saveSet?.catalog?.length
+    ? saveSet.catalog : undefined;
+  const catalogExcludes = (catalogTargets || []).flatMap((target) => (target.excludes || [])
+    .map((exclude) => target.filter.kind === 'exact' && exclude.startsWith(`${target.filter.value}/`) ? exclude.slice(target.filter.value.length + 1) : exclude));
+  const activeIndex = (target: SaveTarget) => (saveSet?.active || [])
+    .findIndex((active) => active.root === target.root && JSON.stringify(active.filter) === JSON.stringify(target.filter));
+  const openSaves = (target: number) => game && bridge.request({ type: 'open_saves', game: game.id, target }).catch((failure) => setError(message(failure)));
   const gameName = game ? `${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}` : '';
 
   useEffect(() => {
@@ -145,6 +161,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           executable: !resetExecutable && executable.trim() !== (game.executable || '') ? executable.trim() : undefined,
           save_location: location.trim() || undefined,
           reset_executable: resetExecutable, reset_save_location: !custom && !location.trim() && Boolean(saveSet?.location),
+          wait_for_exit: waitForExit !== (game.wait_for_exit !== false) ? waitForExit : undefined,
         });
         close();
       } else if (kind === 'settings') {
@@ -210,22 +227,42 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
             {focused !== 'executable' && !resetExecutable && (game.executable_overridden || executable !== (game.executable || ''))
               && <button type="button" className="dialog-reset" onClick={() => { setExecutable(game.executable || ''); setResetExecutable(true); }}>Reset</button>}
           </p>}
-          {kind === 'configure' && game?.kind !== 'custom' && saveSet?.catalog && <div className="catalog-paths"><span>Catalog save locations</span>{saveSet.catalog.map((target) => <code key={target.root}>{target.root}</code>)}</div>}
-          <div className="dialog-field"><label htmlFor="save-location">Save location</label><input id="save-location" value={location}
-            onFocus={() => setFocused('location')} onBlur={() => setFocused(undefined)}
-            onChange={(event) => setLocation(event.target.value)} required={kind === 'add' || game?.kind === 'custom'} />
-            <button type="button" onClick={() => browse('location')}>Change…</button>
-          </div>
-          <p className="dialog-below">
-            {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</span>
-              : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
-                && <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>}
-          </p>
+          {catalogTargets ? <>
+            <div className="dialog-field dialog-paths"><label htmlFor="save-location">Save location</label>
+              <span className="dialog-path-list">{catalogTargets.map((target, i) => {
+                const path = targetPath(target);
+                const active = activeIndex(target);
+                return <span className="dialog-input" key={path}><input id={i === 0 ? 'save-location' : undefined} aria-label={i === 0 ? undefined : 'Save location'} value={path} disabled />
+                  <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder" disabled={active < 0}
+                    onClick={() => openSaves(active)}><EyeIcon /></button></span>;
+              })}</span>
+              <button type="button" onClick={() => browse('location')}>Change…</button>
+            </div>
+            {catalogExcludes.length > 0 && <p className="dialog-below"><span className="dialog-hint">Except {catalogExcludes.join(', ')}</span></p>}
+          </> : <>
+            <div className="dialog-field"><label htmlFor="save-location">Save location</label><span className="dialog-input"><input id="save-location" value={location}
+              onFocus={() => setFocused('location')} onBlur={() => setFocused(undefined)}
+              onChange={(event) => setLocation(event.target.value)} required={kind === 'add' || game?.kind === 'custom'} />
+                {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder"
+                  disabled={!saveSet?.location || location !== saveSet.location || !saveSet.active.length} onClick={() => openSaves(0)}><EyeIcon /></button>}</span>
+              <button type="button" onClick={() => browse('location')}>Change…</button>
+            </div>
+            <p className="dialog-below">
+              {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</span>
+                : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
+                  && <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>}
+            </p>
+          </>}
           {saveSet?.catalog_problem && <p className="dialog-hint">{saveSet.catalog_problem}</p>}
           {kind === 'configure' && game && <div className="dialog-field"><label htmlFor="checkpoints-store">Checkpoints store</label>
             <span className="dialog-input"><input id="checkpoints-store" value={checkpointsPath} disabled />
               <button type="button" className="dialog-icon-button" aria-label="Open checkpoints store" title="Show in folder"
                 onClick={() => bridge.request({ type: 'open_checkpoints', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button></span>
+          </div>}
+          {kind === 'configure' && game && <div className="dialog-exit-wait">
+            <label className="dialog-check"><input type="checkbox" checked={waitForExit} onChange={(event) => setWaitForExit(event.target.checked)} />
+              Wait for the game to close before saving or loading</label>
+            <p className="dialog-exit-wait-note">Most games write progress to disk only on Save &amp; Quit. This makes sure it’s there before a checkpoint is made or loaded.</p>
           </div>}
           {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
         </>}

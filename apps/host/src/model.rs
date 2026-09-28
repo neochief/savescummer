@@ -51,9 +51,21 @@ pub struct Game {
     pub executable: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<UserLocation>,
+    /// Save, Load and Revert are refused while the game runs: it writes its
+    /// progress to disk only when it exits. On unless the user turned it off.
+    #[serde(default = "yes", skip_serializing_if = "is_yes")]
+    pub wait_for_exit: bool,
     /// Creation order, so custom games and records keep a stable order.
     #[serde(default)]
     pub created: u64,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_yes(value: &bool) -> bool {
+    *value
 }
 
 impl Game {

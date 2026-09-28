@@ -73,6 +73,7 @@ enum UiRequest {
         save_location: Option<String>,
         reset_executable: bool,
         reset_save_location: bool,
+        wait_for_exit: Option<bool>,
     },
     SaveSet {
         game: String,
@@ -100,6 +101,10 @@ enum UiRequest {
     OpenExecutable {
         game: String,
     },
+    OpenSaves {
+        game: String,
+        target: usize,
+    },
 }
 
 impl UiRequest {
@@ -118,9 +123,23 @@ impl UiRequest {
             Self::Scan => Command::Scan { full: false },
             Self::Outcome { operation } => Command::Outcome { operation, wait: true },
             Self::AddGame { name, executable, save_location } => Command::AddGame { name, executable, save_location },
-            Self::Configure { game, name, executable, save_location, reset_executable, reset_save_location } => {
-                Command::Configure { game, name, executable, save_location, reset_executable, reset_save_location }
-            }
+            Self::Configure {
+                game,
+                name,
+                executable,
+                save_location,
+                reset_executable,
+                reset_save_location,
+                wait_for_exit,
+            } => Command::Configure {
+                game,
+                name,
+                executable,
+                save_location,
+                reset_executable,
+                reset_save_location,
+                wait_for_exit,
+            },
             Self::SaveSet { game } => Command::SaveSet { game },
             Self::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } => {
                 Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut }
@@ -134,6 +153,9 @@ impl UiRequest {
             }
             Self::OpenExecutable { game } => {
                 Command::Open { target: OpenTarget::Executable { game }, resolve_only: false }
+            }
+            Self::OpenSaves { game, target } => {
+                Command::Open { target: OpenTarget::TargetRoot { game, target }, resolve_only: false }
             }
         }
     }

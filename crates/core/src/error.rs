@@ -53,6 +53,9 @@ pub enum ErrorKind {
     NoSaveLocation,
     /// Another operation runs for this game.
     Busy,
+    /// The game runs and writes its progress only when it exits: Save,
+    /// Load and Revert wait until it has exited.
+    GameRunning,
     /// The game waits on an unresolved interruption.
     Blocked,
     /// The game, checkpoint or operation doesn't exist.
@@ -112,6 +115,7 @@ impl ErrorKind {
             ErrorKind::NoSaves => "no_saves",
             ErrorKind::NoSaveLocation => "no_save_location",
             ErrorKind::Busy => "busy",
+            ErrorKind::GameRunning => "game_running",
             ErrorKind::Blocked => "blocked",
             ErrorKind::NotFound => "not_found",
             ErrorKind::Gone => "gone",
