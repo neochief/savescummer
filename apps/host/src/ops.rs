@@ -954,14 +954,14 @@ fn run_delete(host: &Arc<Host>, op_id: &str, game_id: &str, checkpoint: &str) ->
             let _ = db::set_checkpoint_state(host.db().conn(), &record.id, "deleted");
             Ok(OpResult { checkpoint: Some(record.id.clone()), count: Some(1), ..Default::default() })
         }
-        Err(snap::DisposeError::Rename(f)) => Err(f),
+        Err(snap::DisposeError::Rename(f)) => Err(*f),
         Err(snap::DisposeError::Remove(disposal, f)) => {
             let relative = disposal.strip_prefix(&store).unwrap_or(&disposal).to_string_lossy().replace('\\', "/");
             let _ = host.db().write(|c| {
                 db::set_checkpoint_folder(c, &record.id, &relative)?;
                 db::set_checkpoint_state(c, &record.id, "deleting")
             });
-            Err(f)
+            Err(*f)
         }
     };
     let mut inner = host.lock();
@@ -1003,7 +1003,8 @@ fn run_flush(host: &Arc<Host>, op_id: &str, game_id: &str) -> Result<OpResult, F
             snap::remove_disposal(&path)
         } else {
             snap::dispose(&path, &new_id("f")).map_err(|e| match e {
-                snap::DisposeError::Rename(f) | snap::DisposeError::Remove(_, f) => f,
+                snap::DisposeError::Rename(f) => *f,
+                snap::DisposeError::Remove(_, f) => *f,
             })
         };
         match result {

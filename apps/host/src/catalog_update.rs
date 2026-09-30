@@ -27,9 +27,9 @@ use savescummer_ipc::Phase;
 use crate::fetch::{self, Fetched};
 use crate::host::{self, Host};
 
-/// Where released catalogs live: the bundle on the main branch, rebuilt by
-/// `cargo xtask catalog` whenever the game list or the addendum changes.
-pub const CATALOG_URL: &str = "https://raw.githubusercontent.com/neochief/savescummer/main/catalog/catalog.json";
+/// The release branch is the catalog update channel for installed builds.
+/// Publish only bundles compatible with the released host to this branch.
+pub const CATALOG_URL: &str = "https://raw.githubusercontent.com/neochief/savescummer/release/catalog/catalog.json";
 
 /// Far above today's bundle (~130 KB), far below anything worth reading.
 const MAX_BUNDLE: u64 = 16 * 1024 * 1024;

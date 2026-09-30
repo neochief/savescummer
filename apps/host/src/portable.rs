@@ -50,7 +50,7 @@ fn map_paths(game: &mut Game, map: impl Fn(&Path) -> PathBuf) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use savescummer_catalog::KnownFolders;
@@ -59,7 +59,6 @@ mod tests {
         Portable::new(&KnownFolders { home: Some(home.into()), ..Default::default() }, false)
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_stored_record_names_no_user_and_loads_on_another_pc() {
         let record = r#"{"id":"custom-1","kind":"custom","name":"Game","installed":true,

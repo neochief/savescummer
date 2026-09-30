@@ -119,6 +119,7 @@ pub mod serde_path {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     fn portable(home: &str) -> Portable {
         Portable::new(&KnownFolders { home: Some(home.into()), ..Default::default() }, false)
     }

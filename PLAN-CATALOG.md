@@ -775,6 +775,9 @@ resolver isn't consulted for it, and it never changes on its own.
   SHA-256 verification, size cap, schema validation (same parser as build-time),
   atomic replacement in `%LOCALAPPDATA%\SaveScummer\catalog`, and last-good
   retention. Any failure falls back silently to the previous/embedded bundle.
+- The installed host's default raw URL points at `release/catalog/catalog.json`.
+  Advance `release` only with bundles compatible with installed versions;
+  a release tag alone does not move this update channel.
 - A changed bundle revision triggers a rescan. `--no-catalog-update` disables
   fetching for tests and isolated runs; a CLI command reports the active bundle
   revision and refreshes it on demand.

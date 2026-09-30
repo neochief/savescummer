@@ -190,6 +190,8 @@ Version resources: `apps/host/build.rs` and `apps/cli/build.rs` embed the Cargo 
 
 ## RELEASING
 
+The installed host downloads catalog updates from `release/catalog/catalog.json` on GitHub. Create the `release` branch from a commit with a compatible catalog before shipping a build that uses this URL. Advance that branch only after CI passes and its catalog remains readable by installed versions; tag the release commit on that branch. A tag alone does not move the catalog channel.
+
 1. `cargo xtask release 1.2.3` on a clean branch: checks the version is new and the tag free (locally and on origin), writes it into `Cargo.toml`, the Tauri config and the UI package manifest, refreshes `Cargo.lock`, runs `check` (`--skip-checks` for emergencies), commits "Release 1.2.3", tags `v1.2.3` and pushes both. `--no-push` prints the two push commands instead. If anything fails before the commit, the bump is undone.
 2. The tag starts `.github/workflows/release.yml`: Windows and macOS jobs run `cargo xtask dist` and upload their release files; a final job runs `cargo xtask publish`.
 3. `publish` checks that `gh` is logged in, the tag points at `HEAD`, and `dist/` holds exactly the Windows installer and macOS disk image. It creates a draft release (or re-uploads to an existing draft), and refuses if the release is already published.

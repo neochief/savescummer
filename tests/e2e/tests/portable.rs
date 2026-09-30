@@ -75,7 +75,11 @@ fn the_stored_configuration_names_no_user_folder() {
 
     let stored = stored(&world, &store);
     assert!(!contains_path(&stored, &world.home), "no user folder is stored: {stored}");
-    assert!(stored.contains(&world.portable(&exe).replace('\\', "\\\\")), "{stored}");
+    let storage = Storage::open(&world.data.join("host.db")).unwrap();
+    let games = savescummer_storage::games(storage.conn()).unwrap();
+    let (_, record) = games.iter().find(|(id, _)| id == &game).unwrap();
+    let record: serde_json::Value = serde_json::from_str(record).unwrap();
+    assert_eq!(record["executable"], world.portable(&exe));
 }
 
 #[test]

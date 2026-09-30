@@ -284,16 +284,16 @@ pub fn dispose(dir: &Path, token: &str) -> Result<(), DisposeError> {
     let parent = dir.parent().unwrap_or(Path::new("."));
     let disposal = parent.join(format!("{DISPOSAL_PREFIX}{token}"));
     fsx::rename_noreplace(dir, &disposal)
-        .map_err(|e| DisposeError::Rename(fsx::failure(fsx::rename_kind(&e), &e, dir)))?;
-    remove_disposal(&disposal).map_err(|f| DisposeError::Remove(disposal.clone(), f))
+        .map_err(|e| DisposeError::Rename(Box::new(fsx::failure(fsx::rename_kind(&e), &e, dir))))?;
+    remove_disposal(&disposal).map_err(|f| DisposeError::Remove(disposal.clone(), Box::new(f)))
 }
 
 #[derive(Debug)]
 pub enum DisposeError {
     /// Nothing was touched.
-    Rename(Failure),
+    Rename(Box<Failure>),
     /// Renamed, but not fully removed; leftovers are cleaned up later.
-    Remove(PathBuf, Failure),
+    Remove(PathBuf, Box<Failure>),
 }
 
 pub fn remove_disposal(path: &Path) -> Result<(), Failure> {
