@@ -6,6 +6,7 @@
 
 mod common;
 
+use std::path::Path;
 use std::time::Duration;
 
 use common::*;
@@ -13,6 +14,20 @@ use serde_json::json;
 
 fn top(world: &World) -> String {
     s(&world.state()["active_stack"][0])
+}
+
+fn wait_in_front(world: &World, game: &str, activate_file: &Path, label: &str) {
+    wait_for(label, Duration::from_secs(20), || {
+        if top(world) == game {
+            let _ = std::fs::remove_file(activate_file);
+            Some(())
+        } else {
+            // A newly launched background process may be denied the first
+            // activation request. Keep asking its own window to come forward.
+            std::fs::write(activate_file, "").unwrap();
+            None
+        }
+    });
 }
 
 #[test]
@@ -55,15 +70,14 @@ fn the_frontmost_app_is_the_top_of_the_stack() {
             world.ok(&["add-game", "--name", name, "--exe", app.to_str().unwrap(), "--saves", saves.to_str().unwrap()]);
         games.push((s(&added["game"]), exe, world.root.join(format!("activate-{name}"))));
     }
-    let [(a, exe_a, activate_a), (b, exe_b, _)] = &games[..] else { unreachable!() };
+    let [(a, exe_a, activate_a), (b, exe_b, activate_b)] = &games[..] else { unreachable!() };
 
     let _running_a = launch(exe_a, &["--window", "--activate-file", activate_a.to_str().unwrap()]);
-    wait_for("A in front", Duration::from_secs(20), || (top(&world) == *a).then_some(()));
-    let _running_b = launch(exe_b, &["--window"]);
-    wait_for("B in front", Duration::from_secs(20), || (top(&world) == *b).then_some(()));
+    wait_in_front(&world, a, activate_a, "A in front");
+    let _running_b = launch(exe_b, &["--window", "--activate-file", activate_b.to_str().unwrap()]);
+    wait_in_front(&world, b, activate_b, "B in front");
     // ⌘-Tab back to A.
-    std::fs::write(activate_a, "").unwrap();
-    wait_for("A in front again", Duration::from_secs(20), || (top(&world) == *a).then_some(()));
+    wait_in_front(&world, a, activate_a, "A in front again");
 }
 
 /// The fixture catalog's game as a Mac port: a bundle in its Steam folder,
@@ -124,15 +138,14 @@ fn quitting_the_game_in_front_keeps_it_the_target_while_macos_brings_another_for
             world.ok(&["add-game", "--name", name, "--exe", app.to_str().unwrap(), "--saves", saves.to_str().unwrap()]);
         games.push((s(&added["game"]), exe, app, world.root.join(format!("activate-{name}"))));
     }
-    let [(a, exe_a, _, activate_a), (b, exe_b, app_b, _)] = &games[..] else { unreachable!() };
+    let [(a, exe_a, _, activate_a), (b, exe_b, app_b, activate_b)] = &games[..] else { unreachable!() };
 
     // Into the Breach open, then the user ⌘-Tabs to FTL and quits it.
     let mut running_a = launch(exe_a, &["--window", "--activate-file", activate_a.to_str().unwrap()]);
-    wait_for("A in front", Duration::from_secs(20), || (top(&world) == *a).then_some(()));
-    let _running_b = launch(exe_b, &["--window"]);
-    wait_for("B in front", Duration::from_secs(20), || (top(&world) == *b).then_some(()));
-    std::fs::write(activate_a, "").unwrap();
-    wait_for("A in front again", Duration::from_secs(20), || (top(&world) == *a).then_some(()));
+    wait_in_front(&world, a, activate_a, "A in front");
+    let _running_b = launch(exe_b, &["--window", "--activate-file", activate_b.to_str().unwrap()]);
+    wait_in_front(&world, b, activate_b, "B in front");
+    wait_in_front(&world, a, activate_a, "A in front again");
     running_a.quit();
     world.wait_state("A closed", |st| st["active_stack"].as_array().unwrap().len() == 1);
     // macOS brings the app used before forward on its own: here, B. (Which
