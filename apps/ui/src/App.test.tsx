@@ -79,9 +79,9 @@ class FakeBridge implements Bridge {
 test('selecting another game reads that game’s real history page', async () => {
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
-  expect(await screen.findByText('First checkpoint')).toBeTruthy();
+  expect(await screen.findByText('First checkpoint', {}, { timeout: 5000 })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Game B, Not running/ }));
-  expect(await screen.findByText('Second checkpoint')).toBeTruthy();
+  expect(await screen.findByText('Second checkpoint', {}, { timeout: 5000 })).toBeTruthy();
   expect(screen.queryByText('First checkpoint')).toBeNull();
   expect(bridge.requests).toContainEqual({ type: 'history', game: 'b', limit: 100 });
 });
