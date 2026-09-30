@@ -148,10 +148,12 @@ fn shortcut_settings_validate_persist_and_pause_hotkeys_during_capture() {
         r#"{"v":2,"id":"capture-off","type":"ui_report","focused":false,"visible":true,"capturing_shortcut":false}"#,
     ]);
 
+    world.ok(&["settings", "--load-shortcut", ""]);
+
     host.kill();
     let _host = world.host();
     assert_eq!(world.state()["settings"]["save_shortcut"], "Alt+F6");
-    assert_eq!(world.state()["settings"]["load_shortcut"], "Ctrl+F10");
+    assert_eq!(world.state()["settings"]["load_shortcut"], "", "a removed shortcut stays removed, not defaulted");
 }
 
 #[test]

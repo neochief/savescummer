@@ -82,23 +82,37 @@ impl Shortcut {
         parts.join("+")
     }
 
-    pub fn defaults() -> [Self; 2] {
+    pub fn defaults() -> Shortcuts {
         let modifier = if cfg!(target_os = "macos") { "Alt" } else { "Ctrl" };
-        [Self::parse(&format!("{modifier}+F5")).unwrap(), Self::parse(&format!("{modifier}+F9")).unwrap()]
+        [Self::parse(&format!("{modifier}+F5")).ok(), Self::parse(&format!("{modifier}+F9")).ok()]
     }
 }
 
-pub fn validate_shortcuts(save: &str, load: &str) -> Result<[Shortcut; 2], String> {
+/// Save and Load, in that order; None when the user removed one.
+pub type Shortcuts = [Option<Shortcut>; 2];
+
+/// The stored text of a shortcut: empty when it's unset.
+pub fn shortcut_text(shortcut: Option<Shortcut>) -> String {
+    shortcut.map(Shortcut::canonical).unwrap_or_default()
+}
+
+pub fn validate_shortcuts(save: &str, load: &str) -> Result<Shortcuts, String> {
     validate_shortcuts_for_platform(save, load, current_platform())
 }
 
-fn validate_shortcuts_for_platform(save: &str, load: &str, platform: &str) -> Result<[Shortcut; 2], String> {
-    let save = Shortcut::parse(save).map_err(|error| format!("Save shortcut: {error}"))?;
-    let load = Shortcut::parse(load).map_err(|error| format!("Load shortcut: {error}"))?;
-    if save == load {
+fn validate_shortcuts_for_platform(save: &str, load: &str, platform: &str) -> Result<Shortcuts, String> {
+    let parse = |text: &str, label: &str| {
+        (!text.trim().is_empty())
+            .then(|| Shortcut::parse(text).map_err(|error| format!("{label} shortcut: {error}")))
+            .transpose()
+    };
+    let save = parse(save, "Save")?;
+    let load = parse(load, "Load")?;
+    if save.is_some() && save == load {
         return Err("Load shortcut: choose a different shortcut from Save".into());
     }
     for (label, shortcut) in [("Save", save), ("Load", load)] {
+        let Some(shortcut) = shortcut else { continue };
         if let Some(conflict) = shortcut_conflict(platform, shortcut)
             && conflict.severity == "major"
         {
@@ -162,8 +176,9 @@ mod tests {
     #[test]
     fn canonicalizes_and_rejects_ambiguous_shortcuts() {
         let keys = validate_shortcuts("shift + alt + f6", "Ctrl+Alt+A").unwrap();
-        assert_eq!(keys[0].canonical(), "Alt+Shift+F6");
-        assert_eq!(keys[1].canonical(), "Ctrl+Alt+A");
+        assert_eq!(shortcut_text(keys[0]), "Alt+Shift+F6");
+        assert_eq!(shortcut_text(keys[1]), "Ctrl+Alt+A");
+        assert_eq!(validate_shortcuts("", "").unwrap(), [None, None]);
         assert!(validate_shortcuts("A", "Ctrl+F9").is_err());
         assert!(validate_shortcuts("Alt+F6", "F6+Alt").is_err());
         assert!(validate_shortcuts("F13", "Ctrl+F9").is_err());

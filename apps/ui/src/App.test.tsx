@@ -186,7 +186,7 @@ test('Configure turns Expert mode on', async () => {
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const dialog = await screen.findByRole('dialog', { name: 'Configure Game A' });
   const check = within(dialog).getByRole('checkbox', { name: 'Expert mode' }) as HTMLInputElement;
   expect(check.checked).toBe(false);
   expect(within(dialog).getByText('Allow terminating a running game from its game card.')).toBeTruthy();
@@ -306,7 +306,7 @@ test('a disabled Save has no shortcut and guarded app data has a readable error'
   const button = await screen.findByRole('button', { name: 'save Game A' });
   expect((button as HTMLButtonElement).disabled).toBe(true);
   expect(button.closest('.action-slot')?.querySelector('.shortcut-tab')).toBeNull();
-  expect(screen.getByRole('status', { name: 'Allow access to this game’s saves' }).textContent).toContain("SaveScummer needs permission to access other apps' data.");
+  expect(screen.getByRole('status', { name: 'Allow access to this game’s saves' }).querySelector('.guidance-description')).toBeNull();
 });
 
 test('an access error from an operation is translated for the error block', async () => {
@@ -420,7 +420,7 @@ test('the card cog configures that card, not the selected game, and shows its ch
   await screen.findByText('First checkpoint');
   const cog = screen.getByRole('button', { name: 'Configure Game B' });
   fireEvent.click(cog);
-  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game B' });
+  const dialog = await screen.findByRole('dialog', { name: 'Configure Game B' });
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'save_set', game: 'b' }));
   const store = within(dialog).getByLabelText('Checkpoints store') as HTMLInputElement;
   await waitFor(() => expect(store.value).toBe('/store/b'));
@@ -438,7 +438,7 @@ test('Configure offers Reset only where a path differs from the default', async 
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const dialog = await screen.findByRole('dialog', { name: 'Configure Game A' });
   const location = within(dialog).getByLabelText('Save location') as HTMLInputElement;
   await waitFor(() => expect(location.value).toBe('/old/saves'));
   const resets = () => within(dialog).queryAllByRole('button', { name: 'Reset' });
@@ -462,10 +462,9 @@ test('Configure lists the catalog save paths when no location is set', async () 
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const dialog = await screen.findByRole('dialog', { name: 'Configure Game A' });
   const paths = () => within(dialog).queryAllByLabelText('Save location').map((input) => (input as HTMLInputElement).value);
   await waitFor(() => expect(paths()).toEqual(['/lib/Application Support/game', '/docs/Game/Worlds/*.wld']));
-  expect(within(dialog).getByText('Except settings.ini')).toBeTruthy();
   fireEvent.click(within(dialog).getAllByRole('button', { name: 'Open save location' })[1]);
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'open_saves', game: 'a', target: 1 }));
   expect(within(dialog).queryByRole('button', { name: 'Reset' })).toBeNull();
@@ -477,7 +476,7 @@ test('Configure offers executable Reset when the host reports an override', asyn
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
+  const dialog = await screen.findByRole('dialog', { name: 'Configure Game A' });
   await waitFor(() => expect((within(dialog).getByLabelText('Save location') as HTMLInputElement).value).toBe('/old/saves'));
   expect(within(dialog).getAllByRole('button', { name: 'Reset' })).toHaveLength(2);
 });
@@ -526,10 +525,10 @@ test('Settings captures, saves, and shows host-owned shortcuts', async () => {
     checkpoint_store: '/tmp/checkpoints', save_shortcut: 'Ctrl+F5', load_shortcut: 'Ctrl+F9' };
   render(<App bridge={bridge} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-  const save = screen.getByRole('textbox', { name: 'Save shortcut' });
-  fireEvent.focus(save);
+  const save = screen.getByRole('button', { name: /^Save shortcut/ });
+  fireEvent.click(save);
   fireEvent.keyDown(save, { code: 'F6', key: 'F6', ctrlKey: true });
-  expect((save as HTMLInputElement).value).toBe(displayShortcut('Ctrl+F6'));
+  expect(save.textContent).toBe(displayShortcut('Ctrl+F6'));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'settings', play_sounds: true,
     launch_on_startup: undefined, save_shortcut: 'Ctrl+F6', load_shortcut: 'Ctrl+F9' }));
@@ -546,15 +545,46 @@ test('Settings rejects duplicate shortcuts and Cancel keeps saved values', async
     checkpoint_store: '/tmp/checkpoints', save_shortcut: 'Ctrl+F5', load_shortcut: 'Ctrl+F9' };
   render(<App bridge={bridge} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-  const save = screen.getByRole('textbox', { name: 'Save shortcut' });
-  fireEvent.focus(save);
+  const save = screen.getByRole('button', { name: /^Save shortcut/ });
+  fireEvent.click(save);
   fireEvent.keyDown(save, { code: 'F9', key: 'F9', ctrlKey: true });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   expect(screen.getAllByText('Choose a different shortcut.').length).toBeGreaterThan(0);
   expect(bridge.requests.some((request) => request.type === 'settings')).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-  expect((screen.getByRole('textbox', { name: 'Save shortcut' }) as HTMLInputElement).value).toBe(displayShortcut('Ctrl+F5'));
+  expect(screen.getByRole('button', { name: /^Save shortcut/ }).textContent).toBe(displayShortcut('Ctrl+F5'));
+});
+
+test('a shortcut can be removed, and restoring an empty one brings back the default', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.settings = { play_sounds: true, launch_on_startup: false, launch_on_startup_available: true,
+    checkpoint_store: '/tmp/checkpoints', save_shortcut: 'Ctrl+F6', load_shortcut: 'Ctrl+F9' };
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+  const save = screen.getByRole('button', { name: /^Save shortcut/ });
+  fireEvent.click(save);
+  fireEvent.keyDown(save, { code: 'ShiftLeft', key: 'Shift', shiftKey: true, ctrlKey: true });
+  expect(save.textContent).toBe(displayShortcut('Ctrl+Shift+'));
+  fireEvent.click(screen.getByRole('button', { name: `Keep ${displayShortcut('Ctrl+F6')}` }));
+  expect(save.textContent).toBe(displayShortcut('Ctrl+F6'));
+
+  fireEvent.click(save);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove shortcut' }));
+  expect(save.textContent).toBe('Record shortcut');
+  fireEvent.click(save);
+  const fallback = navigator.platform.includes('Mac') ? 'Alt+F5' : 'Ctrl+F5';
+  fireEvent.click(screen.getByRole('button', { name: `Use default ${displayShortcut(fallback)}` }));
+  expect(save.textContent).toBe(displayShortcut(fallback));
+
+  fireEvent.click(save);
+  fireEvent.keyDown(save, { code: 'Backspace', key: 'Backspace' });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'settings', play_sounds: true,
+    launch_on_startup: undefined, save_shortcut: '', load_shortcut: 'Ctrl+F9' }));
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
+    settings: { ...bridge.state.settings!, save_shortcut: '' } }));
+  expect(document.querySelectorAll('.action-slot .shortcut-tab')).toHaveLength(1);
 });
 
 test('shortcut conflicts block major keys and warn for minor keys on both platforms', () => {
@@ -572,8 +602,8 @@ test('Settings blocks major conflicts and shows a savable warning for minor conf
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-  const save = screen.getByRole('textbox', { name: 'Save shortcut' });
-  fireEvent.focus(save);
+  const save = screen.getByRole('button', { name: /^Save shortcut/ });
+  fireEvent.click(save);
   const mac = navigator.platform.includes('Mac');
   fireEvent.keyDown(save, { code: 'KeyC', key: 'c', ctrlKey: !mac, metaKey: mac });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -581,6 +611,7 @@ test('Settings blocks major conflicts and shows a savable warning for minor conf
   expect(screen.getByText('Copy', { selector: 'strong' })).toBeTruthy();
   expect(bridge.requests.some((request) => request.type === 'settings')).toBe(false);
 
+  fireEvent.click(save);
   fireEvent.keyDown(save, { code: mac ? 'KeyN' : 'KeyG', key: mac ? 'n' : 'g', metaKey: true });
   expect(screen.getByText(/May interfere with/).textContent).toContain(mac ? 'New window' : 'Game Bar');
   expect(screen.getByText(mac ? 'New window or document' : 'Open Game Bar', { selector: 'strong' })).toBeTruthy();
@@ -593,8 +624,8 @@ test('host rejection stays beside the shortcut and keeps Settings open', async (
   bridge.settingsError = 'Save shortcut: Alt+F6 is unavailable: another app uses it';
   render(<App bridge={bridge} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-  const save = screen.getByRole('textbox', { name: 'Save shortcut' });
-  fireEvent.focus(save);
+  const save = screen.getByRole('button', { name: /^Save shortcut/ });
+  fireEvent.click(save);
   fireEvent.keyDown(save, { code: 'F6', key: 'F6', altKey: true });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   expect(await screen.findByText('Alt+F6 is unavailable: another app uses it')).toBeTruthy();
@@ -624,19 +655,19 @@ test('Flush opens over Configure, previews host data, and sends only the game af
   render(<App bridge={bridge} />);
   expect(await screen.findByText('First checkpoint')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
-  const configure = await screen.findByRole('dialog', { name: 'Configure — Game A' });
-  const flushButton = within(configure).getByRole('button', { name: 'Flush checkpoints' });
+  const configure = await screen.findByRole('dialog', { name: 'Configure Game A' });
+  const flushButton = within(configure).getByRole('button', { name: /^Flush/ });
   fireEvent.click(flushButton);
-  const flush = await screen.findByRole('dialog', { name: 'Flush checkpoints — Game A' });
+  const flush = await screen.findByRole('dialog', { name: 'Flush checkpoints Game A' });
   expect(await within(flush).findByText('Saved backups')).toBeTruthy();
   expect(bridge.requests).toContainEqual({ type: 'flush_preview', game: 'a', limit: 30 });
   expect(bridge.requests.some((request) => request.type === 'flush')).toBe(false);
   fireEvent.click(within(flush).getByRole('button', { name: 'Cancel' }));
-  expect(screen.queryByRole('dialog', { name: 'Flush checkpoints — Game A' })).toBeNull();
-  expect(screen.getByRole('dialog', { name: 'Configure — Game A' })).toBeTruthy();
+  expect(screen.queryByRole('dialog', { name: 'Flush checkpoints Game A' })).toBeNull();
+  expect(screen.getByRole('dialog', { name: 'Configure Game A' })).toBeTruthy();
   expect(document.activeElement).toBe(flushButton);
   fireEvent.click(flushButton);
-  const again = await screen.findByRole('dialog', { name: 'Flush checkpoints — Game A' });
+  const again = await screen.findByRole('dialog', { name: 'Flush checkpoints Game A' });
   await within(again).findByText('Saved backups');
   fireEvent.click(within(again).getByRole('button', { name: 'Flush' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'flush', game: 'a' }));

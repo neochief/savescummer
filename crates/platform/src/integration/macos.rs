@@ -26,7 +26,7 @@ use objc2_user_notifications::{
     UNNotificationRequest, UNNotificationResponse, UNUserNotificationCenter, UNUserNotificationCenterDelegate,
 };
 
-use super::{HotkeyAction, Key, Shortcut, Signal};
+use super::{HotkeyAction, Key, Shortcut, Shortcuts, Signal};
 
 /// The menu-bar template, 22 × 22 points at 1x and 2x.
 const ICON_1X: &[u8] = include_bytes!("../../../../assets/macos/SaveScummerTemplate.png");
@@ -37,7 +37,7 @@ type Handler = Arc<Mutex<Box<dyn Fn(Signal) + Send + 'static>>>;
 
 /// Who hears signals; None when integrations are off.
 static HANDLER: Mutex<Option<Handler>> = Mutex::new(None);
-static ACTIVE_SHORTCUTS: Mutex<Option<[Shortcut; 2]>> = Mutex::new(None);
+static ACTIVE_SHORTCUTS: Mutex<Option<Shortcuts>> = Mutex::new(None);
 /// AppKit asked to quit (logout, or Quit from the Dock) and waits for the
 /// answer, which is given once the host has shut down.
 static TERMINATING: AtomicBool = AtomicBool::new(false);
@@ -50,7 +50,7 @@ thread_local! {
 struct MainState {
     bar: Retained<NSStatusItem>,
     hotkeys: Option<GlobalHotKeyManager>,
-    shortcuts: [Shortcut; 2],
+    shortcuts: Shortcuts,
 }
 
 pub struct Integration {
@@ -109,7 +109,7 @@ fn wake_event() -> Option<Retained<NSEvent>> {
 
 /// Adds the menu-bar item and registers the hotkeys. Must be called on the
 /// main thread, before [`run_main_loop`].
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortcut; 2]) -> Result<Integration, String> {
+pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts) -> Result<Integration, String> {
     let Some(mtm) = MainThreadMarker::new() else {
         return Err("the menu bar and hotkeys must start on the main thread".into());
     };
@@ -134,24 +134,24 @@ impl Integration {
         self.hotkey_errors.clone()
     }
 
-    pub fn rebind(&self, shortcuts: [Shortcut; 2]) -> Result<(), String> {
+    pub fn rebind(&self, shortcuts: Shortcuts) -> Result<(), String> {
         run_on_main(move |_| {
             MAIN.with(|main| {
                 let mut main = main.borrow_mut();
                 let state = main.as_mut().ok_or("hotkeys are not running")?;
                 let manager = state.hotkeys.as_ref().ok_or("hotkeys are unavailable")?;
                 let old = state.shortcuts;
-                for shortcut in old {
+                for shortcut in old.into_iter().flatten() {
                     let _ = manager.unregister(native_shortcut(shortcut));
                 }
                 let mut registered = Vec::new();
-                for shortcut in shortcuts {
+                for shortcut in shortcuts.into_iter().flatten() {
                     let hotkey = native_shortcut(shortcut);
                     if let Err(error) = manager.register(hotkey) {
                         for hotkey in registered {
                             let _ = manager.unregister(hotkey);
                         }
-                        for shortcut in old {
+                        for shortcut in old.into_iter().flatten() {
                             let _ = manager.register(native_shortcut(shortcut));
                         }
                         return Err(format!("{} is unavailable: {error}", shortcut.canonical()));
@@ -345,13 +345,13 @@ fn show_menu(bar: &NSStatusItem, delegate: &Delegate, mtm: MainThreadMarker) {
 // --- Hotkeys: Carbon `RegisterEventHotKey` through `global-hotkey`. It needs
 // no Accessibility permission and works over fullscreen games.
 
-fn register_hotkeys(shortcuts: [Shortcut; 2]) -> (Option<GlobalHotKeyManager>, Vec<String>) {
+fn register_hotkeys(shortcuts: Shortcuts) -> (Option<GlobalHotKeyManager>, Vec<String>) {
     let manager = match GlobalHotKeyManager::new() {
         Ok(manager) => manager,
         Err(e) => return (None, vec![format!("hotkeys are unavailable: {e}")]),
     };
     let mut errors = Vec::new();
-    for shortcut in shortcuts {
+    for shortcut in shortcuts.into_iter().flatten() {
         if let Err(e) = manager.register(native_shortcut(shortcut)) {
             errors.push(format!("{} is unavailable: another app already uses it ({e})", shortcut.canonical()));
         }
@@ -407,7 +407,7 @@ fn hotkey_action(event: GlobalHotKeyEvent) -> Option<HotkeyAction> {
     let shortcuts = lock(&ACTIVE_SHORTCUTS).unwrap_or_else(Shortcut::defaults);
     shortcuts
         .iter()
-        .position(|shortcut| native_shortcut(*shortcut).id() == event.id)
+        .position(|shortcut| shortcut.is_some_and(|shortcut| native_shortcut(shortcut).id() == event.id))
         .map(|index| if index == 0 { HotkeyAction::Save } else { HotkeyAction::Load })
 }
 

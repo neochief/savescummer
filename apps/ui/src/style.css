@@ -26,19 +26,20 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .window-controls button:hover { background: #3a322e; }
 .window-controls button.close:hover { background: #c42b1c; color: #fff; }
 .window-controls svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; }
-/* The logo under the sidebar menu (or at the window's bottom edge with no games) opens About. Muted like idle game
+/* The logo under the sidebar menu (or at the window's bottom edge with no games) opens About; its icon centres under the menu icons. Muted like idle game
    cards; full color on hover. */
-.brand { flex: none; align-self: center; display: flex; align-items: center; margin-top: 8px; padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: inherit;
+.brand { flex: none; align-self: flex-start; display: flex; align-items: center; margin: 8px 0 0 6px; padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: inherit;
   filter: grayscale(1) sepia(.55) brightness(.62); transition: filter .15s ease; }
 .brand:is(:hover, :focus-visible) { filter: none; }
-.brand .app-icon { width: 32px; height: 32px; }
-.brand .wordmark { font-size: 21px; -webkit-text-stroke-width: 2px; }
+.brand .app-icon { width: 26px; height: 26px; }
+.brand .wordmark { font-size: 17px; -webkit-text-stroke-width: 1.75px; }
 .app.no-games .brand { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); margin: 0; }
 .app-icon { width: 40px; height: 40px; flex: none; }
 /* The skeleton leans out of a dark arched window: centered on the skull, the sill sits under the ribs, the hands hang over it. */
 .empty-character { position: relative; width: 140px; height: 140px; flex: none; pointer-events: none; }
 .empty-character::before { content: ''; position: absolute; top: 0; left: -8px; width: 164px; height: 120px; border-radius: 82px 82px 0 0; background: #181414; }
-.empty-character img { position: relative; display: block; width: 100%; height: 100%; }
+.empty-character .character-art { position: relative; display: block; width: 100%; height: 100%; }
+.empty-character .character-art svg { display: block; }
 /* Sits at the top so the pointing hand lands on the first game card. */
 .empty-selection { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 16px; pointer-events: none; color: #aea095; text-align: center; }
 .empty-selection p { margin: 0; }
@@ -151,7 +152,9 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .guidance-content::-webkit-scrollbar { width: 8px; }
 .guidance-content::-webkit-scrollbar-track { background: transparent; }
 .guidance-content::-webkit-scrollbar-thumb { background: #5b4c42; border-radius: 8px; }
-.guidance-panel strong { margin-bottom: 8px; font: 700 clamp(20px, 2.5vw, 28px)/1.12 Chakra Petch, sans-serif; overflow-wrap: anywhere; }
+.guidance-panel strong { margin-bottom: 2px; font: 700 clamp(20px, 2.5vw, 28px)/1.12 Chakra Petch, sans-serif; overflow-wrap: anywhere; }
+.guidance-content:has(.guidance-text) > .guidance-buttons { margin-top: 8px; }
+.guidance-content:has(.guidance-buttons) p[role="alert"] { margin-top: 4px; }
 .guidance-title-detail { color: #cfc2b3; }
 .guidance-text { width: 100%; }
 .guidance-panel p { margin: 0; font-size: 13px; line-height: 1.35; color: #a99b90; overflow-wrap: anywhere; }
@@ -310,14 +313,39 @@ dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
 .dialog-body::-webkit-scrollbar, .flush-details::-webkit-scrollbar { width: 8px; }
 .dialog-body::-webkit-scrollbar-track, .flush-details::-webkit-scrollbar-track { background: transparent; }
 .dialog-body::-webkit-scrollbar-thumb, .flush-details::-webkit-scrollbar-thumb { background: #5b4c42; border-radius: 8px; }
-.dialog-field { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
-.dialog-field label { width: 128px; flex: none; text-align: right; }
+.dialog-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 14px; }
+/* Every form label, above a field or beside a checkbox, shares one colour and size. */
+.dialog-field label, .dialog-check { color: #faf8ee; font: 600 14px Chakra Petch, sans-serif; }
+.dialog-field label { width: 100%; }  /* on its own line above the input */
 .dialog-field input { flex: 1; min-width: 0; height: 32px; padding: 5px 8px; border: 1px solid #5b4c42; border-radius: 5px; background: #1c1918; color: #faf8ee; user-select: text; }
-.dialog-settings .dialog-field input[data-shortcut-field] { flex: 0 1 180px; }
+/* Paths stop growing at a readable width; names need far less. */
+.dialog-field > .dialog-input, .dialog-path-list { flex: 0 1 480px; }
+.dialog-field input.dialog-name { flex: 0 1 240px; }
+/* Related fields sit in groups with a clear gap between them. */
+.dialog-group > :first-child { margin-top: 0; }
+.dialog-group > :last-child { margin-bottom: 0; }
+.dialog-group + .dialog-group { margin-top: 24px; }
 .dialog-field input:focus { outline: 1px solid #f51e2b; border-color: #f51e2b; }
-.dialog-field input.capturing { border-color: #f51e2b; }
+/* Read-only paths sink into the dialog; WebKit needs text-fill-color and opacity reset to take the colour. */
+.dialog-field input:disabled { border-color: #3d342d; background: #231e1b; color: #8f8176; -webkit-text-fill-color: #8f8176; opacity: 1; cursor: default; }
 .dialog-field input[aria-invalid="true"] { border-color: #ff7a80; }
-.dialog-error.shortcut-error, .dialog-warning.shortcut-warning { margin: -9px 0 14px 136px; }
+/* A set shortcut reads as a button, an unset one sinks like an empty field; recording turns it into an input with inline actions. */
+.shortcut-input { position: relative; flex: 0 1 180px; display: flex; }
+.dialog-field .shortcut-input .shortcut-value { width: 100%; padding: 0 8px; border: 1px solid transparent; font: 600 14px Chakra Petch, sans-serif; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dialog-field .shortcut-input .shortcut-value:hover { background: #54443a; }
+.dialog-field .shortcut-input.unset .shortcut-value { border-color: #3d342d; background: #231e1b; color: #8f8176; font-weight: 500; }
+.dialog-field .shortcut-input.unset .shortcut-value:hover { color: #b3a598; }
+.dialog-field .shortcut-input.recording .shortcut-value { padding-right: 58px; border-color: #f51e2b; outline: 1px solid #f51e2b; background: #1c1918; color: #faf8ee; text-align: left; }
+.shortcut-placeholder { color: #8f8176; font-weight: 500; }
+.shortcut-actions { position: absolute; top: 0; right: 6px; bottom: 0; display: flex; align-items: center; gap: 4px; }
+.dialog-field .shortcut-actions button { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+.dialog-field .shortcut-actions .shortcut-restore { background: #e8833a; }
+.dialog-field .shortcut-actions .shortcut-restore:hover { background: #f29a55; }
+.dialog-field .shortcut-actions .shortcut-clear { background: #5b4c42; }
+.dialog-field .shortcut-actions .shortcut-clear:hover { background: #75645a; }
+.shortcut-actions .icon { width: 10px; height: 10px; filter: brightness(0) invert(1); }
+.dialog-field .shortcut-input .shortcut-value[aria-invalid="true"] { border-color: #ff7a80; }
+.dialog-error.shortcut-error, .dialog-warning.shortcut-warning { margin: -9px 0 14px; }
 .dialog-warning.shortcut-warning { color: #f4c77d; font-size: 12px; }
 .dialog-field button, .dialog footer button { height: 32px; padding: 0 14px; border: 0; border-radius: 5px; background: #463830; color: #faf8ee; }
 .dialog-input { position: relative; flex: 1; min-width: 0; display: flex; }
@@ -326,34 +354,41 @@ dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
 .dialog-field .dialog-input button.dialog-icon-button { position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; background: transparent; border-radius: 4px; }
 .dialog-field .dialog-input button.dialog-icon-button:not(:disabled):hover { background: #463830; }
 .dialog-icon-button .icon { width: 15px; height: 15px; }
-.dialog-below { min-height: 16px; margin: -9px 0 10px 136px; font-size: 12px; line-height: 16px; }
+.dialog-below { min-height: 16px; margin: -9px 0 10px; font-size: 12px; line-height: 16px; }
 .dialog-below:empty { display: none; }
 .dialog-below .dialog-hint { margin: 0; }
 .dialog-reset { padding: 0; border: 0; background: none; color: #ff7a80; font: inherit; cursor: pointer; }
 .dialog-reset:hover { text-decoration: underline; }
 .dialog-check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
-.dialog-expert-mode { margin: 16px 0 0; padding: 12px 14px; border: 1px solid #f51e2b; border-radius: 8px; box-shadow: inset 0 0 16px #f51e2b40; }
-.dialog-expert-mode .dialog-check { margin: 0; font-weight: 600; }
+.dialog-expert-mode { padding: 12px 14px; border: 1px solid #f51e2b; border-radius: 8px; box-shadow: inset 0 0 16px #f51e2b40; }
+.dialog-expert-mode .dialog-check { margin: 0; }
 .dialog-expert-mode-note { margin: 6px 0 0; padding-left: 28px; color: #afa095; font-size: 12px; line-height: 1.45; }  /* the text lines up with the checkbox label */
 .dialog-expert-mode-note strong { color: #faf8ee; font: 700 13px Chakra Petch, sans-serif; }
 .dialog-expert-mode-note li + li { margin-top: 8px; }
-input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: none; accent-color: #f51e2b; }
-.dialog-hint { margin: -7px 0 16px 136px; color: #afa095; font-size: 12px; }
-.dialog-error { color: #ff7a80; margin: 12px 0 0 136px; font-size: 12px; }
+/* Drawn like the text fields rather than the native control; checked fills red with a white check.svg. */
+input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin: 0; flex: none; border: 1px solid #5b4c42; border-radius: 5px; background: #1c1918; cursor: pointer; }
+input[type="checkbox"]:checked { border-color: #f51e2b; background: #f51e2b url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'%3E%3Cpath fill='%23fff' d='M432.6 100.3c32.4 27.5-13.6 63.3-26.9 80.5-64.7 79.7-147.9 156.3-224.2 224.2-13.2 11.5-33.1 10.4-44.8-2.6-21.7-24-46-46.7-70.6-69.6-21.8-28.4-98-65.2-62.1-106.8 12.8-12.2 33.1-11.6 45.2 1.2 35.6 37.6 76.1 71.6 113.1 109.2 59.8-55.6 120.7-108.2 173.2-172.4 20.3-23.6 28.6-32.5 52-60 11.4-13.5 31.6-15.1 45.1-3.6z'/%3E%3C/svg%3E") center / 12px no-repeat; }
+input[type="checkbox"]:focus-visible { outline: 1px solid #f51e2b; border-color: #f51e2b; }
+/* Disabled checkboxes and their labels match the disabled text fields. */
+input[type="checkbox"]:disabled { border-color: #3d342d; background-color: #231e1b; cursor: default; }
+input[type="checkbox"]:checked:disabled { background-color: #3d342d; }
+.dialog-check:has(input:disabled) { color: #8f8176; }
+.dialog-hint { margin: -7px 0 16px; color: #afa095; font-size: 12px; }
+.dialog-error { color: #ff7a80; margin: 12px 0 0; font-size: 12px; }
 .dialog footer { flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; }
 .dialog footer .dialog-primary { background: #f3eee7; color: #2a2420; }
 .dialog footer .dialog-primary.danger { background: #f51e2b; color: #fff; }
 .dialog footer .dialog-primary.danger { order: -1; }
-.dialog footer .dialog-flush { margin-right: auto; display: inline-flex; align-items: center; gap: 7px; color: #f51e2b; }
-.dialog footer .dialog-flush:not(:disabled):hover { background: #f51e2b; color: #fff; }
+.dialog-field .flush-button { display: inline-flex; align-items: center; gap: 7px; color: #f51e2b; }
+.dialog-field .flush-button:not(:disabled):hover { background: #f51e2b; color: #fff; }
 .dialog-button-icon { width: 13px; height: 13px; flex: none; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
 .dialog-button-icon.trash { --icon: url(/icons/trash-can.svg); }
-.dialog footer .dialog-flush:disabled { opacity: .45; }
+.dialog-field .flush-button:disabled { opacity: .45; }
 .dialog button:disabled { opacity: .5; }
 .dialog-paths { align-items: flex-start; }
-.dialog-paths label { line-height: 32px; }
-.dialog-path-list { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.flush-counts { display: grid; grid-template-columns: 1fr auto; gap: 7px 16px; max-width: 320px; margin: 18px auto; }
+.dialog-path-list { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.dialog-flush .dialog-body > p:first-child { margin-top: 0; }
+.flush-counts { display: grid; grid-template-columns: 1fr auto; gap: 7px 16px; max-width: 240px; margin: 12px 0 0; }
 .flush-counts dd { margin: 0; text-align: right; }
 .details-toggle { border: 0; background: transparent; color: #f3eee7; padding: 8px; }
 .flush-details { max-height: 160px; overflow: auto; scrollbar-color: #5b4c42 transparent; padding: 10px; border-radius: 6px; background: #1c1918; font-size: 12px; user-select: text; }

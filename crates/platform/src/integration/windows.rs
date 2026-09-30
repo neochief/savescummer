@@ -24,7 +24,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_NULL, WNDCLASSW, WS_OVERLAPPED,
 };
 
-use super::{HotkeyAction, Key, Shortcut, Signal};
+use super::{HotkeyAction, Key, Shortcut, Shortcuts, Signal};
 use crate::win::{copy_wide, wide};
 
 /// Tray callback message (see `uCallbackMessage`).
@@ -46,7 +46,7 @@ struct Balloon {
 }
 
 struct Rebind {
-    shortcuts: [Shortcut; 2],
+    shortcuts: Shortcuts,
     reply: mpsc::SyncSender<Result<(), String>>,
 }
 
@@ -58,7 +58,7 @@ struct UiState {
     /// The tray icon, reloaded when the display scale changes.
     icon: Cell<AppIcon>,
     taskbar_created: u32,
-    shortcuts: Cell<[Shortcut; 2]>,
+    shortcuts: Cell<Shortcuts>,
 }
 
 #[derive(Clone, Copy)]
@@ -85,7 +85,7 @@ pub struct Integration {
     hotkey_errors: Vec<String>,
 }
 
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: [Shortcut; 2]) -> Result<Integration, String> {
+pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts) -> Result<Integration, String> {
     let (tx, rx) = mpsc::sync_channel(1);
     let thread = std::thread::Builder::new()
         .name("savescummer-integration".into())
@@ -121,7 +121,7 @@ impl Integration {
         self.hotkey_errors.clone()
     }
 
-    pub fn rebind(&self, shortcuts: [Shortcut; 2]) -> Result<(), String> {
+    pub fn rebind(&self, shortcuts: Shortcuts) -> Result<(), String> {
         let (reply, receiver) = mpsc::sync_channel(1);
         let request = Box::into_raw(Box::new(Rebind { shortcuts, reply }));
         // SAFETY: ownership passes to the window procedure only on success.
@@ -159,7 +159,7 @@ type Ready = Result<(isize, Vec<String>), String>;
 
 fn ui_thread(
     on_signal: Box<dyn Fn(Signal) + Send + 'static>,
-    shortcuts: [Shortcut; 2],
+    shortcuts: Shortcuts,
     ready: mpsc::SyncSender<Ready>,
 ) {
     let class = wide("SaveScummerIntegration");
@@ -210,6 +210,7 @@ fn ui_thread(
 
         let mut errors = Vec::new();
         for (index, shortcut) in shortcuts.iter().enumerate() {
+            let Some(shortcut) = shortcut else { continue };
             if RegisterHotKey(hwnd, HOTKEYS[index].0, modifiers(*shortcut), key_code(shortcut.key)) == 0 {
                 let code = GetLastError();
                 errors.push(format!(
@@ -257,8 +258,9 @@ fn key_code(key: Key) -> u32 {
     }
 }
 
-fn register_pair(hwnd: HWND, shortcuts: [Shortcut; 2]) -> Result<(), String> {
+fn register_pair(hwnd: HWND, shortcuts: Shortcuts) -> Result<(), String> {
     for (index, shortcut) in shortcuts.iter().enumerate() {
+        let Some(shortcut) = shortcut else { continue };
         if unsafe { RegisterHotKey(hwnd, HOTKEYS[index].0, modifiers(*shortcut), key_code(shortcut.key)) } == 0 {
             let error = unsafe { GetLastError() };
             for (id, _) in HOTKEYS.iter().take(index) {

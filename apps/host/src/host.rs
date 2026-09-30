@@ -16,7 +16,7 @@ use savescummer_ipc::{
     AccessInfo, CheckpointBrief, EventBody, GameKind, GameSummary, Operation, Phase, ScanInfo, SettingsInfo, State,
     StoreInfo,
 };
-use savescummer_platform::integration::Shortcut;
+use savescummer_platform::integration::{Shortcut, Shortcuts, shortcut_text};
 use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, CheckpointRow, Storage};
 
@@ -100,7 +100,7 @@ pub struct Inner {
     pub store_available: bool,
     pub store_moving: bool,
     pub play_sounds: bool,
-    pub shortcuts: [Shortcut; 2],
+    pub shortcuts: Shortcuts,
     pub launch_on_startup: bool,
     /// macOS: turned off in System Settings, where only the user can turn
     /// it on again.
@@ -230,8 +230,8 @@ impl Host {
             phase: inner.phase,
             settings: SettingsInfo {
                 play_sounds: inner.play_sounds,
-                save_shortcut: inner.shortcuts[0].canonical(),
-                load_shortcut: inner.shortcuts[1].canonical(),
+                save_shortcut: shortcut_text(inner.shortcuts[0]),
+                load_shortcut: shortcut_text(inner.shortcuts[1]),
                 launch_on_startup: inner.launch_on_startup,
                 launch_on_startup_available: savescummer_platform::autostart::available(),
                 launch_on_startup_needs_approval: inner.launch_needs_approval,

@@ -11,7 +11,7 @@ use savescummer_ipc::{
     CatalogInfo, FlushItem, FlushPreview, HistoryEntry, HistoryPage, HostRun, HostRuns, OpStatus, OpenTarget, Opened,
     RowActions, SaveSetInfo, TargetInfo,
 };
-use savescummer_platform::integration::validate_shortcuts;
+use savescummer_platform::integration::{shortcut_text, validate_shortcuts};
 use savescummer_storage::{self as db, CheckpointRow};
 
 use crate::checkpoints::unavailable_reason;
@@ -228,8 +228,8 @@ pub fn settings(
     load_shortcut: Option<String>,
 ) -> Result<serde_json::Value, Failure> {
     let old = host.lock().shortcuts;
-    let save = save_shortcut.unwrap_or_else(|| old[0].canonical());
-    let load = load_shortcut.unwrap_or_else(|| old[1].canonical());
+    let save = save_shortcut.unwrap_or_else(|| shortcut_text(old[0]));
+    let load = load_shortcut.unwrap_or_else(|| shortcut_text(old[1]));
     let shortcuts = validate_shortcuts(&save, &load).map_err(|error| Failure::new(ErrorKind::InvalidRequest, error))?;
     let changed = shortcuts != old;
     if changed && !host.opts.no_integrations && host.integration.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
@@ -243,9 +243,10 @@ pub fn settings(
     let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
     if changed && let Some(integration) = integration.as_ref() {
         integration.rebind(shortcuts).map_err(|error| {
-            let field = if error.contains(&shortcuts[1].canonical()) {
+            let names = |shortcut: Option<_>| shortcut.is_some_and(|shortcut| error.contains(&shortcut_text(Some(shortcut))));
+            let field = if names(shortcuts[1]) {
                 "Load shortcut"
-            } else if error.contains(&shortcuts[0].canonical()) {
+            } else if names(shortcuts[0]) {
                 "Save shortcut"
             } else {
                 "Shortcuts"
@@ -263,8 +264,8 @@ pub fn settings(
     }
     let write_result = host.db().write(|conn| {
         if changed {
-            db::set_setting(conn, SETTING_SAVE_SHORTCUT, &shortcuts[0].canonical())?;
-            db::set_setting(conn, SETTING_LOAD_SHORTCUT, &shortcuts[1].canonical())?;
+            db::set_setting(conn, SETTING_SAVE_SHORTCUT, &shortcut_text(shortcuts[0]))?;
+            db::set_setting(conn, SETTING_LOAD_SHORTCUT, &shortcut_text(shortcuts[1]))?;
         }
         if let Some(on) = launch {
             db::set_setting(conn, SETTING_LAUNCH, if on { "1" } else { "0" })?;
@@ -294,7 +295,7 @@ pub fn settings(
     let mut inner = host.lock();
     host.publish(&mut inner);
     Ok(serde_json::json!({ "play_sounds": inner.play_sounds, "launch_on_startup": inner.launch_on_startup,
-        "save_shortcut": inner.shortcuts[0].canonical(), "load_shortcut": inner.shortcuts[1].canonical() }))
+        "save_shortcut": shortcut_text(inner.shortcuts[0]), "load_shortcut": shortcut_text(inner.shortcuts[1]) }))
 }
 
 /// Reads launch at login back from the OS: the user may change it in

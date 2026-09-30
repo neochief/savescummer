@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Bridge } from './bridge';
 import type { FlushPreview, Game, HostState, SaveSet, SaveTarget } from './types';
 import { version } from '../package.json';
-import { capturedShortcut, displayShortcut, shortcutDescription, shortcutError, shortcutWarning } from './shortcuts';
+import { shortcutDescription, shortcutError, shortcutWarning } from './shortcuts';
+import { ShortcutInput } from './ShortcutInput';
 
 export type DialogKind = 'settings' | 'add' | 'configure' | 'flush' | 'about';
 
@@ -48,9 +49,8 @@ function DialogFrame({ title, kind, close, opener, children }: {
   </dialog>;
 }
 
-function Footer({ close, submit, busy, disabled = false, destructive = false, extra }: { close: () => void; submit: string; busy: boolean; disabled?: boolean; destructive?: boolean; extra?: ReactNode }) {
+function Footer({ close, submit, busy, disabled = false, destructive = false }: { close: () => void; submit: string; busy: boolean; disabled?: boolean; destructive?: boolean }) {
   return <footer>
-    {extra}
     {destructive ? <><button type="submit" name="intent" value="cancel" onClick={close}>Cancel</button><button className="dialog-primary danger" type="submit" name="intent" value="flush" disabled={busy || disabled}>{busy ? 'Working…' : submit}</button></>
       : <><button className="dialog-primary" type="submit" disabled={busy || disabled}>{busy ? 'Saving…' : submit}</button><button type="button" onClick={close}>Cancel</button></>}
   </footer>;
@@ -95,19 +95,18 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [details, setDetails] = useState(false);
   const [sounds, setSounds] = useState(state?.settings?.play_sounds ?? true);
   const [startup, setStartup] = useState(state?.settings?.launch_on_startup ?? false);
-  const [saveShortcut, setSaveShortcut] = useState(state?.settings?.save_shortcut || (navigator.platform.includes('Mac') ? 'Alt+F5' : 'Ctrl+F5'));
-  const [loadShortcut, setLoadShortcut] = useState(state?.settings?.load_shortcut || (navigator.platform.includes('Mac') ? 'Alt+F9' : 'Ctrl+F9'));
+  const defaultShortcuts = navigator.platform.includes('Mac') ? { save: 'Alt+F5', load: 'Alt+F9' } : { save: 'Ctrl+F5', load: 'Ctrl+F9' };
+  // An empty shortcut is one the user removed.
+  const [saveShortcut, setSaveShortcut] = useState(state?.settings?.save_shortcut ?? defaultShortcuts.save);
+  const [loadShortcut, setLoadShortcut] = useState(state?.settings?.load_shortcut ?? defaultShortcuts.load);
   const [shortcutErrors, setShortcutErrors] = useState<{ save?: string; load?: string }>({});
   const saveWarning = shortcutErrors.save ? undefined : shortcutWarning(saveShortcut);
   const loadWarning = shortcutErrors.load ? undefined : shortcutWarning(loadShortcut);
-  const [capturing, setCapturing] = useState<'save' | 'load'>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   // A catalog game with no location of its own shows the catalog's paths, read-only.
   const catalogTargets = kind === 'configure' && game?.kind !== 'custom' && location === '' && focused !== 'location' && saveSet?.catalog?.length
     ? saveSet.catalog : undefined;
-  const catalogExcludes = (catalogTargets || []).flatMap((target) => (target.excludes || [])
-    .map((exclude) => target.filter.kind === 'exact' && exclude.startsWith(`${target.filter.value}/`) ? exclude.slice(target.filter.value.length + 1) : exclude));
   const activeIndex = (target: SaveTarget) => (saveSet?.active || [])
     .findIndex((active) => active.root === target.root && JSON.stringify(active.filter) === JSON.stringify(target.filter));
   const openSaves = (target: number) => game && bridge.request({ type: 'open_saves', game: game.id, target }).catch((failure) => setError(message(failure)));
@@ -118,16 +117,14 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     return () => { bridge.capture(false).catch(() => undefined); };
   }, [bridge, kind]);
 
-  function captureKey(event: ReactKeyboardEvent<HTMLInputElement>, which: 'save' | 'load') {
-    if (event.key === 'Tab' || event.key === 'Escape') return;
-    event.preventDefault();
-    event.stopPropagation();
-    const shortcut = capturedShortcut(event);
-    if (!shortcut) return;
+  function changeShortcut(which: 'save' | 'load', shortcut: string) {
     if (which === 'save') setSaveShortcut(shortcut);
     else setLoadShortcut(shortcut);
     setShortcutErrors((current) => ({ ...current, [which]: undefined }));
   }
+
+  // Hotkeys pause while a field records, so pressing the current one doesn't fire it.
+  const recordShortcut = (recording: boolean) => bridge.capture(recording).catch((failure) => { if (recording) setError(message(failure)); });
 
   async function browse(which: 'executable' | 'location') {
     try {
@@ -210,36 +207,37 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
 
   // The game name reads dimmer than the action, like the guidance panel's title detail.
   const title = kind === 'settings' ? 'Settings' : kind === 'add' ? 'Add custom game'
-    : <>{kind === 'configure' ? 'Configure' : 'Flush checkpoints'}<span className="dialog-title-detail"> — {gameName}</span></>;
+    : <>{kind === 'configure' ? 'Configure' : 'Flush checkpoints'}<span className="dialog-title-detail"> {gameName}</span></>;
   // Configure opens once its paths have arrived, so its contents don't rearrange while it's visible.
   if (kind === 'configure' && !((saveSet || error) && checkpointsPath !== undefined)) return null;
   return <DialogFrame title={title} kind={kind} close={close} opener={opener}>
     <form onSubmit={submit}>
       <div className="dialog-body">
         {kind === 'settings' && <>
-          <div className="dialog-field"><label htmlFor="save-shortcut">Save shortcut</label><input id="save-shortcut" data-shortcut-field="save"
-            value={displayShortcut(saveShortcut)} readOnly aria-invalid={Boolean(shortcutErrors.save)} aria-describedby={shortcutErrors.save ? 'save-shortcut-error' : saveWarning ? 'save-shortcut-warning' : undefined}
-            className={capturing === 'save' ? 'capturing' : ''}
-            onFocus={() => { setCapturing('save'); bridge.capture(true).catch((failure) => setError(message(failure))); }}
-            onBlur={(event) => { setCapturing(undefined); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.shortcutField)) bridge.capture(false).catch(() => undefined); }}
-            onKeyDown={(event) => captureKey(event, 'save')} /></div>
+          <div className="dialog-group">
+          <div className="dialog-field"><label id="save-shortcut-label" htmlFor="save-shortcut">Save shortcut</label>
+            <ShortcutInput id="save-shortcut" value={saveShortcut} fallback={defaultShortcuts.save} invalid={Boolean(shortcutErrors.save)}
+              describedBy={shortcutErrors.save ? 'save-shortcut-error' : saveWarning ? 'save-shortcut-warning' : undefined}
+              onChange={(shortcut) => changeShortcut('save', shortcut)} onRecording={recordShortcut} /></div>
           {shortcutErrors.save && <p id="save-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutMessage(shortcutErrors.save, saveShortcut)}</p>}
           {saveWarning && <p id="save-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{shortcutMessage(saveWarning, saveShortcut)}</p>}
-          <div className="dialog-field"><label htmlFor="load-shortcut">Load shortcut</label><input id="load-shortcut" data-shortcut-field="load"
-            value={displayShortcut(loadShortcut)} readOnly aria-invalid={Boolean(shortcutErrors.load)} aria-describedby={shortcutErrors.load ? 'load-shortcut-error' : loadWarning ? 'load-shortcut-warning' : undefined}
-            className={capturing === 'load' ? 'capturing' : ''}
-            onFocus={() => { setCapturing('load'); bridge.capture(true).catch((failure) => setError(message(failure))); }}
-            onBlur={(event) => { setCapturing(undefined); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.shortcutField)) bridge.capture(false).catch(() => undefined); }}
-            onKeyDown={(event) => captureKey(event, 'load')} /></div>
+          <div className="dialog-field"><label id="load-shortcut-label" htmlFor="load-shortcut">Load shortcut</label>
+            <ShortcutInput id="load-shortcut" value={loadShortcut} fallback={defaultShortcuts.load} invalid={Boolean(shortcutErrors.load)}
+              describedBy={shortcutErrors.load ? 'load-shortcut-error' : loadWarning ? 'load-shortcut-warning' : undefined}
+              onChange={(shortcut) => changeShortcut('load', shortcut)} onRecording={recordShortcut} /></div>
           {shortcutErrors.load && <p id="load-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutMessage(shortcutErrors.load, loadShortcut)}</p>}
           {loadWarning && <p id="load-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{shortcutMessage(loadWarning, loadShortcut)}</p>}
+          </div>
+          <div className="dialog-group">
           <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds</label>
           <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
             onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>
           {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}
+          </div>
         </>}
         {(kind === 'add' || kind === 'configure') && <>
-          {kind === 'configure' && game?.kind === 'custom' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
+          <div className="dialog-group">
+          {kind === 'configure' && game?.kind === 'custom' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" className="dialog-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
           <div className="dialog-field"><label htmlFor="game-executable">Game executable</label><span className="dialog-input"><input id="game-executable" value={executable}
             onFocus={() => setFocused('executable')} onBlur={() => setFocused(undefined)}
             onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); }} required />
@@ -263,7 +261,6 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               })}</span>
               <button type="button" onClick={() => browse('location')}>Change</button>
             </div>
-            {catalogExcludes.length > 0 && <p className="dialog-below"><span className="dialog-hint">Except {catalogExcludes.join(', ')}</span></p>}
           </> : <>
             <div className="dialog-field"><label htmlFor="save-location">Save location</label><span className="dialog-input"><input id="save-location" value={location}
               onFocus={() => setFocused('location')} onBlur={() => setFocused(undefined)}
@@ -283,8 +280,14 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
             <span className="dialog-input"><input id="checkpoints-store" value={checkpointsPath} disabled />
               <button type="button" className="dialog-icon-button" aria-label="Open checkpoints store" title="Show in folder"
                 onClick={() => bridge.request({ type: 'open_checkpoints', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button></span>
+            {onFlush && <button type="button" className="flush-button"
+              disabled={busy || !game.flush.available || (!game.has_history && !game.checkpoints_size)} onClick={(event) => onFlush(event.currentTarget)}>
+              <span className="dialog-button-icon trash" />Flush{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}
+            </button>}
           </div>}
-          {kind === 'configure' && game && <div className="dialog-expert-mode">
+          {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" className="dialog-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
+          </div>
+          {kind === 'configure' && game && <div className="dialog-group dialog-expert-mode">
             <label className="dialog-check"><input type="checkbox" checked={expertMode} onChange={(event) => setExpertMode(event.target.checked)} />
               Expert mode</label>
             <ul className="dialog-expert-mode-note">
@@ -292,7 +295,6 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               <li><strong>Allow terminating a running game from its game card.</strong> This is much faster than quitting through the game’s menus, so it’s super efficient for save scumming. But it may also prevent some games from saving properly and cause problems. Knowing which games are safe to terminate takes expert save-scumming skills.</li>
             </ul>
           </div>}
-          {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
         </>}
         {kind === 'flush' && <>
           <p>Permanently delete all backups and clear this game's history?<br />Your current game data will be kept.</p>
@@ -312,11 +314,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
         {error && <p className="dialog-error" role="alert">{error}</p>}
       </div>
       <Footer close={close} submit={kind === 'add' ? 'Add' : kind === 'flush' ? 'Flush' : 'Save'} busy={busy || (kind === 'flush' && !preview) || (kind === 'configure' && !saveSet)} destructive={kind === 'flush'}
-        disabled={!!game && ((kind === 'flush' && !game.flush.available) || (kind === 'configure' && !game.configure.available))}
-        extra={kind === 'configure' && game && onFlush && <button type="button" className="dialog-flush"
-          disabled={busy || !game.flush.available || (!game.has_history && !game.checkpoints_size)} onClick={(event) => onFlush(event.currentTarget)}>
-          <span className="dialog-button-icon trash" />Flush checkpoints{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}
-        </button>} />
+        disabled={!!game && ((kind === 'flush' && !game.flush.available) || (kind === 'configure' && !game.configure.available))} />
     </form>
   </DialogFrame>;
 }

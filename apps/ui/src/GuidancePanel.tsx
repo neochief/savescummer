@@ -46,8 +46,7 @@ export function GuidancePanel({ game, bridge, retrying, onRetry, onConfigure }: 
   };
   const message = guidance.kind === 'blocked' && !game.retry.available && !retrying
     ? failureMessage(game.retry.failure, text)
-    : guidance.kind === 'invalid_target' || guidance.kind === 'access_needed'
-      ? failureMessage(guidance.failure, text) : text;
+    : guidance.kind === 'invalid_target' ? failureMessage(guidance.failure, text) : text;
   const coverage = guidance.save && guidance.load ? 'both' : guidance.save ? 'save' : 'load';
   return <section className={`guidance-panel covers-${coverage}`} data-kind={guidance.kind} role="status"
     aria-label={guidance.kind === 'game_running' ? 'Exit the game first' : title}>

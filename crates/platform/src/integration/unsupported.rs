@@ -1,6 +1,6 @@
 //! No tray, hotkeys or notifications on this OS yet (PLAN-MACOS.md).
 
-use super::{Shortcut, Signal};
+use super::{Shortcuts, Signal};
 
 pub struct Integration {
     _private: (),
@@ -8,7 +8,7 @@ pub struct Integration {
 
 pub fn start(
     on_signal: Box<dyn Fn(Signal) + Send + 'static>,
-    _shortcuts: [Shortcut; 2],
+    _shortcuts: Shortcuts,
 ) -> Result<Integration, String> {
     let _ = on_signal;
     Err("not supported on this platform yet".into())
@@ -21,7 +21,7 @@ impl Integration {
         Vec::new()
     }
 
-    pub fn rebind(&self, _shortcuts: [Shortcut; 2]) -> Result<(), String> {
+    pub fn rebind(&self, _shortcuts: Shortcuts) -> Result<(), String> {
         Err("hotkeys are not supported on this platform yet".into())
     }
 

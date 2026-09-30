@@ -38,6 +38,7 @@ use clap::Parser;
 
 use savescummer_catalog::Bundle;
 use savescummer_ipc::{EventBody, Phase};
+use savescummer_platform::integration::{Shortcut, shortcut_text, validate_shortcuts};
 use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, Storage};
 
@@ -235,10 +236,11 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     let play_sounds = setting(SETTING_PLAY_SOUNDS).is_none_or(|v| v == "1");
     let notices = db::notices(storage.conn()).unwrap_or_default();
     let mut inner = Inner::new(store, play_sounds);
-    let defaults = savescummer_platform::integration::Shortcut::defaults();
-    let save = setting(SETTING_SAVE_SHORTCUT).unwrap_or_else(|| defaults[0].canonical());
-    let load = setting(SETTING_LOAD_SHORTCUT).unwrap_or_else(|| defaults[1].canonical());
-    inner.shortcuts = savescummer_platform::integration::validate_shortcuts(&save, &load).unwrap_or(defaults);
+    let defaults = Shortcut::defaults();
+    // A stored empty value is a shortcut the user removed; a missing one is the default.
+    let save = setting(SETTING_SAVE_SHORTCUT).unwrap_or_else(|| shortcut_text(defaults[0]));
+    let load = setting(SETTING_LOAD_SHORTCUT).unwrap_or_else(|| shortcut_text(defaults[1]));
+    inner.shortcuts = validate_shortcuts(&save, &load).unwrap_or(defaults);
     for (game, kind, _) in notices {
         inner.notices.insert(game, kind);
     }

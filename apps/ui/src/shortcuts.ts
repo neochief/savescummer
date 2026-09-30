@@ -15,16 +15,24 @@ export function shortcutDescription(shortcut: string): string | undefined {
   return shortcutConflict(shortcut, currentPlatform())?.description;
 }
 
-export function capturedShortcut(event: KeyPress): string | undefined {
-  const key = /^(F(?:[1-9]|1[0-2])|Key[A-Z]|Digit[0-9])$/.exec(event.code)?.[1];
-  if (!key) return undefined;
+function modifiers(event: Omit<KeyPress, 'code'>): string[] {
   const parts: string[] = [];
   if (event.ctrlKey) parts.push('Ctrl');
   if (event.altKey) parts.push('Alt');
   if (event.shiftKey) parts.push('Shift');
   if (event.metaKey) parts.push('Meta');
-  parts.push(key.startsWith('Key') ? key.slice(3) : key.startsWith('Digit') ? key.slice(5) : key);
-  return parts.join('+');
+  return parts;
+}
+
+export function capturedShortcut(event: KeyPress): string | undefined {
+  const key = /^(F(?:[1-9]|1[0-2])|Key[A-Z]|Digit[0-9])$/.exec(event.code)?.[1];
+  if (!key) return undefined;
+  return [...modifiers(event), key.startsWith('Key') ? key.slice(3) : key.startsWith('Digit') ? key.slice(5) : key].join('+');
+}
+
+/** The modifiers held so far, as they'll read once a key joins them: "⇧⌘" or "Shift+Win+". */
+export function heldModifiers(event: Omit<KeyPress, 'code'>): string {
+  return displayShortcut(modifiers(event).map((part) => `${part}+`).join(''));
 }
 
 export function displayShortcut(shortcut: string): string {
@@ -34,7 +42,7 @@ export function displayShortcut(shortcut: string): string {
 }
 
 export function shortcutError(shortcut: string, other: string, platform = currentPlatform()): string | undefined {
-  if (!shortcut) return 'Press a shortcut.';
+  if (!shortcut) return undefined;
   if (shortcut === other) return 'Choose a different shortcut.';
   if (/^[A-Z0-9]$/.test(shortcut) || /^Shift\+[A-Z0-9]$/.test(shortcut)) {
     return 'Letters and numbers need Ctrl, Alt, or Meta.';

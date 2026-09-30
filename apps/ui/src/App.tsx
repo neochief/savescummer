@@ -7,6 +7,7 @@ import { AboutDialog, AppDialog, formatBytes, type DialogKind } from './Dialogs'
 import { displayShortcut } from './shortcuts';
 import { failureMessage } from './messages';
 import { GuidancePanel } from './GuidancePanel';
+import { SleepySkeleton } from './SleepySkeleton';
 
 type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush' | 'retry';
 type Feedback = { game: string; action: Action; target?: string; phase: 'busy' | 'success' | 'error'; message?: string };
@@ -37,7 +38,9 @@ function BrandButton({ onClick }: { onClick: (opener: HTMLButtonElement) => void
 
 // Empty-state skeleton leaning out of an arched window; every character SVG shares the same canvas and pose height.
 function Character({ name }: { name: string }) {
-  return <div className="empty-character" aria-hidden="true"><img src={`/character/${name}.svg`} alt="" /></div>;
+  return <div className="empty-character" aria-hidden="true">
+    {name === 'no-games-found' ? <SleepySkeleton className="character-art" /> : <img className="character-art" src={`/character/${name}.svg`} alt="" />}
+  </div>;
 }
 
 // Windows runs undecorated (tauri.windows.conf.json), so the window bar draws its own caption buttons. There is no
@@ -732,11 +735,11 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
     : game.busy?.kind === action ? { game: game.id, action, phase: 'busy' } : undefined;
   const label = current?.phase === 'error' ? 'FAILED' : action.toUpperCase();
   const title = current?.message || failureMessage(game[action].failure, game[action].reason || '');
+  // An empty shortcut was removed in Settings: no tab then.
+  const tab = shortcut ?? `${mac ? 'Alt' : 'Ctrl'}+${action === 'save' ? 'F5' : 'F9'}`;
   // Keep the clickable checkpoint card separate from the Load button so the labels stay aligned.
   return <div className="action-slot" inert={covered}>
-    {available && !covered && <span className="shortcut-tab">
-      {displayShortcut(shortcut || `${mac ? 'Alt' : 'Ctrl'}+${action === 'save' ? 'F5' : 'F9'}`)}
-    </span>}
+    {available && !covered && tab && <span className="shortcut-tab">{displayShortcut(tab)}</span>}
     <button className={`main-button ${action} ${current?.phase || ''}`} disabled={!available || busy || covered}
       onClick={onClick} title={title || undefined} aria-label={`${action} ${game.name}`}>
       {/* The hidden widest labels keep the button from resizing as SAVE turns into SAVING… or FAILED,

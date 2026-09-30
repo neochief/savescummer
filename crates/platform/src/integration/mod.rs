@@ -27,7 +27,7 @@ mod imp;
 mod shortcut;
 
 pub use imp::{Integration, start};
-pub use shortcut::{Key, Shortcut, validate_shortcuts};
+pub use shortcut::{Key, Shortcut, Shortcuts, shortcut_text, validate_shortcuts};
 
 /// Runs the OS's event loop on the calling thread, which must be the main
 /// thread, until `wait` returns (the host waits for shutdown and shuts down
