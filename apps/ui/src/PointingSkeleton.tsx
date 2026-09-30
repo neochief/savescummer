@@ -64,9 +64,59 @@ function gazeOffset(u: number, v: number, limits: { horizontal: number; up: numb
 
 // Every instance gets its own ID prefix so clip paths and <use> references never resolve into another copy.
 let instances = 0;
+function restoreRig(svg: Element, doc: Document) {
+  // Vector editors can flatten the animation helpers while retaining the visible drawing.
+  // Rebuild them from the eye sockets so an exported illustration remains usable in the UI.
+  if (svg.querySelector('#iris-static-left')) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const create = (tag: string, attrs: Record<string, string>) => {
+    const node = doc.createElementNS(ns, tag);
+    for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
+    return node;
+  };
+  const required = (id: string) => {
+    const node = svg.querySelector(`[id="${id}"]`);
+    if (!node) throw new Error(`Pointing skeleton SVG is missing ${id}`);
+    return node;
+  };
+  let defs: Element | null = svg.querySelector('defs');
+  if (!defs) {
+    defs = create('defs', {});
+    svg.prepend(defs);
+  }
+  for (const [from, to, pivot] of [
+    ['Upper-arm-bone', 'upper-arm-left', '458 811'],
+    ['Forearm-bone', 'forearm-left', '353 996'],
+    ['_07-·-Pointing-hand---viewer-left', '_07-·-Pointing-hand---viewer-left', '277 888'],
+  ]) {
+    const joint = required(from);
+    joint.setAttribute('id', to);
+    joint.setAttribute('data-pivot', pivot);
+  }
+  for (const side of sides) {
+    required(`Brow-${side}`).setAttribute('id', `brow-${side}`);
+    const socket = required(`eye-socket-${side}`);
+    const path = create('path', { id: `eye-opening-${side}`, d: socket.getAttribute('d')! });
+    const clip = create('clipPath', { id: `eye-clip-${side}` });
+    clip.append(create('use', { href: `#eye-opening-${side}` }));
+    const [cx, cy, down] = side === 'left' ? [530, 607, 85.56] : [815, 510, 104.56];
+    defs.append(path, clip,
+      create('path', { id: `gaze-bounds-${side}`, 'data-max-horizontal': '24', 'data-max-up': '12', 'data-max-down': String(down) }),
+      create('circle', { id: `gaze-neutral-${side}`, cx: String(cx), cy: String(cy) }));
+    const contents = required(`eye-contents-${side}`);
+    contents.setAttribute('clip-path', `url(#eye-clip-${side})`);
+    const gaze = create('g', { id: `iris-gaze-${side}` });
+    gaze.append(create('circle', { id: `iris-circle-${side}`, fill: '#ff0028' }));
+    const dynamic = create('g', { id: `iris-dynamic-${side}` });
+    dynamic.append(gaze);
+    contents.replaceChildren(dynamic,
+      create('use', { id: `eye-outline-${side}`, href: `#eye-opening-${side}`, fill: 'none', stroke: '#0a0505', 'stroke-width': '16' }));
+  }
+}
 function inlineSvg(prefix: string) {
   const doc = new DOMParser().parseFromString(source, 'image/svg+xml');
   const svg = doc.documentElement;
+  restoreRig(svg, doc);
   svg.querySelectorAll('title, desc').forEach((node) => node.remove());
   svg.removeAttribute('aria-labelledby');
   svg.removeAttribute('role');
@@ -81,7 +131,7 @@ function inlineSvg(prefix: string) {
     // Round eyeballs instead of the drawn crescents, resting where the crescents were. The drawn openings already
     // outline themselves, so the separate rim stays hidden; lids (the opening's outline again, drawn inside the eye's
     // clip so it only reaches inward) set how open the eyes look.
-    part('iris-static').remove();
+    part('iris-static')?.remove();
     part('iris-dynamic').removeAttribute('style');
     const circle = part('iris-circle'), { center: [cx, cy], radius } = expression.neutral.eyes[side];
     circle.setAttribute('cx', String(cx));

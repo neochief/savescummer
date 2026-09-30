@@ -165,6 +165,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const arrivalTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cardTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const scanTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const historyGame = useRef<string | undefined>(undefined);
   // Game whose history finished loading at least once; only refreshes of it can reveal new rows.
   const loadedGame = useRef<string | undefined>(undefined);
@@ -202,7 +205,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     try {
       await bridge.request({ type, game: game.id });
       // The process monitor, rather than the request, confirms the new state.
-      setTimeout(() => setCardPending((current) => current?.token === token ? undefined : current), 5000);
+      clearTimeout(cardTimer.current);
+      cardTimer.current = setTimeout(() => setCardPending((current) => current?.token === token ? undefined : current), 5000);
     } catch (error) {
       setCardError({ game: game.id, message: error instanceof Error ? error.message : String(error) });
       setCardPending((current) => current?.token === token ? undefined : current);
@@ -239,7 +243,11 @@ export function App({ bridge }: { bridge: Bridge }) {
       else items.forEach((unlisten) => unlisten());
       return bridge.request<HostState>({ type: 'state' });
     }).then((value) => { if (live) { setState(value); setStatus('connected'); } }).catch(() => undefined);
-    return () => { live = false; unlisteners.forEach((unlisten) => unlisten()); clearTimeout(feedbackTimer.current); clearTimeout(arrivalTimer.current); };
+    return () => {
+      live = false;
+      unlisteners.forEach((unlisten) => unlisten());
+      for (const timer of [feedbackTimer, arrivalTimer, flashTimer, cardTimer, scanTimer, revealTimer]) clearTimeout(timer.current);
+    };
   }, [bridge]);
 
   const visibleGames = useMemo(() => state?.games.filter((game) => game.installed) || [], [state]);
@@ -370,7 +378,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     if (viewport && (top < viewport.scrollTop || top + itemHeight(target) > viewport.scrollTop + viewport.clientHeight)) {
       viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
     }
-    setTimeout(() => setFlash(undefined), 1800);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(undefined), 1800);
   }, [bridge, history, next, selectedGame]);
 
   const runAction = useCallback(async (action: 'save' | 'load' | 'revert' | 'retry', checkpoint?: string) => {
@@ -408,7 +417,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     } catch (error) {
       setScanFeedback(String(error instanceof Error ? error.message : error));
     }
-    setTimeout(() => setScanFeedback(undefined), 2400);
+    clearTimeout(scanTimer.current);
+    scanTimer.current = setTimeout(() => setScanFeedback(undefined), 2400);
   }, [bridge]);
 
   const commitDelete = useCallback(async (game: string, checkpoint: string) => {
@@ -462,7 +472,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     setArrived(new Set([row.id]));
     arrivalTimer.current = setTimeout(() => setArrived(new Set()), 1800);
     setFlash(row.id);
-    setTimeout(() => setFlash(undefined), 1800);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(undefined), 1800);
     const visible = restored.filter((item) => !item.checkpoint ||
       item.checkpoint === pending.checkpoint || !hiddenDeletes.has(deleteKey(pending.game, item.checkpoint)));
     const items = groupHistory(visible).flatMap(({ rows }) => [undefined, ...rows]);
