@@ -3,12 +3,15 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { failureMessage } from './messages';
 import type { HostResponse, UiRequest } from './types';
 
+export const platformName = navigator.platform.startsWith('Mac') ? 'macOS' : navigator.platform.startsWith('Win') ? 'Windows' : 'Linux';
+
 export interface Bridge {
   request<T>(request: UiRequest): Promise<T>;
   report(selected: string | null, focused: boolean): Promise<void>;
   capture(capturing: boolean): Promise<void>;
   artwork(game: string, kind: 'hero' | 'logo' | 'header' | 'icon'): Promise<string>;
   openWebsite(): Promise<void>;
+  openSaveSearch(engine: 'google' | 'chatgpt', game: string): Promise<void>;
   onState(callback: (state: import('./types').HostState) => void): Promise<UnlistenFn>;
   onStatus(callback: (status: string) => void): Promise<UnlistenFn>;
   onLabels(callback: (game: string) => void): Promise<UnlistenFn>;
@@ -34,6 +37,9 @@ export const tauriBridge: Bridge = {
   },
   openWebsite() {
     return invoke<void>('open_website');
+  },
+  openSaveSearch(engine, game) {
+    return invoke<void>('open_save_search', { engine, game });
   },
   async onState(callback) {
     return listen('host-state', (event) => callback(event.payload as import('./types').HostState));

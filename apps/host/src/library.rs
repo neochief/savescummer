@@ -18,6 +18,7 @@ use savescummer_storage as db;
 
 use crate::host::{Host, Inner};
 use crate::model::{Derived, Game, SETTING_COUNTER, UserLocation};
+use crate::portable::GameRecords;
 
 /// Real paths, resolved once per pass.
 pub struct CachedPaths {
@@ -431,7 +432,7 @@ pub fn persist_games(host: &Host, inner: &Inner, counter: u64) {
     let mut storage = host.db();
     let _ = storage.write(|c| {
         for game in inner.games.values() {
-            db::put_game(c, &game.id, &serde_json::to_string(game).expect("game serializes"))?;
+            db::put_game(c, &game.id, &host.portable().record(game))?;
         }
         db::set_setting(c, SETTING_COUNTER, &counter.to_string())
     });
@@ -440,7 +441,7 @@ pub fn persist_games(host: &Host, inner: &Inner, counter: u64) {
 pub fn persist_game(host: &Host, game: &Game) -> Result<(), Failure> {
     let mut storage = host.db();
     storage
-        .write(|c| db::put_game(c, &game.id, &serde_json::to_string(game).expect("game serializes")))
+        .write(|c| db::put_game(c, &game.id, &host.portable().record(game)))
         .map_err(|e| Failure::new(ErrorKind::NotRecorded, e.to_string()))
 }
 
@@ -490,8 +491,8 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
         return Err(Failure::new(ErrorKind::InvalidConfig, "the name can't be blank"));
     }
     ask_for_typed(host, Some(executable), Some(location))?;
-    let exe = absolute(executable)?;
-    let location = user_location(location)?;
+    let exe = absolute(host, executable)?;
+    let location = user_location(host, location)?;
     let mut inner = host.lock();
     let counter = next_counter(host) + 1;
     let id = crate::host::new_id("custom");
@@ -519,7 +520,7 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
         let mut storage = host.db();
         storage
             .write(|c| {
-                db::put_game(c, &id, &serde_json::to_string(&game).expect("game serializes"))?;
+                db::put_game(c, &id, &host.portable().record(&game))?;
                 db::set_setting(c, SETTING_COUNTER, &counter.to_string())
             })
             .map_err(|e| Failure::new(ErrorKind::NotRecorded, e.to_string()))?;
@@ -607,13 +608,13 @@ pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> R
         game.location = None;
     }
     if let Some(exe) = request.executable {
-        game.executable = Some(absolute(exe)?);
+        game.executable = Some(absolute(host, exe)?);
         if game.is_custom() {
             game.installed = savescummer_snapshots::presence(game.executable.as_deref().unwrap()) != Presence::Missing;
         }
     }
     if let Some(location) = request.save_location {
-        game.location = Some(user_location(location)?);
+        game.location = Some(user_location(host, location)?);
     }
     if let Some(enabled) = request.expert_mode {
         game.expert_mode = enabled;
@@ -631,8 +632,10 @@ pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> R
     Ok(())
 }
 
-fn absolute(text: &str) -> Result<PathBuf, Failure> {
-    let path = PathBuf::from(text.trim());
+/// A typed full path, which may start with the user's folder written
+/// portably (see [`crate::portable`]).
+fn absolute(host: &Host, text: &str) -> Result<PathBuf, Failure> {
+    let path = host.portable().expand(text.trim());
     if !path.is_absolute() {
         return Err(Failure::new(ErrorKind::InvalidConfig, "use a full path").path(&path));
     }
@@ -646,7 +649,7 @@ fn absolute(text: &str) -> Result<PathBuf, Failure> {
 fn ask_for_typed(host: &Host, executable: Option<&str>, location: Option<&str>) -> Result<(), Failure> {
     for (text, program) in [(executable, true), (location, false)] {
         let Some(text) = text else { continue };
-        let path = absolute(text)?;
+        let path = absolute(host, text)?;
         let root = split_location(&path).map_or(path, |target| target.root);
         // A program is only read, and app bundles only guard writes (as for
         // install folders, see `privacy::game_needs`).
@@ -659,8 +662,8 @@ fn ask_for_typed(host: &Host, executable: Option<&str>, location: Option<&str>) 
 }
 
 /// A typed save location, validated.
-fn user_location(text: &str) -> Result<UserLocation, Failure> {
-    let path = absolute(text)?;
+fn user_location(host: &Host, text: &str) -> Result<UserLocation, Failure> {
+    let path = absolute(host, text)?;
     let target =
         split_location(&path).ok_or_else(|| Failure::new(ErrorKind::InvalidConfig, "use a full path").path(&path))?;
     let real_root = savescummer_snapshots::real_path(&target.root).map_err(|e| {
@@ -673,7 +676,7 @@ fn user_location(text: &str) -> Result<UserLocation, Failure> {
 pub fn load_games(host: &Host, inner: &mut Inner) {
     let rows = db::games(host.db().conn()).unwrap_or_default();
     for (id, data) in rows {
-        if let Ok(game) = Game::from_record_json(&data) {
+        if let Ok(game) = host.portable().load(&data) {
             inner.games.insert(id, game);
         }
     }

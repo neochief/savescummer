@@ -154,7 +154,7 @@ fn shortcut_conflict(platform: &str, shortcut: Shortcut) -> Option<&'static Shor
 fn conflicts() -> &'static ShortcutConflicts {
     static CONFLICTS: OnceLock<ShortcutConflicts> = OnceLock::new();
     CONFLICTS.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../../apps/ui/src/shortcut-conflicts.json"))
+        serde_json::from_str(include_str!("../../../../apps/ui/src/shortcuts/shortcut-conflicts.json"))
             .expect("shortcut conflict list must be valid JSON")
     })
 }

@@ -305,6 +305,13 @@ fn custom_games_are_validated_whole_and_survive_scans() {
     assert_eq!(read(&saves.join("slot1.sav")), "one");
     assert_eq!(read(&saves.join("notes.txt")), "edited notes", "only what the pattern matches is restored");
 
+    // Paths in the user's folders are shown and kept portably, and typed
+    // that way too.
+    let set = world.ok(&["save-set", &id]);
+    assert_eq!(s(&set["location"]), world.portable(&saves.join("*.sav")));
+    world.ok(&["configure", &id, "--saves", &world.portable(&saves.join("*.sav"))]);
+    world.ok(&["save", &id]);
+
     // An invalid change leaves the old configuration exactly as it was.
     assert_eq!(world.cli(&["configure", &id, "--saves", &docs]).error_kind(), "invalid_target");
     let set = world.ok(&["save-set", &id]);

@@ -2,7 +2,7 @@
 //! labels, settings, opening folders and the catalog.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use savescummer_core::history::RowKind;
@@ -132,7 +132,7 @@ pub fn flush_preview(
     let mut items: Vec<FlushItem> = records
         .iter()
         .map(|c| FlushItem {
-            path: store.join(&c.folder).to_string_lossy().into_owned(),
+            path: host.portable().contract(&store.join(&c.folder)),
             kind: if c.state == "deleting" { "temporary".into() } else { c.kind.clone() },
             label: c.label.clone(),
         })
@@ -144,7 +144,7 @@ pub fn flush_preview(
             if savescummer_snapshots::is_reserved_folder(&name) {
                 size += savescummer_snapshots::folder_size(&entry.path());
                 items.push(FlushItem {
-                    path: entry.path().to_string_lossy().into_owned(),
+                    path: host.portable().contract(&entry.path()),
                     kind: "temporary".into(),
                     label: None,
                 });
@@ -160,9 +160,9 @@ pub fn flush_preview(
     Ok(FlushPreview { saved, recovery, temporary, size, items: page, next })
 }
 
-fn target_info(t: &savescummer_core::Target) -> TargetInfo {
+fn target_info(portable: &crate::portable::Portable, t: &savescummer_core::Target) -> TargetInfo {
     TargetInfo {
-        root: t.root.to_string_lossy().into_owned(),
+        root: portable.contract(&t.root),
         filter: t.filter.clone(),
         excludes: t.excludes.clone(),
         presence: t.presence,
@@ -174,6 +174,7 @@ pub fn save_set(host: &Arc<Host>, game: &str) -> Result<SaveSetInfo, Failure> {
     let game_id = host.find_game(&inner, game)?;
     crate::library::derive_one(host, &mut inner, &game_id);
     let game = inner.game(&game_id)?;
+    let portable = host.portable();
     let (catalog, catalog_problem) = match &game.outcome {
         Some(savescummer_catalog::Outcome::Resolved { save_set }) => (
             Some(
@@ -182,7 +183,7 @@ pub fn save_set(host: &Arc<Host>, game: &str) -> Result<SaveSetInfo, Failure> {
                     .map(|t| {
                         let mut t = t.clone();
                         t.presence = savescummer_snapshots::presence(&t.root);
-                        target_info(&t)
+                        target_info(&portable, &t)
                     })
                     .collect(),
             ),
@@ -195,8 +196,12 @@ pub fn save_set(host: &Arc<Host>, game: &str) -> Result<SaveSetInfo, Failure> {
     Ok(SaveSetInfo {
         catalog,
         catalog_problem,
-        location: game.location.as_ref().map(|l| l.text.clone()),
-        active: derived.active.as_ref().map(|ts| ts.iter().map(target_info).collect()).unwrap_or_default(),
+        location: game.location.as_ref().map(|l| portable.contract(Path::new(&l.text))),
+        active: derived
+            .active
+            .as_ref()
+            .map(|ts| ts.iter().map(|t| target_info(&portable, t)).collect())
+            .unwrap_or_default(),
         config_error: derived.active.err(),
         warnings: derived.warnings,
         context: game.context.as_ref().map(|c| serde_json::to_value(c).expect("context serializes")),
@@ -358,7 +363,7 @@ pub fn open(host: &Arc<Host>, target: &OpenTarget, resolve_only: bool) -> Result
     };
     let existing = if matches!(target, OpenTarget::AccessSettings { .. }) { path } else { nearest_existing(&path) };
     let opened = if resolve_only { false } else { savescummer_platform::open_folder(&existing).is_ok() };
-    Ok(Opened { path: existing.to_string_lossy().into_owned(), opened })
+    Ok(Opened { path: host.portable().contract(&existing), opened })
 }
 
 fn nearest_existing(path: &std::path::Path) -> PathBuf {

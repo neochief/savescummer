@@ -1168,7 +1168,7 @@ pub fn move_store(host: &Arc<Host>, request_id: &str, target: &str) -> Result<Op
     if let Some(existing) = by_request(host, request_id) {
         return Ok(existing);
     }
-    let new_store = PathBuf::from(target.trim());
+    let new_store = host.portable().expand(target.trim());
     if !new_store.is_absolute() {
         return Err(Failure::new(ErrorKind::InvalidConfig, "use a full path").path(&new_store));
     }
@@ -1293,7 +1293,7 @@ fn run_move(host: &Arc<Host>, op_id: &str, old: &Path, new: &Path) -> Result<OpR
     }
     host.db()
         .write(|c| {
-            db::set_setting(c, crate::model::SETTING_STORE, &new.to_string_lossy())?;
+            db::set_setting(c, crate::model::SETTING_STORE, &host.portable().contract(&new))?;
             for (id, signature, identity) in &identities {
                 c.execute(
                     "UPDATE checkpoints SET signature = ?2, identity = ?3 WHERE id = ?1",

@@ -1,0 +1,18 @@
+/* A set shortcut reads as a button, an unset one sinks like an empty field; recording turns it into an input with inline actions. */
+.shortcut-input { position: relative; flex: 0 1 180px; display: flex; }
+.dialog-field .shortcut-input .shortcut-value { width: 100%; padding: 0 8px; border: 1px solid transparent; font: 600 14px Chakra Petch, sans-serif; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dialog-field .shortcut-input .shortcut-value:hover { background: #54443a; }
+.dialog-field .shortcut-input.unset .shortcut-value { border-color: #3d342d; background: #231e1b; color: #8f8176; font-weight: 500; }
+.dialog-field .shortcut-input.unset .shortcut-value:hover { color: #b3a598; }
+.dialog-field .shortcut-input.recording .shortcut-value { padding-right: 58px; border-color: #f51e2b; outline: 1px solid #f51e2b; background: #1c1918; color: #faf8ee; caret-color: transparent; text-align: left; }
+.dialog-field .shortcut-input.recording .shortcut-value::placeholder { color: #8f8176; font-weight: 500; }
+.shortcut-actions { position: absolute; top: 0; right: 6px; bottom: 0; display: flex; align-items: center; gap: 4px; }
+.dialog-field .shortcut-actions button { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+.dialog-field .shortcut-actions .shortcut-restore { background: #e8833a; }
+.dialog-field .shortcut-actions .shortcut-restore:hover { background: #f29a55; }
+.dialog-field .shortcut-actions .shortcut-clear { background: #5b4c42; }
+.dialog-field .shortcut-actions .shortcut-clear:hover { background: #75645a; }
+.shortcut-actions .icon { width: 10px; height: 10px; filter: brightness(0) invert(1); }
+.dialog-field .shortcut-input .shortcut-value[aria-invalid="true"] { border-color: #ff7a80; }
+.dialog-error.shortcut-error, .dialog-warning.shortcut-warning { margin: -9px 0 14px; }
+.dialog-warning.shortcut-warning { color: #f4c77d; font-size: 12px; }

@@ -17,7 +17,7 @@ use objc2::runtime::{AnyObject, Bool, NSObject, ProtocolObject};
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSBitmapImageRep,
-    NSEvent, NSEventMask, NSEventModifierFlags, NSEventType, NSImage, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem,
+    NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem,
     NSVariableStatusItemLength,
 };
 use objc2_foundation::{NSData, NSError, NSObjectProtocol, NSPoint, NSSize, NSString, NSUUID};
@@ -230,21 +230,6 @@ define_class!(
     }
 
     impl Delegate {
-        /// A click shows the UI; a right-click or ⌃-click opens the menu.
-        #[unsafe(method(statusItemClicked:))]
-        fn status_item_clicked(&self, _sender: Option<&AnyObject>) {
-            let mtm = self.mtm();
-            let event = NSApplication::sharedApplication(mtm).currentEvent();
-            let wants_menu = event.is_some_and(|e| {
-                e.r#type() == NSEventType::RightMouseUp || e.modifierFlags().contains(NSEventModifierFlags::Control)
-            });
-            if wants_menu {
-                open_menu(self, mtm);
-            } else {
-                emit(Signal::OpenMainWindow);
-            }
-        }
-
         #[unsafe(method(openMainWindow:))]
         fn open_main_window(&self, _sender: Option<&AnyObject>) {
             emit(Signal::OpenMainWindow);
@@ -280,13 +265,9 @@ fn status_item(mtm: MainThreadMarker) -> Retained<NSStatusItem> {
     if let Some(button) = item.button(mtm) {
         button.setImage(Some(&template_icon()));
         button.setToolTip(Some(&NSString::from_str("SaveScummer")));
-        // SAFETY: the delegate lives for the process and has this action.
-        unsafe {
-            button.setTarget(Some(&delegate(mtm)));
-            button.setAction(Some(sel!(statusItemClicked:)));
-        }
-        button.sendActionOn(NSEventMask::LeftMouseUp | NSEventMask::RightMouseUp);
     }
+    // Any click, left or right, opens it.
+    item.setMenu(Some(&menu(mtm)));
     item
 }
 
@@ -306,17 +287,8 @@ fn template_icon() -> Retained<NSImage> {
     image
 }
 
-/// Opens the menu under the menu-bar item; returns once it closes. Nothing
-/// stays borrowed meanwhile: the menu runs its own event loop, in which the
-/// host may shut down.
-fn open_menu(delegate: &Delegate, mtm: MainThreadMarker) {
-    let bar = MAIN.with(|main| main.borrow().as_ref().map(|state| state.bar.clone()));
-    if let Some(bar) = bar {
-        show_menu(&bar, delegate, mtm);
-    }
-}
-
-fn show_menu(bar: &NSStatusItem, delegate: &Delegate, mtm: MainThreadMarker) {
+fn menu(mtm: MainThreadMarker) -> Retained<NSMenu> {
+    let delegate = delegate(mtm);
     let menu = NSMenu::new(mtm);
     for (title, action) in [("Main window", sel!(openMainWindow:)), ("Exit", sel!(exit:))] {
         // SAFETY: the delegate lives for the process and has both actions.
@@ -327,19 +299,12 @@ fn show_menu(bar: &NSStatusItem, delegate: &Delegate, mtm: MainThreadMarker) {
                 Some(action),
                 &NSString::new(),
             );
-            item.setTarget(Some(delegate));
+            item.setTarget(Some(&delegate));
             item
         };
         menu.addItem(&item);
     }
-    // Attached only while open, so a plain click stays a click.
-    bar.setMenu(Some(&menu));
-    if let Some(button) = bar.button(mtm) {
-        // SAFETY: a click on our own button; it opens the menu and returns
-        // once the menu closes.
-        unsafe { button.performClick(None) };
-    }
-    bar.setMenu(None);
+    menu
 }
 
 // --- Hotkeys: Carbon `RegisterEventHotKey` through `global-hotkey`. It needs

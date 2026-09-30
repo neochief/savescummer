@@ -235,9 +235,9 @@ impl Host {
                 launch_on_startup: inner.launch_on_startup,
                 launch_on_startup_available: savescummer_platform::autostart::available(),
                 launch_on_startup_needs_approval: inner.launch_needs_approval,
-                checkpoint_store: inner.store.to_string_lossy().into_owned(),
+                checkpoint_store: self.portable().contract(&inner.store),
             },
-            store: StoreInfo { path: inner.store.to_string_lossy().into_owned(), available: inner.store_available },
+            store: StoreInfo { path: self.portable().contract(&inner.store), available: inner.store_available },
             scan: inner.scan.clone(),
             active_stack: inner.stack.entries().to_vec(),
             hotkey_target: hotkey_target(inner).map(|(g, _)| g),
@@ -266,7 +266,7 @@ impl Host {
                 && game.expert_mode,
             expert_mode: game.expert_mode,
             info: game.info.clone(),
-            executable: game.main_executable().map(|p| p.to_string_lossy().into_owned()),
+            executable: game.main_executable().map(|p| self.portable().contract(&p)),
             executable_overridden: game.executable.is_some(),
             save: facts.availability(Action::Save),
             load: facts.availability(Action::Load),
@@ -325,6 +325,11 @@ impl Host {
     pub fn bump_labels(&self, inner: &mut Inner, game_id: &str) {
         inner.caches.entry(game_id.to_string()).or_default().labels_version += 1;
         let _ = self.events_tx.send(EventBody::Labels { game: game_id.to_string() });
+    }
+
+    /// Writes and reads paths the way users see and keep them.
+    pub fn portable(&self) -> crate::portable::Portable {
+        crate::portable::Portable::new(&self.env.folders, self.env.case_insensitive())
     }
 
     /// Finds a game by id, or by a name matching exactly one game.

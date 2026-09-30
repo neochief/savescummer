@@ -16,6 +16,7 @@ use savescummer_ipc::{
 };
 
 use crate::host::Host;
+use crate::portable::Portable;
 use crate::{library, ops, queries};
 
 /// Accepts connections until the process exits.
@@ -35,6 +36,7 @@ pub async fn serve(host: Arc<Host>, mut listener: transport::Listener) {
 
 async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>, stream: S) {
     let (reader, mut writer) = tokio::io::split(stream);
+    let portable = host.portable();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let writer_task = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
@@ -61,13 +63,13 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
             continue;
         }
         if line.len() > MAX_MESSAGE {
-            send(&tx, &error_response("?", Failure::new(ErrorKind::TooLarge, "the request is too large")));
+            send(&tx, &portable, &error_response("?", Failure::new(ErrorKind::TooLarge, "the request is too large")));
             continue;
         }
         let value: serde_json::Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
-                send(&tx, &error_response("?", Failure::new(ErrorKind::InvalidRequest, e.to_string())));
+                send(&tx, &portable, &error_response("?", Failure::new(ErrorKind::InvalidRequest, e.to_string())));
                 continue;
             }
         };
@@ -77,6 +79,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
             // Refused clearly, never half-understood.
             send(
                 &tx,
+                &portable,
                 &error_response(
                     &id,
                     Failure::new(
@@ -90,7 +93,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
         let request: Request = match serde_json::from_value(value) {
             Ok(r) => r,
             Err(e) => {
-                send(&tx, &error_response(&id, Failure::new(ErrorKind::InvalidRequest, e.to_string())));
+                send(&tx, &portable, &error_response(&id, Failure::new(ErrorKind::InvalidRequest, e.to_string())));
                 continue;
             }
         };
@@ -106,7 +109,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
             inner.ui_started = None;
         }
         if matches!(request.command, Command::Watch) {
-            send(&tx, &ok_response(&id, serde_json::json!({})));
+            send(&tx, &portable, &ok_response(&id, serde_json::json!({})));
             if !subscribed {
                 subscribed = true;
                 // A UI attaching: art it may be missing is fetched now.
@@ -119,10 +122,11 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
         let tx = tx.clone();
         tokio::spawn(async move {
             let id = request.id.clone();
+            let portable = host.portable();
             let response = tokio::task::spawn_blocking(move || dispatch(&host, request)).await.unwrap_or_else(|e| {
                 error_response(&id, Failure::new(ErrorKind::Io, format!("the request failed: {e}")))
             });
-            send(&tx, &response);
+            send(&tx, &portable, &response);
         });
     }
     // The client is gone. Before waiting for the writer: a watch keeps it
@@ -143,10 +147,15 @@ async fn connection<S: AsyncRead + AsyncWrite + Send + 'static>(host: Arc<Host>,
 /// Pushes the current state, then every new state (coalesced), label
 /// changes and the shutdown notice.
 async fn watch(host: Arc<Host>, tx: mpsc::UnboundedSender<String>) {
+    let portable = host.portable();
     let mut states = host.state_tx.subscribe();
     let mut events = host.events_tx.subscribe();
     let state = states.borrow_and_update().clone();
-    if !send(&tx, &Event { v: PROTOCOL_VERSION, body: EventBody::State { state: Box::new((*state).clone()) } }) {
+    if !send(
+        &tx,
+        &portable,
+        &Event { v: PROTOCOL_VERSION, body: EventBody::State { state: Box::new((*state).clone()) } },
+    ) {
         return;
     }
     loop {
@@ -154,7 +163,7 @@ async fn watch(host: Arc<Host>, tx: mpsc::UnboundedSender<String>) {
             changed = states.changed() => {
                 if changed.is_err() { return; }
                 let state = states.borrow_and_update().clone();
-                if !send(&tx, &Event { v: PROTOCOL_VERSION, body: EventBody::State { state: Box::new((*state).clone()) } }) {
+                if !send(&tx, &portable, &Event { v: PROTOCOL_VERSION, body: EventBody::State { state: Box::new((*state).clone()) } }) {
                     return;
                 }
             }
@@ -162,7 +171,7 @@ async fn watch(host: Arc<Host>, tx: mpsc::UnboundedSender<String>) {
                 match event {
                     Ok(body) => {
                         let last = matches!(body, EventBody::Shutdown);
-                        if !send(&tx, &Event { v: PROTOCOL_VERSION, body }) || last {
+                        if !send(&tx, &portable, &Event { v: PROTOCOL_VERSION, body }) || last {
                             return;
                         }
                     }
@@ -174,8 +183,12 @@ async fn watch(host: Arc<Host>, tx: mpsc::UnboundedSender<String>) {
     }
 }
 
-fn send<T: Serialize>(tx: &mpsc::UnboundedSender<String>, message: &T) -> bool {
-    let line = serde_json::to_string(message).expect("messages serialize");
+/// Sends one message. The paths in failures are written portably, as every
+/// other path the host sends already is.
+fn send<T: Serialize>(tx: &mpsc::UnboundedSender<String>, portable: &Portable, message: &T) -> bool {
+    let mut value = serde_json::to_value(message).expect("messages serialize");
+    contract_failure_paths(portable, &mut value);
+    let line = value.to_string();
     let line = if line.len() > MAX_MESSAGE {
         serde_json::to_string(&error_response("?", Failure::new(ErrorKind::TooLarge, "the reply would be too large")))
             .unwrap()
@@ -183,6 +196,27 @@ fn send<T: Serialize>(tx: &mpsc::UnboundedSender<String>, message: &T) -> bool {
         line
     };
     tx.send(line).is_ok()
+}
+
+fn contract_failure_paths(portable: &Portable, value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            for (key, field) in fields.iter_mut() {
+                match (key.as_str(), field) {
+                    ("paths", serde_json::Value::Array(paths)) => {
+                        for path in paths {
+                            if let Some(text) = path.as_str() {
+                                *path = portable.contract(std::path::Path::new(text)).into();
+                            }
+                        }
+                    }
+                    (_, field) => contract_failure_paths(portable, field),
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|item| contract_failure_paths(portable, item)),
+        _ => {}
+    }
 }
 
 fn ok_response(id: &str, result: serde_json::Value) -> Response {

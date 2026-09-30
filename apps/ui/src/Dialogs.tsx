@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { Bridge } from './bridge';
+import { platformName, type Bridge } from './bridge';
+import { executableExamples, platformProblem, type PathField } from './paths';
 import type { FlushPreview, Game, HostState, SaveSet, SaveTarget } from './types';
 import { version } from '../package.json';
-import { shortcutDescription, shortcutError, shortcutWarning } from './shortcuts';
-import { ShortcutInput } from './ShortcutInput';
+import { shortcutError } from './shortcuts/shortcuts';
+import { ShortcutInput } from './shortcuts/ShortcutInput';
 
 export type DialogKind = 'settings' | 'add' | 'configure' | 'flush' | 'about';
 
@@ -23,15 +24,19 @@ function targetPath({ root, filter }: SaveTarget) {
   return root.replace(/[\\/]+$/, '') + sep + filter.value.replaceAll('/', sep);
 }
 
-function shortcutMessage(text: string, shortcut: string) {
-  const description = shortcutDescription(shortcut);
-  const at = description ? text.indexOf(description) : -1;
-  if (!description || at < 0) return text;
-  return <>{text.slice(0, at)}<strong>{description}</strong>{text.slice(at + description.length)}</>;
+const executableExample = executableExamples[platformName];
+
+function SearchLinks({ game, bridge, onError }: { game: string; bridge: Bridge; onError: (message: string) => void }) {
+  const search = (engine: 'google' | 'chatgpt') => (event: MouseEvent) => {
+    event.preventDefault();
+    bridge.openSaveSearch(engine, game).catch((failure) => onError(message(failure)));
+  };
+  return <><a href="#" onClick={search('google')}>Google</a> or <a href="#" onClick={search('chatgpt')}>ChatGPT</a></>;
 }
 
-function DialogFrame({ title, kind, close, opener, children }: {
-  title: ReactNode; kind: DialogKind; close: () => void; opener?: HTMLElement | null; children: ReactNode;
+/** `hideTitle` drops the header bar; the title stays for screen readers and only the close button shows. */
+function DialogFrame({ title, hideTitle = false, kind, close, opener, children }: {
+  title: ReactNode; hideTitle?: boolean; kind: DialogKind; close: () => void; opener?: HTMLElement | null; children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -44,8 +49,11 @@ function DialogFrame({ title, kind, close, opener, children }: {
   return <dialog ref={ref} tabIndex={-1} className={`dialog dialog-${kind}`} aria-labelledby={`dialog-title-${kind}`}
     onCancel={(event) => { event.preventDefault(); close(); }}
     onClick={(event) => { if (event.target === ref.current) close(); }}>
-    <header><h2 id={`dialog-title-${kind}`}>{title}</h2><button type="button" className="dialog-close" onClick={close} aria-label="Close dialog"><img className="icon" src="/icons/xmark.svg" alt="" aria-hidden="true" /></button></header>
+    {hideTitle ? <h2 id={`dialog-title-${kind}`} className="sr-only">{title}</h2>
+      : <header><h2 id={`dialog-title-${kind}`}>{title}</h2></header>}
     {children}
+    {/* After the content so it comes last in tab order; CSS pins it to the header's corner. */}
+    <button type="button" className="dialog-close" onClick={close} aria-label="Close dialog"><img className="icon" src="/icons/xmark.svg" alt="" aria-hidden="true" /></button>
   </dialog>;
 }
 
@@ -64,7 +72,7 @@ export function copyrightYears(now = new Date()) {
 
 export function AboutDialog({ bridge, close, opener }: { bridge: Bridge; close: () => void; opener?: HTMLElement | null }) {
   const [error, setError] = useState<string>();
-  return <DialogFrame title="About" kind="about" close={close} opener={opener}>
+  return <DialogFrame title="About" hideTitle kind="about" close={close} opener={opener}>
     <div className="dialog-body about">
       <img className="about-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
       <span className="wordmark" aria-label="SaveScummer"><span>Save</span><strong>Scummer</strong></span>
@@ -88,7 +96,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [resetExecutable, setResetExecutable] = useState(false);
   const [expertMode, setExpertMode] = useState(game?.expert_mode ?? false);
   const [location, setLocation] = useState('');
-  const [focused, setFocused] = useState<'executable' | 'location'>();
+  const [focused, setFocused] = useState<PathField>();
+  // A field's platform problem shows once the user leaves it or submits, not while typing.
+  const [checked, setChecked] = useState<Partial<Record<PathField, boolean>>>({});
   const [saveSet, setSaveSet] = useState<SaveSet>();
   const [checkpointsPath, setCheckpointsPath] = useState<string>();
   const [preview, setPreview] = useState<FlushPreview>();
@@ -99,9 +109,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   // An empty shortcut is one the user removed.
   const [saveShortcut, setSaveShortcut] = useState(state?.settings?.save_shortcut ?? defaultShortcuts.save);
   const [loadShortcut, setLoadShortcut] = useState(state?.settings?.load_shortcut ?? defaultShortcuts.load);
-  const [shortcutErrors, setShortcutErrors] = useState<{ save?: string; load?: string }>({});
-  const saveWarning = shortcutErrors.save ? undefined : shortcutWarning(saveShortcut);
-  const loadWarning = shortcutErrors.load ? undefined : shortcutWarning(loadShortcut);
+  const [rejections, setRejections] = useState<{ save?: string; load?: string }>({});
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   // A catalog game with no location of its own shows the catalog's paths, read-only.
@@ -111,6 +119,14 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     .findIndex((active) => active.root === target.root && JSON.stringify(active.filter) === JSON.stringify(target.filter));
   const openSaves = (target: number) => game && bridge.request({ type: 'open_saves', game: game.id, target }).catch((failure) => setError(message(failure)));
   const gameName = game ? `${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}` : '';
+  const searchName = (kind === 'add' ? name.trim() : game?.name) || 'GAME';
+  // Only what the user typed is checked: a value the host already holds stays as it is.
+  const problems = {
+    executable: executable !== (game?.executable || '') ? platformProblem('executable', executable, searchName) : undefined,
+    location: !catalogTargets && location !== (saveSet?.location || '') ? platformProblem('location', location, searchName) : undefined,
+  };
+  const shown = (field: PathField) => checked[field] ? problems[field] : undefined;
+  const leave = (field: PathField) => { setFocused(undefined); setChecked((value) => ({ ...value, [field]: true })); };
 
   useEffect(() => {
     if (kind !== 'settings') return;
@@ -120,7 +136,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   function changeShortcut(which: 'save' | 'load', shortcut: string) {
     if (which === 'save') setSaveShortcut(shortcut);
     else setLoadShortcut(shortcut);
-    setShortcutErrors((current) => ({ ...current, [which]: undefined }));
+    setRejections((current) => ({ ...current, [which]: undefined }));
   }
 
   // Hotkeys pause while a field records, so pressing the current one doesn't fire it.
@@ -131,6 +147,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
       const picked = await open({ title: which === 'executable' ? 'Choose game executable' : 'Choose save folder',
         directory: which === 'location', multiple: false, fileAccessMode: 'scoped' });
       if (typeof picked !== 'string') return;
+      setChecked((value) => ({ ...value, [which]: true }));
       if (which === 'location') setLocation(picked);
       else {
         setExecutable(picked);
@@ -165,8 +182,13 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     event.preventDefault();
     if (kind === 'flush' && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') !== 'flush') { close(); return; }
     if (kind === 'settings') {
-      const errors = { save: shortcutError(saveShortcut, loadShortcut), load: shortcutError(loadShortcut, saveShortcut) };
-      if (errors.save || errors.load) { setShortcutErrors(errors); return; }
+      // The fields already show why.
+      if (shortcutError(saveShortcut, loadShortcut) || shortcutError(loadShortcut, saveShortcut)) return;
+    }
+    if ((kind === 'add' || kind === 'configure') && (problems.executable || problems.location)) {
+      setChecked({ executable: true, location: true });
+      document.getElementById(problems.executable ? 'game-executable' : 'save-location')?.focus();
+      return;
     }
     setError(undefined);
     setBusy(true);
@@ -197,8 +219,8 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
       }
     } catch (failure) {
       const detail = message(failure);
-      if (kind === 'settings' && detail.startsWith('Save shortcut:')) setShortcutErrors({ save: detail.slice(14).trim() });
-      else if (kind === 'settings' && detail.startsWith('Load shortcut:')) setShortcutErrors({ load: detail.slice(14).trim() });
+      if (kind === 'settings' && detail.startsWith('Save shortcut:')) setRejections({ save: detail.slice(14).trim() });
+      else if (kind === 'settings' && detail.startsWith('Load shortcut:')) setRejections({ load: detail.slice(14).trim() });
       else setError(detail);
     } finally {
       setBusy(false);
@@ -215,21 +237,13 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
       <div className="dialog-body">
         {kind === 'settings' && <>
           <div className="dialog-group">
-          <div className="dialog-field"><label id="save-shortcut-label" htmlFor="save-shortcut">Save shortcut</label>
-            <ShortcutInput id="save-shortcut" value={saveShortcut} fallback={defaultShortcuts.save} invalid={Boolean(shortcutErrors.save)}
-              describedBy={shortcutErrors.save ? 'save-shortcut-error' : saveWarning ? 'save-shortcut-warning' : undefined}
-              onChange={(shortcut) => changeShortcut('save', shortcut)} onRecording={recordShortcut} /></div>
-          {shortcutErrors.save && <p id="save-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutMessage(shortcutErrors.save, saveShortcut)}</p>}
-          {saveWarning && <p id="save-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{shortcutMessage(saveWarning, saveShortcut)}</p>}
-          <div className="dialog-field"><label id="load-shortcut-label" htmlFor="load-shortcut">Load shortcut</label>
-            <ShortcutInput id="load-shortcut" value={loadShortcut} fallback={defaultShortcuts.load} invalid={Boolean(shortcutErrors.load)}
-              describedBy={shortcutErrors.load ? 'load-shortcut-error' : loadWarning ? 'load-shortcut-warning' : undefined}
-              onChange={(shortcut) => changeShortcut('load', shortcut)} onRecording={recordShortcut} /></div>
-          {shortcutErrors.load && <p id="load-shortcut-error" className="dialog-error shortcut-error" role="alert">{shortcutMessage(shortcutErrors.load, loadShortcut)}</p>}
-          {loadWarning && <p id="load-shortcut-warning" className="dialog-warning shortcut-warning" role="status">{shortcutMessage(loadWarning, loadShortcut)}</p>}
+          <ShortcutInput id="save-shortcut" label="Save shortcut" value={saveShortcut} fallback={defaultShortcuts.save} other={loadShortcut}
+            rejection={rejections.save} onChange={(shortcut) => changeShortcut('save', shortcut)} onRecording={recordShortcut} />
+          <ShortcutInput id="load-shortcut" label="Load shortcut" value={loadShortcut} fallback={defaultShortcuts.load} other={saveShortcut}
+            rejection={rejections.load} onChange={(shortcut) => changeShortcut('load', shortcut)} onRecording={recordShortcut} />
           </div>
           <div className="dialog-group">
-          <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds</label>
+          <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds on Save and Load</label>
           <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
             onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>
           {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}
@@ -239,41 +253,48 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           <div className="dialog-group">
           {kind === 'configure' && game?.kind === 'custom' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" className="dialog-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
           <div className="dialog-field"><label htmlFor="game-executable">Game executable</label><span className="dialog-input"><input id="game-executable" value={executable}
-            onFocus={() => setFocused('executable')} onBlur={() => setFocused(undefined)}
-            onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); }} required />
+            onFocus={() => setFocused('executable')} onBlur={() => leave('executable')} aria-invalid={Boolean(shown('executable'))}
+            onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); setChecked((value) => ({ ...value, executable: false })); }} required />
               {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open game executable" title="Show in folder"
                 disabled={resetExecutable || executable !== (game.executable || '')}
                 onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button>}</span>
             <button type="button" onClick={() => browse('executable')}>Change</button>
           </div>
+          {shown('executable') ? <p className="dialog-problem" role="alert">{shown('executable')}</p> : <>
+          {kind === 'add' && <p className="dialog-hint">Example: {executableExample}</p>}
           {kind === 'configure' && game && game.kind !== 'custom' && <p className="dialog-below">
             {focused !== 'executable' && !resetExecutable && (game.executable_overridden || executable !== (game.executable || ''))
               && <button type="button" className="dialog-reset" onClick={() => { setExecutable(game.executable || ''); setResetExecutable(true); }}>Reset</button>}
           </p>}
+          </>}
+          {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" className="dialog-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
           {catalogTargets ? <>
-            <div className="dialog-field dialog-paths"><label htmlFor="save-location">Save location</label>
+            <div className="dialog-field dialog-paths"><label htmlFor="save-location">Where the game keeps its save files</label>
               <span className="dialog-path-list">{catalogTargets.map((target, i) => {
                 const path = targetPath(target);
                 const active = activeIndex(target);
-                return <span className="dialog-input" key={path}><input id={i === 0 ? 'save-location' : undefined} aria-label={i === 0 ? undefined : 'Save location'} value={path} disabled />
+                return <span className="dialog-input" key={path}><input id={i === 0 ? 'save-location' : undefined} aria-label={i === 0 ? undefined : 'Where the game keeps its save files'} value={path} disabled />
                   <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder" disabled={active < 0}
                     onClick={() => openSaves(active)}><EyeIcon /></button></span>;
               })}</span>
               <button type="button" onClick={() => browse('location')}>Change</button>
             </div>
           </> : <>
-            <div className="dialog-field"><label htmlFor="save-location">Save location</label><span className="dialog-input"><input id="save-location" value={location}
-              onFocus={() => setFocused('location')} onBlur={() => setFocused(undefined)}
-              onChange={(event) => setLocation(event.target.value)} required={kind === 'add' || game?.kind === 'custom'} />
+            <div className="dialog-field"><label htmlFor="save-location">Where the game keeps its save files</label><span className="dialog-input"><input id="save-location" value={location}
+              onFocus={() => setFocused('location')} onBlur={() => leave('location')} aria-invalid={Boolean(shown('location'))}
+              onChange={(event) => { setLocation(event.target.value); setChecked((value) => ({ ...value, location: false })); }} required={kind === 'add' || game?.kind === 'custom'} />
                 {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder"
                   disabled={!saveSet?.location || location !== saveSet.location || !saveSet.active.length} onClick={() => openSaves(0)}><EyeIcon /></button>}</span>
               <button type="button" onClick={() => browse('location')}>Change</button>
             </div>
-            <p className="dialog-below">
+            {shown('location') ? <p className="dialog-problem" role="alert">{shown('location')} Ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />.</p>
+            : <p className="dialog-below">
               {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</span>
                 : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
-                  && <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>}
-            </p>
+                  ? <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>
+                  : <span className="dialog-hint">When not sure, ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />{' '}
+                    “What is the save game location of {searchName} on {platformName}”</span>}
+            </p>}
           </>}
           {saveSet?.catalog_problem && <p className="dialog-hint">{saveSet.catalog_problem}</p>}
           {kind === 'configure' && game && <div className="dialog-field"><label htmlFor="checkpoints-store">Checkpoints store</label>
@@ -285,7 +306,6 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               <span className="dialog-button-icon trash" />Flush{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}
             </button>}
           </div>}
-          {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" className="dialog-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
           </div>
           {kind === 'configure' && game && <div className="dialog-group dialog-expert-mode">
             <label className="dialog-check"><input type="checkbox" checked={expertMode} onChange={(event) => setExpertMode(event.target.checked)} />
@@ -297,11 +317,11 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           </div>}
         </>}
         {kind === 'flush' && <>
-          <p>Permanently delete all backups and clear this game's history?<br />Your current game data will be kept.</p>
+          <p>Permanently delete all SaveScummer checkpoints and history for this game?<br />The game’s own saves stay untouched.</p>
           {preview ? <><dl className="flush-counts">
-            {preview.saved > 0 && <><dt>Saved backups</dt><dd>{preview.saved}</dd></>}
+            {preview.saved > 0 && <><dt>Checkpoints</dt><dd>{preview.saved}</dd></>}
             {preview.recovery > 0 && <><dt>Recovery points</dt><dd>{preview.recovery}</dd></>}
-            {preview.temporary > 0 && <><dt>Incomplete copies</dt><dd>{preview.temporary}</dd></>}
+            {preview.temporary > 0 && <><dt>Incomplete checkpoints</dt><dd>{preview.temporary}</dd></>}
             <dt>Total</dt><dd>{formatBytes(preview.size)}</dd>
           </dl>{preview.items.length > 0 && <button type="button" className="details-toggle" onClick={() => setDetails(!details)} aria-expanded={details}>{details ? '▾' : '▸'} Details</button>}
             {details && preview.items.length > 0 && <div className="flush-details">{preview.items.map((item) => <div key={item.path}><span>{item.kind}</span> {item.path} {item.label}</div>)}

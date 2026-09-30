@@ -7,6 +7,7 @@
 pub mod broad;
 pub mod glob;
 pub mod model;
+pub mod portable;
 pub mod resolve;
 
 pub use model::{Bundle, BundleError, Detect, Executables, Game, PathRule, Platform, SCHEMA, Source, Store, When};

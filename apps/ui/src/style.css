@@ -5,7 +5,8 @@
 :root { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #faf8ee; background: #1c1918; font-synthesis: none; --section-gap: 16px; }
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
-body { overflow: hidden; user-select: none; }
+body { overflow: hidden; user-select: none; cursor: default; }  /* nothing is selectable, so no text I-beam */
+input, textarea { cursor: text; }
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; }
 button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
@@ -40,6 +41,8 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .empty-character::before { content: ''; position: absolute; top: 0; left: -8px; width: 164px; height: 120px; border-radius: 82px 82px 0 0; background: #181414; }
 .empty-character .character-art { position: relative; display: block; width: 100%; height: 100%; }
 .empty-character .character-art svg { display: block; }
+/* The container ignores the pointer; only the drawn skeleton itself is clickable (it startles awake). */
+.empty-character .character-art svg * { pointer-events: visiblePainted; }
 /* Sits at the top so the pointing hand lands on the first game card. */
 .empty-selection { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 16px; pointer-events: none; color: #aea095; text-align: center; }
 .empty-selection p { margin: 0; }
@@ -49,6 +52,7 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .sidebar h2 { height: 32px; line-height: 32px; font-family: Chakra Petch, sans-serif; }
 .running-icon { width: 9px; height: 9px; background: currentColor; -webkit-mask: url(/icons/triangle.svg) center / contain no-repeat; mask: url(/icons/triangle.svg) center / contain no-repeat; animation: pulse 3s ease-in-out infinite; }
 .running-badge { flex: 1; height: 24px; padding: 0 6px; border: 2px solid #f51e2b; border-radius: 6px; display: grid;
+  align-content: center;  /* WebKit doesn't stretch a <button>'s grid row, so the face would sit at the top */
   background: #f51e2b; color: #000; font: 700 11px Chakra Petch, sans-serif; letter-spacing: .04em; pointer-events: none; }
 /* Both faces share one cell, so the badge keeps its width when RUNNING swaps to CLOSE. */
 .running-badge-face { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: 5px; transition: opacity .15s ease; }
@@ -113,7 +117,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .card-action-icon.play { --icon: url(/icons/triangle.svg); }
 .card-action-icon.stop { --icon: url(/icons/xmark.svg); }
 .library-controls { flex: none; padding: 16px 12px 12px; background: #2c2623; }  /* top 8px sits under the list's overlap */
-.library-controls button { width: 100%; height: 40px; border: 0; border-radius: 8px; padding: 8px; display: flex; align-items: center; gap: 8px; background: transparent; color: #e4d7c9; text-align: left; font: 600 15px Chakra Petch, sans-serif; }
+.library-controls button { width: 100%; height: 40px; border: 0; border-radius: 8px; padding: 8px; display: flex; align-items: center; gap: 8px; background: transparent; color: #faf8ee; text-align: left; font: 600 15px Chakra Petch, sans-serif; }
 .library-controls button:not(:disabled):hover { background: #3a322e; }
 .library-controls button:disabled { opacity: .55; }
 .main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 16px; }
@@ -177,7 +181,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .main-button.error { background: #6a2528; color: #faf8ee; }
 .library-controls button .icon { width: 15px; height: 15px; }
 .action-error-block { margin: 0 0 var(--section-gap); color: #ffb5b8; background: #482427; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
-.game-info { flex: none; margin: 0 0 var(--section-gap); color: #cfc4b8; font-size: 13px; line-height: 1.45; }
+.game-info { flex: none; margin: -8px 0 var(--section-gap); color: #cfc4b8; font-size: 13px; line-height: 1.45; }
 .game-info-controls { display: flex; justify-content: space-between; gap: 8px; }
 .game-info-controls > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 72px; height: 32px; padding: 5px 10px; border: 0; border-radius: 6px; background: #3a322e; color: #f3eee7; font: 600 13px Chakra Petch, sans-serif; text-transform: uppercase; }
 .game-info-controls > button:hover { background: #51423a; }
@@ -284,9 +288,6 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 dialog.dialog { position: fixed; width: min(680px, calc(100vw - 48px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid #3d342d; border-radius: 12px; background: #2a2420; color: #faf8ee; box-shadow: 0 20px 64px #0d0707aa; animation: dialog-rise .16s ease-out; }
 dialog.dialog-settings { width: min(480px, calc(100vw - 48px)); }
 dialog.dialog-about { width: min(360px, calc(100vw - 48px)); }
-/* No header bar: the close button floats in the corner; the title stays for screen readers only. */
-.dialog-about header { position: absolute; top: 0; right: 0; border: 0; }
-.dialog-about header h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .about { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 28px; }
 .about .about-icon { width: 112px; height: 112px; }
 .about .wordmark { margin: 4px 0 0; font-size: 32px; -webkit-text-stroke-width: 3px; }
@@ -299,15 +300,15 @@ dialog.dialog-flush { width: min(560px, calc(100vw - 48px)); }
 dialog.dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
 dialog.dialog:focus { outline: none; }
 dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
-.dialog header { flex: none; height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3d342d; }
+.dialog header { flex: none; height: 48px; padding: 0 48px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3d342d; }
 .dialog h2 { margin: 0; font: 600 18px Chakra Petch, sans-serif; }
 .dialog-title-detail { color: #a99b90; }
-/* Flat close: a thin muted glyph that brightens over a soft round wash; nudged right so the glyph lines up with the header padding. */
-.dialog-close { width: 30px; height: 30px; margin-right: -8px; padding: 0; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; transition: background-color .12s ease; }
-.dialog-close .icon { width: 12px; height: 12px; opacity: .6; transition: opacity .12s ease; }
-.dialog-close:is(:hover, :focus-visible) { background: #3a322e; }
-.dialog-close:is(:hover, :focus-visible) .icon { opacity: 1; }
-.dialog-close:active { background: #463830; }
+/* Flat close: a muted glyph that turns into a white primary-style button on hover. It sits 6px in from the dialog's outer edges (5px plus its 1px border), so its 6px radius runs concentric with the dialog's 12px corner. */
+.dialog-close { position: absolute; top: 5px; right: 5px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 6px; background: transparent; display: grid; place-items: center; transition: background-color .12s ease; }
+.dialog-close .icon { width: 16px; height: 16px; opacity: .6; transition: opacity .12s ease, filter .12s ease; }
+.dialog-close:is(:hover, :focus-visible) { background: #f3eee7; }  /* same face as the white primary buttons */
+.dialog-close:is(:hover, :focus-visible) .icon { opacity: 1; filter: brightness(0); }
+.dialog-close:active { background: #ddd4c9; }
 .dialog form { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .dialog-body { flex: 0 1 auto; min-height: 0; padding: 20px 24px; overflow: auto; font-size: 14px; scrollbar-color: #5b4c42 transparent; }
 .dialog-body::-webkit-scrollbar, .flush-details::-webkit-scrollbar { width: 8px; }
@@ -329,24 +330,6 @@ dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
 /* Read-only paths sink into the dialog; WebKit needs text-fill-color and opacity reset to take the colour. */
 .dialog-field input:disabled { border-color: #3d342d; background: #231e1b; color: #8f8176; -webkit-text-fill-color: #8f8176; opacity: 1; cursor: default; }
 .dialog-field input[aria-invalid="true"] { border-color: #ff7a80; }
-/* A set shortcut reads as a button, an unset one sinks like an empty field; recording turns it into an input with inline actions. */
-.shortcut-input { position: relative; flex: 0 1 180px; display: flex; }
-.dialog-field .shortcut-input .shortcut-value { width: 100%; padding: 0 8px; border: 1px solid transparent; font: 600 14px Chakra Petch, sans-serif; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dialog-field .shortcut-input .shortcut-value:hover { background: #54443a; }
-.dialog-field .shortcut-input.unset .shortcut-value { border-color: #3d342d; background: #231e1b; color: #8f8176; font-weight: 500; }
-.dialog-field .shortcut-input.unset .shortcut-value:hover { color: #b3a598; }
-.dialog-field .shortcut-input.recording .shortcut-value { padding-right: 58px; border-color: #f51e2b; outline: 1px solid #f51e2b; background: #1c1918; color: #faf8ee; text-align: left; }
-.shortcut-placeholder { color: #8f8176; font-weight: 500; }
-.shortcut-actions { position: absolute; top: 0; right: 6px; bottom: 0; display: flex; align-items: center; gap: 4px; }
-.dialog-field .shortcut-actions button { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
-.dialog-field .shortcut-actions .shortcut-restore { background: #e8833a; }
-.dialog-field .shortcut-actions .shortcut-restore:hover { background: #f29a55; }
-.dialog-field .shortcut-actions .shortcut-clear { background: #5b4c42; }
-.dialog-field .shortcut-actions .shortcut-clear:hover { background: #75645a; }
-.shortcut-actions .icon { width: 10px; height: 10px; filter: brightness(0) invert(1); }
-.dialog-field .shortcut-input .shortcut-value[aria-invalid="true"] { border-color: #ff7a80; }
-.dialog-error.shortcut-error, .dialog-warning.shortcut-warning { margin: -9px 0 14px; }
-.dialog-warning.shortcut-warning { color: #f4c77d; font-size: 12px; }
 .dialog-field button, .dialog footer button { height: 32px; padding: 0 14px; border: 0; border-radius: 5px; background: #463830; color: #faf8ee; }
 .dialog-input { position: relative; flex: 1; min-width: 0; display: flex; }
 .dialog-input input { width: 100%; }
@@ -374,6 +357,10 @@ input[type="checkbox"]:disabled { border-color: #3d342d; background-color: #231e
 input[type="checkbox"]:checked:disabled { background-color: #3d342d; }
 .dialog-check:has(input:disabled) { color: #8f8176; }
 .dialog-hint { margin: -7px 0 16px; color: #afa095; font-size: 12px; }
+.dialog-hint a { color: #faf8ee; }
+.dialog-hint a:hover { color: #fff; }
+.dialog-problem { margin: -7px 0 14px; padding: 8px 10px; border-radius: 6px; background: #482427; color: #ffd9da; font-size: 12px; line-height: 1.5; }
+.dialog-problem a { color: #fff; }
 .dialog-error { color: #ff7a80; margin: 12px 0 0; font-size: 12px; }
 .dialog footer { flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; }
 .dialog footer .dialog-primary { background: #f3eee7; color: #2a2420; }

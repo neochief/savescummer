@@ -243,11 +243,11 @@ fn opening_folders_resolves_real_paths_and_missing_folders_open_their_parent() {
     let saves = world.home.join("Saves").join("Opener").join("slots");
     let (game, exe) = world.custom_game("Opener", &saves.join("*.sav"));
     let root = world.ok(&["open", "saves", "--game", &game, "--resolve-only"]);
-    assert_eq!(s(&root["path"]), world.home.to_string_lossy(), "the nearest existing parent");
+    assert_eq!(s(&root["path"]), world.portable(&world.home), "the nearest existing parent");
     assert_eq!(root["opened"], false);
     std::fs::create_dir_all(&saves).unwrap();
     let root = world.ok(&["open", "saves", "--game", &game, "--resolve-only"]);
-    assert_eq!(s(&root["path"]), saves.to_string_lossy(), "a pattern's root is the folder before the wildcard");
+    assert_eq!(s(&root["path"]), world.portable(&saves), "a pattern's root is the folder before the wildcard");
     let exe_dir = world.ok(&["open", "executable", "--game", &game, "--resolve-only"]);
     assert_eq!(s(&exe_dir["path"]), exe.parent().unwrap().to_string_lossy());
     let store = world.ok(&["open", "checkpoints", "--game", &game, "--resolve-only"]);

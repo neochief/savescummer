@@ -22,6 +22,7 @@ pub mod monitoring;
 pub mod ops;
 pub mod options;
 pub mod policy;
+pub mod portable;
 pub mod privacy;
 pub mod queries;
 pub mod recovery;
@@ -232,7 +233,10 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     // Drives seen before: one unplugged since reads as disconnected.
     let drives: Vec<PathBuf> = setting(SETTING_DRIVES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     savescummer_snapshots::load_drives(drives);
-    let store = setting(SETTING_STORE).map(PathBuf::from).unwrap_or_else(|| data_dir.join("checkpoints"));
+    let portable = portable::Portable::new(&env.folders, env.case_insensitive());
+    // Checkpoint records keep their paths portably from here on.
+    savescummer_catalog::portable::install(portable.clone());
+    let store = setting(SETTING_STORE).map(|s| portable.expand(&s)).unwrap_or_else(|| data_dir.join("checkpoints"));
     let play_sounds = setting(SETTING_PLAY_SOUNDS).is_none_or(|v| v == "1");
     let notices = db::notices(storage.conn()).unwrap_or_default();
     let mut inner = Inner::new(store, play_sounds);

@@ -12,6 +12,9 @@ use crate::Filter;
 /// A target as a checkpoint recorded it at Save time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordedTarget {
+    /// Kept portably in the database and the checkpoint's own record, so
+    /// checkpoints move with a configuration to another PC.
+    #[serde(with = "savescummer_catalog::portable::serde_path")]
     pub root: PathBuf,
     pub filter: Filter,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

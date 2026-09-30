@@ -1,6 +1,6 @@
 // Dev-only in-browser stand-in for the Tauri host bridge (`pnpm dev` in a plain browser).
 // Serves a snapshot of the dev demo host: demo-snapshot.json and art/<game id>/<kind>.*.
-import type { Bridge } from '../bridge';
+import { platformName, type Bridge } from '../bridge';
 import type { HistoryEntry, HistoryPage, HostState, Operation, SaveTarget, UiRequest } from '../types';
 import snapshot from './demo-snapshot.json';
 
@@ -47,6 +47,8 @@ export function createMockBridge(): Bridge {
     g.guidance = { kind: 'game_running', save: true, load: true };
   };
   state.games.forEach(lock); state.games.forEach((g) => { g.running = false; }); state.active_stack = []; // TEMP-IDLE
+  // `?no-games` previews the empty library.
+  if (new URLSearchParams(location.search).has('no-games')) state.games = [];
 
   return {
     async request<T>(request: UiRequest): Promise<T> {
@@ -145,6 +147,10 @@ export function createMockBridge(): Bridge {
       return URL.createObjectURL(blob);
     },
     async openWebsite() { window.open('https://savescummer.app/', '_blank'); },
+    async openSaveSearch(engine, game) {
+      const question = encodeURIComponent(`What is the save game location of ${game} on ${platformName}`);
+      window.open(engine === 'google' ? `https://www.google.com/search?q=${question}` : `https://chatgpt.com/?prompt=${question}`, '_blank');
+    },
     async onState(callback) { stateListeners.add(callback); return () => { stateListeners.delete(callback); }; },
     async onStatus(callback) { setTimeout(() => callback('connected')); return () => undefined; },
     async onLabels() { return () => undefined; },

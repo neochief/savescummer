@@ -229,6 +229,27 @@ fn open_website() -> Result<(), String> {
     savescummer_platform::open_folder(Path::new("https://savescummer.app/")).map_err(|e| e.to_string())
 }
 
+/// Asks Google or ChatGPT where `game` keeps its saves. Only the game name comes from the webview; the sites are fixed here.
+#[tauri::command]
+fn open_save_search(engine: String, game: String) -> Result<(), String> {
+    let url = save_search_url(&engine, &game).ok_or_else(|| format!("unknown search engine {engine}"))?;
+    savescummer_platform::open_folder(Path::new(&url)).map_err(|e| e.to_string())
+}
+
+fn save_search_url(engine: &str, game: &str) -> Option<String> {
+    let platform = if cfg!(target_os = "macos") { "macOS" } else if cfg!(windows) { "Windows" } else { "Linux" };
+    let question = format!("What is the save game location of {game} on {platform}");
+    let encoded: String = question.bytes().map(|byte| match byte {
+        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => (byte as char).to_string(),
+        _ => format!("%{byte:02X}"),
+    }).collect();
+    match engine {
+        "google" => Some(format!("https://www.google.com/search?q={encoded}")),
+        "chatgpt" => Some(format!("https://chatgpt.com/?prompt={encoded}")),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 async fn artwork(bridge: tauri::State<'_, Bridge>, game: String, kind: String) -> Result<ArtworkData, String> {
     let bridge = bridge.inner().clone();
@@ -439,7 +460,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(bridge.clone())
-        .invoke_handler(tauri::generate_handler![host_request, report_ui, set_shortcut_capture, artwork, open_website])
+        .invoke_handler(tauri::generate_handler![host_request, report_ui, set_shortcut_capture, artwork, open_website, open_save_search])
         .setup(move |app| {
             watch_host(app.handle().clone(), bridge);
             Ok(())
@@ -453,6 +474,14 @@ mod tests {
     use super::*;
     #[cfg(unix)]
     use std::io::{BufRead, BufReader, Write};
+
+    #[test]
+    fn save_search_keeps_the_game_name_inside_the_query() {
+        let url = save_search_url("google", "Tom & Jerry?x=1").unwrap();
+        assert!(url.starts_with("https://www.google.com/search?q=What%20is%20the%20save%20game%20location%20of%20Tom%20%26%20Jerry%3Fx%3D1%20on%20"));
+        assert!(save_search_url("chatgpt", "A").unwrap().starts_with("https://chatgpt.com/?prompt="));
+        assert!(save_search_url("https://evil.example/", "A").is_none());
+    }
 
     #[test]
     fn artwork_must_resolve_inside_the_cache() {

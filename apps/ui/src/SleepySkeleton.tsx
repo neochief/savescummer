@@ -116,6 +116,7 @@ function rig(root: SVGSVGElement, prefix: string) {
 
 /**
  * The bored skeleton from the empty library: eyes follow the pointer while it slowly nods off, then startles awake.
+ * Clicking it startles it awake immediately.
  * Shows the original illustrated artwork until the pointer first moves, and permanently under reduced motion.
  */
 export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
@@ -222,6 +223,12 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
       enter('away');
       run();
     };
+    // A click startles the skeleton awake from wherever it is in the cycle.
+    const onClick = (event: MouseEvent) => {
+      if (reduced.matches) return;
+      onMove(event as PointerEvent);
+      enter('cycle', phases.findIndex((step) => step.pose === 'wake'));
+    };
     const onVisibility = () => document.hidden ? stop() : run();
     const onReducedMotion = () => {
       if (!reduced.matches) return;
@@ -230,12 +237,14 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
 
     showDynamic(false);
     addEventListener('pointermove', onMove);
+    root.addEventListener('click', onClick);
     document.addEventListener('mouseout', onOut);
     document.addEventListener('visibilitychange', onVisibility);
     reduced.addEventListener('change', onReducedMotion);
     return () => {
       stop();
       removeEventListener('pointermove', onMove);
+      root.removeEventListener('click', onClick);
       document.removeEventListener('mouseout', onOut);
       document.removeEventListener('visibilitychange', onVisibility);
       reduced.removeEventListener('change', onReducedMotion);

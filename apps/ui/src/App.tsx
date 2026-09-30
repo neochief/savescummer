@@ -4,7 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Bridge } from './bridge';
 import type { Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
 import { AboutDialog, AppDialog, formatBytes, type DialogKind } from './Dialogs';
-import { displayShortcut } from './shortcuts';
+import { displayShortcut } from './shortcuts/shortcuts';
 import { failureMessage } from './messages';
 import { GuidancePanel } from './GuidancePanel';
 import { SleepySkeleton } from './SleepySkeleton';

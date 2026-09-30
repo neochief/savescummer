@@ -32,6 +32,22 @@
         "ui-prototype"
       ],
       "port": 5180
+    },
+    {
+      "name": "ui-vite-skeleton",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "apps/ui",
+        "exec",
+        "vite",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "1431",
+        "--strictPort"
+      ],
+      "port": 1431
     }
   ]
 }

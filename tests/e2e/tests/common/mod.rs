@@ -380,6 +380,31 @@ impl World {
         out.lines
     }
 
+    /// A path in the user's folders as the host shows and stores it: `~` on
+    /// macOS and Linux, the most specific of `%LOCALAPPDATA%`, `%APPDATA%`
+    /// and `%USERPROFILE%` on Windows.
+    pub fn portable(&self, path: &Path) -> String {
+        let anchors = if cfg!(windows) {
+            vec![("%LOCALAPPDATA%", &self.localappdata), ("%APPDATA%", &self.appdata), ("%USERPROFILE%", &self.home)]
+        } else {
+            vec![("~", &self.home)]
+        };
+        for (token, dir) in anchors {
+            if let Ok(rest) = path.strip_prefix(dir) {
+                if rest.as_os_str().is_empty() {
+                    return token.to_string();
+                }
+                return format!("{token}{}{}", std::path::MAIN_SEPARATOR, rest.display());
+            }
+        }
+        panic!("{} isn't in the user's folders", path.display());
+    }
+
+    /// A folder for a game's saves inside the user's own folders.
+    pub fn user_saves(&self, name: &str) -> PathBuf {
+        if cfg!(windows) { self.appdata.join(name) } else { self.home.join(".local").join("share").join(name) }
+    }
+
     /// History row kinds, newest first.
     pub fn kinds(&self, game: &str) -> Vec<String> {
         self.history(game).iter().map(|r| r["kind"].as_str().unwrap().to_string()).collect()
@@ -610,6 +635,21 @@ pub fn wait_for<T>(what: &str, timeout: Duration, mut check: impl FnMut() -> Opt
         }
         assert!(Instant::now() < deadline, "timed out waiting for: {what}");
         std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Copies a folder and everything in it.
+pub fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        let kind = entry.file_type().unwrap();
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else if kind.is_file() {
+            std::fs::copy(entry.path(), target).unwrap();
+        } // A socket or other special file belongs to the running host only.
     }
 }
 
