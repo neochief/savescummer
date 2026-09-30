@@ -15,8 +15,9 @@ import source from '../public/character/no-game-selected.svg?raw';
  *   dart left to the list and it squints like the original drawing (deep lids, lowered brows); it holds that glare for
  *   a beat after the arm settles, then relaxes and looks back at the mouse. Not more often than every couple of
  *   seconds, so a restless mouse doesn't turn it into constant jabbing.
- * - With each jab the other hand offers the gamepad, inviting to play: on the thrust it lifts it a little at the elbow
- *   and pushes it toward the viewer with a few quick shakes that fade out by the end of the glare, then settles back.
+ * - Each jab opens with the other hand offering the gamepad, inviting to play: it lifts it a little at the elbow,
+ *   pushes it toward the viewer and shakes it a few times; then the pointing arm jabs, and on the thrust the gamepad
+ *   arm pokes left along with it, turning at the shoulder. The gamepad settles back as the glare relaxes.
  * - Nothing else moves: head and body stay as drawn.
  *
  * The SVG (public/character/no-game-selected.svg) is the single source of the artwork and its rig: round eyes at 0%
@@ -52,15 +53,17 @@ export const pointingSkeletonMotion = {
   jab: {
     retract: [-8, 20, 10], thrust: [6, -12, -8], timing: [0.28, 0.12, 0.25, 0.35, 0.45], dartRate: 30, cooldown: 2.5,
   },
-  // The gamepad offer, played with each jab: from the thrust the forearm lifts `lift` degrees at the elbow, the hand
-  // pushes the gamepad toward the viewer (it grows by `grow` around the wrist) and shakes it `shakes` times a second
-  // by up to `shake` degrees, fading out by the end of the hold; everything settles back as the glare relaxes.
-  offer: { lift: -5, grow: 0.07, shake: 5, shakes: 7 },
+  // The gamepad offer, which opens each jab: for `lead` seconds before the pointing arm moves, the forearm lifts `lift`
+  // degrees at the elbow (reaching it in `rise` seconds), the hand pushes the gamepad toward the viewer (it grows by
+  // `grow` around the wrist) and shakes it `shakes` times a second by up to `shake` degrees, swelling and fading
+  // within the lead. On the thrust the whole gamepad arm pokes left, turning `poke` degrees at the shoulder and back
+  // over the settle. The lift and push hold until the glare relaxes, and relax with it.
+  offer: { lead: 0.75, rise: 0.25, lift: -5, grow: 0.07, shake: 6, shakes: 4, poke: 6 },
 };
 
 // The gamepad hand's groups the offer moves; their drawn placement is kept aside because setup may run twice under
 // StrictMode.
-const offering = ['controller-forearm', 'controller-palm', 'gamepad', 'controller-fingers'];
+const offering = ['controller-upper-arm', 'controller-forearm', 'controller-palm', 'gamepad', 'controller-fingers'];
 
 type Side = 'left' | 'right';
 const sides: Side[] = ['left', 'right'];
@@ -171,12 +174,15 @@ function rig(root: SVGSVGElement, prefix: string) {
     joint('upper-arm-left', 'pivot-shoulder'), joint('forearm-left', 'pivot-elbow'),
     joint('hand-left', 'pivot-wrist'),
   ];
-  // The gamepad hand: the forearm turns at the elbow, and the palm, gamepad and fingers turn with it and around the
-  // wrist. They all share one parent, so the pivots are measured there.
+  // The gamepad arm: the whole arm turns at the shoulder, the forearm and hand at the elbow, and the palm, gamepad and
+  // fingers around the wrist. They all share one parent, so the pivots are measured there.
   const placed = (id: string) => ({ node: el(id), drawn: el(id).getAttribute('data-drawn-transform') ?? '' });
-  const [forearm, ...hand] = offering.map(placed), space = forearm.node.parentNode as SVGGraphicsElement;
+  const [upper, forearm, ...hand] = offering.map(placed), space = upper.node.parentNode as SVGGraphicsElement;
   const pivot = (id: string) => at(id, space).map((v) => +v.toFixed(2));
-  const offer = { forearm, hand, elbow: pivot('pivot-elbow-controller'), wrist: pivot('pivot-wrist-controller') };
+  const offer = {
+    upper, forearm, hand,
+    shoulder: pivot('pivot-shoulder-controller'), elbow: pivot('pivot-elbow-controller'), wrist: pivot('pivot-wrist-controller'),
+  };
   return { eyes, headSpace, between, arm, offer };
 }
 
@@ -220,25 +226,30 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
         bone.setAttribute('transform', chain.trim());
       });
     };
-    // How far the gamepad is offered (0..1) and its shake in degrees, at a point in the jab.
+    // The gamepad offer at a point in the jab (counted from the start of the lead): how far it's lifted and pushed
+    // (0..1), its shake in degrees, and how far the arm has poked left (0..1).
     const offerPose = (at: number) => {
-      const [pull, push, settle, hold, relax] = motion.jab.timing, since = at - pull;
-      if (since < 0) return { reach: 0, shake: 0 };
-      const reach = since < push ? out(since / push)
-        : since < push + settle + hold ? 1 : 1 - inOut(Math.min((since - push - settle - hold) / relax, 1));
-      const fade = Math.max(0, 1 - since / (push + settle + hold));
-      return { reach, shake: motion.offer.shake * fade * Math.sin(2 * Math.PI * motion.offer.shakes * since) };
+      const { lead, rise, shake, shakes } = motion.offer;
+      const [pull, push, settle, hold, relax] = motion.jab.timing, arm = at - lead;
+      const relaxing = arm - pull - push - settle - hold;
+      const reach = relaxing > 0 ? 1 - inOut(Math.min(relaxing / relax, 1)) : out(Math.min(at / rise, 1));
+      const shaking = at < lead ? shake * Math.sin(Math.PI * at / lead) * Math.sin(2 * Math.PI * shakes * at) : 0;
+      const poke = arm < pull || arm >= pull + push + settle ? 0
+        : arm < pull + push ? out((arm - pull) / push) : 1 - inOut((arm - pull - push) / settle);
+      return { reach, shake: shaking, poke };
     };
-    const drawOffer = ({ reach, shake }: { reach: number; shake: number }) => {
-      const { lift, grow } = motion.offer, [ex, ey] = offer.elbow, [wx, wy] = offer.wrist;
-      const turn = `rotate(${(lift * reach).toFixed(2)} ${ex} ${ey})`;
-      offer.forearm.node.setAttribute('transform', `${turn} ${offer.forearm.drawn}`);
+    const drawOffer = ({ reach, shake, poke }: { reach: number; shake: number; poke: number }) => {
+      const { lift, grow } = motion.offer, [sx, sy] = offer.shoulder, [ex, ey] = offer.elbow, [wx, wy] = offer.wrist;
+      const arm = `rotate(${(motion.offer.poke * poke).toFixed(2)} ${sx} ${sy})`;
+      const forearm = `${arm} rotate(${(lift * reach).toFixed(2)} ${ex} ${ey})`;
       const toward = `rotate(${shake.toFixed(2)} ${wx} ${wy}) translate(${wx} ${wy}) scale(${(1 + grow * reach).toFixed(4)}) translate(${-wx} ${-wy})`;
-      for (const { node, drawn } of offer.hand) node.setAttribute('transform', `${turn} ${toward} ${drawn}`);
+      offer.upper.node.setAttribute('transform', `${arm} ${offer.upper.drawn}`);
+      offer.forearm.node.setAttribute('transform', `${forearm} ${offer.forearm.drawn}`);
+      for (const { node, drawn } of offer.hand) node.setAttribute('transform', `${forearm} ${toward} ${drawn}`);
     };
     const jabPose = (at: number) => {
       const { retract, thrust, timing: [pull, push, settle] } = motion.jab;
-      if (at >= pull + push + settle) return [0, 0, 0];
+      if (at < 0 || at >= pull + push + settle) return [0, 0, 0];
       const blend = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
       if (at < pull) return blend([0, 0, 0], retract, inOut(at / pull));
       if (at < pull + push) return blend(retract, thrust, out((at - pull) / push));
@@ -285,12 +296,14 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
     const tick = (now: number) => {
       const dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
       last = now;
-      const dart = jab >= 0 && darting(jab);
+      // The jab clock starts with the gamepad offer; the pointing arm, the dart and the squint follow after its lead.
+      const armAt = jab - motion.offer.lead;
+      const dart = jab >= 0 && darting(armAt);
       const aimAt = dart ? motion.restingGaze : target;
       const k = 1 - Math.exp(-(dart ? motion.jab.dartRate : motion.gazeRate) * dt);
       gaze[0] += (aimAt[0] - gaze[0]) * k;
       gaze[1] += (aimAt[1] - gaze[1]) * k;
-      squint = jab >= 0 ? jabSquint(jab) : 0;
+      squint = jab >= 0 ? jabSquint(armAt) : 0;
       draw();
       // Once the eyes are nearly where they're headed, jab toward the game list (unless the last jab was too recent).
       const distance = Math.hypot(aimAt[0] - gaze[0], aimAt[1] - gaze[1]), arrived = distance < 0.001;
@@ -301,8 +314,8 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
       }
       if (jab >= 0) {
         jab += dt;
-        const done = jab >= motion.jab.timing.reduce((a, b) => a + b);
-        drawArm(jabPose(jab));
+        const done = jab >= motion.offer.lead + motion.jab.timing.reduce((a, b) => a + b);
+        drawArm(jabPose(jab - motion.offer.lead));
         drawOffer(offerPose(jab));
         if (done) { jab = -1; squint = 0; draw(); }
       }
@@ -332,7 +345,7 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
       squint = 0;
       draw();
       drawArm([0, 0, 0]);
-      drawOffer({ reach: 0, shake: 0 });
+      drawOffer({ reach: 0, shake: 0, poke: 0 });
     };
 
     draw();

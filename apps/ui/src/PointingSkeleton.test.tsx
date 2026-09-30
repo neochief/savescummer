@@ -9,7 +9,8 @@ test('the drawing has every layer the rig reads, in a form Affinity Designer kee
   const svg = new DOMParser().parseFromString(source, 'image/svg+xml');
   const parts = [
     'upper-arm-left', 'forearm-left', 'hand-left', 'pivot-shoulder', 'pivot-elbow', 'pivot-wrist',
-    'controller-forearm', 'controller-palm', 'gamepad', 'controller-fingers', 'pivot-elbow-controller', 'pivot-wrist-controller',
+    'controller-upper-arm', 'controller-forearm', 'controller-palm', 'gamepad', 'controller-fingers',
+    'pivot-shoulder-controller', 'pivot-elbow-controller', 'pivot-wrist-controller',
     ...['left', 'right'].flatMap((side) => [
       'eye-socket', 'iris-static', 'iris-dynamic', 'iris-gaze', 'iris-circle', 'brow', 'gaze-bounds', 'gaze-neutral',
     ].map((part) => `${part}-${side}`)),
