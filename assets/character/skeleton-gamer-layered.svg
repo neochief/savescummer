@@ -1,0 +1,127 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="1254" height="1254" viewBox="0 0 1254 1254" version="1.1" fill="#ffffff" stroke="#0a0505" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="art-title art-description" data-outline-width="20">
+  <title id="art-title">Skeleton gamer — articulated vector</title>
+  <desc id="art-description">Vector reconstruction of the crouching skeleton illustration. Transparent background; white bones with a uniform 20-unit #0a0505 outline, matching dark skull features, and #ff0028 red accents. The complete head, torso, gamepad, both upper arms, forearms, hands, thighs, shins and feet are separate named layers. Closed rounded bone ends continue beneath adjoining layers. Limb groups form parent–child chains for skeletal rotation; the gamepad is a separate layer within the gripping hand. All joint coordinates use the original 1254 by 1254 viewBox. No raster images, scripts, masks, linked fill copies or embedded animation.</desc>
+  <metadata id="skeleton-rig">{
+  "version": 2,
+  "units": "viewBox",
+  "viewBox": [
+    0,
+    0,
+    1254,
+    1254
+  ],
+  "outline": {
+    "color": "#0a0505",
+    "width": 20
+  },
+  "boneFill": "#ffffff",
+  "accent": "#ff0028",
+  "rotation": "Set transform=\"rotate(angle pivotX pivotY)\" on the named group. data-pivot gives the joint in viewBox coordinates; descendants follow the parent. Reset by removing transform.",
+  "hierarchy": {
+    "arm-controller-upper": [
+      "arm-controller-forearm",
+      "hand-controller",
+      "controller"
+    ],
+    "arm-support-upper": [
+      "arm-support-forearm",
+      "hand-support"
+    ],
+    "leg-front-thigh": [
+      "leg-front-shin",
+      "leg-front-foot"
+    ],
+    "leg-back-thigh": [
+      "leg-back-shin",
+      "leg-back-foot"
+    ]
+  },
+  "layering": "Support arm below complete head. Every movable bone has a closed, rounded end extending under its neighbor. Hands are complete silhouettes with articulated wrists. Three rounded rib bands form one grouped torso."
+}</metadata>
+  <g id="leg-back" inkscape:label="01 · Back leg" inkscape:groupmode="layer">
+    <g id="leg-back-geometry" inkscape:label="Editable bones">
+      <g id="leg-back-thigh" inkscape:label="Thigh" inkscape:groupmode="layer" data-pivot="519 819" data-coordinate-space="viewBox">
+        <path id="leg-back-thigh-shape" d="M 499 794 C 518 785 550 797 563 817 C 573 837 557 855 544 868 L 472 955 C 465 980 443 994 418 991 C 391 988 381 969 394 947 C 403 932 415 919 424 908 L 478 841 C 471 821 481 804 499 794 Z" />
+        <g id="leg-back-shin" inkscape:label="Shin" inkscape:groupmode="layer" data-pivot="423 945" data-coordinate-space="viewBox">
+          <path id="leg-back-shin-shape" d="M 423 904 C 445 901 467 920 468 941 C 472 966 450 989 424 989 C 399 982 379 983 357 986 L 270 999 C 253 1011 234 1004 222 986 C 211 965 224 939 247 932 C 268 935 283 932 304 926 L 369 907 C 389 901 406 901 423 904 Z" />
+          <g id="leg-back-foot" inkscape:label="Foot" inkscape:groupmode="layer" data-pivot="237 965" data-coordinate-space="viewBox">
+            <path id="leg-back-foot-shape" d="M247 933 C264 943 270 960 263 980 C252 1006 242 1026 225 1045 C250 1039 278 1044 295 1057 C310 1068 317 1084 304 1091 C287 1100 252 1099 219 1099 C188 1099 153 1099 146 1080 C140 1066 146 1054 155 1037 C176 1003 182 985 190 958 C198 934 223 922 247 933 Z" />
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g id="body" inkscape:label="02 · Torso and ribs" inkscape:groupmode="layer" data-pivot="663 752" data-coordinate-space="viewBox">
+    <path id="body-neck-shape" d="M 772 627 C 790 614 810 626 814 645 L 807 704 C 804 725 788 738 773 729 C 760 721 763 704 763 691 L 755 654 C 751 642 759 633 772 627 Z" />
+    <path id="body-rib-cage-base" d="M 633 661 C 678 650 753 657 789 686 C 817 724 788 783 754 802 C 735 816 709 823 686 818 C 647 808 611 790 594 764 C 593 725 612 682 633 661 Z" fill="#0a0505" />
+    <path id="body-rib-upper" d="M 638.22 692.04 C 641.48 698.36 645.51 704.22 650.15 709.58 C 654.78 714.94 660.02 719.81 665.72 724.18 C 671.42 728.54 677.57 732.41 684.07 735.77 C 690.57 739.13 697.40 741.99 704.47 744.33 C 711.53 746.67 718.82 748.50 726.24 749.78 C 733.65 751.07 741.19 751.82 748.74 752.00 A 11 11 0 0 0 749.26 730.00 C 742.81 729.85 736.35 729.21 730.00 728.11 C 723.64 727.00 717.40 725.44 711.39 723.45 C 705.38 721.46 699.60 719.04 694.18 716.23 C 688.76 713.43 683.70 710.24 679.10 706.71 C 674.50 703.19 670.37 699.33 666.79 695.19 C 663.21 691.06 660.19 686.64 657.78 681.96 A 11 11 0 0 0 638.22 692.04 Z" stroke="none" />
+    <path id="body-rib-middle" d="M 621.95 726.47 C 624.35 731.88 627.48 736.91 631.18 741.53 C 634.87 746.15 639.14 750.36 643.86 754.18 C 648.58 758.00 653.75 761.43 659.30 764.50 C 664.84 767.57 670.75 770.28 676.97 772.65 C 683.18 775.02 689.70 777.05 696.46 778.75 C 703.23 780.46 710.23 781.83 717.41 782.88 A 11 11 0 0 0 720.59 761.12 C 714.11 760.17 707.83 758.93 701.84 757.42 C 695.85 755.91 690.15 754.13 684.81 752.09 C 679.47 750.06 674.49 747.77 669.95 745.25 C 665.41 742.74 661.31 740.00 657.70 737.08 C 654.08 734.15 650.96 731.05 648.35 727.79 C 645.74 724.53 643.65 721.12 642.05 717.53 A 11 11 0 0 0 621.95 726.47 Z" stroke="none" />
+    <path id="body-rib-lower" d="M 606.86 760.27 C 608.51 764.18 610.55 767.81 612.91 771.13 C 615.26 774.45 617.94 777.46 620.84 780.17 C 623.75 782.87 626.88 785.26 630.18 787.38 C 633.48 789.50 636.94 791.34 640.52 792.93 C 644.09 794.53 647.77 795.88 651.52 797.01 C 655.27 798.15 659.09 799.07 662.94 799.81 A 11 11 0 0 0 667.06 778.19 C 663.91 777.59 660.84 776.85 657.90 775.96 C 654.95 775.07 652.14 774.03 649.48 772.84 C 646.83 771.66 644.35 770.33 642.07 768.87 C 639.78 767.40 637.70 765.80 635.83 764.06 C 633.95 762.32 632.29 760.44 630.84 758.40 C 629.40 756.36 628.16 754.15 627.14 751.73 A 11 11 0 0 0 606.86 760.27 Z" stroke="none" />
+    <path id="body-pelvis-shape" d="M 584.14 765.14 C 585.13 764.15 586.11 763.14 587.07 762.13 C 588.04 761.11 589.00 760.08 589.94 759.06 C 590.89 758.03 591.83 757.01 592.74 756.01 C 593.66 755.01 594.56 754.03 595.43 753.10 C 596.29 752.16 597.13 751.26 597.93 750.42 C 598.72 749.59 599.47 748.82 600.14 748.14 A 20 20 0 0 0 571.86 719.86 C 570.87 720.85 569.89 721.86 568.93 722.87 C 567.96 723.89 567.00 724.92 566.06 725.94 C 565.11 726.97 564.17 727.99 563.26 728.99 C 562.34 729.99 561.44 730.97 560.57 731.90 C 559.71 732.84 558.87 733.74 558.07 734.58 C 557.28 735.41 556.53 736.18 555.86 736.86 A 20 20 0 0 0 584.14 765.14 Z" />
+  </g>
+  <g id="leg-front" inkscape:label="03 · Front leg" inkscape:groupmode="layer">
+    <g id="leg-front-geometry" inkscape:label="Editable bones">
+      <g id="leg-front-thigh" inkscape:label="Thigh" inkscape:groupmode="layer" data-pivot="520 797" data-coordinate-space="viewBox">
+        <path id="leg-front-thigh-shape" d="M 545 746 C 523 731 493 738 477 758 C 458 781 459 809 477 830 C 494 850 519 856 543 849 C 576 854 607 865 636 868 C 654 870 669 874 681 885 C 697 901 724 900 739 881 C 753 862 741 840 725 825 C 708 809 683 804 657 798 L 577 772 C 562 767 553 758 545 746 Z" />
+        <g id="leg-front-shin" inkscape:label="Shin" inkscape:groupmode="layer" data-pivot="700 865" data-coordinate-space="viewBox">
+          <path id="leg-front-shin-shape" d="M 676 837 C 694 820 722 826 735 845 C 754 873 733 903 719 912 L 649 1026 C 640 1053 611 1057 590 1043 C 568 1027 572 998 591 978 L 652 878 C 655 861 663 847 676 837 Z" />
+          <g id="leg-front-foot" inkscape:label="Foot" inkscape:groupmode="layer" data-pivot="616 1018" data-coordinate-space="viewBox">
+            <path id="leg-front-foot-shape" d="M609 998 C624 992 644 1002 645 1019 C677 1024 711 1037 737 1054 C753 1063 765 1077 755 1089 C747 1101 724 1102 697 1102 L592 1102 C565 1102 539 1099 534 1079 C528 1054 550 1027 571 1011 C585 1001 597 1001 609 998 Z" />
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g id="arm-controller" inkscape:label="04 · Gamepad arm" inkscape:groupmode="layer">
+    <g id="arm-controller-geometry" inkscape:label="Editable arm bones">
+      <g id="arm-controller-upper" inkscape:label="Upper arm" inkscape:groupmode="layer" data-pivot="611 657" data-coordinate-space="viewBox">
+        <path id="arm-controller-upper-shape" d="M 603 610 C 625 605 648 619 654 638 C 667 659 660 690 641 707 C 625 722 605 719 590 711 C 572 712 560 695 558 684 C 529 668 500 651 470 638 C 448 638 438 623 444 606 C 449 591 464 584 480 586 C 489 571 502 571 512 579 C 542 591 570 609 592 620 C 597 614 600 611 603 610 Z" />
+        <g id="arm-controller-forearm" inkscape:label="Forearm" inkscape:groupmode="layer" data-pivot="462 607" data-coordinate-space="viewBox">
+          <path id="arm-controller-forearm-shape" d="M 289 588 C 330 575 369 563 410 549 C 429 536 449 539 464 548 C 481 558 491 577 491 594 C 494 614 482 631 464 636 C 446 641 432 630 429 613 C 392 620 356 632 322 642 C 307 655 287 651 278 637 C 268 621 274 599 289 588 Z" />
+          <g id="hand-controller" inkscape:label="Controller hand · complete silhouette" inkscape:groupmode="layer" data-pivot="293 613" data-coordinate-space="viewBox">
+            <g id="controller" inkscape:label="Gamepad · independent layer" inkscape:groupmode="layer" data-pivot="239 732" data-coordinate-space="viewBox">
+              <path id="controller-shell" d="M165 636 C193 618 225 621 249 635 C274 650 295 664 322 674 C353 684 377 699 381 730 C386 760 372 807 355 831 C340 852 321 856 305 847 C284 837 276 815 264 797 C250 790 220 784 186 776 C164 789 144 797 126 794 C98 793 84 775 86 749 C90 705 124 661 165 636 Z" fill="#27272a" />
+              <g id="controller-controls" fill="#ff0028" stroke="none" inkscape:label="Red controls">
+                <path id="controller-dpad" d="M176 694 L186 697 Q192 699 190 706 L186 719 L199 723 Q207 725 205 733 L202 741 Q200 747 193 745 L180 741 L176 754 Q174 762 166 759 L157 757 Q149 755 151 747 L154 734 L141 731 Q132 729 135 720 L137 713 Q140 705 147 708 L160 711 L164 699 Q166 691 176 694 Z" />
+                <circle id="controller-button-inner" cx="298" cy="770" r="19" />
+                <circle id="controller-button-outer" cx="342" cy="748" r="19" />
+              </g>
+            </g>
+            <path id="hand-controller-shape" d="M 306 602 C 301 585 285 573 269 571 C 245 566 224 577 214 594 C 190 600 169 614 163 638 C 157 658 164 675 180 677 C 195 681 204 670 207 657 C 211 645 216 635 223 631 C 214 643 204 660 202 677 C 199 695 208 706 224 707 C 241 709 250 696 252 679 C 254 663 259 653 268 646 C 258 662 249 679 248 696 C 247 715 258 725 274 725 C 292 725 302 713 303 696 L 309 663 C 319 651 322 637 317 622 C 315 614 311 607 306 602 Z" />
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g id="arm-support" inkscape:label="05 · Supporting arm" inkscape:groupmode="layer">
+    <g id="arm-support-geometry" inkscape:label="Editable arm bones">
+      <g id="arm-support-upper" inkscape:label="Upper arm" inkscape:groupmode="layer" data-pivot="816 775" data-coordinate-space="viewBox">
+        <path id="arm-support-upper-shape" d="M 798 753 C 811 740 829 730 843 735 C 859 741 863 758 864 775 L 912 867 C 933 867 950 883 955 902 C 962 930 945 956 921 960 C 896 964 876 950 871 936 C 854 935 840 918 849 897 L 805 824 C 784 826 767 814 767 795 C 766 777 784 765 798 753 Z" />
+        <g id="arm-support-forearm" inkscape:label="Forearm" inkscape:groupmode="layer" data-pivot="899 915" data-coordinate-space="viewBox">
+          <path id="arm-support-forearm-shape" d="M 877 877 C 896 864 921 869 933 886 C 945 901 943 920 939 928 L 973 989 C 982 1006 981 1024 965 1035 C 951 1045 933 1035 928 1021 C 926 1012 928 1006 933 1000 L 881 949 C 861 956 843 945 840 927 C 835 906 853 890 877 877 Z" />
+          <g id="hand-support" inkscape:label="Supporting hand · complete silhouette" inkscape:groupmode="layer" data-pivot="951 1021" data-coordinate-space="viewBox">
+            <path id="hand-support-shape" d="M 918 1024 C 918 1009 929 997 943 998 C 957 998 971 1006 981 1015 C 1004 1017 1025 1027 1043 1038 C 1068 1040 1090 1052 1101 1070 C 1113 1089 1108 1103 1092 1106 C 1075 1110 1060 1102 1051 1087 C 1038 1067 1020 1053 1002 1047 C 1018 1060 1030 1076 1035 1090 C 1041 1107 1027 1117 1010 1112 C 993 1108 980 1091 969 1073 C 964 1066 958 1057 952 1065 C 940 1083 928 1096 913 1101 C 895 1106 882 1097 884 1083 C 886 1070 897 1056 910 1043 C 915 1035 918 1030 918 1024 Z" />
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g id="head" inkscape:label="06 · Head — complete skull" inkscape:groupmode="layer" data-pivot="787 697" data-coordinate-space="viewBox">
+    <path id="skull" d="M 631 570 C 575 558 539 518 527 475 C 508 410 542 342 590 290 C 650 225 731 184 811 175 C 884 164 952 175 1012 207 C 1081 244 1132 307 1150 379 C 1166 432 1167 484 1145 528 C 1141 550 1140 566 1152 582 C 1175 610 1177 637 1160 658 C 1145 678 1123 682 1092 677 C 1101 702 1094 726 1075 739 C 1054 754 1027 745 1016 724 C 1020 749 1009 773 989 780 C 965 789 941 775 933 755 L 930 737 C 926 763 911 778 890 779 C 866 781 846 767 843 747 C 841 732 848 718 852 708 C 837 725 823 741 802 742 C 778 743 758 729 753 710 C 748 690 756 675 770 662 C 744 668 727 681 707 686 C 681 691 653 682 639 662 C 623 641 628 606 648 580 C 638 577 634 574 631 570 Z" />
+    <g id="head-features" stroke="none" fill="#0a0505" inkscape:label="Face features">
+      <path id="temple" d="M 631 575 C 614 553 618 526 632 505 C 644 487 663 475 680 469 C 684 468 684 471 680 475 C 657 496 644 519 642 541 C 640 556 648 570 661 579 L 646 596 Z" />
+      <g id="eye-viewer-left" inkscape:label="Viewer-left eye" data-pivot="791 550" data-coordinate-space="viewBox">
+        <path id="eye-socket-viewer-left" d="M690 496 C711 474 730 470 749 476 C780 485 813 513 843 540 C864 558 880 580 897 564 C905 555 911 559 910 571 C909 583 899 590 887 590 C883 610 868 630 848 624 C816 613 779 608 744 619 C721 615 705 596 701 575 C695 549 704 517 718 499 C708 498 699 501 690 502 C686 503 686 500 690 496 Z" />
+        <path id="eye-red-viewer-left" d="M773 515 C758 530 750 545 747 560 C744 572 745 584 748 592 C775 586 807 592 833 603 C842 590 847 574 843 558 C822 541 796 525 773 515 Z" fill="#ff0028" />
+        <path id="brow-viewer-left" d="M740 421 C764 407 790 412 811 422 C845 438 870 474 879 509 C880 516 877 518 872 513 C832 475 791 445 741 428 C736 427 737 423 740 421 Z" />
+      </g>
+      <g id="eye-viewer-right" inkscape:label="Viewer-right eye" data-pivot="1048 552" data-coordinate-space="viewBox">
+        <path id="eye-socket-viewer-right" d="M974 550 C980 566 993 553 1003 544 C1030 519 1052 488 1080 470 C1095 459 1110 455 1118 459 C1126 463 1115 470 1103 480 C1119 504 1123 529 1116 554 C1110 590 1085 618 1058 623 C1026 631 997 613 988 578 C975 581 968 572 969 561 C969 552 971 546 974 550 Z" />
+        <path id="eye-red-viewer-right" d="M999 566 C1023 550 1048 528 1071 511 C1084 526 1090 543 1088 558 C1086 583 1068 606 1047 608 C1024 610 1008 593 999 566 Z" fill="#ff0028" />
+        <path id="brow-viewer-right" d="M991 497 C996 466 1016 438 1038 425 C1053 416 1070 415 1081 418 C1087 420 1085 423 1081 426 C1051 449 1022 478 997 504 C991 510 989 506 991 497 Z" />
+      </g>
+      <path id="nose" d="M944 603 C949 598 954 599 960 605 C971 617 982 633 986 646 C991 663 979 671 966 665 C959 662 954 657 950 651 C942 661 933 670 920 669 C907 668 902 658 908 644 C916 627 932 612 944 603 Z" />
+    </g>
+  </g>
+</svg>
