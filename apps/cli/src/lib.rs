@@ -190,6 +190,9 @@ enum Cmd {
         save_shortcut: Option<String>,
         #[arg(long)]
         load_shortcut: Option<String>,
+        /// Delete checkpoints older than 30 days, of every game.
+        #[arg(long)]
+        flush_old_checkpoints: Option<OnOff>,
     },
     /// Move the checkpoint store to another folder.
     MoveStore {
@@ -625,7 +628,14 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
         }
         Cmd::AddGame { name, exe, saves } => {
             let response = s.send(Command::AddGame { name, executable: exe, save_location: saves })?;
-            Ok(s.report(&response, |v| format!("added {}", v.get("game").and_then(|g| g.as_str()).unwrap_or_default())))
+            Ok(s.report(&response, |v| {
+                let game = v.get("game").and_then(|g| g.as_str()).unwrap_or_default();
+                if v.get("existing").and_then(|e| e.as_bool()) == Some(true) {
+                    format!("already in the library as {game}")
+                } else {
+                    format!("added {game}")
+                }
+            }))
         }
         Cmd::Configure { game, name, exe, saves, reset_exe, reset_saves, expert_mode } => {
             let response = s.send(Command::Configure {
@@ -646,12 +656,13 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
                 format!("scan finished; {} new game(s)", v.get("new_games").and_then(|n| n.as_u64()).unwrap_or(0))
             }))
         }
-        Cmd::Settings { sounds, launch_on_startup, save_shortcut, load_shortcut } => {
+        Cmd::Settings { sounds, launch_on_startup, save_shortcut, load_shortcut, flush_old_checkpoints } => {
             let response = s.send(Command::Settings {
                 play_sounds: sounds.map(OnOff::value),
                 launch_on_startup: launch_on_startup.map(OnOff::value),
                 save_shortcut,
                 load_shortcut,
+                flush_old_checkpoints: flush_old_checkpoints.map(OnOff::value),
             })?;
             Ok(s.report(&response, |v| v.to_string()))
         }

@@ -146,6 +146,9 @@ pub enum Command {
         save_shortcut: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         load_shortcut: Option<String>,
+        /// Delete checkpoints older than 30 days, of every game.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        flush_old_checkpoints: Option<bool>,
     },
     /// The UI's focus and selection, so hotkeys act on the selected game
     /// while the window is focused. A connection that sends it and watches
@@ -533,6 +536,8 @@ pub struct SettingsInfo {
     /// they can turn it on again there (Login Items).
     #[serde(default)]
     pub launch_on_startup_needs_approval: bool,
+    /// Checkpoints older than 30 days are deleted, installed games or not.
+    pub flush_old_checkpoints: bool,
     pub checkpoint_store: String,
 }
 

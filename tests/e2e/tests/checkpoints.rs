@@ -137,6 +137,35 @@ fn flush_deletes_every_checkpoint_and_the_history_but_never_the_saves() {
 }
 
 #[test]
+fn checkpoints_older_than_30_days_are_flushed_unless_turned_off() {
+    let world = World::new();
+    let game = {
+        let _host = world.host();
+        assert_eq!(world.state()["settings"]["flush_old_checkpoints"], true, "on by default");
+        let (game, saves) = game_with_saves(&world, "Aging");
+        world.ok(&["save", &game, "--label", "old"]);
+        write(&saves.join("slot.sav"), "v2");
+        world.ok(&["save", &game, "--label", "new"]);
+        world.ok(&["settings", "--flush-old-checkpoints", "off"]);
+        game
+    };
+    let storage = savescummer_storage::Storage::open(&world.data.join("host.db")).unwrap();
+    storage
+        .conn()
+        .execute("UPDATE checkpoints SET created_at = '2020-01-01T00:00:00.000Z' WHERE label = 'old'", [])
+        .unwrap();
+    drop(storage);
+
+    let _host = world.host();
+    let labels = || world.history(&game).iter().map(|row| s(&row["label"])).collect::<Vec<_>>();
+    assert_eq!(labels(), ["new", "old"], "kept while turned off");
+    // Turning it on flushes at once, not at the next periodic scan.
+    world.ok(&["settings", "--flush-old-checkpoints", "on"]);
+    wait_for("the old checkpoint flushed", Duration::from_secs(20), || (labels() == ["new"]).then_some(()));
+    assert_eq!(world.game(&game)["latest"]["label"], "new");
+}
+
+#[test]
 fn backups_changed_outside_the_app_are_noticed() {
     let world = World::new();
     let _host = world.host();

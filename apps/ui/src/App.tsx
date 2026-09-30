@@ -172,6 +172,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   const previousActiveStack = useRef<string[]>([]);
   const pendingUndo = useRef<PendingUndo | undefined>(undefined);
   const [undoDelete, setUndoDelete] = useState<{ game: string; checkpoint: string }>();
+  // A game Add found already in the library; told once, until another game is selected.
+  const [alreadyAdded, setAlreadyAdded] = useState<string>();
+  useEffect(() => { setAlreadyAdded((current) => current === selected ? current : undefined); }, [selected]);
   const [hiddenDeletes, setHiddenDeletes] = useState<ReadonlySet<string>>(new Set());
   const [flash, setFlash] = useState<string>();
   const [arrived, setArrived] = useState<ReadonlySet<string>>(new Set());
@@ -644,6 +647,7 @@ export function App({ bridge }: { bridge: Bridge }) {
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
             <p className="action-error-block" role="alert">{failureMessage(hostError, 'Game unavailable')}</p>}
+          {alreadyAdded === selectedGame.id && <p className="library-notice" role="status">{selectedGame.name} was already in your library.</p>}
           {(selectedGame.info || undoDelete?.game === selectedGame.id) && <div className="game-info">
             <div className="game-info-controls">
               {selectedGame.info && <button className="info-button" onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
@@ -692,7 +696,7 @@ export function App({ bridge }: { bridge: Bridge }) {
       </main>
       {dialog === 'about' && <AboutDialog bridge={bridge} opener={dialogOpener.current} close={() => setDialog(undefined)} />}
       {dialog && dialog !== 'about' && <AppDialog key={`${dialog}-${dialogTarget?.id || ''}`} kind={dialog} game={dialogTarget} state={state} bridge={bridge} opener={dialogOpener.current}
-        close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id) => { setDialog(undefined); setSelected(id); }}
+        close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id, existing) => { setDialog(undefined); setSelected(id); setAlreadyAdded(existing ? id : undefined); }}
         onFlushed={(operation) => dialogTarget && finishFlush(dialogTarget.id, operation)} onFlush={setFlushOpener} />}
       {dialog && flushOpener && dialogTarget && <AppDialog key={`flush-over-${dialogTarget.id}`} kind="flush" game={dialogTarget} state={state} bridge={bridge}
         opener={flushOpener} close={() => setFlushOpener(undefined)} onAdded={() => undefined}

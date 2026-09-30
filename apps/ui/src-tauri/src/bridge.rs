@@ -95,6 +95,7 @@ enum UiRequest {
         launch_on_startup: Option<bool>,
         save_shortcut: Option<String>,
         load_shortcut: Option<String>,
+        flush_old_checkpoints: Option<bool>,
     },
     FlushPreview {
         game: String,
@@ -159,8 +160,14 @@ impl UiRequest {
                 expert_mode,
             },
             Self::SaveSet { game } => Command::SaveSet { game },
-            Self::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } => {
-                Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut }
+            Self::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut, flush_old_checkpoints } => {
+                Command::Settings {
+                    play_sounds,
+                    launch_on_startup,
+                    save_shortcut,
+                    load_shortcut,
+                    flush_old_checkpoints,
+                }
             }
             Self::FlushPreview { game, cursor, limit } => {
                 Command::FlushPreview { game, cursor, limit: limit.map(|n| n.min(200)) }

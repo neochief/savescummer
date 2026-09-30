@@ -1,7 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { failureMessage } from './messages';
-import type { HostResponse, UiRequest } from './types';
+import type { Failure, HostResponse, UiRequest } from './types';
+
+/** A request the host refused, with its reasons for callers that explain them in place. */
+export class HostError extends Error {
+  constructor(readonly failure: Failure | undefined, fallback: string) {
+    super(failureMessage(failure, fallback));
+  }
+}
 
 export const platformName = navigator.platform.startsWith('Mac') ? 'macOS' : navigator.platform.startsWith('Win') ? 'Windows' : 'Linux';
 
@@ -21,7 +28,7 @@ export const tauriBridge: Bridge = {
   async request<T>(request: UiRequest): Promise<T> {
     const response = await invoke<HostResponse<T>>('host_request', { request });
     if (!response.ok || response.result === undefined) {
-      throw new Error(failureMessage(response.error, 'Host rejected the request'));
+      throw new HostError(response.error, 'Host rejected the request');
     }
     return response.result;
   },

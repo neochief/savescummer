@@ -110,6 +110,8 @@ export function createMockBridge(): Bridge {
         case 'open_checkpoints': return { path: `${state.settings?.checkpoint_store}/${request.game}`, opened: !request.resolve_only } as T;
         case 'scan': return { new_games: 0 } as T;
         case 'add_game': {
+          const existing = state.games.find((g) => g.executable === request.executable);
+          if (existing) return { game: existing.id, existing: true } as T;
           const id = `custom-${++seq}`;
           state.games.push({ id, name: request.name, kind: 'custom', executable: request.executable, installed: true, running: false,
             save: { available: true }, load: { available: false }, restore: { available: true }, delete: { available: true }, flush: { available: true }, configure: { available: true }, retry: { available: false }, history_version: 1, labels_version: 0 });

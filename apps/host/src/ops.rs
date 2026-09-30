@@ -111,7 +111,7 @@ impl Request {
     }
 }
 
-fn op(id: &str, request_id: Option<&str>, game: Option<&str>, kind: &str, status: OpStatus) -> Operation {
+pub(crate) fn op(id: &str, request_id: Option<&str>, game: Option<&str>, kind: &str, status: OpStatus) -> Operation {
     Operation {
         id: id.to_string(),
         request_id: request_id.map(str::to_string),

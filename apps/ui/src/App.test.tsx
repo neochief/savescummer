@@ -3,8 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { App, relativeAge } from './App';
 import { copyrightYears } from './Dialogs';
 import { displayShortcut } from './shortcuts/shortcuts';
-import type { Bridge } from './bridge';
-import type { Game, HistoryEntry, HistoryPage, HostState, Operation, SaveSet, SaveTarget, UiRequest } from './types';
+import { HostError, type Bridge } from './bridge';
+import type { Failure, Game, HistoryEntry, HistoryPage, HostState, Operation, SaveSet, SaveTarget, UiRequest } from './types';
 
 const dialogOpen = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: dialogOpen }));
@@ -40,6 +40,7 @@ class FakeBridge implements Bridge {
   outcome: Promise<Operation> = Promise.resolve({ id: 'op-1', kind: 'save', status: 'succeeded' });
   scanResult: Promise<{ new_games: number }> = Promise.resolve({ new_games: 0 });
   settingsError?: string;
+  addRefusal?: Failure;
   requests: UiRequest[] = [];
   stateListener?: (state: HostState) => void;
   statusListener?: (status: string) => void;
@@ -53,7 +54,10 @@ class FakeBridge implements Bridge {
       return { id: 'op-1', kind: request.type, status: 'accepted' } as T;
     }
     if (request.type === 'set_label') return {} as T;
-    if (request.type === 'add_game') return { game: 'custom-1' } as T;
+    if (request.type === 'add_game') {
+      if (this.addRefusal) throw new HostError(this.addRefusal, 'Host rejected the request');
+      return { game: 'custom-1' } as T;
+    }
     if (request.type === 'open_checkpoints') return { path: `/store/${request.game}`, opened: !request.resolve_only } as T;
     if (request.type === 'save_set') return this.saveSet as T;
     if (request.type === 'flush_preview') return { saved: 1, recovery: 0, temporary: 0, size: 4096, items: [] } as T;
@@ -449,6 +453,43 @@ test('Add custom game sends portable home paths as typed, without calling them a
     executable: '~/Games/Example/Example', save_location: '~/.local/share/Example/*.sav' }));
 });
 
+test('Add custom game reads a Terminal-escaped or quoted paste as the path it names', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add custom game' }));
+  const executable = screen.getByLabelText('Game executable') as HTMLInputElement;
+  const location = screen.getByLabelText('Where the game keeps its save files') as HTMLInputElement;
+  fireEvent.change(executable, { target: { value: '"~/Games/Hades/Hades"' } });
+  fireEvent.blur(executable);
+  expect(executable.value).toBe('~/Games/Hades/Hades');
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Hades' } });
+  fireEvent.change(location, { target: { value: '~/.local/share/Supergiant\\ Games/Hades' } });
+  fireEvent.blur(location);
+  expect(location.value).toBe('~/.local/share/Supergiant Games/Hades');
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'add_game', name: 'Hades',
+    executable: '~/Games/Hades/Hades', save_location: '~/.local/share/Supergiant Games/Hades' }));
+});
+
+test('Add custom game explains a save location the host finds too broad under that field', async () => {
+  const bridge = new FakeBridge();
+  bridge.addRefusal = { kind: 'invalid_target', target_cause: { kind: 'too_broad' }, paths: ['/home', '~'] };
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add custom game' }));
+  fireEvent.change(screen.getByLabelText('Game executable'), { target: { value: '~/Games/Hades/Hades' } });
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Hades' } });
+  const location = screen.getByLabelText('Where the game keeps its save files');
+  fireEvent.change(location, { target: { value: '~' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain('This is your whole home folder, and many apps keep files there. Pick the folder inside it where Hades keeps its saves.');
+  expect(location.getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getByRole('dialog', { name: 'Add custom game' })).toBeTruthy();
+  fireEvent.change(location, { target: { value: '~/.local/share/Hades' } });
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
 test('Configure shows the host’s portable paths and returns them untouched', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0] = { ...bridge.state.games[0], kind: 'custom', executable: '~/Games/A/a', executable_overridden: true };
@@ -588,7 +629,7 @@ test('Settings captures, saves, and shows host-owned shortcuts', async () => {
   expect(saveButton().textContent).toBe(displayShortcut('Ctrl+F6'));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'settings', play_sounds: true,
-    launch_on_startup: undefined, save_shortcut: 'Ctrl+F6', load_shortcut: 'Ctrl+F9' }));
+    launch_on_startup: undefined, save_shortcut: 'Ctrl+F6', load_shortcut: 'Ctrl+F9', flush_old_checkpoints: true }));
   expect(bridge.capture).toHaveBeenCalledWith(true);
   await waitFor(() => expect(bridge.capture).toHaveBeenCalledWith(false));
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
@@ -640,7 +681,7 @@ test('a shortcut can be removed, and restoring an empty one brings back the defa
   fireEvent.keyDown(saveField(), { code: 'Backspace', key: 'Backspace' });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'settings', play_sounds: true,
-    launch_on_startup: undefined, save_shortcut: '', load_shortcut: 'Ctrl+F9' }));
+    launch_on_startup: undefined, save_shortcut: '', load_shortcut: 'Ctrl+F9', flush_old_checkpoints: true }));
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
     settings: { ...bridge.state.settings!, save_shortcut: '' } }));
   expect(document.querySelectorAll('.action-slot .shortcut-tab')).toHaveLength(1);

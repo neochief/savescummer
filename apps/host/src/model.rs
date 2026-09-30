@@ -157,6 +157,7 @@ pub const SETTING_SAVE_SHORTCUT: &str = "save_shortcut";
 pub const SETTING_LOAD_SHORTCUT: &str = "load_shortcut";
 pub const SETTING_STORE: &str = "checkpoint_store";
 pub const SETTING_LAUNCH: &str = "launch_on_startup";
+pub const SETTING_FLUSH_OLD: &str = "flush_old_checkpoints";
 pub const SETTING_COUNTER: &str = "game_counter";
 /// The mount points of drives the host relies on, as a JSON list.
 pub const SETTING_DRIVES: &str = "drives";

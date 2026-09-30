@@ -11,6 +11,7 @@
    "launch_on_startup": true,
    "launch_on_startup_available": false,
    "launch_on_startup_needs_approval": false,
+   "flush_old_checkpoints": true,
    "checkpoint_store": "~/savescummer/.runtime/dev-demo/data/checkpoints"
   },
   "store": {

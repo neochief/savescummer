@@ -2,13 +2,14 @@
 //! outside the app, cleaning up reserved leftovers, and the visible-history
 //! index.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use savescummer_core::history::{RowFacts, RowKind, visibility};
 use savescummer_core::{ErrorKind, Presence};
+use savescummer_ipc::{OpStatus, Phase};
 use savescummer_snapshots::{self as snap, is_reserved_folder};
 use savescummer_storage::{self as db, CheckpointRow, HistoryRow};
 
@@ -111,6 +112,80 @@ pub fn verify_all(host: &Arc<Host>) {
         host.bump_history(&mut inner, &game);
     }
     host.publish(&mut inner);
+}
+
+/// How long checkpoints are kept while "Flush checkpoints older than 30
+/// days" is on.
+pub const MAX_AGE_DAYS: i64 = 30;
+
+/// The full-scan part of "Flush checkpoints older than 30 days": deletes
+/// every older checkpoint, saved or recovery, of every game on record,
+/// installed or not. A game that is busy or waits for a Retry keeps them
+/// until a later scan; a checkpoint changed outside the app is left to
+/// [`verify_all`].
+pub fn flush_old(host: &Arc<Host>) {
+    let store = {
+        let inner = host.lock();
+        if !inner.flush_old || !inner.store_available || inner.phase == Phase::ShuttingDown {
+            return;
+        }
+        inner.store.clone()
+    };
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(MAX_AGE_DAYS);
+    let mut old: BTreeMap<String, Vec<CheckpointRow>> = BTreeMap::new();
+    for record in db::all_live_checkpoints(host.db().conn()).unwrap_or_default() {
+        let created = chrono::DateTime::parse_from_rfc3339(&record.created_at);
+        if record.state == "ok" && created.is_ok_and(|at| at < cutoff) {
+            old.entry(record.game_id.clone()).or_default().push(record);
+        }
+    }
+    for (game_id, records) in old {
+        // Reserve the game like an operation, so nothing restores from a
+        // checkpoint while it's disposed of.
+        let op_id = new_id("op");
+        let pending: HashSet<String> = {
+            let mut inner = host.lock();
+            if inner.store_moving || inner.busy.contains_key(&game_id) || inner.blocked.contains_key(&game_id) {
+                continue;
+            }
+            let operation = crate::ops::op(&op_id, None, Some(&game_id), "flush", OpStatus::Running);
+            inner.busy.insert(game_id.clone(), operation);
+            host.publish(&mut inner);
+            inner.deletes.values().filter_map(|d| d.op.checkpoint.clone()).collect()
+        };
+        let mut count = 0;
+        for record in records.iter().filter(|r| !pending.contains(&r.id)) {
+            let path = store.join(&record.folder);
+            if judge(record, &path) != Verdict::Same {
+                continue;
+            }
+            match snap::dispose(&path, &new_id("f")) {
+                Ok(()) => {
+                    let _ = db::set_checkpoint_state(host.db().conn(), &record.id, "deleted");
+                    count += 1;
+                }
+                // Renamed but not removed: the next full scan finishes it.
+                Err(snap::DisposeError::Remove(disposal, _)) => {
+                    let relative =
+                        disposal.strip_prefix(&store).unwrap_or(&disposal).to_string_lossy().replace('\\', "/");
+                    let _ = host.db().write(|c| {
+                        db::set_checkpoint_folder(c, &record.id, &relative)?;
+                        db::set_checkpoint_state(c, &record.id, "deleting")
+                    });
+                }
+                Err(snap::DisposeError::Rename(_)) => {}
+            }
+        }
+        crate::trace(&format!("flushed {count} checkpoint(s) of {game_id} older than {MAX_AGE_DAYS} days"));
+        let mut inner = host.lock();
+        if inner.busy.get(&game_id).is_some_and(|b| b.id == op_id) {
+            inner.busy.remove(&game_id);
+        }
+        recompute_visibility(host, &mut inner, &game_id);
+        host.refresh_cache(&mut inner, &game_id);
+        host.bump_history(&mut inner, &game_id);
+        host.publish(&mut inner);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

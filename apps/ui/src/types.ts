@@ -76,7 +76,7 @@ export interface HostState {
   store?: { path: string; available: boolean };
   deletes: Operation[];
   settings?: { play_sounds: boolean; launch_on_startup: boolean; launch_on_startup_available: boolean; launch_on_startup_needs_approval?: boolean;
-    checkpoint_store: string; save_shortcut?: string; load_shortcut?: string };
+    flush_old_checkpoints?: boolean; checkpoint_store: string; save_shortcut?: string; load_shortcut?: string };
 }
 
 export interface SaveTarget {
@@ -138,7 +138,7 @@ export type UiRequest =
   | { type: 'add_game'; name: string; executable: string; save_location: string }
   | { type: 'configure'; game: string; name?: string; executable?: string; save_location?: string; reset_executable: boolean; reset_save_location: boolean; expert_mode?: boolean }
   | { type: 'save_set'; game: string }
-  | { type: 'settings'; play_sounds?: boolean; launch_on_startup?: boolean; save_shortcut?: string; load_shortcut?: string }
+  | { type: 'settings'; play_sounds?: boolean; launch_on_startup?: boolean; save_shortcut?: string; load_shortcut?: string; flush_old_checkpoints?: boolean }
   | { type: 'flush_preview'; game: string; cursor?: string; limit?: number }
   | { type: 'flush'; game: string }
   | { type: 'open_checkpoints'; game: string; resolve_only?: boolean }

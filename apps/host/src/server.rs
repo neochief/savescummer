@@ -297,8 +297,8 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
         Command::CloseGame { game } => json(crate::lifecycle::close(host, &game)?),
         Command::SetLabel { checkpoint, label } => queries::set_label(host, &checkpoint, label.as_deref()),
         Command::AddGame { name, executable, save_location } => {
-            let id = library::add_custom(host, &name, &executable, &save_location)?;
-            json(serde_json::json!({ "game": id }))
+            let (id, existing) = library::add_custom(host, &name, &executable, &save_location)?;
+            json(serde_json::json!({ "game": id, "existing": existing }))
         }
         Command::Configure {
             game,
@@ -332,8 +332,8 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
                 .ok_or_else(|| Failure::new(ErrorKind::ShuttingDown, "the scan didn't finish"))?;
             json(result)
         }
-        Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } => {
-            queries::settings(host, play_sounds, launch_on_startup, save_shortcut, load_shortcut)
+        Command::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut, flush_old_checkpoints } => {
+            queries::settings(host, play_sounds, launch_on_startup, save_shortcut, load_shortcut, flush_old_checkpoints)
         }
         Command::UiReport { focused, visible, selected, capturing_shortcut } => {
             let scan = {

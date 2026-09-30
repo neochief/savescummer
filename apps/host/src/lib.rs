@@ -44,7 +44,9 @@ use savescummer_scanner::Environment;
 use savescummer_storage::{self as db, Storage};
 
 use crate::host::{CatalogState, Host, Inner};
-use crate::model::{SETTING_DRIVES, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT, SETTING_STORE};
+use crate::model::{
+    SETTING_DRIVES, SETTING_FLUSH_OLD, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT, SETTING_STORE,
+};
 use crate::options::Options;
 
 /// The catalog built into the host, the fallback when nothing newer exists.
@@ -240,6 +242,7 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     let play_sounds = setting(SETTING_PLAY_SOUNDS).is_none_or(|v| v == "1");
     let notices = db::notices(storage.conn()).unwrap_or_default();
     let mut inner = Inner::new(store, play_sounds);
+    inner.flush_old = setting(SETTING_FLUSH_OLD).is_none_or(|v| v == "1");
     let defaults = Shortcut::defaults();
     // A stored empty value is a shortcut the user removed; a missing one is the default.
     let save = setting(SETTING_SAVE_SHORTCUT).unwrap_or_else(|| shortcut_text(defaults[0]));

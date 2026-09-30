@@ -16,7 +16,9 @@ use savescummer_storage::{self as db, CheckpointRow};
 
 use crate::checkpoints::unavailable_reason;
 use crate::host::Host;
-use crate::model::{SETTING_LAUNCH, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT};
+use crate::model::{
+    SETTING_FLUSH_OLD, SETTING_LAUNCH, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT,
+};
 
 const DEFAULT_PAGE: usize = 50;
 const MAX_PAGE: usize = 500;
@@ -231,6 +233,7 @@ pub fn settings(
     launch: Option<bool>,
     save_shortcut: Option<String>,
     load_shortcut: Option<String>,
+    flush_old: Option<bool>,
 ) -> Result<serde_json::Value, Failure> {
     let old = host.lock().shortcuts;
     let save = save_shortcut.unwrap_or_else(|| shortcut_text(old[0]));
@@ -278,6 +281,9 @@ pub fn settings(
         if let Some(on) = play_sounds {
             db::set_setting(conn, SETTING_PLAY_SOUNDS, if on { "1" } else { "0" })?;
         }
+        if let Some(on) = flush_old {
+            db::set_setting(conn, SETTING_FLUSH_OLD, if on { "1" } else { "0" })?;
+        }
         Ok(())
     });
     if let Err(error) = write_result {
@@ -297,9 +303,17 @@ pub fn settings(
     if let Some(on) = play_sounds {
         host.lock().play_sounds = on;
     }
+    if let Some(on) = flush_old {
+        let was_on = std::mem::replace(&mut host.lock().flush_old, on);
+        if on && !was_on {
+            // Turned on: old checkpoints go now, not at the next periodic scan.
+            host.scans.request(true, false, "old checkpoints are flushed");
+        }
+    }
     let mut inner = host.lock();
     host.publish(&mut inner);
     Ok(serde_json::json!({ "play_sounds": inner.play_sounds, "launch_on_startup": inner.launch_on_startup,
+        "flush_old_checkpoints": inner.flush_old,
         "save_shortcut": shortcut_text(inner.shortcuts[0]), "load_shortcut": shortcut_text(inner.shortcuts[1]) }))
 }
 

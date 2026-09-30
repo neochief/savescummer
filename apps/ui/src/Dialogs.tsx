@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { platformName, type Bridge } from './bridge';
-import { executableExamples, platformProblem, type PathField } from './paths';
+import { HostError, platformName, type Bridge } from './bridge';
+import { cleanPath, executableExamples, patternExamples, platformProblem, tooBroadProblem, type PathField } from './paths';
 import type { FlushPreview, Game, HostState, SaveSet, SaveTarget } from './types';
 import { version } from '../package.json';
 import { shortcutError } from './shortcuts/shortcuts';
@@ -89,7 +89,7 @@ export function AboutDialog({ bridge, close, opener }: { bridge: Bridge; close: 
 
 export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, onFlushed, onFlush }: {
   kind: DialogKind; game?: Game; state?: HostState; bridge: Bridge; close: () => void; opener?: HTMLElement | null;
-  onAdded: (id: string) => void; onFlushed: (operation: string) => void; onFlush?: (opener: HTMLElement) => void;
+  onAdded: (id: string, existing: boolean) => void; onFlushed: (operation: string) => void; onFlush?: (opener: HTMLElement) => void;
 }) {
   const [name, setName] = useState(game?.kind === 'custom' ? game.name : '');
   const [executable, setExecutable] = useState(kind === 'configure' ? game?.executable || '' : '');
@@ -97,6 +97,8 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [expertMode, setExpertMode] = useState(game?.expert_mode ?? false);
   const [location, setLocation] = useState('');
   const [focused, setFocused] = useState<PathField>();
+  // The host refused the save location as a folder many apps share.
+  const [tooBroad, setTooBroad] = useState<string>();
   // A field's platform problem shows once the user leaves it or submits, not while typing.
   const [checked, setChecked] = useState<Partial<Record<PathField, boolean>>>({});
   const [saveSet, setSaveSet] = useState<SaveSet>();
@@ -105,6 +107,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [details, setDetails] = useState(false);
   const [sounds, setSounds] = useState(state?.settings?.play_sounds ?? true);
   const [startup, setStartup] = useState(state?.settings?.launch_on_startup ?? false);
+  const [flushOld, setFlushOld] = useState(state?.settings?.flush_old_checkpoints ?? true);
   const defaultShortcuts = navigator.platform.includes('Mac') ? { save: 'Alt+F5', load: 'Alt+F9' } : { save: 'Ctrl+F5', load: 'Ctrl+F9' };
   // An empty shortcut is one the user removed.
   const [saveShortcut, setSaveShortcut] = useState(state?.settings?.save_shortcut ?? defaultShortcuts.save);
@@ -120,13 +123,20 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const openSaves = (target: number) => game && bridge.request({ type: 'open_saves', game: game.id, target }).catch((failure) => setError(message(failure)));
   const gameName = game ? `${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}` : '';
   const searchName = (kind === 'add' ? name.trim() : game?.name) || 'GAME';
+  const typed = { executable: cleanPath(executable), location: cleanPath(location) };
   // Only what the user typed is checked: a value the host already holds stays as it is.
   const problems = {
-    executable: executable !== (game?.executable || '') ? platformProblem('executable', executable, searchName) : undefined,
-    location: !catalogTargets && location !== (saveSet?.location || '') ? platformProblem('location', location, searchName) : undefined,
+    executable: typed.executable !== (game?.executable || '') ? platformProblem('executable', typed.executable, searchName) : undefined,
+    location: !catalogTargets && typed.location !== (saveSet?.location || '') ? platformProblem('location', typed.location, searchName) : undefined,
   };
-  const shown = (field: PathField) => checked[field] ? problems[field] : undefined;
-  const leave = (field: PathField) => { setFocused(undefined); setChecked((value) => ({ ...value, [field]: true })); };
+  const shown = (field: PathField) => (checked[field] ? problems[field] : undefined) ?? (field === 'location' ? tooBroad : undefined);
+  // Leaving a field shows the path as it will be used.
+  const leave = (field: PathField) => {
+    setFocused(undefined);
+    setChecked((value) => ({ ...value, [field]: true }));
+    if (field === 'executable' && typed.executable !== executable) setExecutable(typed.executable);
+    if (field === 'location' && typed.location !== location) setLocation(typed.location);
+  };
 
   useEffect(() => {
     if (kind !== 'settings') return;
@@ -194,23 +204,23 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     setBusy(true);
     try {
       if (kind === 'add') {
-        if (!name.trim() || !executable.trim() || !location.trim()) throw new Error('Fill in the name, executable, and save location.');
-        const result = await bridge.request<{ game: string }>({ type: 'add_game', name: name.trim(), executable: executable.trim(), save_location: location.trim() });
-        onAdded(result.game);
+        if (!name.trim() || !typed.executable || !typed.location) throw new Error('Fill in the name, executable, and save location.');
+        const result = await bridge.request<{ game: string; existing?: boolean }>({ type: 'add_game', name: name.trim(), executable: typed.executable, save_location: typed.location });
+        onAdded(result.game, Boolean(result.existing));
       } else if (kind === 'configure' && game) {
         const custom = game.kind === 'custom';
         await bridge.request({ type: 'configure', game: game.id,
           name: custom ? name.trim() : undefined,
-          executable: !resetExecutable && executable.trim() !== (game.executable || '') ? executable.trim() : undefined,
-          save_location: location.trim() || undefined,
-          reset_executable: resetExecutable, reset_save_location: !custom && !location.trim() && Boolean(saveSet?.location),
+          executable: !resetExecutable && typed.executable !== (game.executable || '') ? typed.executable : undefined,
+          save_location: typed.location || undefined,
+          reset_executable: resetExecutable, reset_save_location: !custom && !typed.location && Boolean(saveSet?.location),
           expert_mode: expertMode !== (game.expert_mode ?? false) ? expertMode : undefined,
         });
         close();
       } else if (kind === 'settings') {
         await bridge.request({ type: 'settings', play_sounds: sounds,
           launch_on_startup: state?.settings?.launch_on_startup_available && startup !== state.settings.launch_on_startup ? startup : undefined,
-          save_shortcut: saveShortcut, load_shortcut: loadShortcut });
+          save_shortcut: saveShortcut, load_shortcut: loadShortcut, flush_old_checkpoints: flushOld });
         close();
       } else if (kind === 'flush' && game) {
         const accepted = await bridge.request<{ id: string }>({ type: 'flush', game: game.id });
@@ -218,6 +228,12 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
         onFlushed(accepted.id);
       }
     } catch (failure) {
+      const broad = failure instanceof HostError ? tooBroadProblem(failure.failure, searchName) : undefined;
+      if (broad) {
+        setTooBroad(broad);
+        document.getElementById('save-location')?.focus();
+        return;
+      }
       const detail = message(failure);
       if (kind === 'settings' && detail.startsWith('Save shortcut:')) setRejections({ save: detail.slice(14).trim() });
       else if (kind === 'settings' && detail.startsWith('Load shortcut:')) setRejections({ load: detail.slice(14).trim() });
@@ -247,6 +263,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
             onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>
           {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}
+          <label className="dialog-check"><input type="checkbox" checked={flushOld} onChange={(event) => setFlushOld(event.target.checked)} />Flush checkpoints older than 30 days</label>
           </div>
         </>}
         {(kind === 'add' || kind === 'configure') && <>
@@ -282,14 +299,14 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           </> : <>
             <div className="dialog-field"><label htmlFor="save-location">Where the game keeps its save files</label><span className="dialog-input"><input id="save-location" value={location}
               onFocus={() => setFocused('location')} onBlur={() => leave('location')} aria-invalid={Boolean(shown('location'))}
-              onChange={(event) => { setLocation(event.target.value); setChecked((value) => ({ ...value, location: false })); }} required={kind === 'add' || game?.kind === 'custom'} />
+              onChange={(event) => { setLocation(event.target.value); setChecked((value) => ({ ...value, location: false })); setTooBroad(undefined); }} required={kind === 'add' || game?.kind === 'custom'} />
                 {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder"
                   disabled={!saveSet?.location || location !== saveSet.location || !saveSet.active.length} onClick={() => openSaves(0)}><EyeIcon /></button>}</span>
               <button type="button" onClick={() => browse('location')}>Change</button>
             </div>
             {shown('location') ? <p className="dialog-problem" role="alert">{shown('location')} Ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />.</p>
             : <p className="dialog-below">
-              {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</span>
+              {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as {patternExamples[platformName]}</span>
                 : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
                   ? <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>
                   : <span className="dialog-hint">When not sure, ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />{' '}

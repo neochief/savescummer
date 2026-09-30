@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use savescummer_catalog::{Decision, Install, Outcome, Probe, assign_games, resolve, split_location};
 use savescummer_core::safety::{OtherGame, RealPaths, SafetyInput, check};
+use savescummer_core::common::{is_within, same_path};
 use savescummer_core::{ErrorKind, Failure, Presence, Target};
 use savescummer_ipc::GameKind;
 use savescummer_platform::privacy::Category;
@@ -484,16 +485,44 @@ pub fn steam_account_changed(host: &Host, game: &Game) -> bool {
     game.context.as_ref().is_some_and(|c| c.steam_account != current)
 }
 
-/// Validates and adds a custom game. Nothing partial is left behind.
-pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> Result<String, Failure> {
+/// The library game a program already belongs to: the same program, one
+/// inside the same app bundle, or one inside a known game's install folder
+/// (the monitor counts those as that game).
+fn owner_of(inner: &Inner, exe: &Path, ci: bool) -> Option<String> {
+    let real = |path: &Path| savescummer_snapshots::real_path(path).unwrap_or_else(|_| path.to_path_buf());
+    let exe = real(exe);
+    let bundle = |path: &Path| path.extension().is_some_and(|e| e.eq_ignore_ascii_case("app"));
+    inner.games.values().find_map(|game| {
+        let by_program = game.executables().iter().map(|p| real(p)).any(|theirs| {
+            same_path(&exe, &theirs, ci)
+                || (bundle(&theirs) && is_within(&exe, &theirs, ci))
+                || (bundle(&exe) && is_within(&theirs, &exe, ci))
+        });
+        let by_folder = !game.is_custom() && game.installs.iter().any(|i| is_within(&exe, &real(&i.install_dir), ci));
+        (by_program || by_folder).then(|| game.id.clone())
+    })
+}
+
+/// Adds a custom game, validated whole. Nothing partial is left behind. A
+/// program already in the library isn't added twice: its game is returned,
+/// marked existing, and the typed save location is ignored.
+pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> Result<(String, bool), Failure> {
     let name = name.trim();
     if name.is_empty() {
         return Err(Failure::new(ErrorKind::InvalidConfig, "the name can't be blank"));
     }
-    ask_for_typed(host, Some(executable), Some(location))?;
+    let ci = host.env.case_insensitive();
     let exe = absolute(host, executable)?;
+    if let Some(existing) = owner_of(&host.lock(), &exe, ci) {
+        return Ok((existing, true));
+    }
+    ask_for_typed(host, Some(executable), Some(location))?;
     let location = user_location(host, location)?;
     let mut inner = host.lock();
+    // Added meanwhile, while macOS was asked for access.
+    if let Some(existing) = owner_of(&inner, &exe, ci) {
+        return Ok((existing, true));
+    }
     let counter = next_counter(host) + 1;
     let id = crate::host::new_id("custom");
     let game = Game {
@@ -533,7 +562,7 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
     drop(inner);
     // A save location on another drive is expected from now on.
     crate::scan::remember_drives(host);
-    Ok(id)
+    Ok((id, false))
 }
 
 /// Checks a changed game record as a whole: every new value must validate,
@@ -664,6 +693,14 @@ fn ask_for_typed(host: &Host, executable: Option<&str>, location: Option<&str>) 
 /// A typed save location, validated.
 fn user_location(host: &Host, text: &str) -> Result<UserLocation, Failure> {
     let path = absolute(host, text)?;
+    // A drive or volume root has no folder to split off, but it's refused for
+    // the same reason as any shared folder, and named the same way.
+    if path.parent().is_none() {
+        return Err(Failure::new(ErrorKind::InvalidTarget, format!("takes the shared folder {}", path.display()))
+            .path(&path)
+            .path(&path)
+            .target_cause(savescummer_core::TargetCause::TooBroad));
+    }
     let target =
         split_location(&path).ok_or_else(|| Failure::new(ErrorKind::InvalidConfig, "use a full path").path(&path))?;
     let real_root = savescummer_snapshots::real_path(&target.root).map_err(|e| {

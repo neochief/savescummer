@@ -245,6 +245,37 @@ fn a_program_inside_the_install_folder_counts_as_the_game() {
 }
 
 #[test]
+fn adding_a_program_already_in_the_library_returns_its_game() {
+    let world = World::new();
+    let install = world.steam_install(1001, "Rogue One", "RogueOne.exe");
+    let _host = world.host();
+    let unused = world.home.join("Elsewhere");
+    let add = |exe: &std::path::Path| {
+        world.ok(&["add-game", "--name", "Mine", "--exe", exe.to_str().unwrap(), "--saves", unused.to_str().unwrap()])
+    };
+
+    // A known game's program, or another program inside its install folder.
+    for exe in [install.join("RogueOne.exe"), install.join("runtime").join("engine.exe")] {
+        let added = add(&exe);
+        assert_eq!((s(&added["game"]), &added["existing"]), ("steam-1001".to_string(), &json!(true)));
+    }
+    // A custom game's program, the second time.
+    let exe = world.root.join("games").join("Indie").join("Indie.exe");
+    copy_game(&exe);
+    let first = add(&exe);
+    assert_eq!(first["existing"], false);
+    let before = world.ok(&["save-set", &s(&first["game"])]);
+    let other = world.home.join("Other");
+    let again =
+        world.ok(&["add-game", "--name", "Mine", "--exe", exe.to_str().unwrap(), "--saves", other.to_str().unwrap()]);
+    assert_eq!((&again["game"], &again["existing"]), (&first["game"], &json!(true)));
+
+    assert_eq!(world.state()["games"].as_array().unwrap().len(), 2, "nothing is added twice");
+    let after = world.ok(&["save-set", &s(&first["game"])]);
+    assert_eq!(after["location"], before["location"], "the typed location of a repeat is ignored");
+}
+
+#[test]
 fn custom_games_are_validated_whole_and_survive_scans() {
     let world = World::new();
     let _host = world.host();
@@ -257,6 +288,18 @@ fn custom_games_are_validated_whole_and_survive_scans() {
 
     // A relative path.
     assert_eq!(add("saves").error_kind(), "invalid_config");
+    // The whole home folder, typed the way the host shows it: refused as
+    // shared, naming the folder so the UI can say which one.
+    let home = add(&world.portable(&world.home));
+    assert_eq!(home.error_kind(), "invalid_target");
+    assert_eq!(home.last()["error"]["target_cause"]["kind"], "too_broad");
+    assert_eq!(home.last()["error"]["paths"][1], world.portable(&world.home));
+    // A drive or volume root, the same way.
+    let drive = world.root.ancestors().last().unwrap().to_str().unwrap().to_string();
+    let root = add(&drive);
+    assert_eq!(root.error_kind(), "invalid_target");
+    assert_eq!(root.last()["error"]["target_cause"]["kind"], "too_broad");
+    assert_eq!(root.last()["error"]["paths"][1], drive.as_str());
     // A broad folder whole, or a wildcard directly in one.
     let docs = world.documents.to_str().unwrap().to_string();
     assert_eq!(add(&docs).error_kind(), "invalid_target");

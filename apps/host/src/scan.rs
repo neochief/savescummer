@@ -179,6 +179,7 @@ pub fn run(host: &Arc<Host>, full: bool, user: bool, reason: &str) -> usize {
     crate::privacy::after_scan(host, user);
     if full {
         crate::checkpoints::verify_all(host);
+        crate::checkpoints::flush_old(host);
         crate::checkpoints::clean_up(host);
     }
     if let Some(watcher) = host.watcher.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
