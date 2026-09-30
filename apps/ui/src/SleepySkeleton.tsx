@@ -28,6 +28,10 @@ export const skeletonMotion = {
   scowlGlance: 0.3, // share of the pointer tracking the eyes keep while scowling
   lidDepth: 20, // how far the dark lids reach in from the socket edge over the eyeballs
   scowlLidDepth: 36, // the same, while scowling
+  // The hanging fingers of the lower hand drum on the sill one after another: each rises toward vertical, then drops
+  // fast, followed by a pause. `tempo` is rolls per second when wide awake, slowing toward `sleepyTempo` as the
+  // drumming fades; `spread` (start-to-start) and `tap` are shares of one roll, `rise` is the share of a tap spent rising.
+  drumming: { degrees: 18, tempo: 0.9, sleepyTempo: 0.35, spread: 0.2, tap: 0.18, rise: 0.7 },
 };
 
 type Side = 'left' | 'right';
@@ -36,8 +40,9 @@ type Phase = {
   name: string; pose: Pose; duration: number; sag: number; track: boolean; ease: (t: number) => number; gazeRate?: number;
   follow?: number; // how much the head tilts after the gaze (default 1)
   classic?: number; // blend toward the illustrated scowl: 0 = rigged eyes, 1 = original artwork (default 0)
+  drum?: number; // how actively the fingers drum: 0 = still, 1 = wide awake (default 0)
 };
-type Values = { closure: number; sag: number; follow: number; classic: number; radius: Record<Side, number> };
+type Values = { closure: number; sag: number; follow: number; classic: number; drum: number; radius: Record<Side, number> };
 
 const sides: Side[] = ['left', 'right'];
 const inOut = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
@@ -48,15 +53,15 @@ function cycle(): Phase[] {
   const t = skeletonTiming, lift = -skeletonMotion.wakeLift, snap = skeletonMotion.wakeGazeRate;
   return [
     // Falling asleep is one slide: scowl → bored → heavy → almost closed → closed.
-    { name: 'classic', pose: 'bored', duration: t.classic, sag: 0, classic: 1, track: true, ease: inOut },
-    { name: 'drowse', pose: 'bored', duration: t.drowse, sag: 0, track: true, ease: inOut },
-    { name: 'heavy', pose: 'heavy', duration: t.heavy, sag: 0.45, track: true, ease: inOut },
-    { name: 'almost-closed', pose: 'almost-closed', duration: t.almostClosed, sag: 0.8, track: true, ease: inOut },
+    { name: 'classic', pose: 'bored', duration: t.classic, sag: 0, classic: 1, drum: 1, track: true, ease: inOut },
+    { name: 'drowse', pose: 'bored', duration: t.drowse, sag: 0, drum: 0.8, track: true, ease: inOut },
+    { name: 'heavy', pose: 'heavy', duration: t.heavy, sag: 0.45, drum: 0.35, track: true, ease: inOut },
+    { name: 'almost-closed', pose: 'almost-closed', duration: t.almostClosed, sag: 0.8, drum: 0.08, track: true, ease: inOut },
     { name: 'closing', pose: 'closed', duration: t.closing, sag: 1, track: true, ease: inOut },
     { name: 'asleep', pose: 'closed', duration: t.asleep, sag: 1, track: true, ease: inOut },
     { name: 'wake', pose: 'wake', duration: t.wake, sag: lift, track: false, ease: out, gazeRate: snap },
     { name: 'surprised', pose: 'wake', duration: t.surprised, sag: lift, track: false, ease: inOut, gazeRate: snap },
-    { name: 'recover', pose: 'bored', duration: t.recover, sag: 0, classic: 1, track: false, ease: inOut },
+    { name: 'recover', pose: 'bored', duration: t.recover, sag: 0, classic: 1, drum: 1, track: false, ease: inOut },
   ];
 }
 
@@ -193,13 +198,18 @@ function rig(root: SVGSVGElement, prefix: string) {
   const presets = Object.fromEntries((['bored', 'heavy', 'almost-closed', 'closed', 'wake'] as Pose[]).map((name) => {
     const preset = el(`pose-${name}`);
     const value = (attr: string) => Number(preset.getAttribute(attr));
-    return [name, { closure: value('data-closure-progress'), sag: 0, follow: 1, classic: 0, radius: { left: value('data-iris-radius-left'), right: value('data-iris-radius-right') } }];
+    return [name, { closure: value('data-closure-progress'), sag: 0, follow: 1, classic: 0, drum: 1, radius: { left: value('data-iris-radius-left'), right: value('data-iris-radius-right') } }];
   })) as Record<Pose, Values>;
   const pose = (name: Pose) => presets[name];
   const head = el<SVGGraphicsElement>('head-pose');
   const pivot = head.getAttribute('data-pivot')!.split(/\s+/).map(Number);
   const between = [(eyes.left.neutral[0] + eyes.right.neutral[0]) / 2, (eyes.left.neutral[1] + eyes.right.neutral[1]) / 2];
-  return { eyes, pose, head, pivot, between };
+  // Each drumming finger rocks around its knuckle: the top middle of its first bone.
+  const fingers = ['Left-hanging-finger', 'Middle-hanging-finger', 'Short-outer-digit'].map((id) => {
+    const finger = el<SVGGraphicsElement>(id), knuckle = (finger.firstElementChild as SVGGraphicsElement).getBBox();
+    return { finger, pivot: [knuckle.x + knuckle.width / 2, knuckle.y] };
+  });
+  return { eyes, pose, head, pivot, between, fingers };
 }
 
 /**
@@ -217,13 +227,14 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
   useLayoutEffect(() => {
     if (typeof window.matchMedia !== 'function') return; // no media queries (e.g. jsdom): hold still
     const root = container.current!.querySelector('svg')!;
-    const { eyes, pose, head, pivot, between } = rig(root, prefix);
+    const { eyes, pose, head, pivot, between, fingers } = rig(root, prefix);
     const phases = cycle();
     const motion = skeletonMotion;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
     let mode: 'static' | 'cycle' | 'away' = 'static';
     let index = 0, elapsed = 0, frame = 0, last = 0, shaken = Infinity; // seconds since the last click
+    let drumClock = 0; // progress through drum rolls
     const classicPose: Values = { ...pose('bored'), classic: 1 };
     let from = classicPose, current = classicPose;
     let pointer: [number, number] | undefined;
@@ -233,7 +244,7 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
       mode = next; index = Math.max(0, phases.findIndex((step) => step.name === phase)); elapsed = 0; from = current;
     };
     const phase = (): Phase => mode === 'away'
-      ? { name: 'away', pose: 'bored', duration: skeletonTiming.pointerExit, sag: 0, follow: 0, track: false, ease: inOut }
+      ? { name: 'away', pose: 'bored', duration: skeletonTiming.pointerExit, sag: 0, follow: 0, drum: 0, track: false, ease: inOut }
       : phases[index];
 
     const pointerDirection = () => {
@@ -245,6 +256,14 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
     };
 
     const draw = () => {
+      const drumming = motion.drumming;
+      fingers.forEach(({ finger, pivot: [x, y] }, i) => {
+        // Rise smoothly, then strike down with growing speed.
+        const at = ((((drumClock - i * drumming.spread) % 1) + 1) % 1) / drumming.tap;
+        const lift = at >= 1 ? 0 : at < drumming.rise ? inOut(at / drumming.rise) : 1 - ((at - drumming.rise) / (1 - drumming.rise)) ** 2;
+        const angle = drumming.degrees * current.drum * lift;
+        finger.setAttribute('transform', `rotate(${angle.toFixed(2)} ${x.toFixed(1)} ${y.toFixed(1)})`);
+      });
       const tilt = gaze[0] * motion.headGazeTilt[0] - Math.min(gaze[1], 0) * motion.headGazeTilt[1];
       const { degrees, frequency, duration } = motion.clickShake;
       const shake = shaken < duration ? degrees * (1 - shaken / duration) ** 2 * Math.sin(2 * Math.PI * frequency * shaken) : 0;
@@ -277,16 +296,20 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
       elapsed += dt;
       shaken += dt;
       while (mode === 'cycle' && elapsed >= step.duration) {
-        elapsed -= step.duration; from = { ...pose(step.pose), sag: step.sag, follow: step.follow ?? 1, classic: step.classic ?? 0 };
+        elapsed -= step.duration;
+        from = { ...pose(step.pose), sag: step.sag, follow: step.follow ?? 1, classic: step.classic ?? 0, drum: step.drum ?? 0 };
         index = (index + 1) % phases.length; step = phase();
       }
       const t = step.ease(Math.min(elapsed / step.duration, 1));
       const to = pose(step.pose);
       current = {
         closure: lerp(from.closure, to.closure, t), sag: lerp(from.sag, step.sag, t), follow: lerp(from.follow, step.follow ?? 1, t),
+        drum: lerp(from.drum, step.drum ?? 0, t),
         classic: lerp(from.classic, step.classic ?? 0, t),
         radius: { left: lerp(from.radius.left, to.radius.left, t), right: lerp(from.radius.right, to.radius.right, t) },
       };
+      const { tempo, sleepyTempo } = motion.drumming;
+      drumClock += dt * lerp(sleepyTempo, tempo, current.drum);
       const target = mode === 'away' ? motion.awayGaze : step.track ? pointerDirection() : [0, 0];
       const length = Math.hypot(target[0], target[1]);
       const [u, v] = length > 1 ? [target[0] / length, target[1] / length] : target;
