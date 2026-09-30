@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use savescummer_catalog::{Decision, Install, Outcome, Probe, assign_games, resolve, split_location};
-use savescummer_core::safety::{OtherGame, RealPaths, SafetyInput, check};
 use savescummer_core::common::{is_within, same_path};
+use savescummer_core::safety::{OtherGame, RealPaths, SafetyInput, check};
 use savescummer_core::{ErrorKind, Failure, Presence, Target};
 use savescummer_ipc::GameKind;
 use savescummer_platform::privacy::Category;
