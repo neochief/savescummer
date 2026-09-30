@@ -190,7 +190,9 @@ fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
     write(&saves.join("other.sav"), "other");
     let before = tree(&saves);
 
-    let mut running = launch(&exe, &["--hold", slot.to_str().unwrap()]);
+    let ready = world.home.join("holder-ready");
+    let mut running = launch(&exe, &["--hold", slot.to_str().unwrap(), "--ready-file", ready.to_str().unwrap()]);
+    wait_for("the game to open its save", std::time::Duration::from_secs(5), || ready.exists().then_some(()));
     world.wait_game(&game, "the game is running", |g| g["running"] == true);
     let started = std::time::Instant::now();
     let load = world.cli_background(&["load", &game]);
@@ -224,7 +226,19 @@ fn a_save_the_game_lets_go_of_within_a_moment_is_waited_out() {
 
     // Outside the save folder, so it isn't part of the save.
     let release = world.home.join("release-the-save");
-    let _running = launch(&exe, &["--hold", slot.to_str().unwrap(), "--release-file", release.to_str().unwrap()]);
+    let ready = world.home.join("brief-holder-ready");
+    let _running = launch(
+        &exe,
+        &[
+            "--hold",
+            slot.to_str().unwrap(),
+            "--release-file",
+            release.to_str().unwrap(),
+            "--ready-file",
+            ready.to_str().unwrap(),
+        ],
+    );
+    wait_for("the game to open its save", std::time::Duration::from_secs(5), || ready.exists().then_some(()));
     world.wait_game(&game, "the game is running", |g| g["running"] == true);
     let load = world.cli_background(&["load", &game]);
     std::thread::sleep(std::time::Duration::from_millis(300));

@@ -13,7 +13,7 @@ const content: Record<Guidance['kind'], [string, string, string]> = {
   game_running: ['Exit the game', 'to save or load checkpoints', 'Save copies progress after the game writes it on exit.\nLoad replaces it for the game to read on relaunch.'],
   play_first: ['Play first', 'to save progress', 'Start the game, make some progress, then save and exit.'],
   no_game_data: ['No game data to save', '', 'You can still load a checkpoint.'],
-  no_saves: ['Save', 'a checkpoint', 'No checkpoints yet.'],
+  no_saves: ['No checkpoints yet', '', 'Go and play the game first.'],
 };
 
 export function GuidancePanel({ game, bridge, retrying, onRetry, onConfigure }: {

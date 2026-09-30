@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App, relativeAge } from './App';
+import { copyrightYears } from './Dialogs';
 import { displayShortcut, shortcutError, shortcutWarning } from './shortcuts';
 import type { Bridge } from './bridge';
 import type { Game, HistoryEntry, HistoryPage, HostState, Operation, SaveSet, SaveTarget, UiRequest } from './types';
@@ -188,7 +189,7 @@ test('Configure turns Expert mode on', async () => {
   const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
   const check = within(dialog).getByRole('checkbox', { name: 'Expert mode' }) as HTMLInputElement;
   expect(check.checked).toBe(false);
-  expect(within(dialog).getByText(/Allows terminating a running game from its game card/)).toBeTruthy();
+  expect(within(dialog).getByText('Allow terminating a running game from its game card.')).toBeTruthy();
   fireEvent.click(check);
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(bridge.requests).toContainEqual(expect.objectContaining({ type: 'configure', game: 'a', expert_mode: true })));
@@ -263,9 +264,9 @@ test('a Load-only empty state leaves Save usable', async () => {
   bridge.state.games[0].guidance = { kind: 'no_saves', save: false, load: true };
   bridge.state.games[0].latest = undefined;
   render(<App bridge={bridge} />);
-  const panel = await screen.findByRole('status', { name: 'Save a checkpoint' });
+  const panel = await screen.findByRole('status', { name: 'No checkpoints yet' });
   expect(panel.classList.contains('covers-load')).toBe(true);
-  expect(panel.textContent).toContain('No checkpoints yet.');
+  expect(panel.textContent).toContain('Go and play the game first.');
   expect(document.querySelector('.action-slot:first-child .shortcut-tab')).toBeTruthy();
   expect(document.querySelector('.action-slot:nth-child(2) .shortcut-tab')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'save Game A' }));
@@ -501,6 +502,24 @@ test('closing a dialog restores focus to its opener', async () => {
   expect(document.activeElement).toBe(opener);
 });
 
+test('the sidebar logo opens About, whose Website button opens the site', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'About SaveScummer' }));
+  const about = screen.getByRole('dialog', { name: 'About' });
+  expect(about.textContent).toMatch(/Version \d+\.\d+\.\d+/);
+  expect(about.textContent).toContain('Oleksandr Shvets. All rights reserved.');
+  fireEvent.click(within(about).getByRole('button', { name: 'Website' }));
+  expect(bridge.openWebsite).toHaveBeenCalledOnce();
+  fireEvent.click(within(about).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('copyright years start at 2026 and extend to the current year', () => {
+  expect(copyrightYears(new Date(2026, 5, 1))).toBe('2026');
+  expect(copyrightYears(new Date(2028, 0, 1))).toBe('2026–2028');
+});
+
 test('Settings captures, saves, and shows host-owned shortcuts', async () => {
   const bridge = new FakeBridge();
   bridge.state.settings = { play_sounds: true, launch_on_startup: false, launch_on_startup_available: true,
@@ -606,7 +625,7 @@ test('Flush opens over Configure, previews host data, and sends only the game af
   expect(await screen.findByText('First checkpoint')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
   const configure = await screen.findByRole('dialog', { name: 'Configure — Game A' });
-  const flushButton = within(configure).getByRole('button', { name: 'Flush checkpoints…' });
+  const flushButton = within(configure).getByRole('button', { name: 'Flush checkpoints' });
   fireEvent.click(flushButton);
   const flush = await screen.findByRole('dialog', { name: 'Flush checkpoints — Game A' });
   expect(await within(flush).findByText('Saved backups')).toBeTruthy();

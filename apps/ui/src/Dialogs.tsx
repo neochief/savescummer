@@ -30,7 +30,7 @@ function shortcutMessage(text: string, shortcut: string) {
 }
 
 function DialogFrame({ title, kind, close, opener, children }: {
-  title: string; kind: DialogKind; close: () => void; opener?: HTMLElement | null; children: ReactNode;
+  title: ReactNode; kind: DialogKind; close: () => void; opener?: HTMLElement | null; children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -208,8 +208,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     }
   }
 
+  // The game name reads dimmer than the action, like the guidance panel's title detail.
   const title = kind === 'settings' ? 'Settings' : kind === 'add' ? 'Add custom game'
-    : `${kind === 'configure' ? 'Configure' : 'Flush checkpoints'} — ${gameName}`;
+    : <>{kind === 'configure' ? 'Configure' : 'Flush checkpoints'}<span className="dialog-title-detail"> — {gameName}</span></>;
   // Configure opens once its paths have arrived, so its contents don't rearrange while it's visible.
   if (kind === 'configure' && !((saveSet || error) && checkpointsPath !== undefined)) return null;
   return <DialogFrame title={title} kind={kind} close={close} opener={opener}>
@@ -245,7 +246,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open game executable" title="Show in folder"
                 disabled={resetExecutable || executable !== (game.executable || '')}
                 onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button>}</span>
-            <button type="button" onClick={() => browse('executable')}>Change…</button>
+            <button type="button" onClick={() => browse('executable')}>Change</button>
           </div>
           {kind === 'configure' && game && game.kind !== 'custom' && <p className="dialog-below">
             {focused !== 'executable' && !resetExecutable && (game.executable_overridden || executable !== (game.executable || ''))
@@ -260,7 +261,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
                   <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder" disabled={active < 0}
                     onClick={() => openSaves(active)}><EyeIcon /></button></span>;
               })}</span>
-              <button type="button" onClick={() => browse('location')}>Change…</button>
+              <button type="button" onClick={() => browse('location')}>Change</button>
             </div>
             {catalogExcludes.length > 0 && <p className="dialog-below"><span className="dialog-hint">Except {catalogExcludes.join(', ')}</span></p>}
           </> : <>
@@ -269,7 +270,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               onChange={(event) => setLocation(event.target.value)} required={kind === 'add' || game?.kind === 'custom'} />
                 {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder"
                   disabled={!saveSet?.location || location !== saveSet.location || !saveSet.active.length} onClick={() => openSaves(0)}><EyeIcon /></button>}</span>
-              <button type="button" onClick={() => browse('location')}>Change…</button>
+              <button type="button" onClick={() => browse('location')}>Change</button>
             </div>
             <p className="dialog-below">
               {focused === 'location' ? <span className="dialog-hint">A folder, a file, or a pattern such as D:\Game\saves\*.sav</span>
@@ -287,8 +288,8 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
             <label className="dialog-check"><input type="checkbox" checked={expertMode} onChange={(event) => setExpertMode(event.target.checked)} />
               Expert mode</label>
             <ul className="dialog-expert-mode-note">
-              <li>Allows saving and loading while the game is running. Beware: this won’t work as expected for LOTS of games that keep progress in memory. For those games, we can only save or load progress while it’s on disk and the game is stopped. But some games can be fooled into saving progress mid-game. This depends on the game and takes expert save-scumming skills to figure out.</li>
-              <li>Allows terminating a running game from its game card. This is much faster than quitting through the game’s menus, so it’s super efficient for save scumming. But it may also prevent some games from saving properly and cause problems. Knowing which games are safe to terminate takes expert save-scumming skills.</li>
+              <li><strong>Allow saving and loading while the game is running.</strong> Beware: this won’t work as expected for LOTS of games that keep progress in memory. For those games, we can only save or load progress while it’s on disk and the game is stopped. But some games can be fooled into saving progress mid-game. This depends on the game and takes expert save-scumming skills to figure out.</li>
+              <li><strong>Allow terminating a running game from its game card.</strong> This is much faster than quitting through the game’s menus, so it’s super efficient for save scumming. But it may also prevent some games from saving properly and cause problems. Knowing which games are safe to terminate takes expert save-scumming skills.</li>
             </ul>
           </div>}
           {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
@@ -314,7 +315,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
         disabled={!!game && ((kind === 'flush' && !game.flush.available) || (kind === 'configure' && !game.configure.available))}
         extra={kind === 'configure' && game && onFlush && <button type="button" className="dialog-flush"
           disabled={busy || !game.flush.available || (!game.has_history && !game.checkpoints_size)} onClick={(event) => onFlush(event.currentTarget)}>
-          Flush checkpoints{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}…
+          <span className="dialog-button-icon trash" />Flush checkpoints{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}
         </button>} />
     </form>
   </DialogFrame>;

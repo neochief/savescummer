@@ -7,6 +7,7 @@
 //!
 //! - `--write <path>=<text>`: write a save file at start.
 //! - `--hold <path>`: keep a file open without delete sharing until exit.
+//! - `--ready-file <path>`: create a marker after startup options, including held files, are ready.
 //! - `--release-file <path>`: close the held files when this file appears,
 //!   and keep running.
 //! - `--launch <exe> [args…] --`: start another program, then keep going.
@@ -26,6 +27,7 @@ fn main() {
     let mut held = Vec::new();
     let mut quit_file: Option<PathBuf> = None;
     let mut release_file: Option<PathBuf> = None;
+    let mut ready_file: Option<PathBuf> = None;
     let mut run_ms: Option<u64> = None;
     let mut crash_ms: Option<u64> = None;
     let mut exit_now = false;
@@ -44,6 +46,10 @@ fn main() {
             }
             "--hold" => {
                 held.push(hold(&args[i + 1]));
+                i += 2;
+            }
+            "--ready-file" => {
+                ready_file = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
             "--launch" => {
@@ -85,6 +91,9 @@ fn main() {
             }
             other => panic!("unknown argument {other}"),
         }
+    }
+    if let Some(path) = ready_file {
+        std::fs::write(path, b"").expect("mark ready");
     }
     if exit_now {
         return;

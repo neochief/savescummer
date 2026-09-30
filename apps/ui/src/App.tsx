@@ -109,6 +109,7 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
 }) {
   const hero = useArtwork(bridge, game, game.artwork?.hero ? 'hero' : 'header');
   const logo = useArtwork(bridge, game, 'logo');
+  const runningFace = <span className="running-badge-face"><span className="running-icon" />RUNNING</span>;
   return (
     <div className={`game-card-wrap ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`}>
       <button className={`game-card ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`}
@@ -120,15 +121,18 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
         {logo ? <img className="game-logo" src={logo} alt="" /> : <span className="game-fallback">{game.name}</span>}
         {game.install_tag && <span className="install-tag">{game.install_tag}</span>}
       </button>
-      {game.running && <span className="running-badge"><span className="running-dot" />RUNNING</span>}
-      {(!game.running || game.can_close) && <div className="card-lifecycle-actions">
-        <button className="card-action" disabled={pending || (!game.running && game.can_play === false)}
-          onClick={() => onLifecycle(game.running ? 'close_game' : 'play')}
-          aria-label={`${game.running ? 'Terminate' : 'Play'} ${game.name}`}
-          title={game.running ? 'Terminate game' : game.can_play === false ? 'No executable configured' : 'Play game'}>
-          <span className={`card-action-icon ${game.running ? 'stop' : 'play'}`} />
+      <div className="card-lifecycle-actions">
+        {/* When the host allows closing, the badge itself turns into the close button on hover and focus. */}
+        {game.running && game.can_close ? <button className="running-badge" disabled={pending} onClick={() => onLifecycle('close_game')}
+          aria-label={`Terminate ${game.name}`} title="Terminate game">
+          {runningFace}<span className="running-badge-face close"><span className="card-action-icon stop" />CLOSE</span>
         </button>
-      </div>}
+        : game.running ? <span className="running-badge">{runningFace}</span>
+        : <button className="card-action" disabled={pending || game.can_play === false} onClick={() => onLifecycle('play')}
+          aria-label={`Play ${game.name}`} title={game.can_play === false ? 'No executable configured' : 'Play game'}>
+          <span className="card-action-icon play" />
+        </button>}
+      </div>
       <div className="card-actions">
         <button className="card-action" onClick={(event) => onConfigure(event.currentTarget)}
           aria-label={`Configure ${game.name}`} title="Configure">
@@ -653,7 +657,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             <div key={selectedGame.id} className={`history history-${historyDirection}${revealing ? ' revealing' : ''}`}
               ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
-              {virtualItems.length === 0 && !historyError && <p className="empty-history">Saves will appear here.</p>}
+              {virtualItems.length === 0 && !historyError && <p className="empty-history">Checkpoints will appear here when you Save them.</p>}
               <div className="history-virtual" style={{ height: historyTotal + (next ? 52 : 0) }}>
                 {dayLanes.filter((lane) => lane.end > firstVisible && lane.start < lastVisible).map(({ key, day, start, end }) => {
                   const top = itemTop[start];
