@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg width="100%" height="100%" viewBox="0 0 1254 1254" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;">
+    <defs>
+        <g id="eye-gaze-guides" data-coordinate-space="_03-·-Head---complete-skull" data-calibration-pose="current socket openings">
+          <path id="gaze-bounds-left" d="M 530 595 C 543.255 595 554 600.373 554 607 C 554 654.253 543.255 692.56 530 692.56 C 516.745 692.56 506 654.253 506 607 C 506 600.373 516.745 595 530 595 Z" data-center-x="530" data-center-y="607" data-max-horizontal="24" data-max-up="12" data-max-down="85.56" data-normal-iris-radius="58" data-down-visible-height-fraction="0.3" />
+          <circle id="gaze-neutral-left" cx="530" cy="607" r="1" />
+          <circle id="gaze-down-limit-left" cx="530" cy="692.56" r="1" />
+          <path id="gaze-bounds-right" d="M 815 498 C 828.255 498 839 503.373 839 510 C 839 567.747 828.255 614.56 815 614.56 C 801.745 614.56 791 567.747 791 510 C 791 503.373 801.745 498 815 498 Z" data-center-x="815" data-center-y="510" data-max-horizontal="24" data-max-up="12" data-max-down="104.56" data-normal-iris-radius="52" data-down-visible-height-fraction="0.3" />
+          <circle id="gaze-neutral-right" cx="815" cy="510" r="1" />
+          <circle id="gaze-down-limit-right" cx="815" cy="614.56" r="1" />
+        </g>
+        <path id="eye-opening-left" d="M416,612C413,613 416,598 421,588C437,558 461,547 488,547C521,545 547,559 570,575C595,591 607,603 622,587C626,582 629,576 634,581C643,590 635,605 625,612C629,626 622,642 612,648C605,651 600,647 588,647C548,646 506,658 476,680C467,688 459,682 451,671C436,650 437,616 451,590C437,596 426,604 416,612Z"/>
+        <clipPath id="eye-clip-left" clipPathUnits="userSpaceOnUse">
+            <use href="#eye-opening-left" xlink:href="#eye-opening-left"/>
+        </clipPath>
+        <path id="eye-opening-right" d="M688,525C698,535 706,523 717,506C748,455 783,410 818,385C842,368 872,370 887,382C892,386 891,388 885,388C874,389 860,393 852,399C885,417 900,450 900,484C902,527 879,568 846,589C815,608 780,604 752,590C735,581 723,567 715,555C706,560 698,556 692,548C685,539 682,527 688,525Z"/>
+        <clipPath id="eye-clip-right" clipPathUnits="userSpaceOnUse">
+            <use href="#eye-opening-right" xlink:href="#eye-opening-right"/>
+        </clipPath>
+    </defs>
     <g id="_01-·-Body" serif:id="01 · Body">
         <g id="Rib-cage-and-sternum" serif:id="Rib cage and sternum">
             <path id="Ribs-and-sternum" serif:id="Ribs and sternum" d="M506,853C516,883 548,909 581,920C596,925 610,928 620,925C626,923 624,912 624,901C623,880 636,866 655,866C679,864 699,881 697,902C696,911 692,920 698,925C706,932 747,919 774,906C799,894 817,876 825,856C828,848 835,847 840,854C853,876 838,907 816,925C787,950 743,957 705,955C693,954 690,962 696,970C707,989 744,990 772,985C816,978 856,951 865,920C868,910 868,902 865,894C885,915 890,940 882,961C873,987 848,1012 816,1028C778,1047 731,1036 692,1020L693,1041C694,1059 682,1072 660,1071C634,1074 615,1063 616,1045L618,1016C580,1034 542,1035 510,1025C480,1017 460,997 460,973C454,949 467,922 485,903C477,926 483,947 497,962C518,984 555,993 588,991C604,991 617,987 622,980C626,974 623,972 615,974C580,976 539,964 516,948C486,928 486,897 498,870C500,863 503,857 506,853Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
@@ -14,10 +32,10 @@
         </g>
     </g>
     <g id="_02-·-Pointing-arm---viewer-left" serif:id="02 · Pointing arm — viewer left">
-        <g id="Upper-arm-bone" serif:id="Upper arm bone">
+        <g id="upper-arm-left" serif:id="Upper arm bone" data-pivot="458 811">
             <path id="Humerus-left" serif:id="Humerus left" d="M351,938C378,905 402,868 425,831C409,807 425,783 450,777C474,770 498,783 497,801C497,807 494,813 492,816C503,826 509,839 505,851C500,868 483,879 466,875C445,908 422,943 401,976C389,996 367,1007 350,993C333,979 335,958 351,938Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
-        <g id="Forearm-bone" serif:id="Forearm bone">
+        <g id="forearm-left" serif:id="Forearm bone" data-pivot="353 996">
             <path id="Forearm-bone-left" serif:id="Forearm bone left" d="M258,878C269,866 286,866 298,879C323,907 346,937 371,966C385,959 401,972 406,986C413,1007 400,1028 379,1028C369,1046 350,1050 333,1043C310,1035 300,1014 307,992C286,961 266,937 247,916C236,904 244,888 258,878Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
     </g>
@@ -25,31 +43,37 @@
         <path id="Skull" d="M375,616C337,613 311,579 311,530C306,473 337,413 383,360C460,270 567,194 658,170C713,154 764,155 806,173C886,205 935,288 938,376C940,401 931,429 933,447C933,466 945,477 964,488C986,502 997,526 997,552C998,579 986,603 969,613C949,625 930,612 914,607C900,601 895,615 883,624C874,630 863,633 852,633C877,647 894,665 892,684C890,707 872,723 851,721C826,720 810,699 795,681C810,708 816,729 804,751C795,770 776,777 757,772C731,767 722,744 714,711C720,741 726,765 711,782C699,797 676,799 657,792C635,787 628,774 629,754L631,725C626,743 627,763 613,778C601,792 581,795 564,787C542,779 537,761 543,741C547,726 560,706 556,703C550,697 527,714 501,730C480,743 459,755 438,749C414,744 400,727 399,706C396,685 405,670 411,660C416,652 398,645 388,632C383,626 379,622 375,616Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         <g id="Right-eye" serif:id="Right eye">
             <path id="eye-socket-right" d="M688,525C698,535 706,523 717,506C748,455 783,410 818,385C842,368 872,370 887,382C892,386 891,388 885,388C874,389 860,393 852,399C885,417 900,450 900,484C902,527 879,568 846,589C815,608 780,604 752,590C735,581 723,567 715,555C706,560 698,556 692,548C685,539 682,527 688,525Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
-            <g id="eye-contents-right">
-                <clipPath id="_clip1">
-                    <path d="M688,525C698,535 706,523 717,506C748,455 783,410 818,385C842,368 872,370 887,382C892,386 891,388 885,388C874,389 860,393 852,399C885,417 900,450 900,484C902,527 879,568 846,589C815,608 780,604 752,590C735,581 723,567 715,555C706,560 698,556 692,548C685,539 682,527 688,525Z"/>
-                </clipPath>
-                <g clip-path="url(#_clip1)">
-                    <g id="Illustrated-iris-·-right" serif:id="Illustrated iris · right">
-                        <path id="Eye-red-right" serif:id="Eye red right" d="M810,440C834,448 851,472 853,499C855,529 837,557 812,567C795,574 779,572 764,563C789,542 796,509 776,476L810,440Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+            <g id="eye-contents-right" clip-path="url(#eye-clip-right)">
+                <g id="iris-static-right" serif:id="Illustrated iris · right">
+                    <path id="Eye-red-right" serif:id="Eye red right" d="M810,440C834,448 851,472 853,499C855,529 837,557 812,567C795,574 779,572 764,563C789,542 796,509 776,476L810,440Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+                </g>
+                <g id="iris-dynamic-right" style="display:none;">
+                    <g id="iris-gaze-right" transform="translate(0 0)">
+                        <circle id="iris-circle-right" cx="815" cy="510" r="52" style="fill:rgb(255,0,40);"/>
                     </g>
                 </g>
             </g>
-            <path id="Brow-right" serif:id="Brow right" d="M696,450C683,422 698,379 724,352C746,328 774,311 796,310C802,310 806,311 802,316C768,355 733,398 701,448C699,452 697,453 696,450Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
+            <g id="eye-dynamic-rim-right" style="display:none;">
+                <use href="#eye-opening-right" xlink:href="#eye-opening-right" id="eye-outline-right" fill="none" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <path id="brow-right" serif:id="Brow right" d="M696,450C683,422 698,379 724,352C746,328 774,311 796,310C802,310 806,311 802,316C768,355 733,398 701,448C699,452 697,453 696,450Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
         </g>
         <g id="Left-eye" serif:id="Left eye">
             <path id="eye-socket-left" d="M416,612C413,613 416,598 421,588C437,558 461,547 488,547C521,545 547,559 570,575C595,591 607,603 622,587C626,582 629,576 634,581C643,590 635,605 625,612C629,626 622,642 612,648C605,651 600,647 588,647C548,646 506,658 476,680C467,688 459,682 451,671C436,650 437,616 451,590C437,596 426,604 416,612Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
-            <g id="eye-contents-left">
-                <clipPath id="_clip2">
-                    <path d="M416,612C413,613 416,598 421,588C437,558 461,547 488,547C521,545 547,559 570,575C595,591 607,603 622,587C626,582 629,576 634,581C643,590 635,605 625,612C629,626 622,642 612,648C605,651 600,647 588,647C548,646 506,658 476,680C467,688 459,682 451,671C436,650 437,616 451,590C437,596 426,604 416,612Z"/>
-                </clipPath>
-                <g clip-path="url(#_clip2)">
-                    <g id="Illustrated-iris-·-left" serif:id="Illustrated iris · left">
-                        <path id="Eye-red-left" serif:id="Eye red left" d="M476,646C474,625 489,602 510,594C537,581 568,599 584,620C548,612 507,618 476,646Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+            <g id="eye-contents-left" clip-path="url(#eye-clip-left)">
+                <g id="iris-static-left" serif:id="Illustrated iris · left">
+                    <path id="Eye-red-left" serif:id="Eye red left" d="M476,646C474,625 489,602 510,594C537,581 568,599 584,620C548,612 507,618 476,646Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+                </g>
+                <g id="iris-dynamic-left" style="display:none;">
+                    <g id="iris-gaze-left" transform="translate(0 0)">
+                        <circle id="iris-circle-left" cx="530" cy="607" r="58" style="fill:rgb(255,0,40);"/>
                     </g>
                 </g>
             </g>
-            <path id="Brow-left" serif:id="Brow left" d="M456,497C473,473 496,462 520,470C550,478 577,503 586,532C590,541 586,544 579,539C536,512 493,494 456,497Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
+            <g id="eye-dynamic-rim-left" style="display:none;">
+                <use href="#eye-opening-left" xlink:href="#eye-opening-left" id="eye-outline-left" fill="none" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <path id="brow-left" serif:id="Brow left" d="M456,497C473,473 496,462 520,470C550,478 577,503 586,532C590,541 586,544 579,539C536,512 493,494 456,497Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
         </g>
         <g id="Temple-detail" serif:id="Temple detail">
             <path id="Temple-contour" serif:id="Temple contour" d="M373,618C357,595 363,565 400,539C405,535 409,537 405,543C389,568 382,593 390,616C394,631 405,644 416,652L410,668C394,652 382,638 373,618Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
@@ -156,7 +180,7 @@
             </g>
         </g>
     </g>
-    <g id="_07-·-Pointing-hand---viewer-left" serif:id="07 · Pointing hand — viewer left">
+    <g id="_07-·-Pointing-hand---viewer-left" serif:id="07 · Pointing hand — viewer left" data-pivot="277 888">
         <g id="Palm">
             <path id="Pointing-palm-bone" serif:id="Pointing palm bone" d="M241,797C257,790 275,801 289,814C303,827 313,843 312,860C312,881 300,896 282,899C268,903 253,894 243,883C230,869 220,851 223,833C225,816 230,804 241,797Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
