@@ -20,6 +20,10 @@ block2.workspace = true
 dispatch2.workspace = true
 global-hotkey.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+global-hotkey.workspace = true
+x11rb.workspace = true
+
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 

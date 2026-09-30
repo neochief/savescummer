@@ -280,7 +280,8 @@ pub mod open_files;
 // The OS process list, one file per OS.
 #[cfg_attr(windows, path = "source/windows.rs")]
 #[cfg_attr(target_os = "macos", path = "source/macos.rs")]
-#[cfg_attr(not(any(windows, target_os = "macos")), path = "source/unsupported.rs")]
+#[cfg_attr(target_os = "linux", path = "source/linux.rs")]
+#[cfg_attr(not(any(windows, target_os = "macos", target_os = "linux")), path = "source/unsupported.rs")]
 mod source;
 
 /// The OS process list.

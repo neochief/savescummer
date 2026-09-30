@@ -31,7 +31,6 @@ use crate::{cmd, naming, pins, platform, procs};
 pub const MANIFEST: &str = ".savescummer-package.json";
 pub const SUMS: &str = "SHA256SUMS.txt";
 pub const THIRD_PARTY: &str = "THIRD-PARTY-LICENSES.html";
-#[cfg(any(windows, target_os = "macos"))]
 pub const WEB_THIRD_PARTY: &str = "WEB-THIRD-PARTY-LICENSES.html";
 
 /// What goes into a package.
@@ -84,7 +83,6 @@ pub fn assemble(inputs: &Inputs) -> anyhow::Result<PathBuf> {
         copy_dir(&licenses, &layout.resources.join("licenses"))?;
     }
     third_party_licenses(&layout.resources.join(THIRD_PARTY))?;
-    #[cfg(any(windows, target_os = "macos"))]
     if inputs.ui.is_some() {
         web_licenses(&layout.resources.join(WEB_THIRD_PARTY))?;
     }
@@ -308,7 +306,6 @@ fn render_licenses(reports: &[Value]) -> String {
 }
 
 /// Notices and bundled license texts for JavaScript shipped in the webview.
-#[cfg(any(windows, target_os = "macos"))]
 fn web_licenses(out: &Path) -> anyhow::Result<()> {
     let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
     let listing =

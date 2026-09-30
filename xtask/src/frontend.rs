@@ -24,7 +24,8 @@ use crate::{cmd, pins, platform};
 
 /// A built UI, ready to be packaged.
 pub struct Ui {
-    /// Files staged for packaging (`cmake --install` output on Qt platforms).
+    /// Files staged for packaging (`bin/SaveScummer.UI`). Linux packaging
+    /// doesn't read it yet.
     #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub install: PathBuf,
 }
@@ -35,37 +36,16 @@ pub fn source() -> PathBuf {
 
 /// Whether the platform's UI source is present.
 pub fn present() -> bool {
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        source().join("package.json").is_file() && source().join("src-tauri").join("Cargo.toml").is_file()
-    }
-    #[cfg(target_os = "linux")]
-    {
-        source().join("CMakeLists.txt").is_file()
-    }
+    source().join("package.json").is_file() && source().join("src-tauri").join("Cargo.toml").is_file()
 }
 
 /// License texts for a frontend with separately shipped runtime libraries.
 pub fn licenses() -> Option<PathBuf> {
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        None
-    }
-    #[cfg(target_os = "linux")]
-    {
-        Some(paths::packaging().join("licenses"))
-    }
+    None
 }
 
 pub fn version() -> &'static str {
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        "Tauri 2"
-    }
-    #[cfg(target_os = "linux")]
-    {
-        pins::QT_VERSION
-    }
+    "Tauri 2"
 }
 
 /// `.runtime/Qt/<version>/<kit>/`, installed by `setup qt`.
@@ -74,78 +54,13 @@ pub fn kit() -> PathBuf {
 }
 
 pub fn configuration(mode: Mode) -> &'static str {
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        match mode {
-            Mode::Dev => "debug",
-            Mode::Release => "release",
-        }
-    }
-    #[cfg(target_os = "linux")]
     match mode {
-        Mode::Dev => "RelWithDebInfo",
-        Mode::Release => "Release",
+        Mode::Dev => "debug",
+        Mode::Release => "release",
     }
-}
-
-/// Configures, builds, optionally tests, and installs the UI.
-#[cfg(target_os = "linux")]
-pub fn build(mode: Mode, version: &str, test: bool, host: &Path) -> anyhow::Result<Ui> {
-    let kit = kit();
-    if !kit.join("lib").is_dir() {
-        anyhow::bail!("Qt kit not found at {} — run `cargo xtask setup qt`", paths::show(&kit));
-    }
-    let cmake = cmd::on_path(
-        "cmake",
-        "install CMake 3.21+ (Visual Studio, Xcode command-line tools or your distro provide it)",
-    )?;
-    let dir = mode.dir().join("ui");
-    let install = mode.dir().join("ui-install");
-    let config = configuration(mode);
-
-    let mut configure = Command::new(&cmake);
-    configure
-        .arg("-S")
-        .arg(source())
-        .arg("-B")
-        .arg(&dir)
-        .arg(format!("-DCMAKE_PREFIX_PATH={}", kit.display()))
-        .arg(format!("-DCMAKE_BUILD_TYPE={config}"))
-        .arg(format!("-DSAVESCUMMER_VERSION={version}"))
-        .args(platform::cmake_args());
-    cmd::run(&mut configure)?;
-
-    let mut targets = vec!["savescummer-ui"];
-    if test {
-        targets.push("ui-tests");
-    }
-    let mut compile = Command::new(&cmake);
-    compile.arg("--build").arg(&dir).args(["--config", config, "--parallel", "--target"]).args(&targets);
-    cmd::run(&mut compile)?;
-
-    if test {
-        let ctest = cmake.with_file_name(crate::naming::exe("ctest"));
-        let mut run = Command::new(if ctest.is_file() { ctest } else { PathBuf::from("ctest") });
-        run.arg("--test-dir")
-            .arg(&dir)
-            .args(["-C", config, "--output-on-failure"])
-            .env("SAVESCUMMER_TEST_HOST", host)
-            .env("QT_QPA_PLATFORM", "offscreen");
-        platform::qt_runtime_env(&mut run, &kit);
-        cmd::run(&mut run)?;
-    }
-
-    if install.exists() {
-        fs::remove_dir_all(&install).with_context(|| format!("removing {}", install.display()))?;
-    }
-    let mut deploy = Command::new(&cmake);
-    deploy.arg("--install").arg(&dir).args(["--config", config, "--prefix"]).arg(&install);
-    cmd::run(&mut deploy)?;
-    Ok(Ui { install })
 }
 
 /// Build the Tauri UI and stage it under the fixed package name.
-#[cfg(any(windows, target_os = "macos"))]
 pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Result<Ui> {
     let source = source();
     let config: serde_json::Value = serde_json::from_slice(&fs::read(source.join("src-tauri/tauri.conf.json"))?)?;

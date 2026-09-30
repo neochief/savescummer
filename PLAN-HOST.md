@@ -264,6 +264,15 @@ For example: FTL is running, so the stack is just FTL. Void War starts and gets 
 
 Processes are matched to games by the full executable path, so an unrelated program with the same file name elsewhere doesn't count. When two installs of one game exist, each install's executables map to its own game record, so hotkeys target the copy that's actually running.
 
+Both sides of the match are real paths, compared by the filesystem's case rules (as in Save set safety): the game's executables and install folder with links resolved, and each process's path as the OS reports it, which is already resolved (`/proc/<pid>/exe`, `proc_pidpath`, the Windows image name). A path an OS adapter builds itself must be resolved the same way before the monitor sees it.
+
+**Wine and Proton (Linux).** A Windows game under Wine runs as Wine's loader (`wine64-preloader`), so its `/proc/<pid>/exe` names Wine, not the game. Wine writes the game's Windows path into the process's command line instead (`Z:\home\deck\...\Game.exe`), and the Linux adapter turns that back into a Unix path: `Z:` is `/`, other drives follow the prefix's `dosdevices` links. That path is built, not reported, and differs from the real one in two ways that break an exact match:
+
+- **Case.** Wine's names are case-insensitive and Linux's aren't. A game can be started as `game.EXE` while the file is `Game.exe`, and both name the same file for Wine. The adapter keeps the exact name when it exists, otherwise takes the one name on disk that matches ignoring case. Several names differing only in case are ambiguous, and nothing is guessed: the path is kept as Wine gave it, so the process matches nothing.
+- **Links.** The path follows whatever the launcher used, often through a link (`~/.steam/steam`, a library on a linked drive). It's resolved to the real file like the game's paths.
+
+Wine sets the command line moments after the process starts; a process first seen before that is looked at again on the next few full looks, not remembered as Wine's loader. Why this lives in the Linux adapter: case-insensitive names are a property of Wine's paths, not of Linux, so the shared matching stays exact and case-sensitive on Linux, and native Linux games and the rest of the host (save sets, two case-different folders) keep Linux's rules.
+
 Game starts and exits add **Game started** and **Game closed** history markers. They create no checkpoints and have no actions. Relaunching continues the same history.
 
 The host keeps a record of when it was running, so time it didn't observe never joins two unrelated sessions and no exact start or exit time is invented:

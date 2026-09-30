@@ -20,7 +20,8 @@ pub enum Cue {
 
 #[cfg_attr(windows, path = "windows.rs")]
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
-#[cfg_attr(not(any(windows, target_os = "macos")), path = "unsupported.rs")]
+#[cfg_attr(target_os = "linux", path = "linux.rs")]
+#[cfg_attr(not(any(windows, target_os = "macos", target_os = "linux")), path = "unsupported.rs")]
 mod imp;
 
 /// Silence between two cues, so back-to-back cues stay distinguishable.

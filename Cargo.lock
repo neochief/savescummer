@@ -3043,7 +3043,9 @@ dependencies = [
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "tempfile",
  "windows-sys 0.61.2",
+ "x11rb",
 ]
 
 [[package]]
@@ -3064,6 +3066,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "windows-sys 0.61.2",
+ "x11rb",
 ]
 
 [[package]]

@@ -3,7 +3,8 @@
 //! come or gone meanwhile. The host scans on wake instead.
 
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
-#[cfg_attr(not(target_os = "macos"), path = "unsupported.rs")]
+#[cfg_attr(target_os = "linux", path = "linux.rs")]
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), path = "unsupported.rs")]
 mod imp;
 
 /// Calls `on_wake` every time the machine wakes from sleep, for the

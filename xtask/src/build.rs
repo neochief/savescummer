@@ -34,7 +34,6 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
     let mode = if options.release { Mode::Release } else { Mode::Dev };
     let version = version::current()?;
     platform::check_build_machine()?;
-    #[cfg(any(windows, target_os = "macos"))]
     if !frontend::present() {
         bail!("the Tauri UI source is missing from {}", paths::show(&frontend::source()));
     }

@@ -10,7 +10,8 @@ use std::path::Path;
 
 #[cfg_attr(windows, path = "windows.rs")]
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
-#[cfg_attr(not(any(windows, target_os = "macos")), path = "unsupported.rs")]
+#[cfg_attr(target_os = "linux", path = "linux.rs")]
+#[cfg_attr(not(any(windows, target_os = "macos", target_os = "linux")), path = "unsupported.rs")]
 mod imp;
 
 const DEV_BUILD_REFUSAL: &str = "development builds never create a sign-in entry";
@@ -34,6 +35,16 @@ pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), Str
 /// allowed to run).
 pub fn is_enabled(host_exe: &Path) -> bool {
     imp::is_enabled(host_exe)
+}
+
+/// Linux AppImage: re-points an enabled entry at this AppImage when another
+/// version wrote it (each version is a new file). Elsewhere the program's
+/// path is fixed, and this never changes anything.
+pub fn keep_current(host_exe: &Path, data_dir: Option<&Path>) {
+    #[cfg(target_os = "linux")]
+    imp::keep_current(host_exe, data_dir);
+    #[cfg(not(target_os = "linux"))]
+    let _ = (host_exe, data_dir);
 }
 
 /// macOS: the entry exists but the user turned it off in System Settings,

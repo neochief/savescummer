@@ -3,7 +3,6 @@
 //! into this module, so adding it doesn't touch them.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::bail;
 
@@ -27,12 +26,6 @@ pub fn package_name() -> String {
 pub fn check_build_machine() -> anyhow::Result<()> {
     Ok(())
 }
-
-pub fn cmake_args() -> Vec<String> {
-    Vec::new()
-}
-
-pub fn qt_runtime_env(_command: &mut Command, _kit: &Path) {}
 
 /// Where the program with the fixed executable name `name` is in a package
 /// (in the AppDir; the AppImage itself dispatches through `AppRun`).
