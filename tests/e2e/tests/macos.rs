@@ -93,7 +93,7 @@ fn a_mac_port_is_found_played_saved_and_loaded() {
     write(&saves.join("profile.sav"), "before");
     let _host = world.host();
     let game = "steam-3001";
-    world.no_exit_wait(game);
+    world.enable_expert_mode(game);
     assert_eq!(world.game(game)["save"]["available"], true, "{}", world.game(game));
 
     let running = launch(&exe, &[]);

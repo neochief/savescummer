@@ -390,14 +390,14 @@ impl World {
     /// goes: Save and Load don't wait for it to close.
     pub fn custom_game(&self, name: &str, saves: &Path) -> (String, PathBuf) {
         let (game, exe) = self.custom_game_waiting(name, saves);
-        self.no_exit_wait(&game);
+        self.enable_expert_mode(&game);
         (game, exe)
     }
 
     /// The fake game writes its saves as it goes: Save and Load while it runs
     /// don't wait for it to close.
-    pub fn no_exit_wait(&self, game: &str) {
-        self.ok(&["configure", game, "--wait-for-exit", "off"]);
+    pub fn enable_expert_mode(&self, game: &str) {
+        self.ok(&["configure", game, "--expert-mode", "on"]);
     }
 
     /// A custom game as added: Save and Load wait for it to close.

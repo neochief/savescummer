@@ -41,8 +41,8 @@ export interface Game {
   running: boolean;
   can_play?: boolean;
   can_close?: boolean;
-  /** Save, Load and Revert are refused while the game runs (`game_running`): it writes its progress only on exit. */
-  wait_for_exit?: boolean;
+  /** Enables Save, Load, Revert and closing the game while it runs. Off by default. */
+  expert_mode?: boolean;
   kind?: 'known' | 'custom';
   executable?: string;
   executable_overridden?: boolean;
@@ -136,7 +136,7 @@ export type UiRequest =
   | { type: 'scan' }
   | { type: 'outcome'; operation: string }
   | { type: 'add_game'; name: string; executable: string; save_location: string }
-  | { type: 'configure'; game: string; name?: string; executable?: string; save_location?: string; reset_executable: boolean; reset_save_location: boolean; wait_for_exit?: boolean }
+  | { type: 'configure'; game: string; name?: string; executable?: string; save_location?: string; reset_executable: boolean; reset_save_location: boolean; expert_mode?: boolean }
   | { type: 'save_set'; game: string }
   | { type: 'settings'; play_sounds?: boolean; launch_on_startup?: boolean; save_shortcut?: string; load_shortcut?: string }
   | { type: 'flush_preview'; game: string; cursor?: string; limit?: number }

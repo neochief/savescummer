@@ -273,7 +273,7 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             save_location,
             reset_executable,
             reset_save_location,
-            wait_for_exit,
+            expert_mode,
         } => {
             let game = host.find_game(&host.lock(), &game)?;
             library::configure(
@@ -285,7 +285,7 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
                     save_location: save_location.as_deref(),
                     reset_executable,
                     reset_save_location,
-                    wait_for_exit,
+                    expert_mode,
                 },
             )?;
             json(serde_json::json!({ "game": game }))

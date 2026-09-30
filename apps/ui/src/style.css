@@ -19,17 +19,21 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .app.no-games .library-controls { position: static; display: flex; flex-direction: column; padding: 0; background: none; }
 .app.no-games .library-controls button { justify-content: center; }
 .app.no-games .main { flex: 0 0 0; width: 0; padding: 0; overflow: hidden; visibility: hidden; }
-/* One bar for both platforms: macOS keeps its traffic lights on the left, so the brand moves right; Windows draws its own caption buttons. */
-.window-bar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; height: 40px; display: flex; align-items: center; padding-left: 20px; }
-.macos .window-bar { justify-content: flex-end; padding: 0 16px; }
-.window-bar .app-icon { width: 28px; height: 28px; }
-.window-bar .wordmark { font-size: 19px; -webkit-text-stroke-width: 2px; }
+/* One bar for both platforms: macOS keeps its traffic lights on the left; Windows draws its own caption buttons. */
+.window-bar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; height: 40px; display: flex; align-items: center; }
 .window-controls { display: flex; align-self: stretch; margin-left: auto; }
 .window-controls button { width: 46px; border: 0; padding: 0; display: grid; place-items: center; background: transparent; color: #e4d7c9; }
 .window-controls button:hover { background: #3a322e; }
 .window-controls button.close:hover { background: #c42b1c; color: #fff; }
 .window-controls svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; }
-.brand { display: flex; align-items: center; flex: none; pointer-events: none; }
+/* The logo under the sidebar menu (or at the window's bottom edge with no games) opens About. Muted like idle game
+   cards; full color on hover. */
+.brand { flex: none; align-self: center; display: flex; align-items: center; margin-top: 8px; padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: inherit;
+  filter: grayscale(1) sepia(.55) brightness(.62); transition: filter .15s ease; }
+.brand:is(:hover, :focus-visible) { filter: none; }
+.brand .app-icon { width: 32px; height: 32px; }
+.brand .wordmark { font-size: 21px; -webkit-text-stroke-width: 2px; }
+.app.no-games .brand { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); margin: 0; }
 .app-icon { width: 40px; height: 40px; flex: none; }
 /* The skeleton leans out of a dark arched window: centered on the skull, the sill sits under the ribs, the hands hang over it. */
 .empty-character { position: relative; width: 140px; height: 140px; flex: none; pointer-events: none; }
@@ -262,6 +266,15 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .load-more { position: absolute; left: 50%; transform: translateX(-50%); display: block; margin: 8px auto; background: transparent; color: #f3eee7; border: 1px solid #5b4c42; border-radius: 6px; padding: 8px 16px; }
 dialog.dialog { position: fixed; width: min(680px, calc(100vw - 48px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid #3d342d; border-radius: 12px; background: #2a2420; color: #faf8ee; box-shadow: 0 20px 64px #0d0707aa; animation: dialog-rise .16s ease-out; }
 dialog.dialog-settings { width: min(480px, calc(100vw - 48px)); }
+dialog.dialog-about { width: min(360px, calc(100vw - 48px)); }
+.about { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 28px; }
+.about .about-icon { width: 112px; height: 112px; }
+.about .wordmark { margin: 4px 0 0; font-size: 32px; -webkit-text-stroke-width: 3px; }
+.about p { margin: 12px 0 0; }
+.about .about-version { color: #d7c9ba; }
+.about .about-copyright { color: #afa095; font-size: 12px; }
+.about .dialog-error { margin: 12px 0 0; }
+.dialog-about footer { justify-content: center; }
 dialog.dialog-flush { width: min(560px, calc(100vw - 48px)); }
 dialog.dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
 dialog.dialog:focus { outline: none; }
@@ -301,9 +314,10 @@ dialog.dialog::backdrop { background: rgba(12,10,9,.62); }
 .dialog-reset { padding: 0; border: 0; background: none; color: #ff7a80; font: inherit; cursor: pointer; }
 .dialog-reset:hover { text-decoration: underline; }
 .dialog-check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
-.dialog-exit-wait { margin: 16px 0 0; }
-.dialog-exit-wait .dialog-check { margin: 0; }
-.dialog-exit-wait-note { margin: 6px 0 0 36px; color: #f4c77d; font-size: 12px; line-height: 1.45; }
+.dialog-expert-mode { margin: 16px 0 0; }
+.dialog-expert-mode .dialog-check { margin: 0; }
+.dialog-expert-mode-note { margin: 6px 0 0 36px; padding-left: 18px; color: #f4c77d; font-size: 12px; line-height: 1.45; }
+.dialog-expert-mode-note li + li { margin-top: 8px; }
 input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: none; accent-color: #f51e2b; }
 .dialog-hint { margin: -7px 0 16px 136px; color: #afa095; font-size: 12px; }
 .dialog-error { color: #ff7a80; margin: 12px 0 0 136px; font-size: 12px; }

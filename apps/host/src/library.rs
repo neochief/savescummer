@@ -298,14 +298,13 @@ pub fn scan(host: &Arc<Host>, full: bool, reason: &str) -> usize {
                 installs: Vec::new(),
                 identities: Vec::new(),
                 catalog_executables: Vec::new(),
-                safe_to_close: false,
                 outcome: None,
                 context: None,
                 warnings: Vec::new(),
                 install_tag: None,
                 executable: None,
                 location: None,
-                wait_for_exit: true,
+                expert_mode: false,
                 created: counter,
             }
         });
@@ -315,7 +314,6 @@ pub fn scan(host: &Arc<Host>, full: bool, reason: &str) -> usize {
         game.installs = record.installs.clone();
         game.identities = record.install_identities.clone();
         game.catalog_executables = record.executables.clone();
-        game.safe_to_close = entry.safe_to_close;
         game.outcome = Some(record.outcome.clone());
         game.context = Some(record.context.clone());
         game.warnings = record.warnings.clone();
@@ -467,7 +465,6 @@ pub fn reresolve(host: &Host, inner: &mut Inner, game_id: &str) -> bool {
     game.outcome = Some(record.outcome.clone());
     game.context = Some(record.context.clone());
     game.catalog_executables = record.executables.clone();
-    game.safe_to_close = entry.safe_to_close;
     let snapshot = game.clone();
     if changed {
         let _ = persist_game(host, &snapshot);
@@ -508,14 +505,13 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
         installs: Vec::new(),
         identities: Vec::new(),
         catalog_executables: Vec::new(),
-        safe_to_close: false,
         outcome: None,
         context: None,
         warnings: Vec::new(),
         install_tag: None,
         executable: Some(exe),
         location: Some(location),
-        wait_for_exit: true,
+        expert_mode: false,
         created: counter,
     };
     validate_candidate(host, &mut inner, game.clone())?;
@@ -577,7 +573,7 @@ pub struct ConfigureRequest<'a> {
     pub save_location: Option<&'a str>,
     pub reset_executable: bool,
     pub reset_save_location: bool,
-    pub wait_for_exit: Option<bool>,
+    pub expert_mode: Option<bool>,
 }
 
 /// Changes a game's configuration. Applied only after every new value
@@ -619,8 +615,8 @@ pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> R
     if let Some(location) = request.save_location {
         game.location = Some(user_location(location)?);
     }
-    if let Some(wait) = request.wait_for_exit {
-        game.wait_for_exit = wait;
+    if let Some(enabled) = request.expert_mode {
+        game.expert_mode = enabled;
     }
     validate_candidate(host, &mut inner, game.clone())?;
     persist_game(host, &game)?;
@@ -677,7 +673,7 @@ fn user_location(text: &str) -> Result<UserLocation, Failure> {
 pub fn load_games(host: &Host, inner: &mut Inner) {
     let rows = db::games(host.db().conn()).unwrap_or_default();
     for (id, data) in rows {
-        if let Ok(game) = serde_json::from_str::<Game>(&data) {
+        if let Ok(game) = Game::from_record_json(&data) {
             inner.games.insert(id, game);
         }
     }

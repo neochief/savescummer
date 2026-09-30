@@ -141,7 +141,7 @@ fn two_installs_of_one_game_are_two_records_with_install_tags() {
     // Each record has its own save set and history; hotkeys follow the
     // install that runs.
     world.ok(&["save", "steam-1004#gog"]);
-    world.no_exit_wait("steam-1004#gog");
+    world.enable_expert_mode("steam-1004#gog");
     let mut running = launch(&gog_copy.join("TwinGame.exe"), &[]);
     world.wait_game("steam-1004#gog", "the GOG copy runs", |g| g["running"] == true);
     assert_eq!(world.game("steam-1004")["running"], false);

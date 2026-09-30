@@ -263,8 +263,8 @@ impl Host {
             can_play: game.installed && (game.steam_launch_id().is_some() || game.main_executable().is_some()),
             can_close: inner.stack.contains(&game.id)
                 && inner.processes.get(&game.id).is_some_and(|pids| !pids.is_empty())
-                && (game.safe_to_close || !game.wait_for_exit),
-            wait_for_exit: game.wait_for_exit,
+                && game.expert_mode,
+            expert_mode: game.expert_mode,
             info: game.info.clone(),
             executable: game.main_executable().map(|p| p.to_string_lossy().into_owned()),
             executable_overridden: game.executable.is_some(),
@@ -389,7 +389,7 @@ pub fn latest_usable<'a>(
 /// The game runs and writes its progress only when it exits, so nothing on
 /// disk is worth a Save, and a Load would be overwritten when it exits.
 pub fn exit_first(inner: &Inner, game_id: &str) -> bool {
-    inner.games.get(game_id).is_some_and(|g| g.wait_for_exit)
+    inner.games.get(game_id).is_some_and(|g| !g.expert_mode)
         && (inner.stack.contains(game_id) || inner.processes.contains_key(game_id))
 }
 
@@ -436,7 +436,7 @@ impl Host {
         let blocked = inner.blocked.get(game_id).cloned();
         let recovery_failure = blocked.as_ref().and_then(|f| {
             if let Some(game) = inner.games.get(game_id)
-                && game.wait_for_exit
+                && !game.expert_mode
                 && (!inner.processes_observed || game.executables().is_empty())
             {
                 return Some(

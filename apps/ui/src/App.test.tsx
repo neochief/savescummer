@@ -64,6 +64,7 @@ class FakeBridge implements Bridge {
   report = vi.fn(async () => undefined);
   capture = vi.fn(async () => undefined);
   artwork = vi.fn(async () => 'blob:fake');
+  openWebsite = vi.fn(async () => undefined);
   async onState(callback: (state: HostState) => void) { this.stateListener = callback; return () => { this.stateListener = undefined; }; }
   async onStatus(callback: (status: string) => void) { this.statusListener = callback; return () => { this.statusListener = undefined; }; }
   async onLabels() { return () => undefined; }
@@ -79,7 +80,7 @@ test('selecting another game reads that game’s real history page', async () =>
   expect(bridge.requests).toContainEqual({ type: 'history', game: 'b', limit: 100 });
 });
 
-test('cards show Play while stopped and expose Close only when the host permits it', async () => {
+test('cards show Play while stopped and expose Terminate only when the host permits it', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].can_play = true;
   render(<App bridge={bridge} />);
@@ -90,11 +91,11 @@ test('cards show Play while stopped and expose Close only when the host permits 
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 2,
     games: [{ ...bridge.state.games[0], running: true, can_close: false }, bridge.state.games[1]] }));
   expect(screen.queryByRole('button', { name: 'Play Game A' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Close Game A' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Terminate Game A' })).toBeNull();
 
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 3,
     games: [{ ...bridge.state.games[0], running: true, can_close: true }, bridge.state.games[1]] }));
-  fireEvent.click(screen.getByRole('button', { name: 'Close Game A' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Terminate Game A' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'close_game', game: 'a' }));
 
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 4,
@@ -178,18 +179,19 @@ test('a running game that saves on exit covers the actions and hides row loads u
   expect(document.querySelectorAll('.row-button.locked')).toHaveLength(0);
 });
 
-test('Configure turns waiting for the game to close off', async () => {
+test('Configure turns Expert mode on', async () => {
   const bridge = new FakeBridge();
-  bridge.state.games[0] = { ...bridge.state.games[0], executable: '/games/a.exe', wait_for_exit: true };
+  bridge.state.games[0] = { ...bridge.state.games[0], executable: '/games/a.exe', expert_mode: false };
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
   fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
   const dialog = await screen.findByRole('dialog', { name: 'Configure — Game A' });
-  const check = within(dialog).getByRole('checkbox', { name: /Wait for the game to close/ }) as HTMLInputElement;
-  expect(check.checked).toBe(true);
+  const check = within(dialog).getByRole('checkbox', { name: 'Expert mode' }) as HTMLInputElement;
+  expect(check.checked).toBe(false);
+  expect(within(dialog).getByText(/Allows terminating a running game from its game card/)).toBeTruthy();
   fireEvent.click(check);
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-  await waitFor(() => expect(bridge.requests).toContainEqual(expect.objectContaining({ type: 'configure', game: 'a', wait_for_exit: false })));
+  await waitFor(() => expect(bridge.requests).toContainEqual(expect.objectContaining({ type: 'configure', game: 'a', expert_mode: true })));
 });
 
 test('stable guidance survives Delete while history follows the current host gate', async () => {

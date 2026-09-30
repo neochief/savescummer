@@ -320,7 +320,7 @@ pub fn drive(host: Arc<Host>, processes: DemoProcesses) {
         let mut inner = host.lock();
         for game in &games {
             if let Some(record) = inner.games.get_mut(&game.id) {
-                record.wait_for_exit = false;
+                record.expert_mode = true;
             }
         }
         host.publish(&mut inner);

@@ -85,7 +85,7 @@ enum UiRequest {
         save_location: Option<String>,
         reset_executable: bool,
         reset_save_location: bool,
-        wait_for_exit: Option<bool>,
+        expert_mode: Option<bool>,
     },
     SaveSet {
         game: String,
@@ -148,7 +148,7 @@ impl UiRequest {
                 save_location,
                 reset_executable,
                 reset_save_location,
-                wait_for_exit,
+                expert_mode,
             } => Command::Configure {
                 game,
                 name,
@@ -156,7 +156,7 @@ impl UiRequest {
                 save_location,
                 reset_executable,
                 reset_save_location,
-                wait_for_exit,
+                expert_mode,
             },
             Self::SaveSet { game } => Command::SaveSet { game },
             Self::Settings { play_sounds, launch_on_startup, save_shortcut, load_shortcut } => {
@@ -221,6 +221,12 @@ async fn set_shortcut_capture(bridge: tauri::State<'_, Bridge>, capturing: bool)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Opens the product website in the default browser. The URL is fixed here, so the webview can't open arbitrary links.
+#[tauri::command]
+fn open_website() -> Result<(), String> {
+    savescummer_platform::open_folder(Path::new("https://savescummer.app/")).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -433,7 +439,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(bridge.clone())
-        .invoke_handler(tauri::generate_handler![host_request, report_ui, set_shortcut_capture, artwork])
+        .invoke_handler(tauri::generate_handler![host_request, report_ui, set_shortcut_capture, artwork, open_website])
         .setup(move |app| {
             watch_host(app.handle().clone(), bridge);
             Ok(())

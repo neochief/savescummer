@@ -38,9 +38,6 @@ pub struct Game {
     pub identities: Vec<Option<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub catalog_executables: Vec<PathBuf>,
-    /// The catalog explicitly permits a normal close request for this game.
-    #[serde(default)]
-    pub safe_to_close: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<Outcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -54,27 +51,31 @@ pub struct Game {
     pub executable: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<UserLocation>,
-    /// Save, Load and Revert are refused while the game runs: it writes its
-    /// progress to disk only when it exits. On unless the user turned it off.
-    /// This opt-out is the precursor to future Expert Mode. Until that mode
-    /// exists, turning it off also permits a normal Close request without a
-    /// catalog `safeToClose` override; keep those behaviors tied together.
-    #[serde(default = "yes", skip_serializing_if = "is_yes")]
-    pub wait_for_exit: bool,
+    /// Allows Save, Load, Revert and closing the game while it runs.
+    /// Off by default because many games keep progress in memory.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub expert_mode: bool,
     /// Creation order, so custom games and records keep a stable order.
     #[serde(default)]
     pub created: u64,
 }
 
-fn yes() -> bool {
-    true
-}
-
-fn is_yes(value: &bool) -> bool {
-    *value
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl Game {
+    /// Existing records used the inverse `wait_for_exit` setting.
+    pub fn from_record_json(data: &str) -> serde_json::Result<Self> {
+        let mut value: serde_json::Value = serde_json::from_str(data)?;
+        if let Some(fields) = value.as_object_mut() {
+            if let Some(wait) = fields.remove("wait_for_exit").and_then(|value| value.as_bool()) {
+                fields.entry("expert_mode").or_insert_with(|| serde_json::Value::Bool(!wait));
+            }
+        }
+        serde_json::from_value(value)
+    }
+
     pub fn is_custom(&self) -> bool {
         self.kind == GameKind::Custom
     }
@@ -159,3 +160,22 @@ pub const SETTING_LAUNCH: &str = "launch_on_startup";
 pub const SETTING_COUNTER: &str = "game_counter";
 /// The mount points of drives the host relies on, as a JSON list.
 pub const SETTING_DRIVES: &str = "drives";
+
+#[cfg(test)]
+mod tests {
+    use super::Game;
+
+    #[test]
+    fn old_wait_setting_keeps_its_behavior() {
+        let base = r#"{"id":"game","kind":"custom","name":"Game","installed":true"#;
+        let enabled = Game::from_record_json(&format!(r#"{base},"wait_for_exit":false}}"#)).unwrap();
+        let disabled = Game::from_record_json(&format!(r#"{base},"wait_for_exit":true}}"#)).unwrap();
+        let default = Game::from_record_json(&format!("{base}}}")).unwrap();
+        assert!(enabled.expert_mode);
+        assert!(!disabled.expert_mode);
+        assert!(!default.expert_mode);
+        let saved = serde_json::to_value(enabled).unwrap();
+        assert_eq!(saved["expert_mode"], true);
+        assert!(saved.get("wait_for_exit").is_none());
+    }
+}

@@ -24,7 +24,7 @@ fn a_steam_account_switch_between_sessions_follows_the_account_at_game_start() {
     write(&userdata(&world, ACCOUNT_B).join("save.json"), "B progress");
     write(&local(&world, ID64_B).join("local.sav"), "B local");
     let _host = world.host();
-    world.no_exit_wait("steam-1002");
+    world.enable_expert_mode("steam-1002");
     let set = world.ok(&["save-set", "steam-1002"]);
     assert_eq!(set["context"]["steam_account"], ACCOUNT_A);
     world.ok(&["save", "steam-1002", "--label", "account A"]);

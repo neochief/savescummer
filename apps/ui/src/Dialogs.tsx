@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as Reac
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Bridge } from './bridge';
 import type { FlushPreview, Game, HostState, SaveSet, SaveTarget } from './types';
+import { version } from '../package.json';
 import { capturedShortcut, displayShortcut, shortcutDescription, shortcutError, shortcutWarning } from './shortcuts';
 
-export type DialogKind = 'settings' | 'add' | 'configure' | 'flush';
+export type DialogKind = 'settings' | 'add' | 'configure' | 'flush' | 'about';
 
 function EyeIcon() {
   return <img className="icon" src="/icons/eye.svg" alt="" aria-hidden="true" />;
@@ -55,6 +56,29 @@ function Footer({ close, submit, busy, disabled = false, destructive = false, ex
   </footer>;
 }
 
+/** Copyright years run from the first release to the current year: "2026", then "2026–2027" and on. */
+export function copyrightYears(now = new Date()) {
+  const year = now.getFullYear();
+  return year > 2026 ? `2026–${year}` : '2026';
+}
+
+export function AboutDialog({ bridge, close, opener }: { bridge: Bridge; close: () => void; opener?: HTMLElement | null }) {
+  const [error, setError] = useState<string>();
+  return <DialogFrame title="About" kind="about" close={close} opener={opener}>
+    <div className="dialog-body about">
+      <img className="about-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
+      <span className="wordmark" aria-label="SaveScummer"><span>Save</span><strong>Scummer</strong></span>
+      <p className="about-version">Version {version}</p>
+      <p className="about-copyright">© {copyrightYears()} Oleksandr Shvets. All rights reserved.</p>
+      {error && <p className="dialog-error" role="alert">{error}</p>}
+    </div>
+    <footer>
+      <button type="button" className="dialog-primary" onClick={() => bridge.openWebsite().catch((failure) => setError(message(failure)))}>Website</button>
+      <button type="button" onClick={close}>Close</button>
+    </footer>
+  </DialogFrame>;
+}
+
 export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, onFlushed, onFlush }: {
   kind: DialogKind; game?: Game; state?: HostState; bridge: Bridge; close: () => void; opener?: HTMLElement | null;
   onAdded: (id: string) => void; onFlushed: (operation: string) => void; onFlush?: (opener: HTMLElement) => void;
@@ -62,7 +86,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
   const [name, setName] = useState(game?.kind === 'custom' ? game.name : '');
   const [executable, setExecutable] = useState(kind === 'configure' ? game?.executable || '' : '');
   const [resetExecutable, setResetExecutable] = useState(false);
-  const [waitForExit, setWaitForExit] = useState(game?.wait_for_exit !== false);
+  const [expertMode, setExpertMode] = useState(game?.expert_mode ?? false);
   const [location, setLocation] = useState('');
   const [focused, setFocused] = useState<'executable' | 'location'>();
   const [saveSet, setSaveSet] = useState<SaveSet>();
@@ -161,7 +185,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           executable: !resetExecutable && executable.trim() !== (game.executable || '') ? executable.trim() : undefined,
           save_location: location.trim() || undefined,
           reset_executable: resetExecutable, reset_save_location: !custom && !location.trim() && Boolean(saveSet?.location),
-          wait_for_exit: waitForExit !== (game.wait_for_exit !== false) ? waitForExit : undefined,
+          expert_mode: expertMode !== (game.expert_mode ?? false) ? expertMode : undefined,
         });
         close();
       } else if (kind === 'settings') {
@@ -259,10 +283,13 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               <button type="button" className="dialog-icon-button" aria-label="Open checkpoints store" title="Show in folder"
                 onClick={() => bridge.request({ type: 'open_checkpoints', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button></span>
           </div>}
-          {kind === 'configure' && game && <div className="dialog-exit-wait">
-            <label className="dialog-check"><input type="checkbox" checked={waitForExit} onChange={(event) => setWaitForExit(event.target.checked)} />
-              Wait for the game to close before saving or loading</label>
-            <p className="dialog-exit-wait-note">While a game runs, Save may copy stale or partial progress, and the game may overwrite a Load. Turn this off only if you know when the game writes and reads its saves.</p>
+          {kind === 'configure' && game && <div className="dialog-expert-mode">
+            <label className="dialog-check"><input type="checkbox" checked={expertMode} onChange={(event) => setExpertMode(event.target.checked)} />
+              Expert mode</label>
+            <ul className="dialog-expert-mode-note">
+              <li>Allows saving and loading while the game is running. Beware: this won’t work as expected for LOTS of games that keep progress in memory. For those games, we can only save or load progress while it’s on disk and the game is stopped. But some games can be fooled into saving progress mid-game. This depends on the game and takes expert save-scumming skills to figure out.</li>
+              <li>Allows terminating a running game from its game card. This is much faster than quitting through the game’s menus, so it’s super efficient for save scumming. But it may also prevent some games from saving properly and cause problems. Knowing which games are safe to terminate takes expert save-scumming skills.</li>
+            </ul>
           </div>}
           {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
         </>}

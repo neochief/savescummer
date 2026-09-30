@@ -97,7 +97,7 @@ fn a_game_that_saves_on_exit_is_locked_while_it_runs() {
     write(&slot, "sector 1");
     let _host = world.host();
     let (game, exe) = world.custom_game_waiting("Quitter", &saves);
-    assert_eq!(world.game(&game)["wait_for_exit"], true, "the lock is on by default");
+    assert_eq!(world.game(&game)["expert_mode"], false, "the lock is on by default");
     world.ok(&["save", &game]);
 
     // While it runs, Save, Load and the hotkeys are refused before anything is created.

@@ -8,6 +8,7 @@ export interface Bridge {
   report(selected: string | null, focused: boolean): Promise<void>;
   capture(capturing: boolean): Promise<void>;
   artwork(game: string, kind: 'hero' | 'logo' | 'header' | 'icon'): Promise<string>;
+  openWebsite(): Promise<void>;
   onState(callback: (state: import('./types').HostState) => void): Promise<UnlistenFn>;
   onStatus(callback: (status: string) => void): Promise<UnlistenFn>;
   onLabels(callback: (game: string) => void): Promise<UnlistenFn>;
@@ -30,6 +31,9 @@ export const tauriBridge: Bridge = {
   async artwork(game, kind) {
     const data = await invoke<{ mime: string; bytes: number[] }>('artwork', { game, kind });
     return URL.createObjectURL(new Blob([new Uint8Array(data.bytes)], { type: data.mime }));
+  },
+  openWebsite() {
+    return invoke<void>('open_website');
   },
   async onState(callback) {
     return listen('host-state', (event) => callback(event.payload as import('./types').HostState));

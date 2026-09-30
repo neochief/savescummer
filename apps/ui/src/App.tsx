@@ -3,7 +3,7 @@ import Markdown from 'react-markdown';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Bridge } from './bridge';
 import type { Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
-import { AppDialog, formatBytes, type DialogKind } from './Dialogs';
+import { AboutDialog, AppDialog, formatBytes, type DialogKind } from './Dialogs';
 import { displayShortcut } from './shortcuts';
 import { failureMessage } from './messages';
 import { GuidancePanel } from './GuidancePanel';
@@ -27,11 +27,12 @@ function Icon({ name, className = '' }: { name: string; className?: string }) {
 // Scroll shadows fade in over the first 20px of scroll distance (0.1 at 1px, full at 20px).
 const mac = navigator.platform.includes('Mac');
 
-function Brand() {
-  return <div className="brand">
+/** The app logo, muted like the idle game cards until hovered; opens the About dialog. */
+function BrandButton({ onClick }: { onClick: (opener: HTMLButtonElement) => void }) {
+  return <button className="brand" aria-label="About SaveScummer" onClick={(event) => onClick(event.currentTarget)}>
     <img className="app-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
     <span className="wordmark" aria-hidden="true"><span>Save</span><strong>Scummer</strong></span>
-  </div>;
+  </button>;
 }
 
 // Empty-state skeleton leaning out of an arched window; every character SVG shares the same canvas and pose height.
@@ -123,8 +124,8 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
       {(!game.running || game.can_close) && <div className="card-lifecycle-actions">
         <button className="card-action" disabled={pending || (!game.running && game.can_play === false)}
           onClick={() => onLifecycle(game.running ? 'close_game' : 'play')}
-          aria-label={`${game.running ? 'Close' : 'Play'} ${game.name}`}
-          title={game.running ? 'Close game' : game.can_play === false ? 'No executable configured' : 'Play game'}>
+          aria-label={`${game.running ? 'Terminate' : 'Play'} ${game.name}`}
+          title={game.running ? 'Terminate game' : game.can_play === false ? 'No executable configured' : 'Play game'}>
           <span className={`card-action-icon ${game.running ? 'stop' : 'play'}`} />
         </button>
       </div>}
@@ -588,7 +589,6 @@ export function App({ bridge }: { bridge: Bridge }) {
   return (
     <div className={`app ${working ? 'is-busy' : ''} ${noGames ? 'no-games' : ''}`}>
       <header className="window-bar" data-tauri-drag-region>
-        {!noGames && <Brand />}
         {!mac && <WindowControls />}
       </header>
       <aside className="sidebar">
@@ -616,6 +616,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             <button onClick={(event) => openDialog('settings', event.currentTarget)}><Icon name="settings" />Settings</button>
           </div>
         </div>
+        <BrandButton onClick={(opener) => openDialog('about', opener)} />
       </aside>
       <main className="main">
         <p className="sr-only" role="status">{feedback?.phase === 'busy' ? `${feedback.action} in progress`
@@ -682,7 +683,8 @@ export function App({ bridge }: { bridge: Bridge }) {
         </> : state && visibleGames.length ? <div className="empty-selection"><Character name="no-game-selected" /><p>No known games are running.</p></div>
           : <div className="empty-library">{!state ? 'Waiting for the host…' : 'No games found.'}</div>}
       </main>
-      {dialog && <AppDialog key={`${dialog}-${dialogTarget?.id || ''}`} kind={dialog} game={dialogTarget} state={state} bridge={bridge} opener={dialogOpener.current}
+      {dialog === 'about' && <AboutDialog bridge={bridge} opener={dialogOpener.current} close={() => setDialog(undefined)} />}
+      {dialog && dialog !== 'about' && <AppDialog key={`${dialog}-${dialogTarget?.id || ''}`} kind={dialog} game={dialogTarget} state={state} bridge={bridge} opener={dialogOpener.current}
         close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id) => { setDialog(undefined); setSelected(id); }}
         onFlushed={(operation) => dialogTarget && finishFlush(dialogTarget.id, operation)} onFlush={setFlushOpener} />}
       {dialog && flushOpener && dialogTarget && <AppDialog key={`flush-over-${dialogTarget.id}`} kind="flush" game={dialogTarget} state={state} bridge={bridge}

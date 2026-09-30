@@ -132,7 +132,7 @@ fn recovery_gate(host: &Host, game: &str) -> Result<(), Failure> {
         .games
         .get(game)
         .ok_or_else(|| Failure::new(ErrorKind::NotFound, "the recovery game's configuration is missing"))?;
-    if record.wait_for_exit && (!inner.processes_observed || record.executables().is_empty()) {
+    if !record.expert_mode && (!inner.processes_observed || record.executables().is_empty()) {
         return Err(Failure::new(ErrorKind::Io, "couldn't establish whether the game is running").game(game));
     }
     crate::policy::exit_rule(crate::host::exit_first(&inner, game)).map_err(|f| f.with_game_if_missing(game))

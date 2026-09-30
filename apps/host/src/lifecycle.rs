@@ -45,9 +45,7 @@ pub fn close(host: &Arc<Host>, selector: &str) -> Result<bool, Failure> {
         let inner = host.lock();
         let id = host.find_game(&inner, selector)?;
         let game = inner.game(&id)?;
-        // Future Expert Mode will replace the wait_for_exit opt-out. For now,
-        // that opt-out explicitly allows Close when the catalog has not vetted it.
-        if !game.safe_to_close && game.wait_for_exit {
+        if !game.expert_mode {
             return Err(Failure::new(ErrorKind::InvalidRequest, "closing this game is not enabled").game(&id));
         }
         let pids = inner.processes.get(&id).cloned().unwrap_or_default();

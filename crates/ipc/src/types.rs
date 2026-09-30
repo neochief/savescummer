@@ -130,7 +130,7 @@ pub enum Command {
         reset_save_location: bool,
         /// Refuse Save, Load and Revert while the game runs.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        wait_for_exit: Option<bool>,
+        expert_mode: Option<bool>,
     },
     Scan {
         /// A full scan re-checks every checkpoint on disk too.
@@ -453,10 +453,10 @@ pub struct GameSummary {
     pub can_play: bool,
     #[serde(default)]
     pub can_close: bool,
-    /// Save, Load and Revert are refused while the game runs (`game_running`):
-    /// it writes its progress to disk only when it exits.
+    /// Enables Save, Load, Revert and closing the game while it runs.
+    /// Off by default.
     #[serde(default)]
-    pub wait_for_exit: bool,
+    pub expert_mode: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub info: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

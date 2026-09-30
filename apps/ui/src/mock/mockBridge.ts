@@ -42,7 +42,7 @@ export function createMockBridge(): Bridge {
     g.retry = { available: false };
     g.save = { available: true }; g.load = { available: Boolean(g.latest) }; g.restore = { available: true };
     g.guidance = g.latest ? undefined : { kind: 'no_saves', save: false, load: true };
-    if (!g.running || g.wait_for_exit === false) return;
+    if (!g.running || g.expert_mode) return;
     g.save = g.load = g.restore = { available: false, reason: 'game_running' };
     g.guidance = { kind: 'game_running', save: true, load: true };
   };
@@ -58,7 +58,7 @@ export function createMockBridge(): Bridge {
           const g = find(request.game);
           if (request.type === 'close_game' && !g.can_close) throw new Error('Closing this game is not enabled');
           g.running = request.type === 'play';
-          g.can_close = g.running && g.wait_for_exit === false;
+          g.can_close = g.running && Boolean(g.expert_mode);
           state.active_stack = g.running ? [g.id, ...state.active_stack.filter((id) => id !== g.id)] : state.active_stack.filter((id) => id !== g.id);
           lock(g);
           publish();
@@ -86,10 +86,10 @@ export function createMockBridge(): Bridge {
           return { id: `op-${++seq}`, game: g.id, kind: request.type, status: 'accepted' } as T;
         }
         case 'configure': {
-          if (request.wait_for_exit !== undefined) {
+          if (request.expert_mode !== undefined) {
             const g = find(request.game);
-            g.wait_for_exit = request.wait_for_exit;
-            g.can_close = g.running && !g.wait_for_exit;
+            g.expert_mode = request.expert_mode;
+            g.can_close = g.running && g.expert_mode;
             lock(g);
             publish();
           }
@@ -144,6 +144,7 @@ export function createMockBridge(): Bridge {
       const blob = await (await fetch(url)).blob();
       return URL.createObjectURL(blob);
     },
+    async openWebsite() { window.open('https://savescummer.app/', '_blank'); },
     async onState(callback) { stateListeners.add(callback); return () => { stateListeners.delete(callback); }; },
     async onStatus(callback) { setTimeout(() => callback('connected')); return () => undefined; },
     async onLabels() { return () => undefined; },

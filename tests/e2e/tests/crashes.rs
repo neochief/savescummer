@@ -217,7 +217,7 @@ fn startup_recovery_waits_for_exit_and_retry_owns_the_game() {
     let other;
     {
         let _host = setup.world.host();
-        setup.world.ok(&["configure", &setup.game, "--wait-for-exit", "on"]);
+        setup.world.ok(&["configure", &setup.game, "--expert-mode", "off"]);
         exe = PathBuf::from(s(&setup.world.game(&setup.game)["executable"]));
         let saves = setup.world.home.join("Saves").join("Other");
         write(&saves.join("slot.sav"), "other");
@@ -243,7 +243,7 @@ fn startup_recovery_waits_for_exit_and_retry_owns_the_game() {
     for args in [
         vec!["retry", setup.game.as_str()],
         vec!["save", setup.game.as_str()],
-        vec!["configure", setup.game.as_str(), "--wait-for-exit", "off"],
+        vec!["configure", setup.game.as_str(), "--expert-mode", "on"],
     ] {
         assert_eq!(setup.world.cli(&args).error_kind(), "busy", "{args:?}");
     }
