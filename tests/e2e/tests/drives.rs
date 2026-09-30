@@ -8,6 +8,7 @@
 
 mod common;
 
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -45,9 +46,27 @@ impl Drive {
 
     /// Unplugs it. The mount point stays behind as an empty folder.
     fn detach(&mut self) {
-        hdiutil(&["detach", "-quiet", "-force", self.mount.to_str().unwrap()]);
-        self.attached = false;
-        assert!(self.mount.is_dir(), "the empty mount point is left behind");
+        let parent_device = std::fs::metadata(self.mount.parent().unwrap()).unwrap().dev();
+        let mut last_output = None;
+        for _ in 0..20 {
+            let output =
+                Command::new("hdiutil").args(["detach", "-force"]).arg(&self.mount).output().expect("hdiutil detach");
+            if std::fs::metadata(&self.mount).unwrap().dev() == parent_device {
+                self.attached = false;
+                assert!(self.mount.is_dir(), "the empty mount point is left behind");
+                return;
+            }
+            last_output = Some(output);
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        let output = last_output.unwrap();
+        panic!(
+            "hdiutil could not detach {}: status {}, stdout: {}, stderr: {}",
+            self.mount.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 
