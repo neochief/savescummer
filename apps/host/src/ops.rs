@@ -24,6 +24,7 @@ use savescummer_storage::{self as db, CheckpointRow, HistoryRow, OperationRow};
 
 use crate::checkpoints::{Verdict, judge, recompute_visibility};
 use crate::host::{Host, Inner, PendingDelete, new_id, now};
+use crate::policy::Action;
 
 /// What the journal records for an operation, before each step that changes
 /// files. Recovery at startup reads it back.
@@ -83,9 +84,21 @@ pub enum Request {
     Revert { checkpoint: String },
     Delete { checkpoint: String },
     Flush,
+    Retry,
 }
 
 impl Request {
+    fn action(&self) -> Action {
+        match self {
+            Self::Save { .. } => Action::Save,
+            Self::Load { checkpoint: None } => Action::Load,
+            Self::Load { .. } | Self::Revert { .. } => Action::Restore,
+            Self::Delete { .. } => Action::Delete,
+            Self::Flush => Action::Flush,
+            Self::Retry => Action::Retry,
+        }
+    }
+
     pub fn kind(&self) -> &'static str {
         match self {
             Request::Save { .. } => "save",
@@ -93,6 +106,7 @@ impl Request {
             Request::Revert { .. } => "revert",
             Request::Delete { .. } => "delete",
             Request::Flush => "flush",
+            Request::Retry => "retry",
         }
     }
 }
@@ -108,7 +122,6 @@ fn op(id: &str, request_id: Option<&str>, game: Option<&str>, kind: &str, status
         result: None,
         created_at: now(),
         finished_at: None,
-        remaining_ms: None,
         checkpoint: None,
     }
 }
@@ -133,7 +146,6 @@ pub fn from_row(row: &OperationRow) -> Operation {
         result: result.and_then(|r| r.get("result")).and_then(|e| serde_json::from_value(e.clone()).ok()),
         created_at: row.created_at.clone(),
         finished_at: row.finished_at.clone(),
-        remaining_ms: None,
         checkpoint: None,
     }
 }
@@ -160,22 +172,46 @@ pub fn submit(
     }
     let result = submit_new(host, request_id, game, request, hotkey);
     if hotkey {
-        match &result {
-            Ok(op) if op.kind == "save" => cue(host, Cue::SaveStart),
-            Ok(op) if op.kind == "load" => cue(host, Cue::LoadStart),
-            Ok(_) => {}
-            Err(f) if f.kind == ErrorKind::Busy => cue(host, Cue::Busy),
-            Err(f) if f.kind == ErrorKind::GameRunning => {
-                cue(host, Cue::Busy);
-                notify_exit_first(host, f.game.as_deref().unwrap_or(game));
-            }
-            Err(f) => {
-                cue(host, Cue::Failed);
-                notify_failure(host, f);
+        if let Some(sound) = hotkey_submission_cue(&result) {
+            cue(host, sound);
+        }
+        if let Err(f) = &result {
+            match f.kind {
+                ErrorKind::GameRunning => notify_exit_first(host, f.game.as_deref().unwrap_or(game)),
+                ErrorKind::Busy | ErrorKind::NoGameData | ErrorKind::NoSaves => {}
+                _ => notify_failure(host, f),
             }
         }
     }
     result
+}
+
+fn hotkey_submission_cue(result: &Result<Operation, Failure>) -> Option<Cue> {
+    match result {
+        Ok(op) if op.kind == "save" => Some(Cue::SaveStart),
+        Ok(op) if op.kind == "load" => Some(Cue::LoadStart),
+        Ok(_) => None,
+        Err(f) if f.kind == ErrorKind::Busy => Some(Cue::Busy),
+        Err(_) => Some(Cue::Failed),
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn hotkey_sound_follows_the_requested_action() {
+    let save = op("save-op", None, Some("game"), "save", OpStatus::Accepted);
+    assert_eq!(hotkey_submission_cue(&Ok(save)), Some(Cue::SaveStart));
+    assert_eq!(hotkey_completion_cue(OpStatus::Succeeded, "save"), Some(Cue::SaveDone));
+    let load = op("load-op", None, Some("game"), "load", OpStatus::Accepted);
+    assert_eq!(hotkey_submission_cue(&Ok(load)), Some(Cue::LoadStart));
+    assert_eq!(hotkey_completion_cue(OpStatus::Succeeded, "load"), Some(Cue::LoadDone));
+    assert_eq!(hotkey_completion_cue(OpStatus::Failed, "load"), Some(Cue::Failed));
+    for reason in [ErrorKind::GameRunning, ErrorKind::NoGameData, ErrorKind::NoSaves, ErrorKind::Blocked] {
+        let refusal = Failure::new(reason, "locked");
+        assert_eq!(hotkey_submission_cue(&Err(refusal)), Some(Cue::Failed), "{reason:?}");
+    }
+    let busy = Failure::new(ErrorKind::Busy, "busy");
+    assert_eq!(hotkey_submission_cue(&Err(busy)), Some(Cue::Busy));
 }
 
 fn by_request(host: &Host, request_id: &str) -> Option<Operation> {
@@ -197,29 +233,20 @@ fn submit_new(
     let game_id;
     {
         let mut inner = host.lock();
-        match inner.phase {
-            Phase::Starting => return Err(Failure::new(ErrorKind::Starting, "the host is still starting")),
-            Phase::ShuttingDown => return Err(Failure::new(ErrorKind::ShuttingDown, "the host is shutting down")),
-            Phase::Ready => {}
-        }
         game_id = host.find_game(&inner, game)?;
         let fail = |kind: ErrorKind, detail: &str| Failure::new(kind, detail).game(&game_id);
-        if inner.store_moving {
-            return Err(fail(ErrorKind::Busy, "the checkpoint store is being moved"));
-        }
-        if inner.blocked.contains_key(&game_id) {
-            return Err(fail(ErrorKind::Blocked, "the game waits on an interrupted operation"));
-        }
-        if let Request::Delete { checkpoint } = &request {
-            if inner.deletes.values().any(|d| d.op.checkpoint.as_deref() == Some(checkpoint)) {
-                return Err(fail(ErrorKind::InvalidRequest, "this checkpoint is already being deleted"));
-            }
-        } else if inner.busy.contains_key(&game_id) {
-            return Err(fail(ErrorKind::Busy, "another operation runs for this game"));
+        host.action_facts(&inner, &game_id, None)
+            .admission(request.action())
+            .map_err(|f| f.with_game_if_missing(&game_id))?;
+        if let Request::Delete { checkpoint } = &request
+            && inner.deletes.values().any(|d| d.op.checkpoint.as_deref() == Some(checkpoint))
+        {
+            return Err(fail(ErrorKind::InvalidRequest, "this checkpoint is already being deleted"));
         }
         if !matches!(request, Request::Delete { .. }) {
             // Reserve the game while checking; a rejection releases it.
-            inner.busy.insert(game_id.clone(), op(&op_id, Some(request_id), Some(&game_id), kind, OpStatus::Accepted));
+            inner.busy.insert(game_id.clone(), op(&op_id, Some(request_id), Some(&game_id), kind, OpStatus::Checking));
+            host.publish(&mut inner);
         }
     }
     let release = |host: &Host| {
@@ -227,9 +254,10 @@ fn submit_new(
         if inner.busy.get(&game_id).is_some_and(|o| o.id == op_id) {
             inner.busy.remove(&game_id);
         }
+        host.publish(&mut inner);
     };
 
-    let prepared = match preflight(host, &game_id, &request) {
+    let prepared = match preflight(host, &game_id, &request, &op_id) {
         Ok(p) => p,
         Err(f) => {
             release(host);
@@ -239,7 +267,7 @@ fn submit_new(
 
     let mut operation = op(&op_id, Some(request_id), Some(&game_id), kind, OpStatus::Accepted);
     if let Request::Delete { checkpoint } = &request {
-        operation.status = OpStatus::CountingDown;
+        operation.status = OpStatus::Waiting;
         operation.checkpoint = Some(checkpoint.clone());
     }
     let row = OperationRow {
@@ -253,13 +281,27 @@ fn submit_new(
         created_at: operation.created_at.clone(),
         finished_at: None,
     };
-    let inserted = host.db().write(|c| db::insert_operation(c, &row));
-    if let Err(e) = inserted {
-        release(host);
-        return Err(Failure::new(ErrorKind::NotRecorded, e.to_string()).game(&game_id));
-    }
     {
         let mut inner = host.lock();
+        if let Err(f) = host.action_facts(&inner, &game_id, Some(&op_id)).check(request.action()) {
+            drop(inner);
+            release(host);
+            return Err(f.with_game_if_missing(&game_id));
+        }
+        if let Request::Delete { checkpoint } = &request
+            && inner.deletes.values().any(|d| d.op.checkpoint.as_deref() == Some(checkpoint))
+        {
+            drop(inner);
+            release(host);
+            return Err(
+                Failure::new(ErrorKind::InvalidRequest, "this checkpoint is already being deleted").game(&game_id)
+            );
+        }
+        if let Err(e) = host.db().write(|c| db::insert_operation(c, &row)) {
+            drop(inner);
+            release(host);
+            return Err(Failure::new(ErrorKind::NotRecorded, e.to_string()).game(&game_id));
+        }
         inner.ops.insert(op_id.clone(), operation.clone());
         if hotkey {
             inner.hotkey_ops.insert(op_id.clone());
@@ -267,8 +309,7 @@ fn submit_new(
         inner.notices.remove(&game_id);
         match &request {
             Request::Delete { .. } => {
-                let deadline = Instant::now() + Duration::from_millis(host.opts.delete_countdown_ms);
-                inner.deletes.insert(op_id.clone(), PendingDelete { op: operation.clone(), deadline });
+                inner.deletes.insert(op_id.clone(), PendingDelete { op: operation.clone() });
             }
             _ => {
                 inner.busy.insert(game_id.clone(), operation.clone());
@@ -293,6 +334,10 @@ fn submit_new(
             }
             (Request::Delete { checkpoint }, _) => run_delete(&worker_host, &worker_op, &worker_game, &checkpoint),
             (Request::Flush, _) => run_flush(&worker_host, &worker_op, &worker_game),
+            (Request::Retry, _) => {
+                set_status(&worker_host, &worker_op, OpStatus::Running);
+                crate::recovery::retry(&worker_host, &worker_game)
+            }
             _ => Err(Failure::new(ErrorKind::InvalidRequest, "unexpected request")),
         };
         finish(&worker_host, &worker_op, &worker_game, outcome);
@@ -360,25 +405,30 @@ struct Restore {
 }
 
 /// Every rejection happens here, before anything is created.
-fn preflight(host: &Arc<Host>, game_id: &str, request: &Request) -> Result<Prepared, Failure> {
-    let mut inner = host.lock();
-    crate::library::derive_one(host, &mut inner, game_id);
-    // Every location it touches must be allowed before the first read: a
-    // prompt during a game may go unseen while the read waits on it.
-    if let Some(category) = host.privacy.needed(&inner.store) {
-        return Err(Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(&inner.store));
+fn preflight(host: &Arc<Host>, game_id: &str, request: &Request, owner: &str) -> Result<Prepared, Failure> {
+    if matches!(request, Request::Save { .. } | Request::Load { .. } | Request::Revert { .. }) {
+        crate::library::refresh_game(host, game_id)?;
     }
-    if !inner.store_available {
-        return Err(
-            Failure::new(ErrorKind::StoreUnavailable, "the checkpoint store can't be reached").path(&inner.store)
-        );
+    crate::checkpoints::check_store(host);
+    let retry_paths = matches!(request, Request::Retry).then(|| crate::recovery::check_paths(host, game_id));
+    if let Some(result) = &retry_paths {
+        let mut inner = host.lock();
+        match result {
+            Err(f) if f.kind == ErrorKind::TargetUnavailable => {
+                inner.recovery_unavailable.insert(game_id.to_string(), f.clone());
+            }
+            Ok(()) => {
+                inner.recovery_unavailable.remove(game_id);
+            }
+            _ => {}
+        }
+    }
+    let inner = host.lock();
+    host.action_facts(&inner, game_id, Some(owner)).check(request.action())?;
+    if let Some(result) = retry_paths {
+        result?;
     }
     let derived = inner.derived.get(game_id).cloned().unwrap_or_default();
-    if matches!(request, Request::Save { .. } | Request::Load { .. } | Request::Revert { .. })
-        && crate::host::exit_first(&inner, game_id)
-    {
-        return Err(Failure::new(ErrorKind::GameRunning, "exit the game first: it writes its progress when it exits"));
-    }
     match request {
         Request::Delete { checkpoint } => {
             let record = db::checkpoint(host.db().conn(), checkpoint)
@@ -390,17 +440,8 @@ fn preflight(host: &Arc<Host>, game_id: &str, request: &Request) -> Result<Prepa
             Ok(Prepared::Nothing)
         }
         Request::Flush => Ok(Prepared::Nothing),
-        Request::Save { .. } => {
-            let targets = derived.active.clone()?;
-            if let Some(t) = targets.iter().find(|t| t.presence == Presence::Unknown) {
-                return Err(Failure::new(ErrorKind::TargetUnavailable, "the save location can't be read").path(&t.root));
-            }
-            if !derived.has_data {
-                return Err(Failure::new(ErrorKind::NoGameData, "no save location matches anything yet")
-                    .paths(targets.iter().map(|t| t.root.clone())));
-            }
-            Ok(Prepared::Nothing)
-        }
+        Request::Retry => Ok(Prepared::Nothing),
+        Request::Save { .. } => Ok(Prepared::Nothing),
         Request::Load { .. } | Request::Revert { .. } => {
             let targets = derived.active.clone()?;
             let ci = host.env.case_insensitive();
@@ -586,8 +627,8 @@ fn make_checkpoint(
 }
 
 fn current_targets(host: &Host, game_id: &str) -> Result<Vec<Target>, Failure> {
-    let mut inner = host.lock();
-    crate::library::derive_one(host, &mut inner, game_id);
+    crate::library::refresh_game(host, game_id)?;
+    let inner = host.lock();
     let targets = inner
         .derived
         .get(game_id)
@@ -863,25 +904,7 @@ pub fn restore_row(
 }
 
 fn run_delete(host: &Arc<Host>, op_id: &str, game_id: &str, checkpoint: &str) -> Result<OpResult, Failure> {
-    // The countdown lives only in memory.
-    loop {
-        let (cancelled, deadline, shutting_down) = {
-            let inner = host.lock();
-            match inner.deletes.get(op_id) {
-                None => (true, Instant::now(), false),
-                Some(d) => (d.op.status == OpStatus::Cancelled, d.deadline, inner.phase == Phase::ShuttingDown),
-            }
-        };
-        if cancelled {
-            return Err(Failure::new(ErrorKind::InvalidRequest, "cancelled"));
-        }
-        if Instant::now() >= deadline || shutting_down {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    // Then it waits for the game's turn and runs through the same lock.
-    set_status(host, op_id, OpStatus::Waiting);
+    // Wait only if another operation owns the game, then take the same lock.
     loop {
         let mut inner = host.lock();
         if !inner.deletes.contains_key(op_id) {
@@ -944,29 +967,6 @@ fn run_delete(host: &Arc<Host>, op_id: &str, game_id: &str, checkpoint: &str) ->
     let mut inner = host.lock();
     recompute_visibility(host, &mut inner, game_id);
     outcome
-}
-
-/// Cancels a Delete countdown. An accepted cancel guarantees nothing is
-/// deleted; a cancel that arrives too late gets the real state back.
-pub fn cancel_delete(host: &Host, op_id: &str) -> Result<Operation, Failure> {
-    let mut inner = host.lock();
-    let Some(pending) = inner.deletes.get_mut(op_id) else {
-        drop(inner);
-        return find(host, op_id).ok_or_else(|| Failure::new(ErrorKind::NotFound, "no such operation"));
-    };
-    if pending.op.status != OpStatus::CountingDown {
-        return Ok(pending.op.clone());
-    }
-    pending.op.status = OpStatus::Cancelled;
-    let op = pending.op.clone();
-    inner.deletes.remove(op_id);
-    if let Some(o) = inner.ops.get_mut(op_id) {
-        o.status = OpStatus::Cancelled;
-        o.finished_at = Some(now());
-    }
-    let _ = db::finish_operation(host.db().conn(), op_id, "cancelled", &serde_json::json!({}), &now());
-    host.publish(&mut inner);
-    Ok(Operation { status: OpStatus::Cancelled, ..op })
 }
 
 fn run_flush(host: &Arc<Host>, op_id: &str, game_id: &str) -> Result<OpResult, Failure> {
@@ -1048,13 +1048,16 @@ fn run_flush(host: &Arc<Host>, op_id: &str, game_id: &str) -> Result<OpResult, F
 /// Ends an operation: records its outcome, releases the game, publishes,
 /// and gives a hotkey's completion cue.
 pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpResult, Failure>) {
+    let _ = crate::library::refresh_game(host, game_id);
     let at = now();
     let (status, error, result) = match outcome {
         Ok(result) => (OpStatus::Succeeded, None, Some(result)),
         Err(f) if f.detail == "cancelled" && f.kind == ErrorKind::InvalidRequest => (OpStatus::Cancelled, None, None),
         Err(f) => (OpStatus::Failed, Some(f.with_game_if_missing(game_id)), None),
     };
-    let blocked = error.as_ref().is_some_and(|e| matches!(e.kind, ErrorKind::RollbackFailed | ErrorKind::NotRecorded));
+    let is_retry = host.lock().ops.get(op_id).is_some_and(|op| op.kind == "retry");
+    let blocked = !is_retry
+        && error.as_ref().is_some_and(|e| matches!(e.kind, ErrorKind::RollbackFailed | ErrorKind::NotRecorded));
     let db_status = match status {
         OpStatus::Succeeded => "succeeded",
         OpStatus::Cancelled => "cancelled",
@@ -1073,7 +1076,6 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
         operation.error = error.clone();
         operation.result = result;
         operation.finished_at = Some(at);
-        operation.remaining_ms = None;
         inner.ops.insert(op_id.to_string(), operation.clone());
         if inner.busy.get(game_id).is_some_and(|b| b.id == op_id) {
             inner.busy.remove(game_id);
@@ -1089,18 +1091,14 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
             inner.notices.insert(game_id.to_string(), "save_interrupted".into());
         }
         inner.last_results.insert(game_id.to_string(), operation.clone());
-        crate::library::refresh_presence(host, &mut inner, &[game_id.to_string()]);
         host.refresh_cache(&mut inner, game_id);
         host.publish(&mut inner);
         let hidden = !inner.ui.visible;
         (inner.hotkey_ops.remove(op_id), operation.kind.clone(), hidden)
     };
     if hotkey {
-        match (status, kind.as_str()) {
-            (OpStatus::Succeeded, "save") => cue(host, Cue::SaveDone),
-            (OpStatus::Succeeded, "load") => cue(host, Cue::LoadDone),
-            (OpStatus::Succeeded, _) => {}
-            _ => cue(host, Cue::Failed),
+        if let Some(sound) = hotkey_completion_cue(status, &kind) {
+            cue(host, sound);
         }
     }
     if let Some(e) = &error
@@ -1111,6 +1109,15 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
     }
     if let Some(e) = &error {
         crate::privacy::after_failure(host, e);
+    }
+}
+
+fn hotkey_completion_cue(status: OpStatus, kind: &str) -> Option<Cue> {
+    match (status, kind) {
+        (OpStatus::Succeeded, "save") => Some(Cue::SaveDone),
+        (OpStatus::Succeeded, "load") => Some(Cue::LoadDone),
+        (OpStatus::Succeeded, _) => None,
+        _ => Some(Cue::Failed),
     }
 }
 
@@ -1126,9 +1133,22 @@ fn notify_failure(host: &Host, failure: &Failure) {
     if host.lock().ui.visible {
         return;
     }
+    let game = failure.game.as_deref().unwrap_or_default();
+    let name = host.lock().games.get(game).map(|g| g.name.clone()).unwrap_or_else(|| game.into());
+    let text = if failure.kind == ErrorKind::AccessNeeded {
+        let category = failure.access.as_ref().map(|a| a.category.as_str()).unwrap_or(&failure.detail);
+        let category =
+            serde_json::from_value::<savescummer_platform::privacy::Category>(serde_json::json!(category)).ok();
+        format!(
+            "SaveScummer needs access to {} for {name}.",
+            category.map(|c| c.display_name()).unwrap_or("this game's saves")
+        )
+    } else {
+        format!("{name}: {}", failure.kind.as_str().replace('_', " "))
+    };
+    crate::trace(&format!("notification: {text}"));
     if let Some(integration) = host.integration.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        let game = failure.game.clone().unwrap_or_default();
-        integration.notify("SaveScummer", &format!("{game}: {}", failure.kind.as_str().replace('_', " ")));
+        integration.notify("SaveScummer", &text);
     }
 }
 

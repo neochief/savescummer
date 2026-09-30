@@ -6,6 +6,28 @@ mod common;
 use common::*;
 
 #[test]
+fn load_shortcut_refuses_without_a_checkpoint_while_save_shortcut_works() {
+    let world = World::new();
+    let saves = world.home.join("Saves").join("NewRun");
+    write(&saves.join("slot.sav"), "first run");
+    let _host = world.host();
+    let (game, exe) = world.custom_game("NewRun", &saves);
+    let _running = launch(&exe, &[]);
+    let summary = world.wait_game(&game, "the game is running", |g| g["running"] == true);
+    assert_eq!(summary["save"]["available"], true);
+    assert_eq!(summary["load"]["reason"], "no_saves");
+    assert_eq!(s(&world.ok(&["hotkey-target"])["game"]), game);
+
+    let before = world.history(&game).len();
+    assert_eq!(world.cli(&["hotkey", "load"]).error_kind(), "no_saves");
+    assert_eq!(world.history(&game).len(), before, "refused Load changed history");
+
+    let saved = world.ok(&["hotkey", "save"]);
+    assert_eq!(saved["status"], "succeeded");
+    assert_eq!(world.kinds(&game)[0], "saved");
+}
+
+#[test]
 fn a_run_is_saved_loaded_and_reverted_while_playing() {
     let world = World::new();
     let saves = world.home.join("Saves").join("Roguey");
@@ -83,6 +105,10 @@ fn a_game_that_saves_on_exit_is_locked_while_it_runs() {
     let summary = world.wait_game(&game, "the game is running", |g| g["running"] == true);
     assert_eq!(summary["save"]["reason"], "game_running");
     assert_eq!(summary["load"]["reason"], "game_running");
+    assert_eq!(summary["restore"]["reason"], "game_running");
+    let rows = world.history(&game);
+    assert_eq!(rows[0]["actions"]["load"], true, "row capability is independent of the running gate");
+    assert_eq!(world.cli(&["load", &game, "--checkpoint", &s(&rows[0]["checkpoint"])]).error_kind(), "game_running");
     for args in
         [vec!["save", game.as_str()], vec!["load", game.as_str()], vec!["hotkey", "save"], vec!["hotkey", "load"]]
     {
@@ -99,6 +125,26 @@ fn a_game_that_saves_on_exit_is_locked_while_it_runs() {
     write(&slot, "sector 6");
     world.ok(&["load", &game, "--checkpoint", &s(&saved["result"]["checkpoint"])]);
     assert_eq!(read(&slot), "sector 4");
+}
+
+#[test]
+fn saving_an_older_restored_state_makes_it_the_default_again() {
+    let world = World::new();
+    let _host = world.host();
+    let saves = world.home.join("Saves").join("Explicit");
+    let slot = saves.join("slot.sav");
+    write(&slot, "A");
+    let (game, _) = world.custom_game("Explicit", &saves);
+    let a = world.ok(&["save", &game]);
+    write(&slot, "B");
+    world.ok(&["save", &game]);
+    world.ok(&["load", &game, "--checkpoint", &s(&a["result"]["checkpoint"])]);
+    let c = world.ok(&["save", &game]);
+    assert_ne!(a["result"]["checkpoint"], c["result"]["checkpoint"]);
+    assert_eq!(world.game(&game)["latest"]["id"], c["result"]["checkpoint"]);
+    write(&slot, "death");
+    world.ok(&["load", &game]);
+    assert_eq!(read(&slot), "A");
 }
 
 #[test]
@@ -151,9 +197,9 @@ fn load_is_refused_while_the_game_holds_a_save_open_and_nothing_changes() {
     // While this game waits for its save, other games work as usual.
     world.ok(&["save", &other]);
     let out = load.finish();
-    assert!(started.elapsed() >= std::time::Duration::from_secs(1), "the load waited before giving up");
     assert_eq!(out.code, 1, "the load ran and failed: {}", out.stdout);
     assert_eq!(out.last()["error"]["kind"], HELD_KIND);
+    assert!(started.elapsed() >= std::time::Duration::from_secs(1), "the load waited before giving up");
     assert_eq!(tree(&saves), before, "nothing changed");
     assert_eq!(world.kinds(&game), vec!["saved"], "a failed load leaves no history");
     assert!(world.game(&game)["blocked"].is_null(), "an ordinary failure doesn't block the game");

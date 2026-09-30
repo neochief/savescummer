@@ -18,8 +18,7 @@ use crate::ops::Journal;
 /// Decides whether the checkpoint store can be reached. The default store is
 /// created when missing; a moved store on a missing drive is unavailable.
 pub fn check_store(host: &Host) {
-    let mut inner = host.lock();
-    let store = inner.store.clone();
+    let store = host.lock().store.clone();
     let default = host.data_dir.join("checkpoints");
     let available = match snap::presence(&store) {
         Presence::Present => store.is_dir(),
@@ -28,7 +27,8 @@ pub fn check_store(host: &Host) {
         }
         _ => false,
     };
-    if available != inner.store_available {
+    let mut inner = host.lock();
+    if inner.store == store && available != inner.store_available {
         inner.store_available = available;
         host.publish(&mut inner);
     }
@@ -106,6 +106,9 @@ pub fn verify_all(host: &Arc<Host>) {
     for game in touched {
         recompute_visibility(host, &mut inner, &game);
         host.refresh_cache(&mut inner, &game);
+        // Eligibility changes even when every row remains visible (for
+        // example a checkpoint becoming readable again).
+        host.bump_history(&mut inner, &game);
     }
     host.publish(&mut inner);
 }
@@ -255,18 +258,18 @@ pub fn clean_up(host: &Arc<Host>) {
 
 /// The kind of error an unavailable checkpoint reports.
 pub fn unavailable_reason(record: &CheckpointRow, inner: &Inner, ci: bool) -> Option<ErrorKind> {
+    let current = crate::host::current_pairs(inner, &record.game_id);
+    if savescummer_core::common::commonality(&record.targets, &current, ci)
+        == savescummer_core::common::Commonality::None
+    {
+        return Some(ErrorKind::DifferentSaveSet);
+    }
     if !inner.store_available {
         return Some(ErrorKind::StoreUnavailable);
     }
     if record.state == "unavailable" {
         // Can't tell: unreadable for now, not changed.
         return Some(ErrorKind::CheckpointUnreadable);
-    }
-    let current = crate::host::current_pairs(inner, &record.game_id);
-    if savescummer_core::common::commonality(&record.targets, &current, ci)
-        == savescummer_core::common::Commonality::None
-    {
-        return Some(ErrorKind::DifferentSaveSet);
     }
     None
 }

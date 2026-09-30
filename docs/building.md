@@ -133,7 +133,7 @@ Qt license texts from `packaging/licenses/` ship with a Qt frontend build.
 `cargo xtask run` and `host start`:
 
 1. Build the dev package.
-2. Start its host with `--data-dir .runtime/dev` (or `.runtime/dev-demo` with `--demo`), logging to `build/dev/logs/host.log`. `host start` adds `--minimized`; `run` doesn't, so the host shows the UI itself, as it does for a user.
+2. Start its host with `--data-dir .runtime/dev` (or `.runtime/dev-demo` with `--demo`). On macOS the packaged app is opened through Launch Services, so privacy requests belong to SaveScummer even when RustRover runs the task; its log is `.runtime/dev/host.log` (or `.runtime/dev-demo/data/host.log`). Other platforms log startup output to `build/dev/logs/host.log`. `host start` adds `--minimized`; `run` doesn't, so the host shows the UI itself, as it does for a user.
 3. Wait for its `"ready":true` line and record it in `build/dev/session.json`.
 
 On Windows and macOS, `run` opens the Tauri UI from the dev package.

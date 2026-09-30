@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { failureMessage } from './messages';
 import type { HostResponse, UiRequest } from './types';
 
 export interface Bridge {
@@ -16,7 +17,7 @@ export const tauriBridge: Bridge = {
   async request<T>(request: UiRequest): Promise<T> {
     const response = await invoke<HostResponse<T>>('host_request', { request });
     if (!response.ok || response.result === undefined) {
-      throw new Error(response.error?.detail || response.error?.kind || 'Host rejected the request');
+      throw new Error(failureMessage(response.error, 'Host rejected the request'));
     }
     return response.result;
   },

@@ -38,6 +38,21 @@ enum UiRequest {
     Save {
         game: String,
     },
+    Retry {
+        game: String,
+    },
+    Play {
+        game: String,
+    },
+    CloseGame {
+        game: String,
+    },
+    RequestAccess {
+        game: String,
+    },
+    OpenAccessSettings {
+        game: String,
+    },
     Load {
         game: String,
         checkpoint: Option<String>,
@@ -49,9 +64,6 @@ enum UiRequest {
     Delete {
         game: String,
         checkpoint: String,
-    },
-    CancelDelete {
-        operation: String,
     },
     SetLabel {
         checkpoint: String,
@@ -114,11 +126,17 @@ impl UiRequest {
             Self::History { game, cursor, limit } => {
                 Command::History { game, cursor, limit: limit.map(|n| n.min(200)) }
             }
+            Self::Retry { game } => Command::Retry { game },
+            Self::Play { game } => Command::Play { game },
+            Self::CloseGame { game } => Command::CloseGame { game },
+            Self::RequestAccess { game } => Command::RequestAccess { game },
+            Self::OpenAccessSettings { game } => {
+                Command::Open { target: OpenTarget::AccessSettings { game }, resolve_only: false }
+            }
             Self::Save { game } => Command::Save { game, label: None },
             Self::Load { game, checkpoint } => Command::Load { game, checkpoint },
             Self::Revert { game, checkpoint } => Command::Revert { game, checkpoint },
             Self::Delete { game, checkpoint } => Command::Delete { game, checkpoint },
-            Self::CancelDelete { operation } => Command::CancelDelete { operation },
             Self::SetLabel { checkpoint, label } => Command::SetLabel { checkpoint, label },
             Self::Scan => Command::Scan { full: false },
             Self::Outcome { operation } => Command::Outcome { operation, wait: true },
@@ -371,18 +389,7 @@ fn start_host(bridge: &Bridge) -> Result<(), String> {
             .ok_or("can't find the host next to SaveScummer.UI")?
     };
     let mut command =
-        if cfg!(target_os = "macos") && !bridge.explicit_data_dir && std::env::var_os("SAVESCUMMER_HOST_EXE").is_none()
-        {
-            if let Some(bundle) = exe.ancestors().nth(3).filter(|path| path.extension().is_some_and(|e| e == "app")) {
-                let mut command = ProcessCommand::new("/usr/bin/open");
-                command.args(["-g", "-j", "-a"]).arg(bundle).arg("--args");
-                command
-            } else {
-                ProcessCommand::new(&exe)
-            }
-        } else {
-            ProcessCommand::new(&exe)
-        };
+        savescummer_platform::process::bundled_host_command(&exe).unwrap_or_else(|| ProcessCommand::new(&exe));
     command.arg("--minimized");
     if bridge.explicit_data_dir {
         command.arg("--data-dir").arg(&bridge.data_dir);
@@ -466,7 +473,7 @@ mod tests {
             let mut line = String::new();
             BufReader::new(stream.try_clone().unwrap()).read_line(&mut line).unwrap();
             let request: savescummer_ipc::Request = serde_json::from_str(&line).unwrap();
-            stream.write_all(b"{\"v\":1,\"event\":\"show_window\"}\n").unwrap();
+            writeln!(stream, "{}", serde_json::json!({ "v": PROTOCOL_VERSION, "event": "show_window" })).unwrap();
             let response =
                 serde_json::json!({ "v": PROTOCOL_VERSION, "re": request.id, "ok": true, "result": { "ready": true } });
             writeln!(stream, "{response}").unwrap();
@@ -487,7 +494,12 @@ mod tests {
             let mut line = String::new();
             BufReader::new(stream.try_clone().unwrap()).read_line(&mut line).unwrap();
             let request: savescummer_ipc::Request = serde_json::from_str(&line).unwrap();
-            writeln!(stream, "{}", serde_json::json!({ "v": 2, "re": request.id, "ok": true, "result": {} })).unwrap();
+            writeln!(
+                stream,
+                "{}",
+                serde_json::json!({ "v": PROTOCOL_VERSION + 1, "re": request.id, "ok": true, "result": {} })
+            )
+            .unwrap();
         });
         assert!(request_host(endpoint.to_str().unwrap(), Command::State).unwrap_err().contains("version"));
         server.join().unwrap();

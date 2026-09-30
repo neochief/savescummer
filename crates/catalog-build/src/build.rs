@@ -270,6 +270,7 @@ fn build_game(
         detect: entry.detect,
         install_dirs: entry.install_dirs,
         executables: entry.executables,
+        safe_to_close: addendum.and_then(|a| a.overrides.safe_to_close).unwrap_or(false),
         save: entry.save,
         exclude: entry.exclude,
     };

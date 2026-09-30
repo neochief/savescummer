@@ -1,6 +1,7 @@
 //! macOS 13+, Apple Silicon (PLAN-BUILD.md macOS, PLAN-MACOS.md BUILD AND
 //! PACKAGING): `SaveScummer.app`, ad-hoc signed, in a drag-to-Applications DMG.
 
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,7 +12,7 @@ use crate::naming::{self, CLI, HOST, UI};
 use crate::package::{self, Inputs, Layout};
 use crate::{cmd, paths, pins};
 
-pub use crate::unix::{ask_to_close, hide_window, spawn_detached};
+pub use crate::unix::{ask_to_close, hide_window};
 
 pub const PLATFORM: naming::Platform = naming::MACOS;
 pub const RUST_TARGET: &str = "aarch64-apple-darwin";
@@ -38,6 +39,18 @@ pub fn check_build_machine() -> anyhow::Result<()> {
 /// Where the program with the fixed executable name `name` is in a package.
 pub fn program(package: &Path, name: &str) -> PathBuf {
     package.join("Contents").join("MacOS").join(name)
+}
+
+/// Start the packaged host through Launch Services, including dev builds.
+/// A direct child of an IDE inherits that IDE's macOS privacy attribution.
+pub fn launch_app(package: &Path, args: &[OsString], minimized: bool) -> anyhow::Result<()> {
+    let mut command = Command::new("/usr/bin/open");
+    command.arg("-n");
+    if minimized {
+        command.args(["-g", "-j"]);
+    }
+    command.arg("-a").arg(package).arg("--args").args(args);
+    cmd::run(&mut command)
 }
 
 /// ```text

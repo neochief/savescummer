@@ -38,6 +38,9 @@ pub struct Game {
     pub identities: Vec<Option<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub catalog_executables: Vec<PathBuf>,
+    /// The catalog explicitly permits a normal close request for this game.
+    #[serde(default)]
+    pub safe_to_close: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<Outcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -53,6 +56,9 @@ pub struct Game {
     pub location: Option<UserLocation>,
     /// Save, Load and Revert are refused while the game runs: it writes its
     /// progress to disk only when it exits. On unless the user turned it off.
+    /// This opt-out is the precursor to future Expert Mode. Until that mode
+    /// exists, turning it off also permits a normal Close request without a
+    /// catalog `safeToClose` override; keep those behaviors tied together.
     #[serde(default = "yes", skip_serializing_if = "is_yes")]
     pub wait_for_exit: bool,
     /// Creation order, so custom games and records keep a stable order.
@@ -105,6 +111,14 @@ impl Game {
         self.installs.iter().any(|i| i.store == savescummer_catalog::Store::Steam)
     }
 
+    /// Steam must launch its own install for Cloud sync and Proton setup.
+    pub fn steam_launch_id(&self) -> Option<u64> {
+        if self.executable.is_some() || !self.is_steam() {
+            return None;
+        }
+        self.catalog_id.as_deref()?.strip_prefix("steam-")?.parse().ok()
+    }
+
     /// The folder in the checkpoint store: the name with the id, for people.
     pub fn store_folder(&self) -> String {
         let name = savescummer_snapshots::checkpoint::sanitize(&self.name);
@@ -115,7 +129,7 @@ impl Game {
 
 /// What the host derives from a game's record at every scan and before
 /// every operation. Never persisted.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Derived {
     /// The validated save set operations use, with real roots and presence.
     pub active: Result<Vec<Target>, Failure>,

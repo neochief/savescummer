@@ -140,12 +140,12 @@ fn shortcut_settings_validate_persist_and_pause_hotkeys_during_capture() {
 
     world.ok(&[
         "raw",
-        r#"{"v":1,"id":"capture-on","type":"ui_report","focused":true,"visible":true,"capturing_shortcut":true}"#,
+        r#"{"v":2,"id":"capture-on","type":"ui_report","focused":true,"visible":true,"capturing_shortcut":true}"#,
     ]);
     assert_eq!(world.cli(&["hotkey", "save"]).error_kind(), "invalid_request");
     world.ok(&[
         "raw",
-        r#"{"v":1,"id":"capture-off","type":"ui_report","focused":false,"visible":true,"capturing_shortcut":false}"#,
+        r#"{"v":2,"id":"capture-off","type":"ui_report","focused":false,"visible":true,"capturing_shortcut":false}"#,
     ]);
 
     host.kill();
@@ -232,8 +232,7 @@ fn watching_gets_the_state_then_every_change_labels_and_the_shutdown() {
 #[test]
 fn shutdown_lets_a_running_operation_finish_and_runs_pending_deletes() {
     let world = World::new();
-    let mut host =
-        world.host_with(&["--delete-countdown-ms", "60000"], &[("SAVESCUMMER_TEST_DELAY_AT", "saved.copy:1:1000")]);
+    let mut host = world.host_with(&[], &[("SAVESCUMMER_TEST_DELAY_AT", "saved.copy:1:1000")]);
     let (game, _) = game(&world, "Stopping");
     let (other, _) = self::game(&world, "Doomed");
     let doomed = world.ok(&["save", &other]);
@@ -247,7 +246,7 @@ fn shutdown_lets_a_running_operation_finish_and_runs_pending_deletes() {
 
     let _host = world.host();
     assert_eq!(world.ok(&["outcome", &s(&running["id"])])["status"], "succeeded", "the save reached a safe point");
-    assert_eq!(world.ok(&["outcome", &s(&pending["id"])])["status"], "succeeded", "the countdown ended early");
+    assert_eq!(world.ok(&["outcome", &s(&pending["id"])])["status"], "succeeded", "the delete completed");
     assert!(world.history(&other).iter().all(|r| r["kind"] != "saved"));
 }
 

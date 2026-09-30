@@ -9,7 +9,7 @@ pub mod recovery;
 pub mod safety;
 pub mod stack;
 
-pub use error::{ErrorKind, Failure};
+pub use error::{AccessInfo, ErrorKind, Failure, TargetCause};
 pub use savescummer_catalog::{Filter, Platform, Presence, Store, Target};
 
 /// Reserved suffixes: an interrupted Load's copies and set-aside files.

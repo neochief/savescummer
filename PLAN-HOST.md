@@ -52,7 +52,7 @@ Showing the UI always means one window: if a UI is connected, the host tells it 
 - The host has no console, so everything it has to say goes to the host log. The one exception is output a caller explicitly captured (see Command line).
 - The CLI stays a console program; terminals are its purpose. When the UI runs the CLI, it asks for no window.
 
-The host starts, in order: open the database, resolve interrupted operations, scan, start monitoring, then accept operations. It shows the UI as soon as it serves the protocol, so the window can appear during the first scan and show it in progress.
+The host starts, in order: open the database, observe running processes for persisted games, resolve eligible interrupted operations, scan, continue monitoring, then accept operations. Recovery that could touch live saves waits if process observation is unavailable or the exit rule applies (PLAN-LOCKDOWN). It shows the UI as soon as it serves the protocol, so the window can appear during the first scan and show it in progress.
 
 Closing the window ends the UI; the host stays in the tray. Clicking the tray icon shows the UI. The tray menu has two items:
 
@@ -371,13 +371,15 @@ Actions in the same second stay distinct: rows have stable IDs and a stable orde
 
 ## OPERATIONS
 
-Every operation, from any entry point, goes through the same handling and the same per-game lock. The lock covers Save, Load, Revert, Delete, Flush and configuration changes. A request for a busy game is rejected immediately; nothing is queued for later.
+Every operation, from any entry point, goes through the same handling and the same per-game lock. The lock covers Save, Load, Revert, Retry, active Delete, Flush and configuration changes. A request for a busy game is rejected immediately, except Delete may start its existing countdown and wait for ownership. File preflight publishes a provisional `checking` reservation; `accepted` means durably recorded. There are no automatic exit checkpoints (PLAN-LOCKDOWN).
 
 The app works on files. The user is responsible for the game picking up a restored state, following the game's instructions: for most games, reloading from the main menu. Where a game must be closed, the order is close → Load → launch. Why not "restart after restoring": some games save on exit and would overwrite the restored files. Copying is ordinary and best-effort: the host doesn't pause the game or detect writes during a copy. A copy made while the game is writing may be inconsistent; real copy errors fail the operation.
 
 ### Games that write their progress on exit
 
-Most games keep progress in memory and write it to disk only when the player saves and exits (FTL writes its run only then). A Save made while such a game runs copies stale files, and a Load is overwritten when the game exits. So, for a game with *wait for the game to close* on (the default), Save, Load and Revert are refused with `game_running` while the game is on the ACTIVE STACK, from every entry point, before anything is created. Save and Load availability report the same reason, so clients show why. A hotkey press gets the busy cue and a notification to save and exit the game, since the user is in the game and sees no window. Once the process has exited, its writes are complete and everything works at once. Delete, Flush, labels and Configure are unaffected: they don't touch the game's files.
+Most games keep progress in memory and write it to disk only when the player saves and exits (FTL writes its run only then). A Save made while such a game runs copies stale files, and a Load is overwritten when the game exits. So, for a game with *wait for the game to close* on (the default), Save, Load, Revert and Retry are refused with `game_running` while a configured game process is observed, including games awaiting privacy access outside the ACTIVE STACK. Every entry point and the summary use the shared action policy; activity or another prerequisite may refuse first (PLAN-LOCKDOWN, REASONS). A hotkey press gets the failure cue and a notification to save and exit the game, since the user is in the game and sees no window. Once the observed process exits, the exit rule lifts without an added delay. Other writers or unrecognized helper processes remain outside that guarantee. Delete, Flush, labels and Configure are unaffected: they don't touch the game's files.
+
+Action availability, stable guidance, activity and operation results are separate host facts (PLAN-LOCKDOWN). The common policy checks only conditions relevant to each action. Every successful Save creates a new deliberate checkpoint, including when its bytes match an older one; Load and Save have no content-equality refusal.
 
 **Known issue, ignored for now: very large saves.** Every Save copies the whole save set, and every Load copies it twice (the recovery checkpoint, then the `.ssnew` copies). For games with huge save folders, such as a Project Zomboid world with hundreds of MB in thousands of files, a hotkey press can take minutes and every checkpoint takes the full size on disk. The catalog is mostly roguelikes and strategy games with small saves, so this is accepted. If it becomes a problem, the options are skipping files unchanged since the previous checkpoint, hard links between checkpoints, or copy-on-write clones where the file system supports them.
 
@@ -509,7 +511,7 @@ Before a game can be operated on again, the host resolves any unfinished operati
 1. **Nothing live changed** (interrupted while copying a Save, a recovery checkpoint, or a Load's stage 1): delete the temporary folder or the `.ssnew` files, mark the operation failed and release the game. An interrupted Save leaves a one-line notice; an interrupted Load is silent.
 2. **A Load was interrupted in stage 2 or 3, and every file involved is verifiably where the journal says:** undo it by reversing the renames (swapped-in files back to `.ssnew`, `.ssold` files back to their names), then delete the `.ssnew` files. The operation never happened.
 3. **The result is verifiably in place but wasn't recorded** (a Save's folder already has its checkpoint name, or a Load's stage 3 finished for every file): finish the operation, including stage 4, and add its history row, exactly as if it had completed.
-4. **Anything else:** leave every live file exactly as it is, mark the operation failed without a history row, and keep every `.ssnew`, `.ssold`, recovery and temporary file. Release the game if every target is in a coherent state; otherwise keep it blocked with a sticky error and try again at every start and whenever the user presses Retry.
+4. **Anything else:** leave every live file exactly as it is, mark the operation failed without a history row, and keep every `.ssnew`, `.ssold`, recovery and temporary file. Release the game if every target is in a coherent state; otherwise keep it blocked with recovery guidance. At startup and on Retry, check process observation, the exit rule and journal-path accessibility before touching live paths (PLAN-LOCKDOWN).
 
 Never roll back over data that may be newer, never retry the requested Load or Revert on its own, and never delete kept material while an interruption is unresolved. Leftover `.ssold` files from a finished Load (stage 4 failed) are removed quietly at the next start or scan.
 
@@ -576,7 +578,7 @@ Each of these is a small adapter the host owns, so it works with no window open.
 - **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5 (PLAN-MACOS.md, HOTKEYS).
 - When the UI's window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the active game. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
 - Holding a key triggers one operation, not many.
-- A busy game gets a short, rate-limited busy cue.
+- A request rejected because another operation owns the game gets a short, rate-limited busy cue. A press refused for a lockdown gets the failure cue (PLAN-LOCKDOWN, REASONS).
 
 ### Sounds
 
@@ -661,14 +663,14 @@ Commands:
 - Flush
 - Set or clear a label
 - Add a custom game
-- Configure a game (executable, save location, name for custom games, reset overrides, wait for the game to close)
+- Configure a game (executable, save location, name for custom games, reset overrides, wait for the game to close, keep a checkpoint when the game closes)
 - Scan
 - Change settings (Play sounds, Launch on startup)
 - Move the checkpoint store
 - Report the UI's focus and selected game (a connection that reports and watches is the UI; a one-off report, like the CLI's, stays in effect after it disconnects)
 - Show the UI (what a second launch and the tray send)
 - Open a folder by what it is (see Opening folders), or only resolve it
-- Retry a blocked game (an ordinary failure has no retry command: the client sends the same command again with a new request ID)
+- Retry a blocked game as a tracked, durably accepted operation under the per-game reservation, subject to the recovery and exit checks (an ordinary failure has no retry command: the client sends the original command again with a new request ID)
 - Refresh the catalog now
 - Ask macOS for access to where a waiting game lives (the UI's *Allow access*; answered once the user has, granted or denied; PLAN-MACOS, PRIVACY PERMISSIONS)
 - Shut down (the same safe Exit as the tray menu)
@@ -696,7 +698,7 @@ Queries:
 
 A client that watches gets the full current state, then a new state whenever something changes:
 
-- The state is a **summary**, and it's self-contained: games (configuration, install tag, install and availability status, instructions, artwork, and whether Save and Load are available with the reason when not: no game data, no save location, a target unreadable, the checkpoint store unavailable, no saves, busy, blocked, or waiting for macOS to allow access, with the category and whether the user denied it), settings (on macOS, whether launch at login was turned off in System Settings), the ACTIVE STACK, the hotkeys' target, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
+- The state is a **summary**, and it's self-contained: games (configuration, install tag, install and availability status, instructions, artwork, host-computed Save, Load, Restore, Delete, Flush, Configure and Retry availability, stable guidance with its coverage and remedy, structured reasons, and the exit-rule setting (PLAN-LOCKDOWN)), settings (on macOS, whether launch at login was turned off in System Settings), the ACTIVE STACK, the hotkeys' target, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
 - It never contains full history or old records, so its size doesn't grow with history. History is always queried separately, in pages.
 - Every state carries a revision and a host instance ID. A new instance ID means the host restarted: throw away everything cached and start again.
 - Progress can be coalesced; each delivered state stands on its own.
@@ -706,7 +708,7 @@ A client that watches gets the full current state, then a new state whenever som
 ### History pages
 
 - Newest first, in the stable history order, so equal timestamps never cause gaps or duplicates.
-- Each row carries its times, its checkpoint reference, the label and time of the save it's about (its own for Saved, the loaded save's for Loaded), the time of the row it reverted (for Reverted), for Loaded rows how many files the Load removed and whether Steam Cloud replaced a restored file, and whether each action is available right now, so the client needs nothing else to show it.
+- Each row carries its times, its checkpoint reference, the label and time of the save it's about (its own for Saved, the loaded save's for Loaded), the time of the row it reverted (for Reverted), for Loaded rows how many files the Load removed and whether Steam Cloud replaced a restored file, and checkpoint-specific action eligibility. Combine row eligibility with the live summary's Restore or Delete gate; activity changes do not require reloading history pages (PLAN-LOCKDOWN).
 - A page position belongs to one game, one host instance and one version of that game's history. A relevant change to that game invalidates it with an explicit "reload" answer; changes to other games, progress, artwork and labels don't. The watch stream says a game's labels changed; the client re-reads the pages it shows with the same page positions, so editing a label never resets scrolling or history.
 - Anything large is paged. A reply that would be too big is an explicit error, never silently cut off.
 

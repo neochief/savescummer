@@ -6,7 +6,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use crate::common::{is_within, path_key};
-use crate::{ErrorKind, Failure, Filter, Target, has_reserved_suffix};
+use crate::{ErrorKind, Failure, Filter, Target, TargetCause, has_reserved_suffix};
 
 /// The file system facts the checks need.
 pub trait RealPaths {
@@ -53,9 +53,11 @@ pub fn check(input: &SafetyInput<'_>, paths: &dyn RealPaths) -> Result<Vec<Targe
 }
 
 fn real(paths: &dyn RealPaths, path: &Path) -> Result<PathBuf, Failure> {
-    paths
-        .real(path)
-        .map_err(|why| Failure::new(ErrorKind::InvalidTarget, format!("a link can't be resolved: {why}")).path(path))
+    paths.real(path).map_err(|why| {
+        Failure::new(ErrorKind::InvalidTarget, format!("a link can't be resolved: {why}"))
+            .path(path)
+            .target_cause(TargetCause::UnresolvedLink)
+    })
 }
 
 fn check_one(
@@ -76,7 +78,8 @@ fn check_one(
         _ => {}
     }
     if names_reserved(&target.filter) {
-        return Err(fail(ErrorKind::InvalidTarget, "the filter names a reserved suffix (.ssnew, .ssold)".into()));
+        return Err(fail(ErrorKind::InvalidTarget, "the filter names a reserved suffix (.ssnew, .ssold)".into())
+            .target_cause(TargetCause::ReservedName));
     }
 
     let root = real(paths, &target.root)?;
@@ -93,14 +96,18 @@ fn check_one(
     for folder in &broad {
         // Taking a broad folder whole, or anything that contains one.
         if is_within(folder, &claim, ci) {
-            return Err(fail(ErrorKind::InvalidTarget, format!("takes the shared folder {}", folder.display())));
+            return Err(fail(ErrorKind::InvalidTarget, format!("takes the shared folder {}", folder.display()))
+                .path(folder)
+                .target_cause(TargetCause::TooBroad));
         }
         // A wildcard directly in a broad folder.
         if matches!(target.filter, Filter::Pattern(_)) && path_key(&root, ci) == path_key(folder, ci) {
             return Err(fail(
                 ErrorKind::InvalidTarget,
                 format!("a wildcard directly in the shared folder {}", folder.display()),
-            ));
+            )
+            .path(folder)
+            .target_cause(TargetCause::TooBroad));
         }
     }
 
@@ -109,9 +116,9 @@ fn check_one(
         if let Some(relative) = relative(&exe, &root, ci) {
             let parts: Vec<&str> = relative.iter().map(String::as_str).collect();
             if target.filter.covers(&parts, ci) {
-                return Err(
-                    fail(ErrorKind::InvalidTarget, "the filter would match the game's executable".into()).path(&exe)
-                );
+                return Err(fail(ErrorKind::InvalidTarget, "the filter would match the game's executable".into())
+                    .path(&exe)
+                    .target_cause(TargetCause::Executable));
             }
         }
     }
@@ -133,6 +140,7 @@ fn check_one(
                 )
                 .path(&target.root)
                 .path(&theirs.root)
+                .target_cause(TargetCause::Overlap { game: other.id.into(), name: other.name.into() })
                 .game(input.game_id));
             }
         }

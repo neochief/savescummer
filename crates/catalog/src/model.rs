@@ -42,10 +42,17 @@ pub struct Game {
     pub install_dirs: Vec<String>,
     #[serde(default, skip_serializing_if = "Executables::is_empty")]
     pub executables: Executables,
+    /// Explicitly reviewed as accepting a normal quit request.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub safe_to_close: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub save: Vec<PathRule>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<PathRule>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

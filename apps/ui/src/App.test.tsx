@@ -5,7 +5,10 @@ import { displayShortcut, shortcutError, shortcutWarning } from './shortcuts';
 import type { Bridge } from './bridge';
 import type { Game, HistoryEntry, HistoryPage, HostState, Operation, SaveSet, SaveTarget, UiRequest } from './types';
 
-afterEach(cleanup);
+const dialogOpen = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: dialogOpen }));
+
+afterEach(() => { cleanup(); dialogOpen.mockReset(); });
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
@@ -13,7 +16,8 @@ beforeAll(() => {
 
 const game = (id: string, name: string): Game => ({
   id, name, installed: true, running: false,
-  save: { available: true }, load: { available: true },
+  save: { available: true }, load: { available: true }, restore: { available: true },
+  delete: { available: true }, flush: { available: true }, configure: { available: true }, retry: { available: false },
   latest: { id: `cp-${id}`, created_at: '2026-09-27T12:00:00Z' },
   history_version: 1, labels_version: 0,
 });
@@ -44,10 +48,10 @@ class FakeBridge implements Bridge {
     if (request.type === 'state') return this.state as T;
     if (request.type === 'scan') return this.scanResult as Promise<T>;
     if (request.type === 'history') return this.pages[request.game] as T;
-    if (request.type === 'save' || request.type === 'load' || request.type === 'delete' || request.type === 'revert') {
+    if (request.type === 'save' || request.type === 'load' || request.type === 'delete' || request.type === 'revert' || request.type === 'retry') {
       return { id: 'op-1', kind: request.type, status: 'accepted' } as T;
     }
-    if (request.type === 'cancel_delete' || request.type === 'set_label') return {} as T;
+    if (request.type === 'set_label') return {} as T;
     if (request.type === 'add_game') return { game: 'custom-1' } as T;
     if (request.type === 'open_checkpoints') return { path: `/store/${request.game}`, opened: !request.resolve_only } as T;
     if (request.type === 'save_set') return this.saveSet as T;
@@ -73,6 +77,29 @@ test('selecting another game reads that game’s real history page', async () =>
   expect(await screen.findByText('Second checkpoint')).toBeTruthy();
   expect(screen.queryByText('First checkpoint')).toBeNull();
   expect(bridge.requests).toContainEqual({ type: 'history', game: 'b', limit: 100 });
+});
+
+test('cards show Play while stopped and expose Close only when the host permits it', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].can_play = true;
+  render(<App bridge={bridge} />);
+  const play = await screen.findByRole('button', { name: 'Play Game A' });
+  fireEvent.click(play);
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'play', game: 'a' }));
+
+  act(() => bridge.stateListener?.({ ...bridge.state, revision: 2,
+    games: [{ ...bridge.state.games[0], running: true, can_close: false }, bridge.state.games[1]] }));
+  expect(screen.queryByRole('button', { name: 'Play Game A' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Close Game A' })).toBeNull();
+
+  act(() => bridge.stateListener?.({ ...bridge.state, revision: 3,
+    games: [{ ...bridge.state.games[0], running: true, can_close: true }, bridge.state.games[1]] }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close Game A' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'close_game', game: 'a' }));
+
+  act(() => bridge.stateListener?.({ ...bridge.state, revision: 4,
+    games: [bridge.state.games[0], bridge.state.games[1]] }));
+  expect(screen.getByRole('button', { name: 'Play Game A' })).toBeTruthy();
 });
 
 test('Info reveals the full game instructions only when requested', async () => {
@@ -125,11 +152,13 @@ test('Save stays busy until the host outcome succeeds', async () => {
   render(<App bridge={bridge} />);
   const button = await screen.findByRole('button', { name: 'save Game A' });
   fireEvent.click(button);
-  expect(await screen.findByText('SAVING…')).toBeTruthy();
+  await waitFor(() => expect(button.classList.contains('busy')).toBe(true));
+  expect((button as HTMLButtonElement).disabled).toBe(true);
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'outcome', operation: 'op-1' }));
   expect(screen.queryByText('DONE')).toBeNull();
   finish({ id: 'op-1', kind: 'save', status: 'succeeded' });
-  expect(await screen.findByText('DONE')).toBeTruthy();
+  await waitFor(() => expect(button.classList.contains('success')).toBe(true));
+  expect((button as HTMLButtonElement).disabled).toBe(false);
 });
 
 test('a running game that saves on exit covers the actions and hides row loads until it has exited', async () => {
@@ -138,9 +167,9 @@ test('a running game that saves on exit covers the actions and hides row loads u
   await screen.findByText('First checkpoint');
   const locked = { available: false, reason: 'game_running' };
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
-    games: bridge.state.games.map((game) => game.id === 'a' ? { ...game, running: true, save: locked, load: locked } : game) }));
+    games: bridge.state.games.map((game) => game.id === 'a' ? { ...game, running: true, save: locked, load: locked, restore: locked, guidance: { kind: 'game_running', save: true, load: true } } : game) }));
   const panel = screen.getByRole('status', { name: 'Exit the game first' });
-  expect(within(panel).getByText('Save and Exit the game')).toBeTruthy();
+  expect(panel.querySelector('strong')?.textContent).toContain('Exit the game');
   expect((screen.getByRole('button', { name: 'save Game A' }) as HTMLButtonElement).disabled).toBe(true);
   expect(document.querySelectorAll('.row-button:not(.locked)')).toHaveLength(0);
 
@@ -163,6 +192,99 @@ test('Configure turns waiting for the game to close off', async () => {
   await waitFor(() => expect(bridge.requests).toContainEqual(expect.objectContaining({ type: 'configure', game: 'a', wait_for_exit: false })));
 });
 
+test('stable guidance survives Delete while history follows the current host gate', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].guidance = { kind: 'game_running', save: true, load: true };
+  bridge.state.games[0].restore = { available: false, reason: 'game_running' };
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2, games: [
+    { ...bridge.state.games[0], save: { available: false, reason: 'busy' },
+      busy: { id: 'delete-1', kind: 'delete', status: 'running' } }, bridge.state.games[1],
+  ] }));
+  expect(screen.getByRole('status', { name: 'Exit the game first' })).toBeTruthy();
+  expect((screen.getByRole('button', { name: /Load save from/ }) as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3, games: [game('a', 'Game A'), game('b', 'Game B')] }));
+  expect((screen.getByRole('button', { name: /Load save from/ }) as HTMLButtonElement).disabled).toBe(false);
+  expect(bridge.requests.filter((r) => r.type === 'history')).toHaveLength(1);
+});
+
+test('Retry uses a host operation and keeps recovery guidance while running', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].guidance = { kind: 'blocked', save: true, load: true, remedy: 'retry' };
+  bridge.state.games[0].retry = { available: true };
+  let finish!: (operation: Operation) => void;
+  bridge.outcome = new Promise((resolve) => { finish = resolve; });
+  render(<App bridge={bridge} />);
+  await screen.findByRole('status', { name: 'Recover the interrupted operation' });
+  expect(document.querySelectorAll('.action-slot .shortcut-tab')).toHaveLength(0);
+  fireEvent.click(await screen.findByRole('button', { name: 'Try recovery again' }));
+  expect(await screen.findByRole('button', { name: 'Recovering' })).toBeTruthy();
+  expect(screen.getByRole('status', { name: 'Recover the interrupted operation' })).toBeTruthy();
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'retry', game: 'a' }));
+  finish({ id: 'op-1', kind: 'retry', status: 'succeeded' });
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Try recovery again' }) as HTMLButtonElement).disabled).toBe(false));
+});
+
+test('permission remedies use host commands, including the denied settings page', async () => {
+  const bridge = new FakeBridge();
+  const access = { category: 'documents', denied: false, settings_url: 'host-owned' };
+  bridge.state.games[0].guidance = { kind: 'access_needed', save: true, load: true, remedy: 'request_access',
+    failure: { kind: 'access_needed', access } };
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Allow access' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'request_access', game: 'a' }));
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2, games: [
+    { ...bridge.state.games[0], guidance: { kind: 'access_needed', save: true, load: true, remedy: 'request_access',
+      failure: { kind: 'access_needed', access: { ...access, denied: true } } } }, bridge.state.games[1],
+  ] }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Open System Settings' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'open_access_settings', game: 'a' }));
+});
+
+test('Browse saves a missing game location directly', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].guidance = { kind: 'no_save_location', save: true, load: true, remedy: 'configure' };
+  dialogOpen.mockResolvedValue('/games/a/saves');
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Browse' }));
+  expect(dialogOpen).toHaveBeenCalledWith({ title: 'Choose save folder', directory: true,
+    multiple: false, fileAccessMode: 'scoped' });
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'configure', game: 'a',
+    save_location: '/games/a/saves', reset_executable: false, reset_save_location: false }));
+  expect(screen.queryByRole('dialog', { name: /Configure/ })).toBeNull();
+});
+
+test('a Load-only empty state leaves Save usable', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].load = { available: false, reason: 'no_saves' };
+  bridge.state.games[0].guidance = { kind: 'no_saves', save: false, load: true };
+  bridge.state.games[0].latest = undefined;
+  render(<App bridge={bridge} />);
+  const panel = await screen.findByRole('status', { name: 'Save a checkpoint' });
+  expect(panel.classList.contains('covers-load')).toBe(true);
+  expect(panel.textContent).toContain('No checkpoints yet.');
+  expect(document.querySelector('.action-slot:first-child .shortcut-tab')).toBeTruthy();
+  expect(document.querySelector('.action-slot:nth-child(2) .shortcut-tab')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'save Game A' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'save', game: 'a' }));
+});
+
+test('guidance hides only the shortcut for its covered action', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].guidance = { kind: 'no_game_data', save: true, load: false };
+  render(<App bridge={bridge} />);
+  await screen.findByRole('status', { name: 'No game data to save' });
+  const save = document.querySelector('.action-slot:first-child')!;
+  const load = document.querySelector('.action-slot:nth-child(2)')!;
+  expect(save.hasAttribute('inert')).toBe(true);
+  expect((save.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
+  expect(save.querySelector('.shortcut-tab')).toBeNull();
+  expect(load.hasAttribute('inert')).toBe(false);
+  expect((load.querySelector('button') as HTMLButtonElement).disabled).toBe(false);
+  expect(load.querySelector('.shortcut-tab')).toBeTruthy();
+});
+
 test('host rejection is shown on the initiating control', async () => {
   const bridge = new FakeBridge();
   bridge.outcome = Promise.resolve({ id: 'op-1', kind: 'load', status: 'failed', error: { kind: 'io', detail: 'copy failed' } });
@@ -176,12 +298,12 @@ test('host rejection is shown on the initiating control', async () => {
 test('a disabled Save has no shortcut and guarded app data has a readable error', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].save = { available: false, reason: 'access_needed' };
-  bridge.state.games[0].blocked = { kind: 'access_needed', detail: 'app_data' };
+  bridge.state.games[0].guidance = { kind: 'access_needed', save: true, load: true, remedy: 'request_access', failure: { kind: 'access_needed', detail: 'app_data' } };
   render(<App bridge={bridge} />);
   const button = await screen.findByRole('button', { name: 'save Game A' });
   expect((button as HTMLButtonElement).disabled).toBe(true);
   expect(button.closest('.action-slot')?.querySelector('.shortcut-tab')).toBeNull();
-  expect(screen.getByRole('alert').textContent).toBe("SaveScummer needs permission to access other apps' data.");
+  expect(screen.getByRole('status', { name: 'Allow access to this game’s saves' }).textContent).toContain("SaveScummer needs permission to access other apps' data.");
 });
 
 test('an access error from an operation is translated for the error block', async () => {
@@ -204,19 +326,67 @@ test('relative age uses five-second steps and stops at 24 hours', () => {
   expect(relativeAge(new Date(now + 1000), now)).toBe('');
 });
 
-test('delete countdown and cancel follow host state', async () => {
+test('delete hides the row immediately and Undo restores it with the row animation', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].info = 'Game instructions';
+  bridge.pages.a.rows.push({ ...row('cp-older', 'Older checkpoint'), at: '2026-09-27T11:00:00Z' });
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getAllByRole('button', { name: /Delete checkpoint from/ })[0]);
+  expect(screen.queryByText('First checkpoint')).toBeNull();
+  const undo = screen.getByRole('button', { name: 'Undo' });
+  const controls = undo.parentElement;
+  expect(controls?.firstElementChild).toBe(screen.getByRole('button', { name: 'Info' }));
+  expect(controls?.lastElementChild).toBe(undo);
+  expect(undo.classList.contains('undo-button')).toBe(true);
+  expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
+  fireEvent.click(undo);
+  expect(screen.getByText('First checkpoint').closest('.history-row')?.classList.contains('arrived')).toBe(true);
+  expect(screen.getByText('First checkpoint').closest('.history-row')?.classList.contains('flash')).toBe(true);
+  expect([...document.querySelectorAll('.history-row')].map((element) => element.textContent).join('|'))
+    .toMatch(/First checkpoint.*\|.*Older checkpoint/);
+  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
+});
+
+test('only the most recently hidden row can be undone', async () => {
+  const bridge = new FakeBridge();
+  bridge.pages.a.rows.push({ ...row('cp-older', 'Older checkpoint'), at: '2026-09-27T11:00:00Z' });
+  bridge.outcome = new Promise(() => undefined);
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getAllByRole('button', { name: /Delete checkpoint from/ })[0]);
+  fireEvent.click(screen.getByRole('button', { name: /Delete checkpoint from/ }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' }));
+  expect(screen.queryByText('First checkpoint')).toBeNull();
+  expect(screen.queryByText('Older checkpoint')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  expect(screen.getByText('Older checkpoint')).toBeTruthy();
+  expect(screen.queryByText('First checkpoint')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+});
+
+test('Undo expires after five seconds even when hovered', async () => {
   const bridge = new FakeBridge();
   bridge.outcome = new Promise(() => undefined);
   render(<App bridge={bridge} />);
-  const remove = await screen.findByRole('button', { name: /Delete checkpoint from/ });
-  fireEvent.click(remove);
-  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' }));
-  bridge.stateListener?.({ ...bridge.state, revision: 2, deletes: [{
-    id: 'op-1', game: 'a', checkpoint: 'cp-a', kind: 'delete', status: 'counting_down', remaining_ms: 3000,
-  }] });
-  expect(await screen.findByText('Deleting in 3')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'CANCEL' }));
-  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'cancel_delete', operation: 'op-1' }));
+  await screen.findByText('First checkpoint');
+  vi.useFakeTimers();
+  try {
+    fireEvent.click(screen.getByRole('button', { name: /Delete checkpoint from/ }));
+    act(() => vi.advanceTimersByTime(2500));
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    fireEvent.mouseEnter(undo);
+    act(() => vi.advanceTimersByTime(2499));
+    fireEvent.mouseLeave(undo);
+    expect(undo).toBe(screen.getByRole('button', { name: 'Undo' }));
+    expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(bridge.requests).toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test('saved checkpoint labels are edited through the host', async () => {

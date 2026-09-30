@@ -47,11 +47,11 @@ function DialogFrame({ title, kind, close, opener, children }: {
   </dialog>;
 }
 
-function Footer({ close, submit, busy, destructive = false, extra }: { close: () => void; submit: string; busy: boolean; destructive?: boolean; extra?: ReactNode }) {
+function Footer({ close, submit, busy, disabled = false, destructive = false, extra }: { close: () => void; submit: string; busy: boolean; disabled?: boolean; destructive?: boolean; extra?: ReactNode }) {
   return <footer>
     {extra}
-    {destructive ? <><button type="submit" name="intent" value="cancel" onClick={close}>Cancel</button><button className="dialog-primary danger" type="submit" name="intent" value="flush" disabled={busy}>{busy ? 'Working…' : submit}</button></>
-      : <><button className="dialog-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : submit}</button><button type="button" onClick={close}>Cancel</button></>}
+    {destructive ? <><button type="submit" name="intent" value="cancel" onClick={close}>Cancel</button><button className="dialog-primary danger" type="submit" name="intent" value="flush" disabled={busy || disabled}>{busy ? 'Working…' : submit}</button></>
+      : <><button className="dialog-primary" type="submit" disabled={busy || disabled}>{busy ? 'Saving…' : submit}</button><button type="button" onClick={close}>Cancel</button></>}
   </footer>;
 }
 
@@ -262,7 +262,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           {kind === 'configure' && game && <div className="dialog-exit-wait">
             <label className="dialog-check"><input type="checkbox" checked={waitForExit} onChange={(event) => setWaitForExit(event.target.checked)} />
               Wait for the game to close before saving or loading</label>
-            <p className="dialog-exit-wait-note">Most games write progress to disk only on Save &amp; Quit. This makes sure it’s there before a checkpoint is made or loaded.</p>
+            <p className="dialog-exit-wait-note">While a game runs, Save may copy stale or partial progress, and the game may overwrite a Load. Turn this off only if you know when the game writes and reads its saves.</p>
           </div>}
           {kind === 'add' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
         </>}
@@ -284,8 +284,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
         {error && <p className="dialog-error" role="alert">{error}</p>}
       </div>
       <Footer close={close} submit={kind === 'add' ? 'Add' : kind === 'flush' ? 'Flush' : 'Save'} busy={busy || (kind === 'flush' && !preview) || (kind === 'configure' && !saveSet)} destructive={kind === 'flush'}
+        disabled={!!game && ((kind === 'flush' && !game.flush.available) || (kind === 'configure' && !game.configure.available))}
         extra={kind === 'configure' && game && onFlush && <button type="button" className="dialog-flush"
-          disabled={busy || Boolean(game.busy) || (!game.has_history && !game.checkpoints_size)} onClick={(event) => onFlush(event.currentTarget)}>
+          disabled={busy || !game.flush.available || (!game.has_history && !game.checkpoints_size)} onClick={(event) => onFlush(event.currentTarget)}>
           Flush checkpoints{game.checkpoints_size ? ` (${formatBytes(game.checkpoints_size)})` : ''}…
         </button>} />
     </form>

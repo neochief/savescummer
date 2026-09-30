@@ -2,6 +2,9 @@
 # games it gets wrong. See PLAN-CATALOG.md §2.2. The manifest wins per field;
 # an entry here fills only fields the manifest did not produce, except fields
 # under `override`, which replace the manifest's.
+# `override.safeToClose: true` opts a reviewed game into the card's normal
+# close request. Games without it only offer Close when their per-game
+# "wait for exit" safety setting is turned off.
 
 # Risk of Rain Returns: the manifest's `*_localsave.json` matches every Steam
 # account's save on the machine (the `*` is the SteamID64, verified 2026-09-24:

@@ -33,3 +33,31 @@ pub fn hard_exit(code: i32) -> ! {
     }
     std::process::exit(code)
 }
+
+pub fn request_game_close(pid: u32) -> std::io::Result<()> {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, PostMessageW, WM_CLOSE};
+
+    struct Target {
+        pid: u32,
+        sent: bool,
+    }
+    unsafe extern "system" fn visit(hwnd: HWND, data: LPARAM) -> i32 {
+        // SAFETY: EnumWindows calls this synchronously while Target is alive.
+        let target = unsafe { &mut *(data as *mut Target) };
+        let mut owner = 0;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, &mut owner);
+        }
+        if owner == target.pid && unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) } != 0 {
+            target.sent = true;
+        }
+        1
+    }
+    let mut target = Target { pid, sent: false };
+    // SAFETY: the callback only uses target during this synchronous call.
+    unsafe {
+        EnumWindows(Some(visit), &mut target as *mut Target as LPARAM);
+    }
+    if target.sent { Ok(()) } else { Err(std::io::ErrorKind::NotFound.into()) }
+}

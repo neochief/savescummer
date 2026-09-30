@@ -173,7 +173,7 @@ fn an_unverifiable_interruption_keeps_everything_and_blocks_until_coherent() {
     // Nothing kept was deleted by the scan.
     assert!(setup.saves.join("a.sav.ssnew").exists());
     // Retry runs the same rules again: still incoherent, still blocked.
-    assert_eq!(setup.world.cli(&["retry", &setup.game]).code, 3);
+    assert_eq!(setup.world.cli(&["retry", &setup.game]).code, 1, "accepted recovery reports its failed outcome");
     // The user puts a save back under the name; now every name has a live
     // file, so Retry releases the game and keeps the material.
     write(&setup.saves.join("a.sav"), "put back by hand");
@@ -208,4 +208,83 @@ fn other_games_stay_usable_while_one_is_blocked() {
     write(&other_saves.join("x.sav"), "y");
     setup.world.ok(&["load", &other]);
     assert_eq!(read(&other_saves.join("x.sav")), "x");
+}
+
+#[test]
+fn startup_recovery_waits_for_exit_and_retry_owns_the_game() {
+    let setup = setup();
+    let exe;
+    let other;
+    {
+        let _host = setup.world.host();
+        setup.world.ok(&["configure", &setup.game, "--wait-for-exit", "on"]);
+        exe = PathBuf::from(s(&setup.world.game(&setup.game)["executable"]));
+        let saves = setup.world.home.join("Saves").join("Other");
+        write(&saves.join("slot.sav"), "other");
+        other = setup.world.custom_game("Other", &saves).0;
+    }
+    {
+        let mut host = setup.world.host_with(&[], &[("SAVESCUMMER_TEST_CRASH_AT", "load.set_aside:1")]);
+        let _ = setup.world.cli(&["load", &setup.game]);
+        assert_eq!(host.wait_exit(Duration::from_secs(20)), Some(86));
+    }
+    let interrupted = tree(&setup.saves);
+    let mut running = launch(&exe, &[]);
+    let _host = setup.world.host_with(&[], &[("SAVESCUMMER_TEST_DELAY_AT", "retry.start:1:1500")]);
+    let summary = setup.world.game(&setup.game);
+    assert_eq!(summary["guidance"]["kind"], "blocked");
+    assert_eq!(summary["retry"]["reason"], "game_running");
+    assert_eq!(setup.world.cli(&["retry", &setup.game]).error_kind(), "game_running");
+    assert_eq!(tree(&setup.saves), interrupted, "startup and refused Retry preserve every file");
+    running.quit();
+    setup.world.wait_game(&setup.game, "Retry after exit", |g| g["retry"]["available"] == true);
+    let retry = setup.world.cli_background(&["--request-id", "retry-once", "retry", &setup.game]);
+    setup.world.wait_game(&setup.game, "Retry owns the game", |g| g["busy"]["kind"] == "retry");
+    for args in [
+        vec!["retry", setup.game.as_str()],
+        vec!["save", setup.game.as_str()],
+        vec!["configure", setup.game.as_str(), "--wait-for-exit", "off"],
+    ] {
+        assert_eq!(setup.world.cli(&args).error_kind(), "busy", "{args:?}");
+    }
+    setup.world.ok(&["save", &other]);
+    let result = retry.finish();
+    assert_eq!(result.code, 0, "{}", result.stdout);
+    assert_eq!(tree(&setup.saves), setup.before, "the original recovery rules put the saves back");
+    assert!(setup.world.game(&setup.game)["blocked"].is_null());
+    let replay = setup.world.ok(&["--request-id", "retry-once", "retry", &setup.game]);
+    assert_eq!(replay["id"], result.last()["id"], "Retry request IDs replay their durable outcome");
+}
+
+#[test]
+fn recovery_offers_access_to_its_recorded_paths_before_retry() {
+    for point in ["load.set_aside:1", "load.swap_in:2"] {
+        let setup = setup();
+        {
+            let mut host = setup.world.host_with(&[], &[("SAVESCUMMER_TEST_CRASH_AT", point)]);
+            let _ = setup.world.cli(&["load", &setup.game]);
+            assert_eq!(host.wait_exit(Duration::from_secs(20)), Some(86));
+        }
+        let interrupted = tree(&setup.saves);
+        setup.world.set_env("privacy", serde_json::json!({ "folders": [[setup.saves, "documents"]] }));
+        setup.world.set_env("privacy_answers", serde_json::json!({ "documents": "granted" }));
+        let _host = setup.world.host();
+        let game = setup.world.game(&setup.game);
+        assert_eq!(game["guidance"]["kind"], "blocked");
+        assert_eq!(game["guidance"]["remedy"], "request_access");
+        assert_eq!(game["guidance"]["failure"]["access"]["category"], "documents");
+        assert_eq!(game["retry"]["reason"], "access_needed");
+        assert_eq!(setup.world.cli(&["retry", &setup.game]).error_kind(), "access_needed");
+        assert_eq!(tree(&setup.saves), interrupted, "refused recovery changes nothing");
+        setup.world.ok(&["request-access", &setup.game]);
+        setup.world.wait_game(&setup.game, "recovery access granted", |g| g["retry"]["available"] == true);
+        assert_eq!(setup.world.game(&setup.game)["guidance"]["remedy"], "retry");
+        let version = setup.world.game(&setup.game)["history_version"].as_u64().unwrap();
+        setup.world.ok(&["retry", &setup.game]);
+        assert!(setup.world.game(&setup.game)["history_version"].as_u64().unwrap() > version);
+        let completed = point == "load.swap_in:2";
+        assert_eq!(tree(&setup.saves), if completed { setup.checkpoint } else { setup.before });
+        assert_eq!(setup.world.kinds(&setup.game), if completed { vec!["loaded", "saved"] } else { vec!["saved"] });
+        assert!(setup.world.game(&setup.game)["blocked"].is_null());
+    }
 }

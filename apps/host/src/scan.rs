@@ -186,6 +186,7 @@ pub fn run(host: &Arc<Host>, full: bool, user: bool, reason: &str) -> usize {
         watcher.set_registry_keys(registry_keys(host));
     }
     remember_drives(host);
+    crate::recovery::refresh_unavailable_paths(host);
     new_games
 }
 

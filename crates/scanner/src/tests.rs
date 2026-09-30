@@ -18,6 +18,7 @@ fn game(id: &str, steam: Option<u64>, gog: Option<u64>, dir: &str, exe: &str) ->
         detect: Detect { steam: steam.into_iter().collect(), gog: gog.into_iter().collect(), uninstall: vec![] },
         install_dirs: vec![dir.into()],
         executables: Executables { windows: vec![exe.into()], linux: vec![exe.into()], macos: vec![exe.into()] },
+        safe_to_close: false,
         save: vec![PathRule::new("{INSTALL_DIR}/save")],
         exclude: vec![],
     }

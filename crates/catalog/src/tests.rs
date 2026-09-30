@@ -136,6 +136,7 @@ fn game(id: &str, save: &[PathRule]) -> Game {
         detect: Detect::default(),
         install_dirs: vec![],
         executables: Executables::default(),
+        safe_to_close: false,
         save: save.to_vec(),
         exclude: vec![],
     }

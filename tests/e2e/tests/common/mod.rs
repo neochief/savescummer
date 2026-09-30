@@ -321,8 +321,6 @@ impl World {
             self.env_file.to_string_lossy().into_owned(),
             "--poll-ms".into(),
             "100".into(),
-            "--delete-countdown-ms".into(),
-            "1500".into(),
             // Never Steam's real CDN; a closed port fails at once.
             "--artwork-url".into(),
             "http://127.0.0.1:9".into(),

@@ -33,11 +33,15 @@ fn the_demo_plays_real_catalog_games_on_a_simulated_machine() {
     let _host = world.host_with(&["--demo", "--data-dir", demo.to_str().unwrap()], &[]);
     let data = demo.join("data");
 
-    // Real catalog games with instructions, each given a short history.
+    // Real catalog games with history, plus one deliberately unsavable game
+    // used to demonstrate the empty/error state.
     let state = wait_for("the demo's games have history", Duration::from_secs(30), || {
         let state = demo_cli(&data, &["status"]);
         let games = state["games"].as_array().cloned().unwrap_or_default();
-        (games.len() >= 4 && games.iter().all(|g| g["has_history"] == true)).then_some(state)
+        let ready = games.iter().all(|g| {
+            g["has_history"] == true || g["last_result"]["status"] == "failed" || g["save"]["reason"] == "no_game_data"
+        });
+        (games.len() >= 4 && ready && games.iter().filter(|g| g["has_history"] != true).count() == 1).then_some(state)
     });
     let games = state["games"].as_array().unwrap();
     assert!(games.iter().all(|g| g["catalog_id"].is_string() && g["kind"] == "known"), "{state}");

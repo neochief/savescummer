@@ -3,9 +3,9 @@
 //! reachable only by the signed-in user.
 //!
 //! Every message carries the protocol version. A client sends requests
-//! (`{"v":1,"id":"<request id>","type":"save",...}`); the host answers each
-//! with a response (`{"v":1,"re":"<request id>","ok":true,"result":{...}}`)
-//! and, to watchers, pushes events (`{"v":1,"event":"state","state":{...}}`).
+//! (`{"v":2,"id":"<request id>","type":"save",...}`); the host answers each
+//! with a response (`{"v":2,"re":"<request id>","ok":true,"result":{...}}`)
+//! and, to watchers, pushes events (`{"v":2,"event":"state","state":{...}}`).
 
 pub mod client;
 pub mod transport;
@@ -16,7 +16,7 @@ pub use types::*;
 
 use std::path::Path;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Largest message either side accepts. A reply that would be bigger is an
 /// explicit `too_large` error, never cut off.

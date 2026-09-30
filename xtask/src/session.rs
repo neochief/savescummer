@@ -7,7 +7,6 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -81,11 +80,7 @@ fn start_host(package: &Path, demo: bool, minimized: bool, no_integrations: bool
     stop_recorded()?;
     let exe = platform::program(package, HOST);
     let data_dir = if demo { paths::demo_data() } else { paths::dev_data() };
-    let logs = Mode::Dev.dir().join("logs");
-    fs::create_dir_all(&logs)?;
     fs::create_dir_all(&data_dir)?;
-    let log = logs.join("host.log");
-    let out = fs::File::create(&log).with_context(|| format!("creating {}", log.display()))?;
 
     let mut args: Vec<OsString> = vec!["--data-dir".into(), data_dir.clone().into()];
     if demo {
@@ -98,9 +93,22 @@ fn start_host(package: &Path, demo: bool, minimized: bool, no_integrations: bool
         args.push("--minimized".into());
     }
     println!("starting the dev host ({})", paths::show(&exe));
-    let pid = platform::spawn_detached(&exe, &args, &out)?;
-
-    wait_ready(pid, &log)?;
+    #[cfg(target_os = "macos")]
+    let (pid, log) = {
+        let log = if demo { data_dir.join("data/host.log") } else { data_dir.join("host.log") };
+        let offset = if demo { 0 } else { fs::metadata(&log).map(|meta| meta.len() as usize).unwrap_or(0) };
+        platform::launch_app(package, &args, minimized)?;
+        (wait_ready(None, &log, offset)?, log)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let (pid, log) = {
+        let logs = Mode::Dev.dir().join("logs");
+        fs::create_dir_all(&logs)?;
+        let log = logs.join("host.log");
+        let out = fs::File::create(&log).with_context(|| format!("creating {}", log.display()))?;
+        let pid = platform::spawn_detached(&exe, &args, &out)?;
+        (wait_ready(Some(pid), &log, 0)?, log)
+    };
     let start_time = procs::start_time(pid).context("the dev host exited right after starting")?;
     let session = Session { pid, start_time, exe, data_dir, log };
     fs::write(session_file(), serde_json::to_string_pretty(&session)? + "\n")?;
@@ -112,16 +120,21 @@ fn start_host(package: &Path, demo: bool, minimized: bool, no_integrations: bool
     Ok(())
 }
 
-/// Waits for the host's `{"ready":true,…}` line in its log.
-fn wait_ready(pid: u32, log: &Path) -> anyhow::Result<()> {
+/// Waits for the host's ready line. On macOS Launch Services owns the new
+/// process, so its own log supplies the pid instead of `Command::spawn`.
+fn wait_ready(spawned_pid: Option<u32>, log: &Path, offset: usize) -> anyhow::Result<u32> {
     let deadline = Instant::now() + READY_TIMEOUT;
     loop {
-        let file = fs::File::open(log)?;
-        for line in BufReader::new(file).lines() {
-            let line = line?;
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+        let text = fs::read_to_string(log).unwrap_or_default();
+        let fresh = if text.len() >= offset { &text[offset..] } else { &text };
+        for line in fresh.lines() {
+            let json = line.split_once("ready line: ").map_or(line, |(_, json)| json);
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else { continue };
             match value.get("ready").and_then(|r| r.as_bool()) {
-                Some(true) => return Ok(()),
+                Some(true) => {
+                    let pid = value.get("pid").and_then(|pid| pid.as_u64()).map(|pid| pid as u32).or(spawned_pid);
+                    return pid.context("the host's ready line had no pid");
+                }
                 Some(false) => bail!(
                     "the dev host didn't start: {}",
                     value.get("error").and_then(|e| e.as_str()).unwrap_or("no reason given")
@@ -129,7 +142,7 @@ fn wait_ready(pid: u32, log: &Path) -> anyhow::Result<()> {
                 None => {}
             }
         }
-        if procs::start_time(pid).is_none() {
+        if spawned_pid.is_some_and(|pid| procs::start_time(pid).is_none()) {
             let text = fs::read_to_string(log).unwrap_or_default();
             let tail: Vec<&str> = text.lines().rev().take(5).collect::<Vec<_>>().into_iter().rev().collect();
             bail!("the dev host exited before it was ready ({}):\n{}", paths::show(log), tail.join("\n"));
@@ -158,4 +171,19 @@ fn stop_recorded() -> anyhow::Result<()> {
 pub fn stop_all_output() -> anyhow::Result<()> {
     stop_recorded()?;
     procs::stop_outputs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_services_reads_the_new_ready_line_from_the_host_log() {
+        let path = std::env::temp_dir().join(format!("savescummer-ready-{}", uuid::Uuid::new_v4()));
+        let old = "[earlier] ready line: {\"ready\":true,\"pid\":11}\n";
+        let new = "[now] ready line: {\"ready\":true,\"pid\":42}\n";
+        fs::write(&path, format!("{old}{new}")).unwrap();
+        assert_eq!(wait_ready(None, &path, old.len()).unwrap(), 42);
+        fs::remove_file(path).unwrap();
+    }
 }

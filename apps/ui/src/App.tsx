@@ -2,27 +2,16 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Markdown from 'react-markdown';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Bridge } from './bridge';
-import type { Failure, Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
+import type { Game, HistoryEntry, HistoryPage, HostState, Operation, UiRequest } from './types';
 import { AppDialog, formatBytes, type DialogKind } from './Dialogs';
 import { displayShortcut } from './shortcuts';
+import { failureMessage } from './messages';
+import { GuidancePanel } from './GuidancePanel';
 
-type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush';
+type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush' | 'retry';
 type Feedback = { game: string; action: Action; target?: string; phase: 'busy' | 'success' | 'error'; message?: string };
-
-const accessCategories: Record<string, string> = {
-  documents: 'Documents', desktop: 'Desktop', downloads: 'Downloads',
-  icloud_drive: 'iCloud Drive', volumes: 'removable or network drives',
-  app_data: "other apps' data", app_bundles: 'app bundles',
-};
-
-function failureMessage(failure: Failure | undefined, fallback: string): string {
-  if (!failure) return fallback;
-  if (failure.kind === 'access_needed') {
-    const location = failure.detail && accessCategories[failure.detail];
-    return `SaveScummer needs permission to access ${location || "this game's files"}.`;
-  }
-  return failure.detail || failure.kind || fallback;
-}
+type PendingUndo = { game: string; checkpoint: string; row: HistoryEntry; index: number; timer: ReturnType<typeof setTimeout> };
+const deleteKey = (game: string, checkpoint: string) => `${game}:${checkpoint}`;
 
 const icons: Record<string, string> = {
   save: 'flag', load: 'rotate-left', saved: 'flag', loaded: 'rotate-left', reverted: 'rotate-left',
@@ -45,8 +34,13 @@ function Brand() {
   </div>;
 }
 
+// Empty-state skeleton leaning out of an arched window; every character SVG shares the same canvas and pose height.
+function Character({ name }: { name: string }) {
+  return <div className="empty-character" aria-hidden="true"><img src={`/character/${name}.svg`} alt="" /></div>;
+}
+
 // Windows runs undecorated (tauri.windows.conf.json), so the window bar draws its own caption buttons. There is no
-// Maximize: the window's width is capped (maxWidth), so it can't fill the screen.
+// Maximize: the window's width is fixed by matching minWidth and maxWidth, so it can't fill the screen.
 function WindowControls() {
   const run = (action: 'minimize' | 'close') => () => {
     if ('__TAURI_INTERNALS__' in window) getCurrentWindow()[action]().catch(() => undefined);
@@ -108,8 +102,9 @@ function useArtwork(bridge: Bridge, game: Game, kind: 'hero' | 'logo' | 'header'
   return url;
 }
 
-function GameCard({ bridge, game, selected, onSelect, onConfigure }: {
-  bridge: Bridge; game: Game; selected: boolean; onSelect: () => void; onConfigure: (opener: HTMLButtonElement) => void;
+function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigure, onLifecycle }: {
+  bridge: Bridge; game: Game; selected: boolean; pending: boolean; error?: string;
+  onSelect: () => void; onConfigure: (opener: HTMLButtonElement) => void; onLifecycle: (type: 'play' | 'close_game') => void;
 }) {
   const hero = useArtwork(bridge, game, game.artwork?.hero ? 'hero' : 'header');
   const logo = useArtwork(bridge, game, 'logo');
@@ -125,12 +120,21 @@ function GameCard({ bridge, game, selected, onSelect, onConfigure }: {
         {game.install_tag && <span className="install-tag">{game.install_tag}</span>}
       </button>
       {game.running && <span className="running-badge"><span className="running-dot" />RUNNING</span>}
+      {(!game.running || game.can_close) && <div className="card-lifecycle-actions">
+        <button className="card-action" disabled={pending || (!game.running && game.can_play === false)}
+          onClick={() => onLifecycle(game.running ? 'close_game' : 'play')}
+          aria-label={`${game.running ? 'Close' : 'Play'} ${game.name}`}
+          title={game.running ? 'Close game' : game.can_play === false ? 'No executable configured' : 'Play game'}>
+          <span className={`card-action-icon ${game.running ? 'stop' : 'play'}`} />
+        </button>
+      </div>}
       <div className="card-actions">
         <button className="card-action" onClick={(event) => onConfigure(event.currentTarget)}
           aria-label={`Configure ${game.name}`} title="Configure">
           <span className="card-action-icon gear" />
         </button>
       </div>
+      {error && <p className="card-lifecycle-error" role="alert">{error}</p>}
     </div>
   );
 }
@@ -143,6 +147,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [next, setNext] = useState<string>();
   const [historyError, setHistoryError] = useState<string>();
   const [feedback, setFeedback] = useState<Feedback>();
+  const [cardPending, setCardPending] = useState<{ game: string; running: boolean; token: number }>();
+  const [cardError, setCardError] = useState<{ game: string; message: string }>();
+  const cardToken = useRef(0);
   const [scanFeedback, setScanFeedback] = useState<string>();
   const [labelsRevision, setLabelsRevision] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -155,7 +162,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   const historyRef = useRef(history);
   historyRef.current = history;
   const previousActiveStack = useRef<string[]>([]);
-  const deleteDeadlines = useRef(new Map<string, number>());
+  const pendingUndo = useRef<PendingUndo | undefined>(undefined);
+  const [undoDelete, setUndoDelete] = useState<{ game: string; checkpoint: string }>();
+  const [hiddenDeletes, setHiddenDeletes] = useState<ReadonlySet<string>>(new Set());
   const [flash, setFlash] = useState<string>();
   const [arrived, setArrived] = useState<ReadonlySet<string>>(new Set());
   // True briefly after a game's history first loads, so its visible rows cascade in.
@@ -174,6 +183,27 @@ export function App({ bridge }: { bridge: Bridge }) {
   const sidebarTrackRef = useRef<HTMLDivElement>(null);
   const [sidebarScroll, setSidebarScroll] = useState({ top: 0, viewport: 0, content: 0, track: 0 });
 
+  const runLifecycle = async (game: Game, type: 'play' | 'close_game') => {
+    const token = ++cardToken.current;
+    setCardError(undefined);
+    setCardPending({ game: game.id, running: type === 'play', token });
+    try {
+      await bridge.request({ type, game: game.id });
+      // The process monitor, rather than the request, confirms the new state.
+      setTimeout(() => setCardPending((current) => current?.token === token ? undefined : current), 5000);
+    } catch (error) {
+      setCardError({ game: game.id, message: error instanceof Error ? error.message : String(error) });
+      setCardPending((current) => current?.token === token ? undefined : current);
+    }
+  };
+
+  useEffect(() => {
+    if (!cardPending) return;
+    if (state?.games.find((game) => game.id === cardPending.game)?.running === cardPending.running) {
+      setCardPending(undefined);
+    }
+  }, [cardPending, state]);
+
   const openDialog = (kind: DialogKind, opener: HTMLElement | null, game?: string) => {
     dialogOpener.current = opener;
     setDialogGame(game);
@@ -184,14 +214,6 @@ export function App({ bridge }: { bridge: Bridge }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    const deadlines = new Map<string, number>();
-    for (const operation of state?.deletes || []) {
-      if (operation.remaining_ms !== undefined) deadlines.set(operation.id, Date.now() + operation.remaining_ms);
-    }
-    deleteDeadlines.current = deadlines;
-  }, [state?.deletes]);
 
   useEffect(() => {
     let live = true;
@@ -210,10 +232,10 @@ export function App({ bridge }: { bridge: Bridge }) {
 
   const visibleGames = useMemo(() => state?.games.filter((game) => game.installed) || [], [state]);
   const selectedGame = visibleGames.find((game) => game.id === selected);
-  const virtualItems = useMemo(() => groupHistory(history).flatMap(({ day, rows }) => [
+  const virtualItems = useMemo(() => groupHistory(history.filter((row) => !row.checkpoint || !hiddenDeletes.has(deleteKey(selected || '', row.checkpoint)))).flatMap(({ day, rows }) => [
     { key: `day-${day}`, day, row: undefined as HistoryEntry | undefined },
     ...rows.map((row) => ({ key: row.id, day, row })),
-  ]), [history]);
+  ]), [history, hiddenDeletes, selected]);
   const { tops: itemTop, total: historyTotal } = useMemo(() => itemTops(virtualItems.map((item) => item.row)), [virtualItems]);
   const firstVisible = Math.max(0, itemAt(itemTop, scrollTop) - 5);
   const lastVisible = Math.min(virtualItems.length, itemAt(itemTop, scrollTop + viewportHeight) + 6);
@@ -339,13 +361,13 @@ export function App({ bridge }: { bridge: Bridge }) {
     setTimeout(() => setFlash(undefined), 1800);
   }, [bridge, history, next, selectedGame]);
 
-  const runAction = useCallback(async (action: 'save' | 'load' | 'revert', checkpoint?: string) => {
+  const runAction = useCallback(async (action: 'save' | 'load' | 'revert' | 'retry', checkpoint?: string) => {
     if (!selectedGame) return;
     clearTimeout(feedbackTimer.current);
     const game = selectedGame.id;
     setFeedback({ game, action, target: checkpoint, phase: 'busy' });
     try {
-      const request: UiRequest = action === 'save'
+      const request: UiRequest = action === 'retry' ? { type: 'retry', game } : action === 'save'
         ? { type: 'save', game }
         : action === 'load' ? { type: 'load', game, checkpoint }
           : { type: 'revert', game, checkpoint: checkpoint! };
@@ -377,31 +399,77 @@ export function App({ bridge }: { bridge: Bridge }) {
     setTimeout(() => setScanFeedback(undefined), 2400);
   }, [bridge]);
 
-  const deleteCheckpoint = useCallback(async (checkpoint: string) => {
-    if (!selectedGame) return;
-    const game = selectedGame.id;
-    setFeedback(undefined);
+  const commitDelete = useCallback(async (game: string, checkpoint: string) => {
+    const key = deleteKey(game, checkpoint);
     try {
       const accepted = await bridge.request<Operation>({ type: 'delete', game, checkpoint });
       const outcome = await bridge.request<Operation>({ type: 'outcome', operation: accepted.id });
-      if (outcome.status === 'failed') {
-        setFeedback({ game, action: 'delete', target: checkpoint, phase: 'error',
-          message: failureMessage(outcome.error, 'Delete failed') });
-      }
+      if (outcome.status !== 'succeeded') throw new Error(failureMessage(outcome.error, 'Delete failed'));
+      if (historyGame.current === game) setHistory((rows) => rows.filter((row) => row.checkpoint !== checkpoint));
     } catch (error) {
       setFeedback({ game, action: 'delete', target: checkpoint, phase: 'error',
         message: String(error instanceof Error ? error.message : error) });
+    } finally {
+      setHiddenDeletes((hidden) => { const next = new Set(hidden); next.delete(key); return next; });
     }
-  }, [bridge, selectedGame]);
+  }, [bridge]);
 
-  const cancelDelete = useCallback(async (operation: string) => {
-    try {
-      await bridge.request<Operation>({ type: 'cancel_delete', operation });
-    } catch (error) {
-      if (selectedGame) setFeedback({ game: selectedGame.id, action: 'delete', phase: 'error',
-        message: String(error instanceof Error ? error.message : error) });
+  const deleteCheckpoint = useCallback((checkpoint: string) => {
+    if (!selectedGame) return;
+    const game = selectedGame.id;
+    const index = historyRef.current.findIndex((row) => row.checkpoint === checkpoint);
+    if (index < 0) return;
+    if (pendingUndo.current) {
+      clearTimeout(pendingUndo.current.timer);
+      void commitDelete(pendingUndo.current.game, pendingUndo.current.checkpoint);
     }
-  }, [bridge, selectedGame]);
+    setFeedback(undefined);
+    setHiddenDeletes((hidden) => new Set(hidden).add(deleteKey(game, checkpoint)));
+    const timer = setTimeout(() => {
+      pendingUndo.current = undefined;
+      setUndoDelete(undefined);
+      void commitDelete(game, checkpoint);
+    }, 5000);
+    pendingUndo.current = { game, checkpoint, row: historyRef.current[index], index, timer };
+    setUndoDelete({ game, checkpoint });
+  }, [selectedGame, commitDelete]);
+
+  const undoCheckpointDelete = useCallback(() => {
+    const pending = pendingUndo.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingUndo.current = undefined;
+    setUndoDelete(undefined);
+    setHiddenDeletes((hidden) => { const next = new Set(hidden); next.delete(deleteKey(pending.game, pending.checkpoint)); return next; });
+    if (historyGame.current !== pending.game) return;
+    const row = pending.row;
+    const restored = [...historyRef.current];
+    if (!restored.some((item) => item.id === row.id)) restored.splice(Math.min(pending.index, restored.length), 0, row);
+    setHistory(restored);
+    clearTimeout(arrivalTimer.current);
+    setArrived(new Set([row.id]));
+    arrivalTimer.current = setTimeout(() => setArrived(new Set()), 1800);
+    setFlash(row.id);
+    setTimeout(() => setFlash(undefined), 1800);
+    const visible = restored.filter((item) => !item.checkpoint ||
+      item.checkpoint === pending.checkpoint || !hiddenDeletes.has(deleteKey(pending.game, item.checkpoint)));
+    const items = groupHistory(visible).flatMap(({ rows }) => [undefined, ...rows]);
+    const top = itemTops(items).tops[items.indexOf(row)];
+    window.requestAnimationFrame?.(() => {
+      const viewport = scrollRef.current;
+      if (viewport && (top < viewport.scrollTop || top + itemHeight(row) > viewport.scrollTop + viewport.clientHeight)) {
+        viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
+      }
+    });
+  }, [hiddenDeletes]);
+
+  useEffect(() => () => {
+    if (pendingUndo.current) {
+      clearTimeout(pendingUndo.current.timer);
+      void commitDelete(pendingUndo.current.game, pendingUndo.current.checkpoint);
+      pendingUndo.current = undefined;
+    }
+  }, [commitDelete]);
 
   const finishFlush = useCallback(async (game: string, operation: string) => {
     setFeedback({ game, action: 'flush', phase: 'busy' });
@@ -506,14 +574,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     const above = event.clientY < event.currentTarget.getBoundingClientRect().top + sidebarThumbTop;
     scroller.scrollBy({ top: (above ? -1 : 1) * scroller.clientHeight * 0.9, behavior: scrollMotion() });
   };
-  // The host refuses Save, Load and Revert while a game that writes its progress only on exit runs: the actions give
-  // way to a panel until it has exited.
-  const exitFirst = selectedGame?.save.reason === 'game_running' || selectedGame?.load.reason === 'game_running';
   const working = Boolean(selectedGame?.busy) || (feedback?.game === selected && feedback?.phase === 'busy');
-  // The lockdown disables the actions like an operation would, but nothing is working, so no wait cursor.
-  const busy = exitFirst || working;
-  const hostError = selectedGame?.blocked || selectedGame?.config_error ||
-    (selectedGame?.last_result?.status === 'failed' ? selectedGame.last_result.error : undefined);
+  const hostError = selectedGame?.last_result?.status === 'failed' ? selectedGame.last_result.error : undefined;
   const dialogTarget = (dialogGame && state?.games.find((game) => game.id === dialogGame)) || selectedGame;
   const addControl = <button key="add" onClick={(event) => openDialog('add', event.currentTarget)}><Icon name="add" />Add custom game</button>;
   const scanning = scanFeedback === 'Scanning…';
@@ -530,13 +592,15 @@ export function App({ bridge }: { bridge: Bridge }) {
         {!mac && <WindowControls />}
       </header>
       <aside className="sidebar">
-        {noGames && <Brand />}
+        {noGames && <Character name="no-games-found" />}
         <div className="sidebar-surface">
           {installed.length > 0 && <h2 className="library-heading">INSTALLED</h2>}
           <div className={`library-scroll ${installed.length ? 'has-games' : ''}`} style={fadeStyle(sidebarScroll.top, sidebarScrollable ? sidebarScroll.content - sidebarScroll.viewport - sidebarScroll.top : 0)}>
             <div className="sidebar-content" ref={sidebarScrollRef} onScroll={measureSidebar}>
               {installed.length > 0 && <div className="library-panel">
-                {installed.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected} onSelect={() => selectGame(game.id)}
+                {installed.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected}
+                  pending={cardPending?.game === game.id} error={cardError?.game === game.id ? cardError.message : undefined}
+                  onSelect={() => selectGame(game.id)} onLifecycle={(type) => runLifecycle(game, type)}
                   onConfigure={(opener) => openDialog('configure', opener, game.id)} />)}
               </div>}
             </div>
@@ -557,24 +621,30 @@ export function App({ bridge }: { bridge: Bridge }) {
         <p className="sr-only" role="status">{feedback?.phase === 'busy' ? `${feedback.action} in progress`
           : feedback?.phase === 'success' ? `${feedback.action} complete` : ''}</p>
         {status !== 'connected' && <p className="connection" role="status">{status.startsWith('reconnecting') ? 'Reconnecting to host…' : 'Connecting to host…'}</p>}
+        {state?.store?.available === false && <p className="store-notice" role="alert">The checkpoint store is unavailable. Reconnect its drive to continue.</p>}
         {selectedGame ? <>
-          <div className={`action-band ${exitFirst ? 'exit-first' : ''}`} aria-label="Checkpoint actions">
-            <ActionButton action="save" game={selectedGame} feedback={feedback} busy={busy} now={now}
+          <div className={`action-band ${selectedGame.guidance?.save ? 'covers-save' : ''} ${selectedGame.guidance?.load ? 'covers-load' : ''}`} aria-label="Checkpoint actions">
+            <ActionButton action="save" game={selectedGame} feedback={feedback} busy={working} now={now}
               shortcut={state?.settings?.save_shortcut} onClick={() => runAction('save')} />
-            <ActionButton action="load" game={selectedGame} feedback={feedback} busy={busy} now={now}
+            <ActionButton action="load" game={selectedGame} feedback={feedback} busy={working} now={now}
               shortcut={state?.settings?.load_shortcut} onClick={() => runAction('load')}
               onJump={() => selectedGame.latest && jumpToCheckpoint(selectedGame.latest.id)} />
-            {exitFirst && <ExitFirst />}
+            <GuidancePanel key={selectedGame.id} game={selectedGame} bridge={bridge}
+              retrying={selectedGame.busy?.kind === 'retry' || (feedback?.game === selected && feedback?.action === 'retry' && feedback?.phase === 'busy')}
+              onRetry={() => runAction('retry')} onConfigure={(button) => openDialog('configure', button)} />
           </div>
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
             <p className="action-error-block" role="alert">{failureMessage(hostError, 'Game unavailable')}</p>}
-          {selectedGame.info && <div className="game-info">
-            <button onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
-              aria-expanded={Boolean(expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
-              <Icon name="info" />Info
-            </button>
-            {expandedInfo[selectedGame.id] && <div id={`game-info-${selectedGame.id}`} className="game-info-content">
+          {(selectedGame.info || undoDelete?.game === selectedGame.id) && <div className="game-info">
+            <div className="game-info-controls">
+              {selectedGame.info && <button className="info-button" onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
+                aria-expanded={Boolean(expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
+                <Icon name="info" />Info
+              </button>}
+              {undoDelete?.game === selectedGame.id && <button key={undoDelete.checkpoint} className="undo-button" onClick={undoCheckpointDelete}>Undo</button>}
+            </div>
+            {selectedGame.info && expandedInfo[selectedGame.id] && <div id={`game-info-${selectedGame.id}`} className="game-info-content">
               <Markdown>{selectedGame.info}</Markdown>
             </div>}
           </div>}
@@ -596,21 +666,21 @@ export function App({ bridge }: { bridge: Bridge }) {
                   const reveal = { '--reveal-index': Math.min(offset, 12) } as React.CSSProperties;
                   if (!row) return null;
                   const pending = state?.deletes.find((item) => item.checkpoint === row.checkpoint && item.game === selected);
-                  return <div className="virtual-item" style={{ top, height: itemHeight(row), ...reveal }} key={key}><HistoryRow row={row} busy={busy} locked={exitFirst} now={now} bridge={bridge}
+                  return <div className="virtual-item" style={{ top, height: itemHeight(row), ...reveal }} key={key}><HistoryRow row={row} game={selectedGame} busy={working} now={now} bridge={bridge}
                     primary={row.kind === 'saved' && row.checkpoint === selectedGame.latest?.id}
-                    flash={flash === row.id} arrived={arrived.has(row.id)} deleteOperation={pending} deadline={pending && deleteDeadlines.current.get(pending.id)}
+                    flash={flash === row.id} arrived={arrived.has(row.id)} deleteOperation={pending}
                     feedback={feedback?.game === selected ? feedback : undefined}
                     onLoad={() => row.checkpoint && runAction('load', row.checkpoint)}
                     onRevert={() => row.checkpoint && runAction('revert', row.checkpoint)}
                     onJump={() => row.restored && jumpToCheckpoint(row.restored)}
-                    onDelete={() => row.checkpoint && deleteCheckpoint(row.checkpoint)}
-                    onCancelDelete={() => pending && cancelDelete(pending.id)} /></div>;
+                    onDelete={() => row.checkpoint && deleteCheckpoint(row.checkpoint)} /></div>;
                 })}
                 {next && <button className="load-more" style={{ top: historyTotal }} onClick={loadMore}>Show older history</button>}
               </div>
             </div>
           </div>
-        </> : <div className="empty-library">{!state ? 'Waiting for the host…' : visibleGames.length ? 'No known games are running.' : 'No games found.'}</div>}
+        </> : state && visibleGames.length ? <div className="empty-selection"><Character name="no-game-selected" /><p>No known games are running.</p></div>
+          : <div className="empty-library">{!state ? 'Waiting for the host…' : 'No games found.'}</div>}
       </main>
       {dialog && <AppDialog key={`${dialog}-${dialogTarget?.id || ''}`} kind={dialog} game={dialogTarget} state={state} bridge={bridge} opener={dialogOpener.current}
         close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id) => { setDialog(undefined); setSelected(id); }}
@@ -651,30 +721,17 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   onClick: () => void; onJump?: () => void;
 }) {
   const available = game[action].available;
+  const covered = Boolean(game.guidance?.[action]);
   const current: Feedback | undefined = feedback?.game === game.id && feedback.action === action && !feedback.target ? feedback
     : game.busy?.kind === action ? { game: game.id, action, phase: 'busy' } : undefined;
   const label = current?.phase === 'error' ? 'FAILED' : action.toUpperCase();
-  const reason = game[action].reason;
-  const title = current?.message || (reason === 'access_needed'
-    ? failureMessage(game.config_error || game.blocked, 'SaveScummer needs permission to access this game’s files.')
-    : reason === 'no_game_data' ? 'No game data yet'
-      : reason === 'no_saves' ? 'No saves yet' : reason);
-  // The Load button shows the latest checkpoint on its right. A clickable card can't sit inside the button,
-  // so the card is laid over it and the button reserves the card's measured width.
-  const cardRef = useRef<HTMLSpanElement>(null);
-  const [cardWidth, setCardWidth] = useState(0);
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => setCardWidth(card.offsetWidth));
-    observer.observe(card);
-    return () => observer.disconnect();
-  }, [action]);
-  return <div className="action-slot" style={action === 'load' ? { '--card-width': `${cardWidth}px` } as React.CSSProperties : undefined}>
-    {available && <span className="shortcut-tab">
+  const title = current?.message || failureMessage(game[action].failure, game[action].reason || '');
+  // Keep the clickable checkpoint card separate from the Load button so the labels stay aligned.
+  return <div className="action-slot" inert={covered}>
+    {available && !covered && <span className="shortcut-tab">
       {displayShortcut(shortcut || `${mac ? 'Alt' : 'Ctrl'}+${action === 'save' ? 'F5' : 'F9'}`)}
     </span>}
-    <button className={`main-button ${action} ${current?.phase || ''}`} disabled={!available || busy}
+    <button className={`main-button ${action} ${current?.phase || ''}`} disabled={!available || busy || covered}
       onClick={onClick} title={title || undefined} aria-label={`${action} ${game.name}`}>
       {/* The hidden widest labels keep the button from resizing as SAVE turns into SAVING… or FAILED,
           while the visible icon and text stay centered together at a fixed gap. */}
@@ -685,27 +742,18 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
           : <span className="main-face"><Icon name={action} />{label}</span>}
       </span>
     </button>
-    {action === 'load' && <span className="load-card" ref={cardRef}>{game.latest
+    {action === 'load' && <span className="load-card">{game.latest
       ? <CheckpointCard className={`load-badge ${!available ? 'unavailable' : ''}`} at={game.latest.created_at} now={now} fullDate
         label={game.latest.label} action={onJump && { icon: 'crosshairs', text: 'Locate', ariaLabel: 'Jump to latest checkpoint', onClick: onJump }} />
-      : <span className={`load-badge empty ${!available ? 'unavailable' : ''}`}>No saves yet</span>}</span>}
+      : !game.guidance?.load && <span className={`load-badge empty ${!available ? 'unavailable' : ''}`}>No saves yet</span>}</span>}
   </div>;
 }
 
-/** Covers Save and Load while the game runs: its progress reaches the disk only when it exits. */
-function ExitFirst() {
-  return <section className="exit-first-panel" role="status" aria-label="Exit the game first">
-    <strong>Save and Exit the game</strong>
-    <span className="exit-first-sub">to save or load any checkpoints</span>
-    <p>We can only intercept the game progress after the game saves it to disk.</p>
-  </section>;
-}
-
-function HistoryRow({ row, primary, busy, locked, now, bridge, feedback, flash, arrived, deleteOperation, deadline,
-  onLoad, onRevert, onJump, onDelete, onCancelDelete }: {
-  row: HistoryEntry; primary: boolean; busy: boolean; locked: boolean; now: number; bridge: Bridge; feedback?: Feedback; flash: boolean; arrived: boolean;
-  deleteOperation?: Operation; deadline?: number;
-  onLoad: () => void; onRevert: () => void; onJump: () => void; onDelete: () => void; onCancelDelete: () => void;
+function HistoryRow({ row, game, primary, busy, now, bridge, feedback, flash, arrived, deleteOperation,
+  onLoad, onRevert, onJump, onDelete }: {
+  row: HistoryEntry; game: Game; primary: boolean; busy: boolean; now: number; bridge: Bridge; feedback?: Feedback; flash: boolean; arrived: boolean;
+  deleteOperation?: Operation;
+  onLoad: () => void; onRevert: () => void; onJump: () => void; onDelete: () => void;
 }) {
   const name = row.kind.charAt(0).toUpperCase() + row.kind.slice(1).replace('_', ' ');
   const date = new Date(row.at);
@@ -715,11 +763,11 @@ function HistoryRow({ row, primary, busy, locked, now, bridge, feedback, flash, 
     </div>;
   }
   const active = feedback?.target === row.checkpoint && (feedback?.action === 'load' || feedback?.action === 'revert') ? feedback : undefined;
-  const operation = row.actions.load ? 'load' : 'revert';
+  const operation = row.kind === 'saved' ? 'load' : 'revert';
+  const locked = !game.restore.available && !busy;
   const rowLabel = active?.phase === 'error' ? 'FAILED' : operation.toUpperCase();
   const chip = row.label || (row.kind === 'loaded' && row.saved_at ? new Date(row.saved_at).toLocaleTimeString(undefined, { hour12: false }) : undefined)
     || (row.kind === 'reverted' && row.reverted_at ? new Date(row.reverted_at).toLocaleTimeString(undefined, { hour12: false }) : undefined);
-  const count = Math.max(1, Math.ceil(((deadline || Date.now() + (deleteOperation?.remaining_ms || 0)) - now) / 1000));
   return <div id={`entry-${row.id}`} className={`history-row ${primary ? 'primary' : 'secondary'} ${flash ? 'flash' : ''} ${arrived ? 'arrived' : ''}`}>
     <div className="history-stamp">
       {row.kind === 'saved' && row.checkpoint
@@ -734,18 +782,17 @@ function HistoryRow({ row, primary, busy, locked, now, bridge, feedback, flash, 
       {row.kind === 'loaded' && row.cloud_replaced ? 'Steam Cloud replaced the restored save' : ''}
     </div>
     <div className={`history-actions ${deleteOperation ? 'deleting' : ''}`}>
-      {(row.actions.load || row.actions.revert) && <button disabled={busy || !!deleteOperation} className={`row-button ${row.actions.load ? '' : 'revert'} ${locked ? 'locked' : ''}`}
+      {(row.actions.load || row.actions.revert) && <button disabled={!game.restore.available || busy || !!deleteOperation} className={`row-button ${row.actions.load ? '' : 'revert'} ${locked ? 'locked' : ''}`}
         onClick={row.actions.load ? onLoad : onRevert}
         aria-label={`${row.actions.load ? 'Load save' : 'Revert restore'} from ${date.toLocaleString()}`}>
         {active?.phase === 'busy' || active?.phase === 'success'
           ? <Icon key={active.phase} name={active.phase} className="icon-only" />
           : <><Icon name="load" />{rowLabel}</>}
       </button>}
-      {row.actions.delete && <button disabled={busy || !!deleteOperation} className="delete-button" onClick={onDelete}
+      {row.actions.delete && <button disabled={!game.delete.available || !!deleteOperation} className="delete-button" onClick={onDelete}
         aria-label={`Delete checkpoint from ${date.toLocaleString()}`} title="Delete checkpoint"><Icon name="trash-can" /></button>}
       {deleteOperation && <div className="delete-status">
-        {deleteOperation.status === 'counting_down' && <><span>Deleting in {count}</span><button className="cancel-delete" onClick={onCancelDelete}>CANCEL</button></>}
-        {deleteOperation.status === 'waiting' && <><span>Waiting to delete…</span><button className="cancel-delete" onClick={onCancelDelete}>CANCEL</button></>}
+        {deleteOperation.status === 'waiting' && <span>Waiting to delete…</span>}
         {deleteOperation.status === 'running' && <span><Icon name="busy" />Deleting…</span>}
       </div>}
     </div>

@@ -256,24 +256,11 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
         Command::Delete { game, checkpoint } => {
             json(ops::submit(host, request_id, &game, ops::Request::Delete { checkpoint }, false)?)
         }
-        Command::CancelDelete { operation } => json(ops::cancel_delete(host, &operation)?),
         Command::Flush { game } => json(ops::submit(host, request_id, &game, ops::Request::Flush, false)?),
         Command::MoveStore { path } => json(ops::move_store(host, request_id, &path)?),
-        Command::Retry { game } => {
-            let game = host.find_game(&host.lock(), &game)?;
-            if !host.lock().blocked.contains_key(&game) {
-                return Err(Failure::new(
-                    ErrorKind::InvalidRequest,
-                    "the game isn't blocked; send the command again instead",
-                )
-                .game(&game));
-            }
-            crate::recovery::retry(host, &game)?;
-            let mut inner = host.lock();
-            host.refresh_cache(&mut inner, &game);
-            host.publish(&mut inner);
-            json(serde_json::json!({ "game": game }))
-        }
+        Command::Retry { game } => json(ops::submit(host, request_id, &game, ops::Request::Retry, false)?),
+        Command::Play { game } => json(crate::lifecycle::play(host, &game)?),
+        Command::CloseGame { game } => json(crate::lifecycle::close(host, &game)?),
         Command::SetLabel { checkpoint, label } => queries::set_label(host, &checkpoint, label.as_deref()),
         Command::AddGame { name, executable, save_location } => {
             let id = library::add_custom(host, &name, &executable, &save_location)?;

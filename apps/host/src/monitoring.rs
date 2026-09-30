@@ -3,7 +3,7 @@
 //! the Steam Cloud check at the first start after a Load.
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use savescummer_core::history::RowKind;
@@ -15,7 +15,22 @@ use savescummer_storage::{self as db, HistoryRow};
 
 use crate::host::{Host, Inner, new_id, now};
 
-pub fn run(host: Arc<Host>, mut monitor: Monitor) {
+/// Observe persisted games before startup recovery, without scanning live saves.
+pub fn observe_startup(host: &Host, monitor: &mut Monitor) -> Vec<Event> {
+    monitor.set_games(&games(host));
+    let events = monitor.poll();
+    let mut inner = host.lock();
+    inner.processes = monitor.processes();
+    inner.processes_observed = monitor.observation_available();
+    events
+}
+
+pub fn run(host: Arc<Host>, mut monitor: Monitor, initial: Vec<Event>) {
+    for event in initial {
+        handle(&host, event);
+    }
+    let refreshing = Arc::new(AtomicBool::new(false));
+    let recovery_refreshing = Arc::new(AtomicBool::new(false));
     let interval = Duration::from_millis(host.opts.poll_ms.max(20));
     let mut last_refresh = Instant::now();
     loop {
@@ -25,27 +40,50 @@ pub fn run(host: Arc<Host>, mut monitor: Monitor) {
         if host.monitor_dirty.swap(false, Ordering::SeqCst) {
             monitor.set_games(&games(&host));
         }
-        for event in monitor.poll() {
-            handle(&host, event);
-        }
+        let events = monitor.poll();
         let processes = monitor.processes();
-        {
+        let changed = {
             let mut inner = host.lock();
+            let changed = inner.processes != processes || inner.processes_observed != monitor.observation_available();
+            inner.processes_observed = monitor.observation_available();
             if inner.processes != processes {
                 inner.processes = processes;
             }
+            changed
+        };
+        // Publish a Started event only after its process IDs are available
+        // to operation checks, including the held-file check in expert mode.
+        for event in events {
+            handle(&host, event);
+        }
+        {
+            let mut inner = host.lock();
             inner.front = monitor.focused().map(str::to_string);
-            if inner.stack.settle(monitor.focused(), Instant::now()) {
+            if inner.stack.settle(monitor.focused(), Instant::now()) || changed {
                 host.publish(&mut inner);
             }
         }
         // Saves appear while a game runs: keep Save's availability current.
         if last_refresh.elapsed() >= Duration::from_secs(2) {
             last_refresh = Instant::now();
-            let mut inner = host.lock();
-            let running: Vec<String> = inner.stack.entries().to_vec();
-            if !running.is_empty() && crate::library::refresh_presence(&host, &mut inner, &running) {
-                host.publish(&mut inner);
+            let running = host.lock().stack.entries().to_vec();
+            if !running.is_empty() && !refreshing.swap(true, Ordering::SeqCst) {
+                let worker = host.clone();
+                let flag = refreshing.clone();
+                std::thread::spawn(move || {
+                    for game in running {
+                        let _ = crate::library::refresh_game(&worker, &game);
+                    }
+                    flag.store(false, Ordering::SeqCst);
+                });
+            }
+            if !host.lock().blocked.is_empty() && !recovery_refreshing.swap(true, Ordering::SeqCst) {
+                let worker = host.clone();
+                let flag = recovery_refreshing.clone();
+                std::thread::spawn(move || {
+                    crate::recovery::refresh_unavailable_paths(&worker);
+                    flag.store(false, Ordering::SeqCst);
+                });
             }
         }
         std::thread::sleep(interval);
@@ -158,6 +196,7 @@ fn handle(host: &Arc<Host>, event: Event) {
         }
         Event::Exited { game } => {
             let mut inner = host.lock();
+            inner.processes.remove(&game);
             inner.stack.exited(&game, Instant::now());
             crate::trace(&format!("game closed: {}", display_name(&inner, &game)));
             if let Some(session) = inner.sessions.remove(&game) {
@@ -179,6 +218,11 @@ fn handle(host: &Arc<Host>, event: Event) {
                 }
             }
             host.publish(&mut inner);
+            drop(inner);
+            let worker = host.clone();
+            std::thread::spawn(move || {
+                let _ = crate::library::refresh_game(&worker, &game);
+            });
         }
         Event::Focused { game } => {
             let mut inner = host.lock();

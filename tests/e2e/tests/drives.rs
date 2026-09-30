@@ -10,6 +10,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use common::*;
 
@@ -130,6 +131,35 @@ fn saves_on_an_unplugged_drive_are_disconnected_not_absent() {
     write(&saves.join("slot.sav"), "v2");
     world.ok(&["load", &game]);
     assert_eq!(read(&saves.join("slot.sav")), "v1");
+}
+
+#[test]
+fn retry_availability_tracks_the_recorded_recovery_drive() {
+    let world = World::new();
+    let mut drive = Drive::new(&world.root, "RecoveryDrive", "APFS");
+    let saves = drive.mount.join("Saves");
+    let game = {
+        let _host = world.host();
+        let game = game_with_saves(&world, "Interrupted", &saves);
+        world.ok(&["save", &game]);
+        game
+    };
+    write(&saves.join("slot.sav"), "v2");
+    {
+        let mut host = world.host_with(&[], &[("SAVESCUMMER_TEST_CRASH_AT", "load.set_aside:1")]);
+        let _ = world.cli(&["load", &game]);
+        assert_eq!(host.wait_exit(Duration::from_secs(20)), Some(86));
+    }
+    drive.detach();
+    std::fs::remove_dir(&drive.mount).unwrap();
+    let _host = world.host();
+    let summary = world.game(&game);
+    assert_eq!(summary["guidance"]["kind"], "blocked");
+    assert_eq!(summary["retry"]["reason"], "target_unavailable");
+    assert_eq!(world.cli(&["retry", &game]).error_kind(), "target_unavailable");
+
+    drive.attach();
+    world.wait_game(&game, "recorded recovery drive returned", |g| g["retry"]["available"] == true);
 }
 
 #[test]

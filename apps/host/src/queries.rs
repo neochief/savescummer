@@ -52,9 +52,6 @@ pub fn history(
     };
     let limit = limit.unwrap_or(DEFAULT_PAGE).clamp(1, MAX_PAGE);
     let ci = host.env.case_insensitive();
-    let game_blocked = inner.blocked.contains_key(&game_id);
-    let game_busy = inner.busy.contains_key(&game_id) || inner.store_moving;
-    let config_ok = inner.derived.get(&game_id).is_some_and(|d| d.active.is_ok());
     let counting: Vec<String> = inner.deletes.values().filter_map(|d| d.op.checkpoint.clone()).collect();
 
     let storage = host.db();
@@ -79,14 +76,10 @@ pub fn history(
         };
         let unavailable = own.as_ref().and_then(|c| unavailable_reason(c, &inner, ci));
         let deleting = own.as_ref().is_some_and(|c| counting.contains(&c.id));
-        let operable = own.is_some() && unavailable.is_none() && !game_blocked && !game_busy && config_ok;
+        let operable = own.is_some() && matches!(unavailable, None | Some(ErrorKind::StoreUnavailable));
         let actions = match row.kind {
-            RowKind::Saved => {
-                RowActions { load: operable, revert: false, delete: own.is_some() && !deleting && !game_blocked }
-            }
-            RowKind::Loaded | RowKind::Reverted => {
-                RowActions { load: false, revert: operable, delete: own.is_some() && !deleting && !game_blocked }
-            }
+            RowKind::Saved => RowActions { load: operable, revert: false, delete: own.is_some() },
+            RowKind::Loaded | RowKind::Reverted => RowActions { load: false, revert: operable, delete: own.is_some() },
             _ => RowActions { load: false, revert: false, delete: false },
         };
         let (label, saved_at) = match row.kind {
@@ -321,6 +314,15 @@ pub fn open(host: &Arc<Host>, target: &OpenTarget, resolve_only: bool) -> Result
     let path: PathBuf = {
         let mut inner = host.lock();
         match target {
+            OpenTarget::AccessSettings { game } => {
+                let id = host.find_game(&inner, game)?;
+                let facts = host.action_facts(&inner, &id, None);
+                let failure = facts.guidance().and_then(|g| g.failure);
+                let access = failure
+                    .and_then(|f| f.access)
+                    .ok_or_else(|| Failure::new(ErrorKind::InvalidRequest, "no privacy settings needed"))?;
+                PathBuf::from(access.settings_url)
+            }
             OpenTarget::TargetRoot { game, target } => {
                 let id = host.find_game(&inner, game)?;
                 crate::library::derive_one(host, &mut inner, &id);
@@ -353,7 +355,7 @@ pub fn open(host: &Arc<Host>, target: &OpenTarget, resolve_only: bool) -> Result
             }
         }
     };
-    let existing = nearest_existing(&path);
+    let existing = if matches!(target, OpenTarget::AccessSettings { .. }) { path } else { nearest_existing(&path) };
     let opened = if resolve_only { false } else { savescummer_platform::open_folder(&existing).is_ok() };
     Ok(Opened { path: existing.to_string_lossy().into_owned(), opened })
 }

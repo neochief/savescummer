@@ -2,15 +2,17 @@ export interface Failure {
   kind: string;
   detail?: string;
   game?: string;
+  paths?: string[];
+  target_cause?: { kind: string; game?: string; name?: string };
+  access?: { category: string; denied: boolean; settings_url: string };
 }
 
 export interface Operation {
   id: string;
   game?: string;
   kind: string;
-  status: 'accepted' | 'running' | 'counting_down' | 'waiting' | 'succeeded' | 'failed' | 'cancelled';
+  status: 'checking' | 'accepted' | 'running' | 'waiting' | 'succeeded' | 'failed' | 'cancelled';
   error?: Failure;
-  remaining_ms?: number;
   checkpoint?: string;
 }
 
@@ -21,12 +23,24 @@ export interface Artwork {
   icon?: string;
 }
 
+export interface Availability { available: boolean; reason?: string; failure?: Failure }
+export interface Guidance {
+  kind: 'blocked' | 'access_needed' | 'no_save_location' | 'invalid_target' | 'target_unavailable'
+    | 'game_running' | 'play_first' | 'no_game_data' | 'no_saves';
+  save: boolean;
+  load: boolean;
+  failure?: Failure;
+  remedy?: 'configure' | 'request_access' | 'retry';
+}
+
 export interface Game {
   id: string;
   name: string;
   install_tag?: string;
   installed: boolean;
   running: boolean;
+  can_play?: boolean;
+  can_close?: boolean;
   /** Save, Load and Revert are refused while the game runs (`game_running`): it writes its progress only on exit. */
   wait_for_exit?: boolean;
   kind?: 'known' | 'custom';
@@ -37,8 +51,14 @@ export interface Game {
   has_history?: boolean;
   blocked?: Failure;
   config_error?: Failure;
-  save: { available: boolean; reason?: string };
-  load: { available: boolean; reason?: string };
+  save: Availability;
+  load: Availability;
+  restore: Availability;
+  delete: Availability;
+  flush: Availability;
+  configure: Availability;
+  retry: Availability;
+  guidance?: Guidance;
   latest?: { id: string; label?: string; created_at: string };
   busy?: Operation;
   last_result?: Operation;
@@ -53,6 +73,7 @@ export interface HostState {
   phase: 'starting' | 'ready' | 'shutting_down';
   games: Game[];
   active_stack: string[];
+  store?: { path: string; available: boolean };
   deletes: Operation[];
   settings?: { play_sounds: boolean; launch_on_startup: boolean; launch_on_startup_available: boolean; launch_on_startup_needs_approval?: boolean;
     checkpoint_store: string; save_shortcut?: string; load_shortcut?: string };
@@ -103,10 +124,14 @@ export type UiRequest =
   | { type: 'state' }
   | { type: 'history'; game: string; cursor?: string; limit?: number }
   | { type: 'save'; game: string }
+  | { type: 'retry'; game: string }
+  | { type: 'play'; game: string }
+  | { type: 'close_game'; game: string }
+  | { type: 'request_access'; game: string }
+  | { type: 'open_access_settings'; game: string }
   | { type: 'load'; game: string; checkpoint?: string }
   | { type: 'revert'; game: string; checkpoint: string }
   | { type: 'delete'; game: string; checkpoint: string }
-  | { type: 'cancel_delete'; operation: string }
   | { type: 'set_label'; checkpoint: string; label?: string }
   | { type: 'scan' }
   | { type: 'outcome'; operation: string }

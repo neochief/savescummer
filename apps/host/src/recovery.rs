@@ -4,6 +4,7 @@
 //! requested operation on its own, and never delete kept material while an
 //! interruption is unresolved.
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -27,17 +28,114 @@ pub fn resolve_all(host: &Arc<Host>) {
 }
 
 /// Resolves one game's unfinished operations again (Retry on a blocked game).
-pub fn retry(host: &Arc<Host>, game_id: &str) -> Result<(), Failure> {
+pub fn retry(host: &Arc<Host>, game_id: &str) -> Result<OpResult, Failure> {
+    host.crash_point("retry.start", 1);
+    check_paths(host, game_id)?;
     let unfinished = db::unfinished_operations(host.db().conn()).unwrap_or_default();
-    for op in unfinished.iter().filter(|o| o.game_id.as_deref() == Some(game_id)) {
+    for op in unfinished.iter().filter(|o| o.game_id.as_deref() == Some(game_id) && o.kind != "retry") {
         resolve(host, op);
     }
     let mut inner = host.lock();
+    host.bump_history(&mut inner, game_id);
     host.publish(&mut inner);
     match inner.blocked.get(game_id) {
         Some(f) => Err(f.clone()),
-        None => Ok(()),
+        None => Ok(OpResult::default()),
     }
+}
+
+/// A Retry inspects recorded paths, not a potentially changed configuration.
+pub fn check_paths(host: &Host, game: &str) -> Result<(), Failure> {
+    let unfinished =
+        db::unfinished_operations(host.db().conn()).map_err(|e| Failure::new(ErrorKind::Io, e.to_string()))?;
+    for op in unfinished.iter().filter(|o| o.game_id.as_deref() == Some(game) && o.kind != "retry") {
+        let journal: Journal =
+            op.journal.as_ref().and_then(|j| serde_json::from_value(j.clone()).ok()).unwrap_or_default();
+        if let Some(plan) = &journal.plan {
+            recovery_gate(host, game)?;
+            for file in &plan.files {
+                let path = file.live.parent().unwrap_or(&file.live);
+                if let Some(category) = host.privacy.needed(path) {
+                    let mut f = Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(path).game(game);
+                    f.access = Some(Box::new(savescummer_core::AccessInfo {
+                        category: category.as_str().into(),
+                        denied: host.privacy.is_denied(category),
+                        settings_url: category.settings_url().into(),
+                    }));
+                    return Err(f);
+                }
+                if snap::presence(path) == Presence::Unknown {
+                    return Err(Failure::new(ErrorKind::TargetUnavailable, "a recovery location can't be read")
+                        .path(path)
+                        .game(game));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Refresh Retry availability from the original journals without holding
+/// shared state during reads of drives that may be disconnected.
+pub fn refresh_unavailable_paths(host: &Host) {
+    let blocked = host.lock().blocked.clone();
+    if blocked.is_empty() {
+        host.lock().recovery_unavailable.clear();
+        return;
+    }
+    let Ok(unfinished) = db::unfinished_operations(host.db().conn()) else { return };
+    let mut unavailable = HashMap::new();
+    for op in
+        unfinished.iter().filter(|o| o.game_id.as_ref().is_some_and(|g| blocked.contains_key(g)) && o.kind != "retry")
+    {
+        let journal: Journal =
+            op.journal.as_ref().and_then(|j| serde_json::from_value(j.clone()).ok()).unwrap_or_default();
+        let Some(plan) = journal.plan else { continue };
+        let game = op.game_id.as_deref().unwrap_or_default();
+        for file in plan.files {
+            let path = file.live.parent().unwrap_or(&file.live);
+            if snap::presence(path) == Presence::Unknown {
+                unavailable.entry(game.to_string()).or_insert_with(|| {
+                    Failure::new(ErrorKind::TargetUnavailable, "a recovery location can't be read")
+                        .path(path)
+                        .game(game)
+                });
+                break;
+            }
+        }
+    }
+    let mut inner = host.lock();
+    let previous = inner.recovery_unavailable.clone();
+    for (game, original) in &blocked {
+        if inner.blocked.get(game) != Some(original) || inner.busy.contains_key(game) {
+            continue;
+        }
+        match unavailable.remove(game) {
+            Some(failure) => {
+                inner.recovery_unavailable.insert(game.clone(), failure);
+            }
+            None => {
+                inner.recovery_unavailable.remove(game);
+            }
+        }
+    }
+    let active: HashSet<_> = inner.blocked.keys().cloned().collect();
+    inner.recovery_unavailable.retain(|game, _| active.contains(game));
+    if inner.recovery_unavailable != previous {
+        host.publish(&mut inner);
+    }
+}
+
+fn recovery_gate(host: &Host, game: &str) -> Result<(), Failure> {
+    let inner = host.lock();
+    let record = inner
+        .games
+        .get(game)
+        .ok_or_else(|| Failure::new(ErrorKind::NotFound, "the recovery game's configuration is missing"))?;
+    if record.wait_for_exit && (!inner.processes_observed || record.executables().is_empty()) {
+        return Err(Failure::new(ErrorKind::Io, "couldn't establish whether the game is running").game(game));
+    }
+    crate::policy::exit_rule(crate::host::exit_first(&inner, game)).map_err(|f| f.with_game_if_missing(game))
 }
 
 fn finish(host: &Host, op: &OperationRow, status: &str, result: Option<OpResult>, error: Option<Failure>) {
@@ -159,6 +257,13 @@ fn resolve_restore(host: &Arc<Host>, op: &OperationRow, j: &Journal, game: &str)
         finish(host, op, "failed", None, Some(Failure::new(ErrorKind::ShuttingDown, "interrupted").game(game)));
         return;
     };
+    if let Err(mut f) = check_paths(host, game) {
+        if f.paths.is_empty() {
+            f = f.paths(plan.files.iter().map(|file| &file.live));
+        }
+        block(host, op, game, f);
+        return;
+    }
     // Every target the plan touches must be readable to verify anything.
     let unreadable = plan.files.iter().any(|f| f.live.parent().is_some_and(|p| snap::presence(p) == Presence::Unknown));
     let rule = if unreadable { Rule::R4 } else { classify_load(&load::observe(&plan)) };
@@ -230,7 +335,11 @@ fn block(host: &Host, op: &OperationRow, game: &str, failure: Failure) {
         "UPDATE operations SET status = 'blocked', result = ?2 WHERE id = ?1",
         [op.id.as_str(), &value.to_string()],
     );
-    host.lock().blocked.insert(game.to_string(), failure);
+    let mut inner = host.lock();
+    if failure.kind == ErrorKind::TargetUnavailable {
+        inner.recovery_unavailable.insert(game.to_string(), failure.clone());
+    }
+    inner.blocked.insert(game.to_string(), failure);
 }
 
 /// Countdowns live only in memory: a delete that hadn't started is dropped.

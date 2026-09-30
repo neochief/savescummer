@@ -82,6 +82,17 @@ fn manifest_wins_and_addendum_fills_gaps() {
 }
 
 #[test]
+fn normal_close_requires_an_explicit_manifest_override() {
+    let addendum = "\"Known Game\":\n  override:\n    safeToClose: true\n";
+    let allowed = run(&keep(&["Known Game"]), addendum, MANIFEST);
+    assert!(game(&allowed, "Known Game").safe_to_close);
+    assert_eq!(allowed.report.review.overrides[0].fields, vec!["safeToClose"]);
+
+    let default = run(&keep(&["Known Game"]), "", MANIFEST);
+    assert!(!game(&default, "Known Game").safe_to_close);
+}
+
+#[test]
 fn a_fully_shadowed_addendum_changes_nothing() {
     // Void War's lifecycle (3.8): once the manifest has the game, deleting
     // the addendum entry must not change the output.

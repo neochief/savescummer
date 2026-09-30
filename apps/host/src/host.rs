@@ -13,8 +13,8 @@ use savescummer_core::common::{Commonality, commonality};
 use savescummer_core::stack::ActiveStack;
 use savescummer_core::{ErrorKind, Failure, Filter, Presence};
 use savescummer_ipc::{
-    AccessInfo, Availability, CheckpointBrief, EventBody, GameKind, GameSummary, OpStatus, Operation, Phase, ScanInfo,
-    SettingsInfo, State, StoreInfo,
+    AccessInfo, CheckpointBrief, EventBody, GameKind, GameSummary, Operation, Phase, ScanInfo, SettingsInfo, State,
+    StoreInfo,
 };
 use savescummer_platform::integration::Shortcut;
 use savescummer_scanner::Environment;
@@ -22,6 +22,7 @@ use savescummer_storage::{self as db, CheckpointRow, Storage};
 
 use crate::model::{Derived, Game};
 use crate::options::Options;
+use crate::policy::{Action, Facts};
 
 pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
@@ -49,11 +50,10 @@ pub struct UiReport {
     pub capturing_shortcut: bool,
 }
 
-/// A Delete counting down, waiting or running.
+/// A Delete waiting or running.
 #[derive(Debug, Clone)]
 pub struct PendingDelete {
     pub op: Operation,
-    pub deadline: Instant,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -76,11 +76,14 @@ pub struct Inner {
     pub sessions: HashMap<String, String>,
     /// Running games' processes, as the monitor last saw them.
     pub processes: BTreeMap<String, Vec<u32>>,
+    pub processes_observed: bool,
     /// The game in front, as the monitor last saw it, even one waiting for
     /// access (which is never on the stack).
     pub front: Option<String>,
     pub busy: HashMap<String, Operation>,
     pub blocked: HashMap<String, Failure>,
+    /// Unreadable recorded recovery paths, checked outside the shared state lock.
+    pub recovery_unavailable: HashMap<String, Failure>,
     pub last_results: HashMap<String, Operation>,
     pub notices: HashMap<String, String>,
     pub deletes: BTreeMap<String, PendingDelete>,
@@ -240,14 +243,14 @@ impl Host {
             hotkey_target: hotkey_target(inner).map(|(g, _)| g),
             catalog_revision: catalog.bundle.source.revision.clone(),
             games,
-            deletes: inner.deletes.values().map(with_remaining).collect(),
+            deletes: inner.deletes.values().map(|delete| delete.op.clone()).collect(),
         }
     }
 
     fn summary(&self, inner: &Inner, game: &Game) -> GameSummary {
         let cache = inner.caches.get(&game.id).cloned().unwrap_or_default();
         let derived = inner.derived.get(&game.id).cloned().unwrap_or_default();
-        let (save, load) = availability(inner, game, &derived, &cache);
+        let facts = self.action_facts(inner, &game.id, None);
         GameSummary {
             id: game.id.clone(),
             name: game.name.clone(),
@@ -257,12 +260,22 @@ impl Host {
             store: game.store().map(str::to_string),
             installed: game.installed,
             running: inner.stack.contains(&game.id),
+            can_play: game.installed && (game.steam_launch_id().is_some() || game.main_executable().is_some()),
+            can_close: inner.stack.contains(&game.id)
+                && inner.processes.get(&game.id).is_some_and(|pids| !pids.is_empty())
+                && (game.safe_to_close || !game.wait_for_exit),
             wait_for_exit: game.wait_for_exit,
             info: game.info.clone(),
             executable: game.main_executable().map(|p| p.to_string_lossy().into_owned()),
             executable_overridden: game.executable.is_some(),
-            save,
-            load,
+            save: facts.availability(Action::Save),
+            load: facts.availability(Action::Load),
+            restore: facts.availability(Action::Restore),
+            delete: facts.availability(Action::Delete),
+            flush: facts.availability(Action::Flush),
+            configure: facts.availability(Action::Configure),
+            retry: facts.availability(Action::Retry),
+            guidance: facts.guidance(),
             config_error: derived.active.as_ref().err().cloned(),
             access: derived.access.as_ref().map(|(_, category)| AccessInfo {
                 category: category.as_str().to_string(),
@@ -351,14 +364,6 @@ impl Host {
     }
 }
 
-fn with_remaining(delete: &PendingDelete) -> Operation {
-    let mut op = delete.op.clone();
-    if op.status == OpStatus::CountingDown {
-        op.remaining_ms = Some(delete.deadline.saturating_duration_since(Instant::now()).as_millis() as u64);
-    }
-    op
-}
-
 /// Current targets as (real root, filter) pairs for the "in common" rule.
 pub fn current_pairs(inner: &Inner, game_id: &str) -> Vec<(PathBuf, Filter)> {
     match inner.derived.get(game_id).map(|d| &d.active) {
@@ -384,52 +389,82 @@ pub fn latest_usable<'a>(
 /// The game runs and writes its progress only when it exits, so nothing on
 /// disk is worth a Save, and a Load would be overwritten when it exits.
 pub fn exit_first(inner: &Inner, game_id: &str) -> bool {
-    inner.games.get(game_id).is_some_and(|g| g.wait_for_exit) && inner.stack.contains(game_id)
+    inner.games.get(game_id).is_some_and(|g| g.wait_for_exit)
+        && (inner.stack.contains(game_id) || inner.processes.contains_key(game_id))
 }
 
-/// Why Save and Load are or aren't available right now.
-pub fn availability(inner: &Inner, game: &Game, derived: &Derived, cache: &GameCache) -> (Availability, Availability) {
-    let common = || -> Option<ErrorKind> {
-        if let Err(f) = &derived.active {
-            return Some(match f.kind {
-                ErrorKind::NoSaveLocation | ErrorKind::AccessNeeded => f.kind,
-                _ => ErrorKind::InvalidTarget,
-            });
+impl Host {
+    /// Gather cheap observations only. The policy itself performs no I/O.
+    pub fn action_facts(&self, inner: &Inner, game_id: &str, owner: Option<&str>) -> Facts {
+        let derived = inner.derived.get(game_id).cloned().unwrap_or_default();
+        let contextual = |mut f: Failure| {
+            if f.kind == ErrorKind::AccessNeeded {
+                let category = f
+                    .paths
+                    .iter()
+                    .find_map(|p| self.privacy.needed(Path::new(p)))
+                    .or_else(|| derived.access.as_ref().map(|(_, c)| *c));
+                if let Some(category) = category {
+                    f.access = Some(Box::new(AccessInfo {
+                        category: category.as_str().into(),
+                        denied: self.privacy.is_denied(category),
+                        settings_url: category.settings_url().into(),
+                    }));
+                }
+            }
+            f.with_game_if_missing(game_id)
+        };
+        let store_failure = if let Some(category) = self.privacy.needed(&inner.store) {
+            Some(contextual(Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(&inner.store)))
+        } else if !inner.store_available {
+            Some(
+                Failure::new(ErrorKind::StoreUnavailable, "the checkpoint store can't be reached")
+                    .path(&inner.store)
+                    .game(game_id),
+            )
+        } else {
+            None
+        };
+        let location_failure = derived.active.as_ref().err().cloned().map(contextual);
+        let target_failure = derived.active.as_ref().ok().and_then(|targets| {
+            targets.iter().find(|t| t.presence == Presence::Unknown).map(|t| {
+                Failure::new(ErrorKind::TargetUnavailable, "the save location can't be read")
+                    .path(&t.root)
+                    .game(game_id)
+            })
+        });
+        let blocked = inner.blocked.get(game_id).cloned();
+        let recovery_failure = blocked.as_ref().and_then(|f| {
+            if let Some(game) = inner.games.get(game_id)
+                && game.wait_for_exit
+                && (!inner.processes_observed || game.executables().is_empty())
+            {
+                return Some(
+                    Failure::new(ErrorKind::Io, "couldn't establish whether the game is running").game(game_id),
+                );
+            }
+            if exit_first(inner, game_id) {
+                return None;
+            }
+            if let Some(path) = f.paths.iter().find(|p| self.privacy.needed(Path::new(p)).is_some()) {
+                return Some(contextual(Failure::new(ErrorKind::AccessNeeded, "recovery needs access").path(path)));
+            }
+            inner.recovery_unavailable.get(game_id).cloned()
+        });
+        Facts {
+            phase: inner.phase,
+            busy: inner.busy.get(game_id).is_some_and(|op| Some(op.id.as_str()) != owner),
+            store_moving: inner.store_moving,
+            blocked,
+            recovery_failure,
+            store_failure,
+            location_failure,
+            target_failure,
+            exit_locked: exit_first(inner, game_id),
+            has_data: derived.has_data,
+            has_saves: inner.caches.get(game_id).is_some_and(|cache| cache.latest.is_some()),
         }
-        if !inner.store_available {
-            return Some(ErrorKind::StoreUnavailable);
-        }
-        if inner.store_moving {
-            return Some(ErrorKind::Busy);
-        }
-        if inner.blocked.contains_key(&game.id) {
-            return Some(ErrorKind::Blocked);
-        }
-        if inner.busy.contains_key(&game.id) {
-            return Some(ErrorKind::Busy);
-        }
-        if exit_first(inner, &game.id) {
-            return Some(ErrorKind::GameRunning);
-        }
-        if let Ok(targets) = &derived.active
-            && targets.iter().any(|t| t.presence == Presence::Unknown)
-        {
-            return Some(ErrorKind::TargetUnavailable);
-        }
-        None
-    };
-    let base = common();
-    let save = match base {
-        Some(reason) => Availability::no(reason),
-        None if !derived.has_data => Availability::no(ErrorKind::NoGameData),
-        None => Availability::yes(),
-    };
-    let load = match base {
-        Some(reason) => Availability::no(reason),
-        None if cache.latest.is_none() => Availability::no(ErrorKind::NoSaves),
-        None => Availability::yes(),
-    };
-    (save, load)
+    }
 }
 
 /// Which game the hotkeys act on: the selected game while the window is
@@ -440,6 +475,13 @@ pub fn hotkey_target(inner: &Inner) -> Option<(String, &'static str)> {
         && inner.games.contains_key(selected)
     {
         return Some((selected.clone(), "window"));
+    }
+    // A foreground game awaiting access is still the intended target. Its
+    // request goes through the same policy instead of falling through to another game.
+    if let Some(front) = &inner.front
+        && inner.derived.get(front).is_some_and(|d| d.access.is_some())
+    {
+        return Some((front.clone(), "active"));
     }
     inner.stack.active().filter(|g| inner.games.contains_key(*g)).map(|g| (g.to_string(), "active"))
 }
@@ -479,9 +521,11 @@ impl Inner {
             stack: ActiveStack::default(),
             sessions: HashMap::new(),
             processes: BTreeMap::new(),
+            processes_observed: false,
             front: None,
             busy: HashMap::new(),
             blocked: HashMap::new(),
+            recovery_unavailable: HashMap::new(),
             last_results: HashMap::new(),
             notices: HashMap::new(),
             deletes: BTreeMap::new(),

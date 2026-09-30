@@ -125,6 +125,7 @@ pub struct Fields {
     pub executables: Option<Executables>,
     pub save: Option<Vec<PathRule>>,
     pub exclude: Option<Vec<PathRule>>,
+    pub safe_to_close: Option<bool>,
 }
 
 impl Fields {
@@ -145,6 +146,9 @@ impl Fields {
         }
         if self.exclude.is_some() {
             names.push("exclude");
+        }
+        if self.safe_to_close.is_some() {
+            names.push("safeToClose");
         }
         names
     }
@@ -172,6 +176,7 @@ pub fn parse_addendum(text: &str) -> Result<BTreeMap<String, AddendumEntry>, Str
                     executables: raw.executables,
                     save: raw.save,
                     exclude: raw.exclude,
+                    safe_to_close: None,
                 }
                 .into_fields(),
                 overrides: raw.overrides.map(RawFields::into_fields).unwrap_or_default(),
@@ -218,6 +223,8 @@ struct RawFields {
     save: Option<Vec<RawRule>>,
     #[serde(default)]
     exclude: Option<Vec<RawRule>>,
+    #[serde(default)]
+    safe_to_close: Option<bool>,
 }
 
 impl RawFields {
@@ -232,6 +239,7 @@ impl RawFields {
             executables: self.executables.map(|e| Executables { windows: e.windows, macos: e.macos, linux: e.linux }),
             save: self.save.map(|rules| rules.into_iter().map(RawRule::into_rule).collect()),
             exclude: self.exclude.map(|rules| rules.into_iter().map(RawRule::into_rule).collect()),
+            safe_to_close: self.safe_to_close,
         }
     }
 }

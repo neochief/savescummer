@@ -258,11 +258,22 @@ pub fn first_run_asks(host: &Host) -> bool {
 /// Asks for the category `game` waits for (the UI's Allow access). Blocks
 /// until the user answers.
 pub fn request_access(host: &Arc<Host>, game: &str) -> Result<serde_json::Value, Failure> {
+    let game_id = host.find_game(&host.lock(), game)?;
+    crate::library::refresh_game(host, &game_id)?;
     let (game_id, needed) = {
-        let mut inner = host.lock();
-        let game_id = host.find_game(&inner, game)?;
-        crate::library::derive_one(host, &mut inner, &game_id);
-        let needed = inner.derived.get(&game_id).and_then(|d| d.access.clone());
+        let inner = host.lock();
+        let needed = host
+            .privacy
+            .needed(&inner.store)
+            .map(|category| (inner.store.clone(), category))
+            .or_else(|| {
+                inner.blocked.get(&game_id).and_then(|f| {
+                    f.paths
+                        .iter()
+                        .find_map(|p| host.privacy.needed(Path::new(p)).map(|category| (PathBuf::from(p), category)))
+                })
+            })
+            .or_else(|| inner.derived.get(&game_id).and_then(|d| d.access.clone()));
         (game_id, needed)
     };
     let Some((path, category)) = needed else {
@@ -312,7 +323,15 @@ pub fn ask_for(host: &Host, path: &Path) -> Result<(), Failure> {
 /// running now (the one that asked) read without access, so it's a new one,
 /// queued after it.
 fn granted(host: &Arc<Host>) {
-    crate::library::derive_all(host, &mut host.lock());
+    {
+        let mut inner = host.lock();
+        crate::library::derive_all(host, &mut inner);
+        let ids: Vec<_> = inner.games.keys().cloned().collect();
+        for id in ids {
+            host.refresh_cache(&mut inner, &id);
+            host.bump_history(&mut inner, &id);
+        }
+    }
     host.scans.request_again(false, "access was granted");
     let watcher = host.watcher.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(watcher) = watcher.as_ref() {
@@ -322,23 +341,6 @@ fn granted(host: &Arc<Host>) {
     let mut inner = host.lock();
     crate::monitoring::activate_running(&mut inner);
     host.publish(&mut inner);
-}
-
-/// The hotkeys' check: a game in front that waits for access fails, never
-/// letting the keys fall through to another game, and the notice repeats.
-pub fn hotkey_refusal(host: &Host) -> Option<Failure> {
-    let (failure, text) = {
-        let inner = host.lock();
-        let front = inner.front.as_ref()?;
-        let (_, category) = inner.derived.get(front)?.access.as_ref()?;
-        let name = inner.games.get(front).map_or(front.as_str(), |g| g.name.as_str());
-        (
-            Failure::new(ErrorKind::AccessNeeded, category.as_str()).game(front),
-            format!("SaveScummer needs access to {} for {name}.", category.display_name()),
-        )
-    };
-    notify(host, &text);
-    Some(failure)
 }
 
 fn notify(host: &Host, text: &str) {

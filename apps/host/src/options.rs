@@ -56,9 +56,6 @@ pub struct Options {
     /// The minimum time between scans caused by the window gaining focus.
     #[arg(long, hide = true, default_value_t = 20)]
     pub focus_scan_cooldown_secs: u64,
-    /// The Delete countdown.
-    #[arg(long, hide = true, default_value_t = 3000)]
-    pub delete_countdown_ms: u64,
     /// How long Save or Load may make no file progress before it's reported
     /// failed (a read stuck on a permission prompt).
     #[arg(long, hide = true, default_value_t = 30)]

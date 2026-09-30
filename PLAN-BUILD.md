@@ -110,7 +110,7 @@ Every command validates its inputs up front.
 
 The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
 
-The dev host runs from the dev APP PACKAGE, logs to `build/dev/logs/host.log`, and outlives xtask. It inherits only its own stdio (NUL and the log): a plain spawn would also hand it the pipes xtask's output goes to, and a terminal pipeline, VS Code task or CI step reading that output would hang until the host exits. On Windows and macOS, `run` opens the packaged Tauri UI.
+The dev host runs from the dev APP PACKAGE and outlives xtask. On macOS, xtask opens the app through Launch Services so the app owns its privacy requests; xtask reads the ready line and pid from `.runtime/dev/host.log` (or the demo data folder's log). On other platforms, startup output goes to `build/dev/logs/host.log` and the host inherits only its own stdio (NUL and the log), so a terminal pipeline or IDE task reading xtask's output does not hang until the host exits. On Windows and macOS, `run` opens the packaged Tauri UI.
 
 xtask honors `CARGO_TARGET_DIR` like Cargo, so it can build next to another checkout's running binaries.
 

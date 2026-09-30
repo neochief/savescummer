@@ -79,6 +79,7 @@ pub struct Monitor {
     running: BTreeMap<String, BTreeSet<u32>>,
     focused: Option<String>,
     first_poll: bool,
+    observation_available: bool,
     /// The games changed since the last full look.
     games_changed: bool,
     /// Polls since the last full look.
@@ -112,6 +113,7 @@ impl Monitor {
             running: BTreeMap::new(),
             focused: None,
             first_poll: true,
+            observation_available: false,
             games_changed: true,
             quiet_polls: 0,
         }
@@ -151,6 +153,11 @@ impl Monitor {
                 entry.1 = None;
             }
         }
+    }
+
+    /// An empty system process list cannot establish that a game is stopped.
+    pub fn observation_available(&self) -> bool {
+        self.observation_available
     }
 
     pub fn running(&self) -> Vec<String> {
@@ -199,6 +206,7 @@ impl Monitor {
         self.games_changed = false;
         self.quiet_polls = 0;
         let processes = self.source.list();
+        self.observation_available = !processes.is_empty();
         let mut next: HashMap<u32, (u32, Option<String>)> = HashMap::new();
         // Parents before children where possible: process lists are mostly
         // in creation order, and a second pass catches the rest.

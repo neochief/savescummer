@@ -122,15 +122,13 @@ enum Cmd {
         #[arg(long)]
         no_wait: bool,
     },
-    /// Delete a checkpoint (after the host's countdown).
+    /// Delete a checkpoint immediately.
     Delete {
         game: String,
         checkpoint: String,
         #[arg(long)]
         no_wait: bool,
     },
-    /// Cancel a delete countdown.
-    CancelDelete { operation: String },
     /// Delete every checkpoint and the history of a game.
     Flush {
         game: String,
@@ -319,19 +317,14 @@ fn connect(endpoint: &str, cli: &Cli, data_dir: &std::path::Path) -> Result<Clie
         Err(ConnectError::Io(e)) => return Err(format!("can't reach the host: {e}")),
     }
     let exe = host_exe().ok_or("can't find SaveScummer next to the CLI")?;
-    let mut command = match through_launch_services(&exe, cli) {
-        Some(command) => command,
-        None => {
-            let mut command = std::process::Command::new(&exe);
-            // A command needs a host, not a window.
-            command.arg("--minimized");
-            if let Some(dir) = &cli.data_dir {
-                command.arg("--data-dir").arg(dir);
-            }
-            command.args(&cli.host_args);
-            command
-        }
-    };
+    let bundled = savescummer_platform::process::bundled_host_command(&exe);
+    let mut command = bundled.unwrap_or_else(|| std::process::Command::new(&exe));
+    // A command needs a host, not a window.
+    command.arg("--minimized");
+    if let Some(dir) = &cli.data_dir {
+        command.arg("--data-dir").arg(dir);
+    }
+    command.args(&cli.host_args);
     command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     // The host outlives us.
     savescummer_platform::process::detach(&mut command);
@@ -345,22 +338,6 @@ fn connect(endpoint: &str, cli: &Cli, data_dir: &std::path::Path) -> Result<Clie
             Err(e) => return Err(format!("the host didn't start: {e}")),
         }
     }
-}
-
-/// macOS: the installed app's host starts through LaunchServices (`open`),
-/// not as our child. macOS holds whoever started a process responsible for
-/// its privacy prompts: SaveScummer must ask for itself, not for Terminal
-/// (PLAN-MACOS.md, THE APP BUNDLE). Dev hosts with `--data-dir` still run
-/// directly.
-fn through_launch_services(exe: &std::path::Path, cli: &Cli) -> Option<std::process::Command> {
-    if !cfg!(target_os = "macos") || cli.data_dir.is_some() || std::env::var_os("SAVESCUMMER_HOST_EXE").is_some() {
-        return None;
-    }
-    // …/SaveScummer.app/Contents/MacOS/SaveScummer
-    let bundle = exe.ancestors().nth(3).filter(|b| b.extension().is_some_and(|e| e == "app"))?;
-    let mut command = std::process::Command::new("/usr/bin/open");
-    command.args(["-g", "-j", "-a"]).arg(bundle).arg("--args").arg("--minimized").args(&cli.host_args);
-    Some(command)
 }
 
 fn host_exe() -> Option<PathBuf> {
@@ -440,7 +417,7 @@ impl Session {
             if op.status.is_final() {
                 break;
             }
-            // Poll briefly so countdown states are seen as they happen.
+            // Poll briefly for operation progress.
             std::thread::sleep(Duration::from_millis(25));
             let answer = self.client.request(None, Command::Outcome { operation: op.id.clone(), wait: false })?;
             if let Some(value) = answer.result {
@@ -470,16 +447,15 @@ fn empty_op() -> Operation {
         result: None,
         created_at: String::new(),
         finished_at: None,
-        remaining_ms: None,
         checkpoint: None,
     }
 }
 
 fn status_text(status: OpStatus) -> &'static str {
     match status {
+        OpStatus::Checking => "checking",
         OpStatus::Accepted => "accepted",
         OpStatus::Running => "running",
-        OpStatus::CountingDown => "counting down",
         OpStatus::Waiting => "waiting for the game",
         OpStatus::Succeeded => "done",
         OpStatus::Failed => "failed",
@@ -610,13 +586,6 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
         Cmd::Load { game, checkpoint, no_wait } => s.operation(Command::Load { game, checkpoint }, no_wait),
         Cmd::Revert { game, checkpoint, no_wait } => s.operation(Command::Revert { game, checkpoint }, no_wait),
         Cmd::Delete { game, checkpoint, no_wait } => s.operation(Command::Delete { game, checkpoint }, no_wait),
-        Cmd::CancelDelete { operation } => {
-            let response = s.send(Command::CancelDelete { operation })?;
-            Ok(s.report(&response, |v| {
-                let op: Operation = serde_json::from_value(v.clone()).unwrap_or_else(|_| empty_op());
-                format!("delete {}: {}", op.id, status_text(op.status))
-            }))
-        }
         Cmd::Flush { game, preview, yes, no_wait } => {
             if preview || !yes {
                 let response = s.send(Command::FlushPreview { game: game.clone(), cursor: None, limit: Some(500) })?;
@@ -714,10 +683,7 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
             let response = s.send(Command::Open { target, resolve_only })?;
             Ok(s.report(&response, |v| v.get("path").and_then(|p| p.as_str()).unwrap_or_default().to_string()))
         }
-        Cmd::Retry { game } => {
-            let response = s.send(Command::Retry { game })?;
-            Ok(s.report(&response, |_| "resolved".into()))
-        }
+        Cmd::Retry { game } => s.operation(Command::Retry { game }, false),
         Cmd::Catalog { refresh } => {
             let response = s.send(if refresh { Command::CatalogRefresh } else { Command::Catalog })?;
             Ok(s.report(&response, |v| {

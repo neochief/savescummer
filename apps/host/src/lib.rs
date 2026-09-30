@@ -15,11 +15,13 @@ pub mod feedback;
 pub mod fetch;
 pub mod host;
 pub mod library;
+pub mod lifecycle;
 pub mod log;
 pub mod model;
 pub mod monitoring;
 pub mod ops;
 pub mod options;
+pub mod policy;
 pub mod privacy;
 pub mod queries;
 pub mod recovery;
@@ -285,6 +287,12 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     #[cfg(unix)]
     stop_on_sigterm(&runtime, &host);
 
+    // The demo plays its games through a scripted process list.
+    let demo_processes = demo::DemoProcesses::default();
+    let source: Box<dyn savescummer_monitor::ProcessSource> =
+        if opts.demo { Box::new(demo_processes.clone()) } else { savescummer_monitor::system_source() };
+    let mut monitor = savescummer_monitor::Monitor::new(source);
+    let initial = monitoring::observe_startup(&host, &mut monitor);
     trace("resolving interrupted operations");
     recovery::resolve_all(&host);
     trace("first scan");
@@ -313,14 +321,9 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
             }
         });
     }
-    // The demo plays its games through a scripted process list.
-    let demo_processes = demo::DemoProcesses::default();
-    let source: Box<dyn savescummer_monitor::ProcessSource> =
-        if opts.demo { Box::new(demo_processes.clone()) } else { savescummer_monitor::system_source() };
-    let monitor = savescummer_monitor::Monitor::new(source);
     {
         let monitor_host = host.clone();
-        std::thread::spawn(move || monitoring::run(monitor_host, monitor));
+        std::thread::spawn(move || monitoring::run(monitor_host, monitor, initial));
     }
     // Let the monitor take its first look before accepting operations, so a
     // game already running is on the stack.
@@ -393,7 +396,7 @@ fn stop_on_sigterm(runtime: &tokio::runtime::Runtime, host: &Arc<Host>) {
 }
 
 /// Exit, safely: stop accepting operations, let running ones reach a safe
-/// point, run remaining delete countdowns early, tell clients, then exit.
+/// point, finish pending deletes, tell clients, then exit.
 fn shutdown(host: &Arc<Host>) {
     {
         let mut inner = host.lock();

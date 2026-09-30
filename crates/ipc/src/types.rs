@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use savescummer_core::history::RowKind;
-pub use savescummer_core::{ErrorKind, Failure, Filter, Presence};
+pub use savescummer_core::{AccessInfo, ErrorKind, Failure, Filter, Presence};
 
 // ---- requests -------------------------------------------------------------------
 
@@ -88,9 +88,6 @@ pub enum Command {
         game: String,
         checkpoint: String,
     },
-    CancelDelete {
-        operation: String,
-    },
     Flush {
         game: String,
     },
@@ -98,6 +95,12 @@ pub enum Command {
         path: String,
     },
     Retry {
+        game: String,
+    },
+    Play {
+        game: String,
+    },
+    CloseGame {
         game: String,
     },
     // Not operations
@@ -195,10 +198,11 @@ impl Command {
             Command::Load { .. } => "load",
             Command::Revert { .. } => "revert",
             Command::Delete { .. } => "delete",
-            Command::CancelDelete { .. } => "cancel_delete",
             Command::Flush { .. } => "flush",
             Command::MoveStore { .. } => "move_store",
             Command::Retry { .. } => "retry",
+            Command::Play { .. } => "play",
+            Command::CloseGame { .. } => "close_game",
             Command::SetLabel { .. } => "set_label",
             Command::AddGame { .. } => "add_game",
             Command::Configure { .. } => "configure",
@@ -232,6 +236,8 @@ pub enum OpenTarget {
     Checkpoint { checkpoint: String },
     /// The folder holding the game's executable.
     Executable { game: String },
+    /// The system privacy page chosen by the host for this game.
+    AccessSettings { game: String },
 }
 
 // ---- responses and events -------------------------------------------------------
@@ -297,10 +303,10 @@ pub struct Hello {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OpStatus {
+    /// Preparing under a reservation, before durable acceptance. Only in state.busy.
+    Checking,
     Accepted,
     Running,
-    /// A Delete's countdown; it can still be cancelled.
-    CountingDown,
     /// A Delete waiting for the game's turn.
     Waiting,
     Succeeded,
@@ -349,9 +355,6 @@ pub struct Operation {
     pub created_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished_at: Option<String>,
-    /// A Delete counting down: milliseconds left.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remaining_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,
 }
@@ -369,29 +372,52 @@ pub struct Availability {
     pub available: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<ErrorKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<Failure>,
 }
 
 impl Availability {
     pub fn yes() -> Availability {
-        Availability { available: true, reason: None }
+        Availability { available: true, reason: None, failure: None }
     }
 
     pub fn no(reason: ErrorKind) -> Availability {
-        Availability { available: false, reason: Some(reason) }
+        Availability { available: false, reason: Some(reason), failure: None }
     }
 }
 
-/// A game waiting for macOS to allow access to where it lives (PLAN-MACOS.md,
-/// PRIVACY PERMISSIONS). It's inactive until then; the UI offers Allow
-/// access, or the System Settings pane once the user denied it.
+/// Stable guidance selected by the host, independent of a temporary operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccessInfo {
-    /// `documents`, `desktop`, `downloads`, `icloud_drive`, `volumes`,
-    /// `app_data` or `app_bundles`.
-    pub category: String,
-    /// Asked and refused: macOS won't ask again.
-    pub denied: bool,
-    pub settings_url: String,
+#[serde(rename_all = "snake_case")]
+pub enum GuidanceKind {
+    Blocked,
+    AccessNeeded,
+    NoSaveLocation,
+    InvalidTarget,
+    TargetUnavailable,
+    GameRunning,
+    PlayFirst,
+    NoGameData,
+    NoSaves,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Remedy {
+    Configure,
+    RequestAccess,
+    Retry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Guidance {
+    pub kind: GuidanceKind,
+    pub save: bool,
+    pub load: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<Failure>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remedy: Option<Remedy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -423,6 +449,10 @@ pub struct GameSummary {
     pub store: Option<String>,
     pub installed: bool,
     pub running: bool,
+    #[serde(default)]
+    pub can_play: bool,
+    #[serde(default)]
+    pub can_close: bool,
     /// Save, Load and Revert are refused while the game runs (`game_running`):
     /// it writes its progress to disk only when it exits.
     #[serde(default)]
@@ -436,6 +466,14 @@ pub struct GameSummary {
     pub executable_overridden: bool,
     pub save: Availability,
     pub load: Availability,
+    /// Game-wide gates; history rows carry checkpoint eligibility separately.
+    pub restore: Availability,
+    pub delete: Availability,
+    pub flush: Availability,
+    pub configure: Availability,
+    pub retry: Availability,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guidance: Option<Guidance>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_error: Option<Failure>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -547,7 +585,7 @@ pub struct State {
     pub hotkey_target: Option<String>,
     pub catalog_revision: String,
     pub games: Vec<GameSummary>,
-    /// Pending delete countdowns.
+    /// Deletes waiting or running.
     pub deletes: Vec<Operation>,
 }
 
@@ -557,6 +595,8 @@ impl State {
     }
 }
 
+/// Checkpoint-specific eligibility. Clients also apply the live game's gates
+/// and pending deletion state; activity does not invalidate a history page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RowActions {
     /// Saved rows: Load this save.
@@ -594,7 +634,7 @@ pub struct HistoryEntry {
     /// store or a folder unreadable).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unavailable: Option<ErrorKind>,
-    /// A delete countdown runs for this row.
+    /// A delete is underway for this row.
     #[serde(default)]
     pub deleting: bool,
     pub actions: RowActions,
@@ -717,23 +757,23 @@ mod tests {
     #[test]
     fn requests_round_trip() {
         let request = Request {
-            v: 1,
+            v: crate::PROTOCOL_VERSION,
             id: "r1".into(),
             command: Command::Save { game: "steam-1".into(), label: Some("boss".into()) },
         };
         let text = serde_json::to_string(&request).unwrap();
-        assert_eq!(text, r#"{"v":1,"id":"r1","type":"save","game":"steam-1","label":"boss"}"#);
+        assert_eq!(text, r#"{"v":2,"id":"r1","type":"save","game":"steam-1","label":"boss"}"#);
         assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request);
     }
 
     #[test]
     fn incoming_messages_are_told_apart() {
-        let response = r#"{"v":1,"re":"r1","ok":false,"error":{"kind":"busy","game":"g"}}"#;
+        let response = r#"{"v":2,"re":"r1","ok":false,"error":{"kind":"busy","game":"g"}}"#;
         match Incoming::parse(response).unwrap() {
             Incoming::Response(r) => assert_eq!(r.error.unwrap().kind, ErrorKind::Busy),
             other => panic!("{other:?}"),
         }
-        assert!(matches!(Incoming::parse(r#"{"v":1,"event":"shutdown"}"#).unwrap(), Incoming::Event(_)));
+        assert!(matches!(Incoming::parse(r#"{"v":2,"event":"shutdown"}"#).unwrap(), Incoming::Event(_)));
     }
 }
 

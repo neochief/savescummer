@@ -16,37 +16,37 @@ export function createMockBridge(): Bridge {
   const stateListeners = new Set<(state: HostState) => void>();
   const publish = () => { state.revision++; for (const listener of stateListeners) listener(structuredClone(state)); };
   const find = (id: string) => state.games.find((g) => g.id === id)!;
-  // Deletes run like the host's: a cancellable countdown in state.deletes, then a short run.
-  const deletes = new Map<string, { timer: ReturnType<typeof setTimeout>; done: Promise<Operation>; finish: (op: Operation) => void }>();
+  // Deletes run as soon as the UI commits them.
+  const deletes = new Map<string, { done: Promise<Operation> }>();
   const dropDelete = (id: string) => { state.deletes = state.deletes.filter((op) => op.id !== id); deletes.delete(id); };
   const startDelete = (game: string, checkpoint: string): Operation => {
     const id = `op-${++seq}`;
     let finish!: (op: Operation) => void;
     const done = new Promise<Operation>((resolve) => { finish = resolve; });
-    const timer = setTimeout(() => {
-      state.deletes = state.deletes.map((op) => op.id === id ? { ...op, status: 'running', remaining_ms: undefined } : op);
+    setTimeout(() => {
+      history[game] = history[game].filter((row) => row.checkpoint !== checkpoint);
+      find(game).history_version++;
+      dropDelete(id);
       publish();
-      setTimeout(() => {
-        history[game] = history[game].filter((row) => row.checkpoint !== checkpoint);
-        find(game).history_version++;
-        dropDelete(id);
-        publish();
-        finish({ id, game, kind: 'delete', status: 'succeeded' });
-      }, 400);
-    }, 3000);
-    deletes.set(id, { timer, done, finish });
-    state.deletes = [...state.deletes, { id, game, kind: 'delete', status: 'counting_down', remaining_ms: 3000, checkpoint }];
+      finish({ id, game, kind: 'delete', status: 'succeeded' });
+    }, 400);
+    deletes.set(id, { done });
+    state.deletes = [...state.deletes, { id, game, kind: 'delete', status: 'running', checkpoint }];
     publish();
     return { id, game, kind: 'delete', status: 'accepted' };
   };
 
-  // Like the host: a running game that writes its progress on exit can't be saved or loaded.
+  // Dev fixtures explicitly supply the same capabilities as the real host.
   const lock = (g: HostState['games'][number]) => {
+    g.delete = { available: true }; g.flush = { available: true }; g.configure = { available: true };
+    g.retry = { available: false };
+    g.save = { available: true }; g.load = { available: Boolean(g.latest) }; g.restore = { available: true };
+    g.guidance = g.latest ? undefined : { kind: 'no_saves', save: false, load: true };
     if (!g.running || g.wait_for_exit === false) return;
-    g.save = { available: false, reason: 'game_running' };
-    g.load = { available: false, reason: 'game_running' };
+    g.save = g.load = g.restore = { available: false, reason: 'game_running' };
+    g.guidance = { kind: 'game_running', save: true, load: true };
   };
-  state.games.forEach(lock);
+  state.games.forEach(lock); state.games.forEach((g) => { g.running = false; }); state.active_stack = []; // TEMP-IDLE
 
   return {
     async request<T>(request: UiRequest): Promise<T> {
@@ -54,6 +54,16 @@ export function createMockBridge(): Bridge {
       await new Promise((r) => setTimeout(r, 120));
       switch (request.type) {
         case 'state': return structuredClone(state) as T;
+        case 'play': case 'close_game': {
+          const g = find(request.game);
+          if (request.type === 'close_game' && !g.can_close) throw new Error('Closing this game is not enabled');
+          g.running = request.type === 'play';
+          g.can_close = g.running && g.wait_for_exit === false;
+          state.active_stack = g.running ? [g.id, ...state.active_stack.filter((id) => id !== g.id)] : state.active_stack.filter((id) => id !== g.id);
+          lock(g);
+          publish();
+          return true as T;
+        }
         case 'history': {
           const rows = history[request.game] ?? [];
           const start = Number(request.cursor ?? 0);
@@ -62,16 +72,6 @@ export function createMockBridge(): Bridge {
           return page as T;
         }
         case 'delete': return startDelete(request.game, request.checkpoint) as T;
-        case 'cancel_delete': {
-          const pending = deletes.get(request.operation);
-          const op = state.deletes.find((item) => item.id === request.operation);
-          if (!pending || op?.status !== 'counting_down') throw new Error('Too late to cancel');
-          clearTimeout(pending.timer);
-          dropDelete(request.operation);
-          publish();
-          pending.finish({ id: request.operation, game: op.game, kind: 'delete', status: 'cancelled' });
-          return { id: request.operation, kind: 'delete', status: 'cancelled' } satisfies Operation as T;
-        }
         case 'save': case 'load': case 'revert': {
           const g = find(request.game);
           if (request.type === 'save') {
@@ -79,7 +79,7 @@ export function createMockBridge(): Bridge {
             const at = new Date().toISOString();
             history[g.id].unshift({ id, kind: 'saved', at, checkpoint: id, cloud_replaced: false, actions: { load: true, revert: false, delete: true } });
             g.latest = { id, created_at: at };
-            g.load = { available: true };
+            lock(g);
           }
           g.history_version++;
           publish();
@@ -89,8 +89,8 @@ export function createMockBridge(): Bridge {
           if (request.wait_for_exit !== undefined) {
             const g = find(request.game);
             g.wait_for_exit = request.wait_for_exit;
-            if (g.wait_for_exit) lock(g);
-            else { g.save = { available: true }; g.load = { available: Boolean(g.latest) }; }
+            g.can_close = g.running && !g.wait_for_exit;
+            lock(g);
             publish();
           }
           return { game: request.game } as T;
@@ -110,8 +110,9 @@ export function createMockBridge(): Bridge {
         case 'add_game': {
           const id = `custom-${++seq}`;
           state.games.push({ id, name: request.name, kind: 'custom', executable: request.executable, installed: true, running: false,
-            save: { available: true }, load: { available: false }, history_version: 1, labels_version: 0 });
+            save: { available: true }, load: { available: false }, restore: { available: true }, delete: { available: true }, flush: { available: true }, configure: { available: true }, retry: { available: false }, history_version: 1, labels_version: 0 });
           history[id] = [];
+          lock(find(id));
           publish();
           return { game: id } as T;
         }

@@ -40,18 +40,14 @@ Terms used below:
 - **Per-game scope.** A blocked or failed game does not block other games. Sidebar rows
   remain selectable; only the affected game's operation controls are disabled. The one
   exception is a missing checkpoint store, which affects every game (E-C14).
-- **One UI treatment.** Every error uses the same sticky block in the main window:
-  what happened, the likeliest reason and suggested action, a Retry button where retrying
-  can help, buttons that open the exact affected folders, and Details with raw paths and
-  the technical error. No generic modal dialogs.
+- **Separate conditions from results.** Current configuration, access, exit and recovery conditions use host-selected guidance (PLAN-LOCKDOWN). An attempted operation's failure uses the error block below; do not duplicate stable guidance as another error. No generic modal dialogs.
 - **Open the exact folder.** Folder buttons launch the real path through the host:
   the affected target's root, the game's checkpoints folder, a specific checkpoint, or
   the recovery checkpoint. The user never has to type a path. A missing folder opens
   its nearest existing parent, so a button never fails just because a folder is gone.
 - **Retry sends the same command again,** with a new request ID, after an ordinary
   failure. Only a blocked game has its own retry command.
-- **Automatic retry.** Blocked recoveries retry at each host start and when the user
-  asks (Retry).
+- **Recovery eligibility.** Startup recovery and user Retry check observed game processes, the exit rule and journal-path access before changing live files. Otherwise preserve all material and keep the game blocked. Retry is a tracked operation with exclusive ownership, a durable acceptance and an outcome (PLAN-LOCKDOWN).
 
 ## 2. Interrupted-operation recovery rules
 
@@ -73,14 +69,14 @@ the checkpoint in four stages, each finished for all files before the next start
 
 The journal records which operation ran and which files it covered; the leftover
 `.ssnew`/`.ssold` files show how far it got. The host applies these rules at startup, in
-this order:
+this order, after the process and access checks above permit recovery of live paths:
 
 | Rule | Condition | Result |
 |---|---|---|
 | R1 | Live files untouched: a Save before publishing, or a Load/Revert before stage 2 (only `.ssnew` files exist) | Delete the temporary folder or the `.ssnew` files. Clear the operation as failed. An interrupted Save shows the one-line notice (E-A1); an interrupted Load or Revert is silent (E-A2). |
 | R2 | Stage 2 or 3 incomplete: some covered file still exists only as `.ssnew`, and every `.ssold` is intact | Undo: rename restored files back to `.ssnew`, rename every `.ssold` back to its real name, delete the `.ssnew` files. The operation never took effect. Log only. |
 | R3 | Result in place but not committed: a Save published but not registered, or a Load/Revert with every covered file swapped in (no `.ssnew` left) | Finish: register the Save, or delete the remaining `.ssold` files and commit the Load/Revert history entry exactly as if it had completed. |
-| R4 | Anything else: files that don't match the journal, a real name occupied by a file the game created mid-Load, a file changed since the journal, a target's drive unavailable | Keep every file exactly as it is, including `.ssnew`/`.ssold`. Mark the operation failed with no history entry. Retain the recovery checkpoint. Release the game when every covered name has a live file; otherwise keep the game blocked and show the sticky error (E-B1). Retry automatically at each host start. |
+| R4 | Anything else: files that don't match the journal, a real name occupied by a file the game created mid-Load, a file changed since the journal, a target's drive unavailable | Keep every file exactly as it is, including `.ssnew`/`.ssold`. Mark the operation failed with no history entry. Retain the recovery checkpoint. Release the game when every covered name has a live file; otherwise keep the game blocked with recovery guidance (E-B1). Retry at startup only when the recovery checks permit it. |
 
 Never blindly roll back over current data, never retry the requested operation
 automatically (retrying a single failed file action within the budget is not a retry of
@@ -183,7 +179,7 @@ a locked folder is never partially deleted under its real name.
 | E-L2 | Link repointed, broken or no longer resolving | Validation fails: "This save location is a shortcut that changed or can't be resolved. Configure the real folder." Buttons: Configure paths… · Open save location. |
 | E-L3 | Link inside a target | Copy/fingerprint rejects it; E-C6. |
 | E-L4 | Checkpoint folder replaced by a link | Treated as changed externally (E-A5/E-C7); restoring from it is refused. |
-| E-N1 | No target exists yet, or none matches anything | Save disabled with `No game data yet`; the status stays `Running`/`Stopped` and the game is provisional. Open save location (may not exist). |
+| E-N1 | No target exists yet, or none matches anything | The lockdown panel: **Play first**, or **No game data** over Save when checkpoints exist (PLAN-LOCKDOWN); the status stays `Running`/`Stopped` and the game is provisional. Open save location (may not exist). |
 | E-N2 | A target root that held data at Save time is missing at Load | Load of that checkpoint is refused: restoring only the other targets would be half a save, and roots are never recreated. Known game: the catalog resolves the save set again; if the set changes, old checkpoints are unavailable until it returns (E-C8). Override or custom game: unavailable until the folder returns or is reconfigured. |
 | E-N3 | A target root on an unplugged drive or unreachable share, including a drive the host has seen whose mount point is now gone or an empty folder (macOS, Linux) | Presence is unknown, not missing: the target is not treated as absent and no generation is retired. Save, Load and Revert are refused with E-C5, because a checkpoint recorded without that target would later leave it alone as "absent". Retry when accessible. |
 | E-N4 | Game uninstalled | Not shown in the sidebar (known and custom alike). History and checkpoints are retained. |
@@ -206,7 +202,7 @@ field's hint, not in the error block; nothing is saved until the location passes
 | E-V4 | Overlap with another game: roots equal, nested, or containing, unless both use distinct exact names | Rejected, naming the other game. |
 | E-V5 | Filter names a reserved suffix (`*.ssnew`, `save.ssold`) | Rejected. |
 | E-V6 | Filter like `save*` that would also match `save.ssnew`/`save.ssold` | Allowed. Reserved suffixes are excluded from every filter, recovery checkpoint and Load delete, so the pattern never sees them. |
-| E-V7 | Path doesn't exist yet | Allowed; validation never creates anything. The game shows `No game data yet` (E-N1). |
+| E-V7 | Path doesn't exist yet | Allowed; validation never creates anything. The game shows the no-game-data lockdown (E-N1). |
 
 The catalog builder applies the broad-folder rule (E-V2) to catalog targets too, so a
 known game never ships a target that validation would reject.
@@ -323,7 +319,7 @@ real machine before relying on them (5.2).
 | E-L1 | integration | symlinked/junction target root | mklink /J, ln -s |
 | E-L2 | integration | repointed/broken link | recreate link |
 | E-L4 | integration | checkpoint replaced by link | mklink /J over checkpoint |
-| E-N1 | core unit + UI | `No game data yet` for missing and empty targets | fixture state |
+| E-N1 | core unit + UI | The no-game-data lockdown for missing and empty targets | fixture state |
 | E-N2 | core unit | Load refused when a root with data is missing | fixture state |
 | E-N4 | UI | hidden uninstalled games | fixture state |
 | E-N5 | UI | disconnected state | typed bridge fixture |

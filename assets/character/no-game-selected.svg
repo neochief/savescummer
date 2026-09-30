@@ -1,0 +1,151 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:serif="http://www.serif.com/" width="1254" height="1254" viewBox="0 0 1254 1254" version="1.1" role="img" aria-labelledby="character-title character-description" style="fill-rule:nonzero;stroke-linecap:round;stroke-linejoin:round;">
+  <title id="character-title">No game selected — pointing skeleton with controller</title>
+  <desc id="character-description">Editable vector reconstruction at the original 1254 by 1254 coordinates. White bones use uniform 16 px #0a0505 outlines, matching no-games-found.svg. The skull, arm bones, palms, individual finger sections and controller are complete closed shapes, with hidden portions reconstructed beneath overlaps. Each eye has its own feature group. Layer names use viewer-left and viewer-right. data-pivot values are suggested animation pivots in SVG coordinates; no animation is applied.</desc>
+  <g id="_01-·-Body" serif:id="01 · Body" inkscape:groupmode="layer" inkscape:label="01 · Body">
+    <g id="Rib-cage-and-sternum" serif:id="Rib cage and sternum" inkscape:label="Rib cage and sternum">
+      <path id="ribs-and-sternum" d="M506,853 C516,883 548,909 581,920 C596,925 610,928 620,925 C626,923 624,912 624,901 C623,880 636,866 655,866 C679,864 699,881 697,902 C696,911 692,920 698,925 C706,932 747,919 774,906 C799,894 817,876 825,856 C828,848 835,847 840,854 C853,876 838,907 816,925 C787,950 743,957 705,955 C693,954 690,962 696,970 C707,989 744,990 772,985 C816,978 856,951 865,920 C868,910 868,902 865,894 C885,915 890,940 882,961 C873,987 848,1012 816,1028 C778,1047 731,1036 692,1020 L693,1041 C694,1059 682,1072 660,1071 C634,1074 615,1063 616,1045 L618,1016 C580,1034 542,1035 510,1025 C480,1017 460,997 460,973 C454,949 467,922 485,903 C477,926 483,947 497,962 C518,984 555,993 588,991 C604,991 617,987 622,980 C626,974 623,972 615,974 C580,976 539,964 516,948 C486,928 486,897 498,870 C500,863 503,857 506,853 Z" fill="white" stroke="#0a0505" stroke-width="16" inkscape:label="Ribs and sternum" />
+    </g>
+    <g id="Collarbones" inkscape:label="Collarbones">
+      <path id="clavicle-left" data-pivot="456 807" d="M467,792 C492,797 515,812 543,824 C569,836 594,844 613,845 C630,846 640,858 635,875 C630,893 616,899 600,893 C564,882 530,866 496,854 C474,847 453,835 449,818 C446,803 453,791 467,792 Z" fill="white" stroke="#0a0505" stroke-width="16" inkscape:label="Clavicle left" />
+      <path id="clavicle-right" data-pivot="866 806" d="M843,797 C823,802 796,815 770,827 C747,838 725,846 711,847 C696,847 686,857 689,873 C691,890 703,899 719,894 C754,884 790,867 819,854 C842,844 863,837 870,822 C876,807 861,793 843,797 Z" fill="white" stroke="#0a0505" stroke-width="16" inkscape:label="Clavicle right" />
+    </g>
+    <g id="Neck" inkscape:label="Neck">
+      <path id="neck-bone" data-pivot="661 817" d="M639,772 C653,762 678,763 693,778 C707,790 710,812 705,832 C700,853 684,865 663,864 C642,865 625,853 623,835 C619,816 627,785 639,772 Z" fill="white" stroke="#0a0505" stroke-width="16" inkscape:label="Neck bone" />
+    </g>
+  </g>
+  <g id="_02-·-Pointing-arm---viewer-left" serif:id="02 · Pointing arm — viewer left" inkscape:groupmode="layer" inkscape:label="02 · Pointing arm — viewer left" data-pivot="457 811" fill="#ffffff" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <g id="upper-arm-left" serif:id="Upper arm bone" inkscape:label="Upper arm bone" data-pivot="458 811">
+      <path id="humerus-left" data-pivot="458 811" d="M351 938 C378 905 402 868 425 831 C409 807 425 783 450 777 C474 770 498 783 497 801 C497 807 494 813 492 816 C503 826 509 839 505 851 C500 868 483 879 466 875 C445 908 422 943 401 976 C389 996 367 1007 350 993 C333 979 335 958 351 938 Z" inkscape:label="Humerus left" />
+    </g>
+    <g id="forearm-left" serif:id="Forearm bone" inkscape:label="Forearm bone" data-pivot="353 996">
+      <path id="forearm-bone-left" data-pivot="353 996" d="M258 878 C269 866 286 866 298 879 C323 907 346 937 371 966 C385 959 401 972 406 986 C413 1007 400 1028 379 1028 C369 1046 350 1050 333 1043 C310 1035 300 1014 307 992 C286 961 266 937 247 916 C236 904 244 888 258 878 Z" inkscape:label="Forearm bone left" />
+    </g>
+  </g>
+  <g id="_03-·-Head---complete-skull" serif:id="03 · Head — complete skull" inkscape:groupmode="layer" inkscape:label="03 · Head — complete skull" data-pivot="670 710">
+    <path id="skull" d="M375,616 C337,613 311,579 311,530 C306,473 337,413 383,360 C460,270 567,194 658,170 C713,154 764,155 806,173 C886,205 935,288 938,376 C940,401 931,429 933,447 C933,466 945,477 964,488 C986,502 997,526 997,552 C998,579 986,603 969,613 C949,625 930,612 914,607 C900,601 895,615 883,624 C874,630 863,633 852,633 C877,647 894,665 892,684 C890,707 872,723 851,721 C826,720 810,699 795,681 C810,708 816,729 804,751 C795,770 776,777 757,772 C731,767 722,744 714,711 C720,741 726,765 711,782 C699,797 676,799 657,792 C635,787 628,774 629,754 L631,725 C626,743 627,763 613,778 C601,792 581,795 564,787 C542,779 537,761 543,741 C547,726 560,706 556,703 C550,697 527,714 501,730 C480,743 459,755 438,749 C414,744 400,727 399,706 C396,685 405,670 411,660 C416,652 398,645 388,632 C383,626 379,622 375,616 Z" fill="#ffffff" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" inkscape:label="Skull" />
+    <g id="Right-eye" serif:id="Right eye" inkscape:label="Right eye" data-pivot="796 490">
+      <path id="eye-socket-right" d="M688,525 C698,535 706,523 717,506 C748,455 783,410 818,385 C842,368 872,370 887,382 C892,386 891,388 885,388 C874,389 860,393 852,399 C885,417 900,450 900,484 C902,527 879,568 846,589 C815,608 780,604 752,590 C735,581 723,567 715,555 C706,560 698,556 692,548 C685,539 682,527 688,525 Z" fill="#0a0505" inkscape:label="Eye socket right" />
+      <path id="eye-red-right" d="M810,440 C834,448 851,472 853,499 C855,529 837,557 812,567 C795,574 779,572 764,563 C789,542 796,509 776,476 Z" fill="#ff0028" inkscape:label="Eye red right" />
+      <path id="brow-right" d="M696,450 C683,422 698,379 724,352 C746,328 774,311 796,310 C802,310 806,311 802,316 C768,355 733,398 701,448 C699,452 697,453 696,450 Z" fill="#0a0505" inkscape:label="Brow right" />
+      <circle id="eye-highlight" cx="818" cy="484" r="16" fill="#ffffff" inkscape:label="Eye highlight" />
+    </g>
+    <g id="Left-eye" serif:id="Left eye" inkscape:label="Left eye" data-pivot="525 600">
+      <path id="eye-socket-left" d="M416,612 C413,613 416,598 421,588 C437,558 461,547 488,547 C521,545 547,559 570,575 C595,591 607,603 622,587 C626,582 629,576 634,581 C643,590 635,605 625,612 C629,626 622,642 612,648 C605,651 600,647 588,647 C548,646 506,658 476,680 C467,688 459,682 451,671 C436,650 437,616 451,590 C437,596 426,604 416,612 Z" fill="#0a0505" inkscape:label="Eye socket left" />
+      <path id="eye-red-left" d="M476,646 C474,625 489,602 510,594 C537,581 568,599 584,620 C548,612 507,618 476,646 Z" fill="#ff0028" inkscape:label="Eye red left" />
+      <path id="brow-left" d="M456,497 C473,473 496,462 520,470 C550,478 577,503 586,532 C590,541 586,544 579,539 C536,512 493,494 456,497 Z" fill="#0a0505" inkscape:label="Brow left" />
+    </g>
+    <g id="temple-detail" inkscape:label="Temple detail">
+      <path id="temple-contour" d="M373,618 C357,595 363,565 400,539 C405,535 409,537 405,543 C389,568 382,593 390,616 C394,631 405,644 416,652 L410,668 C394,652 382,638 373,618 Z" fill="#0a0505" inkscape:label="Temple contour" />
+    </g>
+    <path id="nose" d="M650,654 C657,631 670,607 682,594 C693,584 706,592 719,602 C733,612 747,625 755,636 C764,649 751,661 739,664 C727,667 715,658 706,654 C699,670 685,685 669,685 C649,685 644,673 650,654 Z" fill="#0a0505" inkscape:label="Nose" />
+  </g>
+  <g id="_04-·-Controller-arm-and-palm---viewer-right" serif:id="04 · Controller arm and palm — viewer right" fill="white" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" inkscape:label="04 · Controller arm and palm — viewer right" inkscape:groupmode="layer" data-pivot="872 810">
+    <g id="Controller-upper-arm-bone" serif:id="Controller upper arm bone" data-pivot="872 810" inkscape:label="Controller upper arm bone">
+      <path id="humerus-controller" d="M841,790 C858,772 884,770 900,785 C906,790 910,796 912,802 C929,803 938,818 931,834 C927,843 920,848 910,850 L960,937 C979,940 989,957 982,973 C978,985 967,992 956,990 C942,1000 925,992 918,979 C914,972 914,965 917,957 L872,865 L858,838 C842,839 829,828 829,814 C828,804 833,796 841,790 Z" data-pivot="872 810" inkscape:label="Humerus controller" data-reconstructed="complete-shape-under-overlap" />
+    </g>
+    <g id="Controller-forearm-bone" serif:id="Controller forearm bone" data-pivot="956 971" inkscape:label="Controller forearm bone">
+      <path id="forearm-bone-controller" d="M945,948 C960,934 989,937 1004,954 C1015,977 1038,996 1055,1013 C1071,1029 1080,1057 1067,1069 C1057,1080 1042,1078 1026,1072 C982,1057 960,1027 947,992 C934,988 930,967 939,955 L945,948 Z" data-pivot="956 971" inkscape:label="Forearm bone controller" data-reconstructed="complete-shape-under-overlap" />
+    </g>
+    <g id="Controller-palm" serif:id="Controller palm" data-pivot="1046 1051" inkscape:label="Controller palm">
+      <path id="controller-palm-bone" d="M1047,1002 C1061,989 1078,989 1092,1000 C1107,981 1137,978 1156,990 C1174,1002 1183,1025 1180,1044 C1178,1073 1160,1092 1135,1095 C1116,1098 1093,1097 1074,1094 C1054,1095 1036,1085 1029,1068 C1022,1050 1030,1023 1047,1002 Z" data-pivot="1046 1051" inkscape:label="Controller palm bone" data-reconstructed="complete-shape-under-overlap" />
+    </g>
+  </g>
+  <g id="_05-·-Gamepad" serif:id="05 · Gamepad" inkscape:label="05 · Gamepad" inkscape:groupmode="layer" data-pivot="1004 939">
+    <g id="Gamepad-casing" serif:id="Gamepad casing" inkscape:label="Gamepad casing">
+      <path id="gamepad-shell" d="M852,840 C866,813 887,798 910,797 C939,795 961,810 975,838 L1058,856 C1077,836 1096,830 1115,833 C1159,836 1180,875 1183,919 C1187,949 1181,975 1165,998 C1154,1013 1144,1025 1134,1044 C1123,1066 1110,1080 1093,1077 C1074,1074 1061,1052 1041,1007 C1025,1002 1014,991 1008,974 L975,966 C965,981 947,987 929,982 C915,978 906,970 901,957 C877,982 855,1005 834,1007 C812,1009 798,995 798,975 C799,950 820,897 852,840 Z" fill="#29292b" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" inkscape:label="Gamepad shell" data-reconstructed="complete-shape-under-overlap" />
+      <path id="gamepad-top-bevel" d="M853,853 C868,823 888,810 911,810 C937,809 954,824 965,845 C968,851 973,854 979,856 L1058,873 C1063,874 1068,872 1072,868 C1086,852 1100,848 1118,849 C1149,852 1169,877 1177,903 C1169,865 1151,840 1117,840 C1095,837 1078,846 1060,863 L975,844 C960,816 940,804 914,804 C890,804 868,820 853,853 Z" fill="#3b3c3e" inkscape:label="Gamepad top bevel" />
+    </g>
+    <g id="Directional-pad" serif:id="Directional pad" inkscape:label="Directional pad">
+      <path id="d-pad-outline" d="M908,831 L921,834 C932,836 935,842 932,852 L931,856 L940,858 C951,860 953,866 950,878 L949,882 C947,892 941,896 931,893 L925,892 L923,900 C921,910 915,913 905,910 L899,909 C889,907 885,901 888,892 L890,884 L883,882 C871,880 868,874 871,863 L873,857 C875,848 881,845 891,848 L897,849 L899,841 C900,834 903,831 908,831 Z" fill="#0a0505" inkscape:label="D pad outline" />
+      <path id="d-pad-red" d="M909,838 C910,836 913,837 917,838 L922,839 C926,840 928,842 927,847 L924,861 L938,864 C943,865 945,867 944,872 L943,879 C942,884 940,887 935,886 L921,883 L917,897 C916,902 914,905 909,903 L903,902 C898,901 894,900 895,895 L899,879 L883,876 C878,875 876,873 877,868 L879,861 C880,856 882,853 887,854 L902,857 L906,842 C907,840 907,839 909,838 Z" fill="#ff0028" inkscape:label="D pad red" />
+    </g>
+    <g id="Gamepad-center-buttons" serif:id="Gamepad center buttons" fill="#0a0505" inkscape:label="Gamepad center buttons">
+      <rect id="select-button" x="967" y="880" width="29" height="14" rx="7" transform="rotate(12 981.5 887)" inkscape:label="Select button" />
+      <rect id="start-button" x="1013" y="889" width="30" height="14" rx="7" transform="rotate(12 1028 896)" inkscape:label="Start button" />
+    </g>
+    <g id="Analog-stick-left" serif:id="Analog stick left" inkscape:label="Analog stick left">
+      <ellipse id="analog-left-outline" cx="940" cy="935" rx="34" ry="34" fill="#0a0505" inkscape:label="Analog left outline" />
+      <ellipse id="analog-left-ring" cx="940" cy="935" rx="27" ry="27" fill="#414244" inkscape:label="Analog left ring" />
+      <ellipse id="analog-left-cap" cx="940" cy="935" rx="17" ry="17" fill="#29292b" inkscape:label="Analog left cap" />
+    </g>
+    <g id="Analog-stick-right" serif:id="Analog stick right" inkscape:label="Analog stick right">
+      <ellipse id="analog-right-outline" cx="1053" cy="953" rx="35" ry="35" fill="#0a0505" inkscape:label="Analog right outline" />
+      <ellipse id="analog-right-ring" cx="1053" cy="953" rx="28" ry="28" fill="#414244" inkscape:label="Analog right ring" />
+      <ellipse id="analog-right-cap" cx="1053" cy="953" rx="18" ry="18" fill="#29292b" inkscape:label="Analog right cap" />
+    </g>
+    <g id="Gamepad-action-buttons" serif:id="Gamepad action buttons" inkscape:label="Gamepad action buttons">
+      <g id="Action-button-top" serif:id="Action button top" inkscape:label="Action button top">
+        <circle id="action-top-outline" cx="1119" cy="884" r="22" fill="#0a0505" inkscape:label="Action top outline" />
+        <circle id="action-top-red" cx="1119" cy="884" r="14" fill="#ff0028" inkscape:label="Action top red" />
+      </g>
+      <g id="Action-button-left" serif:id="Action button left" inkscape:label="Action button left">
+        <circle id="action-left-outline" cx="1088" cy="907" r="22" fill="#0a0505" inkscape:label="Action left outline" />
+        <circle id="action-left-red" cx="1088" cy="907" r="14" fill="#ff0028" inkscape:label="Action left red" />
+      </g>
+      <g id="Action-button-right" serif:id="Action button right" inkscape:label="Action button right">
+        <circle id="action-right-outline" cx="1141" cy="915" r="22" fill="#0a0505" inkscape:label="Action right outline" />
+        <circle id="action-right-red" cx="1141" cy="915" r="14" fill="#ff0028" inkscape:label="Action right red" />
+      </g>
+      <g id="Action-button-bottom" serif:id="Action button bottom" inkscape:label="Action button bottom">
+        <circle id="action-bottom-outline" cx="1110" cy="936" r="22" fill="#0a0505" inkscape:label="Action bottom outline" />
+        <circle id="action-bottom-red" cx="1110" cy="936" r="14" fill="#ff0028" inkscape:label="Action bottom red" />
+      </g>
+    </g>
+  </g>
+  <g id="_06-·-Controller-fingers---viewer-right" serif:id="06 · Controller fingers — viewer right" fill="white" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" inkscape:label="06 · Controller fingers — viewer right" inkscape:groupmode="layer" data-pivot="1126 1035">
+    <g id="Controller-ring-finger" serif:id="Controller ring finger" data-pivot="1173 1096" inkscape:label="Controller ring finger">
+      <g id="Controller-ring-section-1" serif:id="Section 1 — proximal" inkscape:label="Section 1 — proximal">
+        <path id="controller-ring-proximal" d="M1143,1047 C1156,1046 1170,1040 1181,1043 C1196,1046 1205,1057 1207,1069 C1208,1084 1196,1095 1182,1100 C1168,1107 1151,1106 1138,1103 C1125,1100 1120,1088 1123,1075 C1125,1061 1131,1050 1143,1047 Z" data-pivot="1173 1096" inkscape:label="Controller ring proximal" />
+      </g>
+      <g id="Controller-ring-section-2" serif:id="Section 2 — distal" inkscape:label="Section 2 — distal">
+        <path id="controller-ring-distal" d="M1085,1053 C1095,1055 1113,1058 1127,1058 C1141,1058 1151,1070 1150,1084 C1150,1099 1139,1107 1124,1107 C1107,1106 1088,1103 1077,1097 C1066,1092 1064,1081 1068,1070 C1071,1061 1077,1054 1085,1053 Z" data-pivot="1144 1083" inkscape:label="Controller ring distal" />
+      </g>
+    </g>
+    <g id="Controller-middle-finger" serif:id="Controller middle finger" data-pivot="1187 1044" inkscape:label="Controller middle finger">
+      <g id="Controller-middle-section-1" serif:id="Section 1 — proximal" inkscape:label="Section 1 — proximal">
+        <path id="controller-middle-proximal" d="M1150,1002 C1164,1001 1180,990 1191,990 C1205,990 1217,1002 1217,1015 C1217,1029 1207,1040 1193,1047 C1178,1053 1161,1057 1147,1057 C1134,1057 1126,1047 1127,1032 C1128,1019 1137,1007 1150,1002 Z" data-pivot="1187 1044" inkscape:label="Controller middle proximal" />
+      </g>
+      <g id="Controller-middle-section-2" serif:id="Section 2 — distal" inkscape:label="Section 2 — distal">
+        <path id="controller-middle-distal" d="M1093,1008 C1107,1010 1123,1008 1135,1006 C1148,1006 1158,1018 1157,1033 C1157,1048 1147,1058 1133,1061 C1118,1064 1102,1063 1088,1061 C1076,1059 1068,1050 1068,1039 C1067,1026 1079,1010 1093,1008 Z" data-pivot="1151 1039" inkscape:label="Controller middle distal" />
+      </g>
+    </g>
+    <g id="Controller-index-finger" serif:id="Controller index finger" data-pivot="1180 997" inkscape:label="Controller index finger">
+      <g id="Controller-index-section-1" serif:id="Section 1 — proximal" inkscape:label="Section 1 — proximal">
+        <path id="controller-index-proximal" d="M1151,946 C1156,934 1167,930 1178,932 C1196,934 1210,947 1213,962 C1217,978 1206,991 1191,997 C1178,1002 1165,1005 1152,1005 C1139,1004 1133,994 1135,980 C1136,968 1144,956 1151,946 Z" data-pivot="1180 997" inkscape:label="Controller index proximal" />
+      </g>
+      <g id="Controller-index-section-2" serif:id="Section 2 — distal" inkscape:label="Section 2 — distal">
+        <path id="controller-index-distal" d="M1094,967 C1106,964 1118,962 1128,957 C1140,951 1154,958 1158,970 C1164,985 1158,999 1145,1006 C1132,1012 1113,1017 1097,1017 C1082,1018 1072,1010 1071,998 C1069,984 1077,972 1094,967 Z" data-pivot="1151 993" inkscape:label="Controller index distal" />
+      </g>
+    </g>
+  </g>
+  <g id="_07-·-Pointing-hand---viewer-left" serif:id="07 · Pointing hand — viewer left" inkscape:groupmode="layer" inkscape:label="07 · Pointing hand — viewer left" data-pivot="277 888" fill="#ffffff" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <g id="pointing-palm" serif:id="Palm" inkscape:label="Palm" data-pivot="277 888">
+      <path id="pointing-palm-bone" data-pivot="277 888" d="M241 797 C257 790 275 801 289 814 C303 827 313 843 312 860 C312 881 300 896 282 899 C268 903 253 894 243 883 C230 869 220 851 223 833 C225 816 230 804 241 797 Z" inkscape:label="Pointing palm bone" />
+    </g>
+    <g id="pointing-index" serif:id="Index finger — extended" inkscape:label="Index finger — extended" data-pivot="250 792">
+      <path id="pointing-index-proximal" data-reconstructed="occluded-section" data-pivot="250 792" d="M234 771 C246 770 259 782 257 794 C255 808 244 814 230 810 L209 796 C198 788 198 777 208 773 C217 770 226 772 234 771 Z" inkscape:label="Pointing index proximal" />
+      <path id="pointing-index-distal" data-pivot="145 762" d="M143 740 C122 739 101 733 83 728 C67 723 52 732 47 744 C41 759 48 774 62 780 C86 790 113 791 141 792 C156 792 167 780 164 765 C162 752 155 743 143 740 Z" inkscape:label="Pointing index distal" />
+      <path id="pointing-index-intermediate" data-pivot="227 779" d="M153 744 C177 749 196 749 215 751 C229 752 246 762 253 774 C260 786 253 802 241 807 C225 811 217 799 203 800 L162 800 C145 800 135 791 135 777 C135 762 141 750 153 744 Z" inkscape:label="Pointing index intermediate" />
+    </g>
+    <g id="pointing-little" serif:id="Little finger — curled" inkscape:label="Little finger — curled" data-pivot="277 896">
+      <path id="pointing-little-proximal" data-pivot="277 896" d="M261 877 C277 875 289 885 288 899 C287 916 278 929 265 933 C254 937 240 933 236 923 C230 910 238 899 243 889 C247 882 251 878 261 877 Z" inkscape:label="Pointing little proximal" />
+      <path id="pointing-little-intermediate" data-reconstructed="occluded-section" data-pivot="248 910" d="M238 893 C248 895 249 909 242 920 C237 930 223 934 211 936 L193 938 C184 937 179 927 184 918 C188 909 197 904 210 900 C220 897 230 891 238 893 Z" inkscape:label="Pointing little intermediate" />
+      <path id="pointing-little-distal" data-pivot="225 914" d="M181 902 C196 900 211 897 224 889 C235 883 244 894 244 907 C245 925 232 938 216 941 C201 945 178 946 169 936 C160 927 161 912 169 907 C172 904 176 903 181 902 Z" inkscape:label="Pointing little distal" />
+    </g>
+    <g id="pointing-ring" serif:id="Ring finger — curled" inkscape:label="Ring finger — curled" data-pivot="277 870">
+      <path id="pointing-ring-proximal" data-reconstructed="occluded-section" data-pivot="277 870" d="M216 866 C227 859 241 861 244 871 C247 881 236 889 225 891 L211 894 C199 894 199 878 216 866 Z" inkscape:label="Pointing ring proximal" />
+      <path id="pointing-ring-intermediate" data-reconstructed="occluded-section" data-pivot="249 878" d="M227 858 C240 854 253 861 252 874 C251 887 237 893 225 895 L205 898 C193 899 186 889 192 879 C198 869 215 862 227 858 Z" inkscape:label="Pointing ring intermediate" />
+      <path id="pointing-ring-distal" data-pivot="218 877" d="M160 857 C175 853 192 855 208 848 C219 843 230 853 234 866 C241 883 226 897 208 903 C193 908 175 913 161 908 C146 904 140 892 142 879 C144 867 150 860 160 857 Z" inkscape:label="Pointing ring distal" />
+    </g>
+    <g id="pointing-middle" serif:id="Middle finger — curled" inkscape:label="Middle finger — curled" data-pivot="267 848">
+      <path id="pointing-middle-proximal" data-reconstructed="occluded-section" data-pivot="267 848" d="M233 835 C243 829 251 838 255 848 C258 857 259 865 251 871 C241 877 226 869 223 859 C222 849 226 839 233 835 Z" inkscape:label="Pointing middle proximal" />
+      <path id="pointing-middle-intermediate" data-pivot="244 854" d="M226 822 C240 821 251 833 255 845 C259 855 270 861 269 871 C267 884 253 890 240 887 C225 885 212 876 209 862 C206 847 214 827 226 822 Z" inkscape:label="Pointing middle intermediate" />
+      <path id="pointing-middle-distal" data-pivot="208 823" d="M151 807 C166 803 179 805 193 799 C207 793 219 798 223 811 C229 827 218 844 204 851 C187 859 167 855 153 861 C139 867 128 857 128 842 C128 827 137 813 151 807 Z" inkscape:label="Pointing middle distal" />
+    </g>
+    <g id="pointing-thumb" serif:id="Thumb" inkscape:label="Thumb" data-pivot="268 797">
+      <path id="pointing-thumb-proximal" data-reconstructed="occluded-section" data-pivot="268 797" d="M246 783 C259 777 277 784 282 796 C287 809 276 823 267 832 C257 843 245 849 234 842 C222 834 226 819 230 807 C234 796 236 788 246 783 Z" inkscape:label="Pointing thumb proximal" />
+      <path id="pointing-thumb-distal" data-pivot="248 817" d="M251 772 C267 768 284 776 293 790 C303 807 296 819 281 824 C278 839 269 856 254 857 C237 859 223 848 224 834 C224 823 230 816 229 808 C228 793 237 777 251 772 Z" inkscape:label="Pointing thumb distal" />
+    </g>
+  </g>
+</svg>

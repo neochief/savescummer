@@ -88,6 +88,31 @@ pub fn derive_one(host: &Host, inner: &mut Inner, game_id: &str) {
     }
 }
 
+/// Observe files without holding shared state. Never publish a result for a
+/// configuration that changed while the filesystem was being inspected.
+pub fn refresh_game(host: &Host, game_id: &str) -> Result<(), Failure> {
+    let games = host.lock().games.clone();
+    let game = games.get(game_id).ok_or_else(|| Failure::new(ErrorKind::NotFound, "unknown game"))?;
+    let raw = games.iter().map(|(id, g)| (id.clone(), raw_targets(g))).collect();
+    let names = games.iter().map(|(id, g)| (id.clone(), g.name.clone())).collect();
+    let paths = CachedPaths::new(host.env.case_insensitive());
+    let observed = derive(host, game, &raw, &names, &host.env.broad_folders(), &paths);
+    let mut inner = host.lock();
+    if inner.games != games {
+        return Err(Failure::new(ErrorKind::Busy, "configuration changed during preparation").game(game_id));
+    }
+    if inner.derived.get(game_id) != Some(&observed) {
+        let previous = crate::host::current_pairs(&inner, game_id);
+        inner.derived.insert(game_id.to_string(), observed);
+        if previous != crate::host::current_pairs(&inner, game_id) {
+            host.refresh_cache(&mut inner, game_id);
+            host.bump_history(&mut inner, game_id);
+        }
+        host.publish(&mut inner);
+    }
+    Ok(())
+}
+
 fn derive(
     host: &Host,
     game: &Game,
@@ -156,6 +181,7 @@ fn derive(
                     "the save location is a link that changed or can't be resolved",
                 )
                 .path(&target.root)
+                .target_cause(savescummer_core::TargetCause::ChangedLink)
                 .game(&game.id);
                 return Derived { active: Err(failure), has_data: false, warnings, access: None };
             }
@@ -272,6 +298,7 @@ pub fn scan(host: &Arc<Host>, full: bool, reason: &str) -> usize {
                 installs: Vec::new(),
                 identities: Vec::new(),
                 catalog_executables: Vec::new(),
+                safe_to_close: false,
                 outcome: None,
                 context: None,
                 warnings: Vec::new(),
@@ -288,6 +315,7 @@ pub fn scan(host: &Arc<Host>, full: bool, reason: &str) -> usize {
         game.installs = record.installs.clone();
         game.identities = record.install_identities.clone();
         game.catalog_executables = record.executables.clone();
+        game.safe_to_close = entry.safe_to_close;
         game.outcome = Some(record.outcome.clone());
         game.context = Some(record.context.clone());
         game.warnings = record.warnings.clone();
@@ -439,6 +467,7 @@ pub fn reresolve(host: &Host, inner: &mut Inner, game_id: &str) -> bool {
     game.outcome = Some(record.outcome.clone());
     game.context = Some(record.context.clone());
     game.catalog_executables = record.executables.clone();
+    game.safe_to_close = entry.safe_to_close;
     let snapshot = game.clone();
     if changed {
         let _ = persist_game(host, &snapshot);
@@ -479,6 +508,7 @@ pub fn add_custom(host: &Host, name: &str, executable: &str, location: &str) -> 
         installs: Vec::new(),
         identities: Vec::new(),
         catalog_executables: Vec::new(),
+        safe_to_close: false,
         outcome: None,
         context: None,
         warnings: Vec::new(),
@@ -555,9 +585,9 @@ pub struct ConfigureRequest<'a> {
 pub fn configure(host: &Host, game_id: &str, request: ConfigureRequest<'_>) -> Result<(), Failure> {
     ask_for_typed(host, request.executable, request.save_location)?;
     let mut inner = host.lock();
-    if inner.busy.contains_key(game_id) {
-        return Err(Failure::new(ErrorKind::Busy, "another operation runs for this game").game(game_id));
-    }
+    host.action_facts(&inner, game_id, None)
+        .check(crate::policy::Action::Configure)
+        .map_err(|f| f.with_game_if_missing(game_id))?;
     let mut game = inner.game(game_id)?.clone();
     if let Some(name) = request.name {
         if !game.is_custom() {

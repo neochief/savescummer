@@ -135,6 +135,25 @@ impl ErrorKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TargetCause {
+    TooBroad,
+    Overlap { game: String, name: String },
+    Executable,
+    ReservedName,
+    UnresolvedLink,
+    ChangedLink,
+    NotDirectory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccessInfo {
+    pub category: String,
+    pub denied: bool,
+    pub settings_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Failure {
     pub kind: ErrorKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -144,11 +163,20 @@ pub struct Failure {
     /// The raw technical detail, for a Details section and logs.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub detail: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_cause: Option<Box<TargetCause>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<Box<AccessInfo>>,
 }
 
 impl Failure {
     pub fn new(kind: ErrorKind, detail: impl Into<String>) -> Failure {
-        Failure { kind, game: None, paths: Vec::new(), detail: detail.into() }
+        Failure { kind, game: None, paths: Vec::new(), detail: detail.into(), target_cause: None, access: None }
+    }
+
+    pub fn target_cause(mut self, cause: TargetCause) -> Failure {
+        self.target_cause = Some(Box::new(cause));
+        self
     }
 
     pub fn path(mut self, path: impl AsRef<std::path::Path>) -> Failure {

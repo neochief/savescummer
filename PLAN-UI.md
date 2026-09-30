@@ -55,7 +55,7 @@ These decisions come from the interactive prototype in [`ui-prototype/`](ui-prot
   - Ivory `#f3eee7`, 1 px `#cfc2b3` border, text `#76675b`. Line 1: clock, time, age (age in a fixed 54 px slot so the badge never changes width). Line 2 (only with a label): tag and label, separated by a hairline. Single-line badges straddle the edge; two-line badges sit slightly higher so they never reach the first heading.
   - Time format: today `HH:mm:ss`; yesterday `Yesterday HH:mm:ss`; older `yyyy-MM-dd HH:mm:ss`.
   - The badge is its own control. Clicking it jumps to the latest checkpoint in history. Hovering or focusing it shows the expanded badge in place with the full label wrapped, and swaps the tag icon for crosshairs. It never triggers or highlights Load.
-- **Disabled Load (no saves):** drawn as a 2 px `#3a322e` outline with muted icon and text, no shortcut tab, and a "No saves yet" badge in the same outline style on the window color.
+- **Disabled Load (no saves):** drawn as a 2 px `#3a322e` outline with muted icon and text, and no shortcut tab, under the lockdown panel, with no badge (PLAN-LOCKDOWN: **No checkpoints yet**, or **Play first** when there's no game data either).
 - Shortcut tabs: text sits 4 px from the tab's top (visually centered in the exposed part).
 - **Busy:** the initiating control shows a spinner and a progressive label: SAVING, LOADING, and in history LOADING/REVERTING; then a brief check. Controls are disabled only while busy; the success state is already clickable again. The cursor is `wait` over the window while busy.
 - History LOAD/REVERT buttons are **104 × 30 px**; the action column is **144 px** minimum and grows leftward for the delete countdown.
@@ -311,7 +311,7 @@ There is no game name, icon or status header above the buttons. The selected sid
 - **Width:** reserve a fixed-width area at the right for `···` and the gaps between controls. Divide all remaining main-view width equally between Save and Load: 50/50. They keep equal widths as the window resizes.
 - **Contents:** center each button's icon-and-title group at the same height. Hang Load's separate ivory badge from its bottom edge. The badge never moves the main title and is its own interactive control.
 - **Shortcut hints:** the prototype places the current shortcuts on centered keycaps behind their buttons. Lower the tabs to overlap the button faces by 8 px at rest and 4 px when pressed; no background gap may appear. Keep the text above the faces, within the first sidebar heading's 40 px band. The final hotkey presentation remains an open design choice.
-- **Availability:** the host decides whether each action is available, separately from whether the game is running. When there is no game data to copy, Save is disabled and its tooltip and accessible name say `No game data yet`. Nothing else signals this.
+- **Availability:** the host decides whether each action is available, separately from whether the game is running, and gives one reason when it isn't. The separate host `guidance` field selects the panel and its Save/Load coverage (PLAN-LOCKDOWN, LOCKDOWN PANEL). The UI does not select guidance by ranking availability reasons. Row actions combine checkpoint eligibility with the current host gate.
 - The order is fixed: Save, then Load, then `···`, which is always last.
 - Below the buttons and the Load caption sit the **error block**, then the **instructions block**. The error block stays until the next action or game selection and never becomes a modal dialog.
 
@@ -323,7 +323,7 @@ This is the main action and has the strongest emphasis. It supports the core loo
 
 The main Load button restores the **latest retained checkpoint**. Only checkpoints the app made count; copies the user makes by hand are not checkpoints.
 
-What Load will restore is shown in the separate ivory badge hanging on its bottom edge (see PROTOTYPE DECISIONS). The first line shows a clock, exact local time and relative age, with a fixed 54 px slot for the age: today `12:24:03`, yesterday `Yesterday 23:20:12`, or older `2026-09-20 12:24:03`. Clicking the badge jumps to the latest checkpoint without triggering Load; hover or focus expands a long label in place and changes its tag icon to crosshairs. With no checkpoints, Load has a muted 2 px outline and no shortcut tab, and the outline badge reads `No saves yet`. When the host reports no game data on disk, Load is disabled too, with the same `No game data yet` tooltip as Save; the badge still shows what it would restore. The history's Load and Revert buttons follow the same rule.
+What Load will restore is shown in the separate ivory badge hanging on its bottom edge (see PROTOTYPE DECISIONS). The first line shows a clock, exact local time and relative age, with a fixed 54 px slot for the age: today `12:24:03`, yesterday `Yesterday 23:20:12`, or older `2026-09-20 12:24:03`. Clicking the badge jumps to the latest checkpoint without triggering Load; hover or focus expands a long label in place and changes its tag icon to crosshairs. With no checkpoints, Load has a muted 2 px outline and no shortcut tab, and no badge: the lockdown panel covers it. Missing live game data alone does not prevent Load: a usable checkpoint can be restored when targets are valid and accessible and the other host checks pass.
 
 If that save has a label, the badge adds a second line with a tag icon and the label, separated from the time line by a hairline. Long labels truncate in the resting badge and wrap in the expanded hover/focus state. The badge never changes the button's size or the vertical alignment of its icon and title.
 
@@ -350,11 +350,11 @@ App-wide preferences belong to the Settings dialog, opened by `⚙ Settings` bel
 
 ### Busy state
 
-While a save, load, revert, deletion or Flush is running for a game, every control that could start another operation *for that game* is disabled: Save, Load, the history row actions and the `···` commands. The sidebar and other games stay fully usable. A deletion countdown that is still pending does not make the game busy, and its Cancel stays usable even while another operation runs.
+While an operation is checking or running, controls follow the host's action gates. Save, Load, Restore, Retry, Flush and Configure cannot compete for the same game. Delete can begin a countdown while another operation runs; actual deletion waits for ownership. Labels remain editable. The sidebar and other games stay fully usable. A deletion countdown that is still pending does not make the game busy, and its Cancel stays usable even while another operation runs.
 
-While the host reports `game_running` for Save and Load (a game with *wait for the game to close* on is running), a panel covers Save and Load, lined up with the first game card, and the buttons behind it are blurred and unclickable: `Save and Exit the game` (large), `to save or load any checkpoints` (smaller), and `We can only intercept the game progress after the game saves it to disk.` The history's Load and Revert buttons are hidden, keeping their space. The panel goes away as soon as the host reports the game exited.
+Lockdowns (the game running, no saves, a save location problem and the rest) aren't busy states: the lockdown panel covers the buttons, with no wait cursor (PLAN-LOCKDOWN, LOCKDOWN PANEL).
 
-The control that started a Save, Load or Revert shows a rotating `arrows-rotate` icon and a progressive label (`SAVING`, `LOADING`, or `REVERTING`), whether it's a main or history-row button. There is no progress bar or percentage. The cursor is `wait` over the window while busy. On success, the control briefly shows a check and becomes clickable again. There is no success dialog.
+The control that started a Save, Load or Revert shows a rotating `arrows-rotate` icon and a progressive label (`SAVING`, `LOADING`, or `REVERTING`), whether it's a main or history-row button. There is no progress bar or percentage. The cursor is `wait` over the window while busy. On success, the control briefly shows a check and becomes clickable again. There is no success dialog. Retry shows `Recovering…` in the stable recovery panel and follows its tracked outcome. Save always creates a new deliberate checkpoint; there is no content-equality refusal.
 
 
 ## INSTRUCTIONS BLOCK
@@ -402,7 +402,7 @@ Details that are easy to get wrong:
 | Game started | None | Light | None |
 | Game closed | None | Light | None |
 
-The event words and their leading icons distinguish the row kinds. Started and closed rows use the same white event text as other rows and make play sessions visible without a separate session UI or any buttons. An actionable row temporarily disabled while the game is busy keeps its buttons in place.
+The event words and their leading icons distinguish the row kinds. Started and closed rows use the same white event text as other rows and make play sessions visible without a separate session UI; both are plain markers with no checkpoint actions. An actionable row temporarily disabled while the game is busy keeps its buttons in place.
 
 - **Saved** can carry a label (see below).
 - **Loaded** names the save it loaded in the inline chip after `Loaded`, using the checkpoint label or exact `HH:mm:ss` when unnamed. It follows the label live and keeps it after that save is deleted. Truncate long labels with `…` and show the full label in the tooltip. Clicking the chip jumps to and flashes that checkpoint when it remains available.

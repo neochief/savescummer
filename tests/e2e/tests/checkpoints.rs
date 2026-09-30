@@ -1,4 +1,4 @@
-//! Managing checkpoints: labels, deleting with a countdown, Flush, backups
+//! Managing checkpoints: labels, immediate deletion, Flush, backups
 //! changed outside the app, moving the store, and the checkpoint size.
 
 mod common;
@@ -69,7 +69,7 @@ fn a_label_can_be_set_while_the_game_is_busy() {
 }
 
 #[test]
-fn a_delete_counts_down_and_can_be_cancelled() {
+fn a_delete_starts_immediately() {
     let world = World::new();
     let _host = world.host();
     let (game, _) = game_with_saves(&world, "Deleter");
@@ -77,32 +77,10 @@ fn a_delete_counts_down_and_can_be_cancelled() {
     let checkpoint = s(&saved["result"]["checkpoint"]);
 
     let pending = world.ok(&["delete", &game, &checkpoint, "--no-wait"]);
-    assert_eq!(pending["status"], "counting_down");
-    let state = world.state();
-    assert_eq!(state["deletes"].as_array().unwrap().len(), 1, "the countdown is in the state");
-    assert!(state["deletes"][0]["remaining_ms"].as_u64().unwrap() > 0);
-    let rows = world.history(&game);
-    assert_eq!(rows[0]["deleting"], true);
-    // The same row can't be requested twice.
-    assert_eq!(world.cli(&["delete", &game, &checkpoint, "--no-wait"]).error_kind(), "invalid_request");
-    // Load still targets the checkpoint while it counts down.
-    world.ok(&["load", &game]);
-
-    let cancelled = world.ok(&["cancel-delete", &s(&pending["id"])]);
-    assert_eq!(cancelled["status"], "cancelled");
-    std::thread::sleep(Duration::from_millis(2000));
-    assert_eq!(world.history(&game).iter().filter(|r| r["kind"] == "saved").count(), 1, "nothing was deleted");
-
-    // Run to the end: the CLI waits for the files to be gone, printing each state.
-    let out = world.cli(&["delete", &game, &checkpoint]);
-    assert_eq!(out.code, 0);
-    let statuses: Vec<String> = out.lines.iter().map(|l| s(&l["status"])).collect();
-    assert_eq!(statuses.first().unwrap(), "counting_down");
-    assert_eq!(statuses.last().unwrap(), "succeeded");
+    assert_eq!(pending["status"], "waiting");
+    let done = world.ok(&["outcome", &s(&pending["id"]), "--wait"]);
+    assert_eq!(done["status"], "succeeded");
     assert!(world.history(&game).iter().all(|r| r["kind"] != "saved"));
-    // A cancel that arrives too late gets the real state back.
-    let late = world.ok(&["cancel-delete", &s(&out.last()["id"])]);
-    assert_eq!(late["status"], "succeeded");
 }
 
 #[test]
@@ -111,11 +89,11 @@ fn a_delete_waits_for_the_game_to_be_free() {
     let _host = world.host_with(&[], &[("SAVESCUMMER_TEST_DELAY_AT", "saved.copy:1:3000")]);
     let (game, _) = game_with_saves(&world, "Waiter");
     let saved = world.ok(&["save", &game]);
-    let pending = world.ok(&["delete", &game, &s(&saved["result"]["checkpoint"]), "--no-wait"]);
-    // A countdown doesn't reserve the game: a Save still starts…
+    // A Save occupies the game before Delete arrives.
     let save = world.ok(&["save", &game, "--no-wait"]);
     assert_eq!(save["status"], "accepted");
-    // …and the deletion waits for its turn.
+    let pending = world.ok(&["delete", &game, &s(&saved["result"]["checkpoint"]), "--no-wait"]);
+    // The deletion waits for the Save, then runs without a countdown.
     wait_for("the delete is waiting", Duration::from_secs(10), || {
         let op = world.ok(&["outcome", &s(&pending["id"])]);
         (op["status"] == "waiting").then_some(())
@@ -227,7 +205,8 @@ fn the_store_moves_and_an_unreachable_store_makes_operations_unavailable() {
     assert_eq!(world.cli(&["save", &game]).error_kind(), "store_unavailable");
     let rows = world.history(&game);
     assert_eq!(rows.len(), 2, "rows stay, with actions disabled");
-    assert_eq!(rows[0]["actions"]["revert"], false);
+    assert_eq!(rows[0]["actions"]["revert"], true, "row eligibility is independent of the store gate");
+    assert_eq!(summary["restore"]["available"], false);
     assert_eq!(rows.last().unwrap()["unavailable"], "store_unavailable");
 
     // It comes back: everything works as before.

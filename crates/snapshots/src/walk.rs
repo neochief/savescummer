@@ -34,7 +34,9 @@ pub fn walk_target(root: &Path, filter: &Filter, excludes: &[String], ci: bool) 
     match fs::symlink_metadata(root) {
         Err(_) => return Ok(out),
         Ok(meta) if !meta.is_dir() => {
-            return Err(Failure::new(ErrorKind::InvalidTarget, "the save location's root isn't a folder").path(root));
+            return Err(Failure::new(ErrorKind::InvalidTarget, "the save location's root isn't a folder")
+                .path(root)
+                .target_cause(savescummer_core::TargetCause::NotDirectory));
         }
         Ok(_) => {}
     }
