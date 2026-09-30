@@ -28,10 +28,11 @@ export const skeletonMotion = {
   scowlGlance: 0.3, // share of the pointer tracking the eyes keep while scowling
   lidDepth: 20, // how far the dark lids reach in from the socket edge over the eyeballs
   scowlLidDepth: 36, // the same, while scowling
-  // The hanging fingers of the lower hand drum on the sill one after another: each rises toward vertical, then drops
-  // fast, followed by a pause. `tempo` is rolls per second when wide awake, slowing toward `sleepyTempo` as the
-  // drumming fades; `spread` (start-to-start) and `tap` are shares of one roll, `rise` is the share of a tap spent rising.
-  drumming: { degrees: 18, tempo: 0.9, sleepyTempo: 0.35, spread: 0.2, tap: 0.18, rise: 0.7 },
+  // The hanging fingers of the lower hand drum on the sill one after another, rightmost first: each lifts `lift` head
+  // units, then drops back down fast, followed by a pause. `tempo` is rolls per second when wide awake, slowing toward
+  // `sleepyTempo` as the drumming fades; `spread` (start-to-start) and `tap` are shares of one roll, `rise` is the share
+  // of a tap spent rising. The top bone lifts only `topShare` of the way, so the lower bones slide up past it.
+  drumming: { lift: 44, topShare: 0.4, tempo: 0.9, sleepyTempo: 0.35, spread: 0.2, tap: 0.18, rise: 0.7 },
 };
 
 type Side = 'left' | 'right';
@@ -45,6 +46,7 @@ type Phase = {
 type Values = { closure: number; sag: number; follow: number; classic: number; drum: number; radius: Record<Side, number> };
 
 const sides: Side[] = ['left', 'right'];
+const drummingFingers = ['Short-outer-digit', 'Middle-hanging-finger', 'Left-hanging-finger']; // roll order, rightmost first
 const inOut = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
 const out = (t: number) => 1 - (1 - t) ** 3;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -161,6 +163,12 @@ function inlineSvg(prefix: string) {
     lids.setAttribute('stroke-linejoin', 'round');
     part('eye-contents').append(lids);
   }
+  // The fingers' and their bones' drawn placement, kept aside because taps add to it and setup may run twice under
+  // StrictMode.
+  for (const id of drummingFingers) {
+    const finger = svg.querySelector(`[id="${id}"]`)!;
+    for (const node of [finger, ...finger.children]) node.setAttribute('data-drawn-transform', node.getAttribute('transform') ?? '');
+  }
   for (const node of [svg, ...svg.querySelectorAll('*')]) {
     for (const attr of [...node.attributes]) {
       if (attr.name === 'id') attr.value = prefix + attr.value;
@@ -204,10 +212,13 @@ function rig(root: SVGSVGElement, prefix: string) {
   const head = el<SVGGraphicsElement>('head-pose');
   const pivot = head.getAttribute('data-pivot')!.split(/\s+/).map(Number);
   const between = [(eyes.left.neutral[0] + eyes.right.neutral[0]) / 2, (eyes.left.neutral[1] + eyes.right.neutral[1]) / 2];
-  // Each drumming finger rocks around its knuckle: the top middle of its first bone.
-  const fingers = ['Left-hanging-finger', 'Middle-hanging-finger', 'Short-outer-digit'].map((id) => {
-    const finger = el<SVGGraphicsElement>(id), knuckle = (finger.firstElementChild as SVGGraphicsElement).getBBox();
-    return { finger, pivot: [knuckle.x + knuckle.width / 2, knuckle.y] };
+  const fingers = drummingFingers.map((id) => {
+    const finger = el(id), drawn = finger.getAttribute('data-drawn-transform')!;
+    // A straight-up lift in the hand's space, expressed in the finger's own (drawn, rotated) space for its bones.
+    const inverse = new DOMMatrix(drawn || 'none').inverse();
+    const up = (dy: number) => [inverse.c * -dy, inverse.d * -dy];
+    const bones = [...finger.children].map((bone) => ({ bone, drawn: bone.getAttribute('data-drawn-transform')! }));
+    return { finger, drawn, up, bones };
   });
   return { eyes, pose, head, pivot, between, fingers };
 }
@@ -257,12 +268,15 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
 
     const draw = () => {
       const drumming = motion.drumming;
-      fingers.forEach(({ finger, pivot: [x, y] }, i) => {
+      fingers.forEach(({ finger, drawn, up, bones }, i) => {
         // Rise smoothly, then strike down with growing speed.
         const at = ((((drumClock - i * drumming.spread) % 1) + 1) % 1) / drumming.tap;
         const lift = at >= 1 ? 0 : at < drumming.rise ? inOut(at / drumming.rise) : 1 - ((at - drumming.rise) / (1 - drumming.rise)) ** 2;
-        const angle = drumming.degrees * current.drum * lift;
-        finger.setAttribute('transform', `rotate(${angle.toFixed(2)} ${x.toFixed(1)} ${y.toFixed(1)})`);
+        const rise = drumming.lift * current.drum * lift;
+        // The whole finger lifts by the top bone's share; the lower bones lift the rest of the way on top of that.
+        finger.setAttribute('transform', `translate(0 ${(-rise * drumming.topShare).toFixed(2)}) ${drawn}`);
+        const [x, y] = up(rise * (1 - drumming.topShare));
+        bones.slice(1).forEach(({ bone, drawn: placed }) => bone.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) ${placed}`));
       });
       const tilt = gaze[0] * motion.headGazeTilt[0] - Math.min(gaze[1], 0) * motion.headGazeTilt[1];
       const { degrees, frequency, duration } = motion.clickShake;

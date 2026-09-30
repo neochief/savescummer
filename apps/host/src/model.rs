@@ -68,10 +68,10 @@ impl Game {
     /// Existing records used the inverse `wait_for_exit` setting.
     pub fn from_record_json(data: &str) -> serde_json::Result<Self> {
         let mut value: serde_json::Value = serde_json::from_str(data)?;
-        if let Some(fields) = value.as_object_mut() {
-            if let Some(wait) = fields.remove("wait_for_exit").and_then(|value| value.as_bool()) {
-                fields.entry("expert_mode").or_insert_with(|| serde_json::Value::Bool(!wait));
-            }
+        if let Some(fields) = value.as_object_mut()
+            && let Some(wait) = fields.remove("wait_for_exit").and_then(|value| value.as_bool())
+        {
+            fields.entry("expert_mode").or_insert_with(|| serde_json::Value::Bool(!wait));
         }
         serde_json::from_value(value)
     }

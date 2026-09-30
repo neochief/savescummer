@@ -157,11 +157,7 @@ impl Drop for Integration {
 
 type Ready = Result<(isize, Vec<String>), String>;
 
-fn ui_thread(
-    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
-    shortcuts: Shortcuts,
-    ready: mpsc::SyncSender<Ready>,
-) {
+fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts, ready: mpsc::SyncSender<Ready>) {
     let class = wide("SaveScummerIntegration");
     let taskbar = wide("TaskbarCreated");
     // SAFETY: plain Win32 calls with NUL-terminated strings that outlive

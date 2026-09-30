@@ -22,10 +22,10 @@ pub fn launch_game(exe: &std::path::Path) -> std::io::Result<()> {
     #[cfg(not(target_os = "macos"))]
     let mut command = std::process::Command::new(exe);
 
-    if exe.extension().is_none_or(|ext| ext != "app") {
-        if let Some(parent) = exe.parent() {
-            command.current_dir(parent);
-        }
+    if exe.extension().is_none_or(|ext| ext != "app")
+        && let Some(parent) = exe.parent()
+    {
+        command.current_dir(parent);
     }
     detach(&mut command);
     let mut child = command.spawn()?;

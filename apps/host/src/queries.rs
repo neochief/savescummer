@@ -251,7 +251,8 @@ pub fn settings(
     let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
     if changed && let Some(integration) = integration.as_ref() {
         integration.rebind(shortcuts).map_err(|error| {
-            let names = |shortcut: Option<_>| shortcut.is_some_and(|shortcut| error.contains(&shortcut_text(Some(shortcut))));
+            let names =
+                |shortcut: Option<_>| shortcut.is_some_and(|shortcut| error.contains(&shortcut_text(Some(shortcut))));
             let field = if names(shortcuts[1]) {
                 "Load shortcut"
             } else if names(shortcuts[0]) {

@@ -6,10 +6,7 @@ pub struct Integration {
     _private: (),
 }
 
-pub fn start(
-    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
-    _shortcuts: Shortcuts,
-) -> Result<Integration, String> {
+pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, _shortcuts: Shortcuts) -> Result<Integration, String> {
     let _ = on_signal;
     Err("not supported on this platform yet".into())
 }

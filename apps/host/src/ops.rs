@@ -1096,10 +1096,8 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
         let hidden = !inner.ui.visible;
         (inner.hotkey_ops.remove(op_id), operation.kind.clone(), hidden)
     };
-    if hotkey {
-        if let Some(sound) = hotkey_completion_cue(status, &kind) {
-            cue(host, sound);
-        }
+    if hotkey && let Some(sound) = hotkey_completion_cue(status, &kind) {
+        cue(host, sound);
     }
     if let Some(e) = &error
         && hidden
@@ -1293,7 +1291,7 @@ fn run_move(host: &Arc<Host>, op_id: &str, old: &Path, new: &Path) -> Result<OpR
     }
     host.db()
         .write(|c| {
-            db::set_setting(c, crate::model::SETTING_STORE, &host.portable().contract(&new))?;
+            db::set_setting(c, crate::model::SETTING_STORE, &host.portable().contract(new))?;
             for (id, signature, identity) in &identities {
                 c.execute(
                     "UPDATE checkpoints SET signature = ?2, identity = ?3 WHERE id = ?1",
