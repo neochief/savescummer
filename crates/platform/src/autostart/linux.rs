@@ -13,6 +13,10 @@
 //! only that. The user can also turn it off in their desktop's settings,
 //! which set `Hidden=true` or `X-GNOME-Autostart-enabled=false`: that
 //! counts as off.
+//!
+//! The entry always starts the default data folder, as on macOS: a data
+//! folder of its own is for development and tests, whose builds never
+//! create an entry.
 
 use std::path::{Path, PathBuf};
 
@@ -20,8 +24,11 @@ const FILE: &str = "SaveScummer.desktop";
 const TARGET_KEY: &str = "X-SaveScummer-Target";
 
 pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), String> {
+    if on && data_dir.is_some_and(|d| d != crate::data_dir()) {
+        return Err("launch at sign-in always uses the default data folder on Linux; drop --data-dir".into());
+    }
     let path = entry_path().ok_or("no home folder for the autostart entry")?;
-    set_at(&path, on, &target(host_exe), data_dir)
+    set_at(&path, on, &target(host_exe))
 }
 
 pub fn is_enabled(host_exe: &Path) -> bool {
@@ -29,26 +36,28 @@ pub fn is_enabled(host_exe: &Path) -> bool {
 }
 
 /// Re-points an enabled entry of ours at this AppImage, when a different
-/// file (another version) wrote it. Outside an AppImage, never changes it.
-pub fn keep_current(host_exe: &Path, data_dir: Option<&Path>) {
-    let Some(path) = entry_path() else { return };
-    let target = target(host_exe);
-    if appimage(host_exe).is_none() {
+/// file (another version) wrote it. Outside an AppImage, and in
+/// development builds (which never touch the installed app's entry), never
+/// changes it.
+pub fn keep_current(host_exe: &Path) {
+    if !super::available() || appimage(host_exe).is_none() {
         return;
     }
+    let Some(path) = entry_path() else { return };
+    let target = target(host_exe);
     if let Some(entry) = read(&path)
         && entry.enabled
         && entry.target != target
     {
-        let _ = std::fs::write(&path, contents(&target, data_dir));
+        let _ = std::fs::write(&path, contents(&target));
     }
 }
 
-fn set_at(path: &Path, on: bool, target: &Path, data_dir: Option<&Path>) -> Result<(), String> {
+fn set_at(path: &Path, on: bool, target: &Path) -> Result<(), String> {
     if on {
         let dir = path.parent().expect("the entry is in a folder");
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        return std::fs::write(path, contents(target, data_dir)).map_err(|e| format!("{}: {e}", path.display()));
+        return std::fs::write(path, contents(target)).map_err(|e| format!("{}: {e}", path.display()));
     }
     match read(path) {
         Some(entry) if entry.target == target => {
@@ -82,11 +91,8 @@ fn appimage(host_exe: &Path) -> Option<PathBuf> {
     (host_exe.starts_with(&appdir) && appimage.is_absolute()).then_some(appimage)
 }
 
-fn contents(target: &Path, data_dir: Option<&Path>) -> String {
-    let mut exec = format!("{} --minimized", exec_arg(&target.to_string_lossy()));
-    if let Some(dir) = data_dir {
-        exec.push_str(&format!(" --data-dir {}", exec_arg(&dir.to_string_lossy())));
-    }
+fn contents(target: &Path) -> String {
+    let exec = format!("{} --minimized", exec_arg(&target.to_string_lossy()));
     format!(
         "[Desktop Entry]\n\
          Type=Application\n\
@@ -179,24 +185,25 @@ mod tests {
     fn on_writes_an_entry_off_removes_only_ours() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("autostart").join(FILE);
-        let exe = Path::new("/opt/Save Scummer/SaveScummer");
-        set_at(&path, true, exe, Some(Path::new("/data/$HOME's \"saves\" 100%"))).unwrap();
+        let exe = Path::new("/opt/$HOME's \"Save\" 100%/SaveScummer");
+        set_at(&path, true, exe).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(
-            text.contains(
-                r#"Exec="/opt/Save Scummer/SaveScummer" --minimized --data-dir "/data/\\$HOME's \\"saves\\" 100%%""#
-            ),
-            "{text}"
-        );
+        assert!(text.contains(r#"Exec="/opt/\\$HOME's \\"Save\\" 100%%/SaveScummer" --minimized"#), "{text}");
         let entry = read(&path).unwrap();
         assert_eq!(entry.target, exe);
         assert!(entry.enabled);
 
-        set_at(&path, false, Path::new("/elsewhere/SaveScummer"), None).unwrap();
+        set_at(&path, false, Path::new("/elsewhere/SaveScummer")).unwrap();
         assert!(path.exists(), "another program's off leaves ours");
-        set_at(&path, false, exe, None).unwrap();
+        set_at(&path, false, exe).unwrap();
         assert!(!path.exists());
-        set_at(&path, false, exe, None).unwrap();
+        set_at(&path, false, exe).unwrap();
+    }
+
+    #[test]
+    fn a_data_folder_of_its_own_is_refused_before_anything_is_written() {
+        let err = set(true, Path::new("/opt/SaveScummer"), Some(Path::new("/elsewhere/data"))).unwrap_err();
+        assert!(err.contains("default data folder"), "{err}");
     }
 
     #[test]
@@ -204,7 +211,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(FILE);
         let exe = Path::new("/opt/SaveScummer");
-        set_at(&path, true, exe, None).unwrap();
+        set_at(&path, true, exe).unwrap();
         let text = std::fs::read_to_string(&path).unwrap().replace("Autostart-enabled=true", "Autostart-enabled=false");
         std::fs::write(&path, text).unwrap();
         assert!(!read(&path).unwrap().enabled);
@@ -216,7 +223,7 @@ mod tests {
         let path = dir.path().join(FILE);
         std::fs::write(&path, "[Desktop Entry]\nType=Application\nExec=/usr/bin/savescummer\n").unwrap();
         assert!(read(&path).is_none());
-        set_at(&path, false, Path::new("/usr/bin/savescummer"), None).unwrap();
+        set_at(&path, false, Path::new("/usr/bin/savescummer")).unwrap();
         assert!(path.exists());
     }
 

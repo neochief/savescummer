@@ -44,6 +44,11 @@ pub struct LinuxSource {
     known: HashMap<(u32, u64), Known>,
     pids: HashSet<u32>,
     display: Display,
+    /// A foreground pid not in the list that already asked for a full look.
+    /// A sandboxed app (Flatpak) reports its window's pid from its own pid
+    /// namespace, which is never in the list: asking once per such window
+    /// keeps it from forcing a full look on every poll.
+    unknown_front: Option<u32>,
 }
 
 impl ProcessSource for LinuxSource {
@@ -72,9 +77,12 @@ impl ProcessSource for LinuxSource {
     }
 
     fn may_have_changed(&mut self, watched: &[u32]) -> bool {
-        if self.foreground().is_some_and(|pid| !self.pids.contains(&pid)) {
+        let front = self.foreground().filter(|pid| !self.pids.contains(pid));
+        if front.is_some() && front != self.unknown_front {
+            self.unknown_front = front;
             return true;
         }
+        self.unknown_front = front;
         // A game starting another program (a launcher starting the real
         // game): look now, while its parent is still known.
         for &pid in watched {
@@ -398,6 +406,9 @@ mod tests {
         let this = procs.iter().find(|p| p.pid == me).expect("this process is listed");
         assert_eq!(this.exe.as_deref(), Some(std::env::current_exe().unwrap().as_path()));
         assert_eq!(this.parent, std::os::unix::process::parent_id());
+        // Asked twice: a window in front from another pid namespace (a
+        // Flatpak app) asks for one full look, not one per poll.
+        let _ = source.may_have_changed(&[me]);
         assert!(!source.may_have_changed(&[me]) || children(me).is_none());
     }
 }

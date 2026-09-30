@@ -40,11 +40,11 @@ pub fn is_enabled(host_exe: &Path) -> bool {
 /// Linux AppImage: re-points an enabled entry at this AppImage when another
 /// version wrote it (each version is a new file). Elsewhere the program's
 /// path is fixed, and this never changes anything.
-pub fn keep_current(host_exe: &Path, data_dir: Option<&Path>) {
+pub fn keep_current(host_exe: &Path) {
     #[cfg(target_os = "linux")]
-    imp::keep_current(host_exe, data_dir);
+    imp::keep_current(host_exe);
     #[cfg(not(target_os = "linux"))]
-    let _ = (host_exe, data_dir);
+    let _ = host_exe;
 }
 
 /// macOS: the entry exists but the user turned it off in System Settings,

@@ -257,7 +257,7 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         return ExitCode::from(2);
     }
     if let Ok(exe) = std::env::current_exe() {
-        savescummer_platform::autostart::keep_current(&exe, opts.data_dir.as_deref());
+        savescummer_platform::autostart::keep_current(&exe);
     }
     let host = Host::new(opts.clone(), data_dir, env, endpoint.clone(), catalog, storage, inner);
     // Before anything reads a game's files.

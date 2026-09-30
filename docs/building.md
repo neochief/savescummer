@@ -190,12 +190,14 @@ Version resources: `apps/host/build.rs` and `apps/cli/build.rs` embed the Cargo 
 
 ## RELEASING
 
-The installed host downloads catalog updates from `release/catalog/catalog.json` on GitHub. Create the `release` branch from a commit with a compatible catalog before shipping a build that uses this URL. Advance that branch only after CI passes and its catalog remains readable by installed versions; tag the release commit on that branch. A tag alone does not move the catalog channel.
+Releases are cut on the `release` branch. It is also the catalog channel: installed hosts download catalog updates from `release/catalog/catalog.json` on GitHub, so every push to `release` reaches users at once, before CI on that push finishes. Its catalog must stay readable by the installed versions. A tag alone does not move the catalog channel.
 
-1. `cargo xtask release 1.2.3` on a clean branch: checks the version is new and the tag free (locally and on origin), writes it into `Cargo.toml`, the Tauri config and the UI package manifest, refreshes `Cargo.lock`, runs `check` (`--skip-checks` for emergencies), commits "Release 1.2.3", tags `v1.2.3` and pushes both. `--no-push` prints the two push commands instead. If anything fails before the commit, the bump is undone.
-2. The tag starts `.github/workflows/release.yml`: Windows and macOS jobs run `cargo xtask dist` and upload their release files; a final job runs `cargo xtask publish`.
-3. `publish` checks that `gh` is logged in, the tag points at `HEAD`, and `dist/` holds exactly the Windows installer and macOS disk image. It creates a draft release (or re-uploads to an existing draft), and refuses if the release is already published.
-4. Review the draft on GitHub and publish it by hand.
+1. Merge `main` into `release` locally. Don't push the merge by hand: step 2 pushes it after checking it.
+2. `cargo xtask release 1.2.3` on `release`, with a clean tree: checks the version is new and the tag free (locally and on origin), writes it into `Cargo.toml`, the Tauri config and the UI package manifest, refreshes `Cargo.lock`, runs `check` (`--skip-checks` for emergencies; `check` includes `catalog --check`, the last gate before the catalog goes out), commits "Release 1.2.3", tags `v1.2.3` locally and pushes the branch only. `--no-push` prints the push commands instead. If anything fails before the commit, the bump is undone.
+3. The push runs CI (`.github/workflows/ci.yml`) on `release`: `check` and `dist` on every platform. If it fails, fix on `main`, merge it into `release` again and push; the version stays 1.2.3. Once CI passes, move the local tag to the new commit before pushing it: `git tag -f -a v1.2.3 -m "Release 1.2.3"`.
+4. Once CI passes, push the tag (`git push origin v1.2.3`; the release command prints it). The tag starts `.github/workflows/release.yml`: Windows and macOS jobs run `cargo xtask dist` and upload their release files; a final job runs `cargo xtask publish`.
+5. `publish` checks that `gh` is logged in, the tag points at `HEAD`, and `dist/` holds exactly the Windows installer and macOS disk image. It creates a draft release (or re-uploads to an existing draft), and refuses if the release is already published.
+6. Review the draft on GitHub and publish it by hand.
 
 A published release never changes; fixes ship as a new version. To rebuild a draft from another commit, delete the tag locally and on origin and push it again.
 
@@ -204,7 +206,7 @@ A published release never changes; fixes ship as a new version. To rebuild a dra
 
 ## CI
 
-- [`ci.yml`](../.github/workflows/ci.yml): branch pushes, pull requests and manual runs. Both Windows and macOS install Node.js and pnpm, run `check`, then `dist` to build and test the full Tauri package and release file. macOS also installs librsvg for the icon. Superseded runs are cancelled.
+- [`ci.yml`](../.github/workflows/ci.yml): pushes to the `release` branch, and manual runs (the Actions tab) for any branch. Both Windows and macOS install Node.js and pnpm, run `check`, then `dist` to build and test the full Tauri package and release file. macOS also installs librsvg for the icon. Superseded runs are cancelled.
 - [`release.yml`](../.github/workflows/release.yml): `v*` tags build and draft the Windows installer and macOS disk image. Never cancelled.
 
 The Windows pnpm store is cached using `apps/ui/pnpm-lock.yaml`; the pinned packaging tools are cached using `xtask/src/pins.rs`. Run the listed `cargo xtask` commands locally to reproduce build failures.

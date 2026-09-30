@@ -88,7 +88,7 @@ enum Task {
         #[arg(long)]
         deep: bool,
     },
-    /// Cut a release: bump the version, check, commit, tag and push.
+    /// Cut a release: bump the version, check, commit, tag, and push the branch (the tag waits for CI).
     Release {
         /// The new version, e.g. 1.2.3 (a leading `v` is fine).
         version: String,

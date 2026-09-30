@@ -434,10 +434,10 @@ Two workflows in `.github/workflows/`. Setup actions install toolchains and cach
 
 **ci.yml** — so nothing merges that breaks a platform:
 
-- Runs on branch pushes, pull requests and manual runs; not tags.
+- Runs on pushes to the `release` branch, and by hand (the Actions tab) for any branch. Other pushes, pull requests and tags don't start it. Why: work lands on `main` unchecked by CI to save time, and releasing is when every platform must pass. Merging `main` into `release` runs it; the tag is pushed only once it passes (RELEASING).
 - A concurrency group per ref cancels superseded runs.
 - A Windows job on `windows-latest`: checkout, Rust cache, Node.js 22, pnpm from `apps/ui/package.json`, packaging tool caches, `setup cargo-about`, `setup inno`, `check`, then `dist`. This compiles and tests the Tauri UI and produces the real installer on every CI run.
-- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Node.js 22, pnpm, tool cache, `setup cargo-about`, `check`, `dist`. The Linux job is still future work. Packaging in CI means an unaccepted license fails the pull request.
+- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Node.js 22, pnpm, tool cache, `setup cargo-about`, `check`, `dist`. The Linux job is still future work. Packaging in CI means an unaccepted license fails the run.
 
 **release.yml** — builds the Windows installer and macOS disk image into a draft GitHub Release:
 
@@ -455,9 +455,9 @@ Two workflows in `.github/workflows/`. Setup actions install toolchains and cach
 1. Checks that the version has three parts (a leading `v` is fine), I'm on a branch, the tree is clean, the version differs from the current one, and tag `v<version>` exists neither locally nor on origin.
 2. Writes the version into `Cargo.toml`, `apps/ui/package.json` and `apps/ui/src-tauri/tauri.conf.json`, then refreshes `Cargo.lock` (`cargo update --workspace`).
 3. Runs `cargo xtask check` (`--skip-checks` for emergencies). If it fails, the bump is undone and the tree is left clean.
-4. Commits "Release <version>", creates the annotated tag `v<version>`, and pushes both (`--no-push` prints the two commands instead).
+4. Commits "Release <version>", creates the annotated tag `v<version>`, and pushes the branch only (`--no-push` prints the commands instead).
 
-The tag starts release.yml.
+It runs on the `release` branch, after merging `main` into it locally. The branch push runs CI on every platform; the tag is pushed by hand once that passes, and starts release.yml. Why the tag waits: the release build and the draft should only exist for a commit every platform passed. Why the branch can't wait too: `release` is the catalog channel (PLAN-CATALOG.md 6), and pushing it is how the release commit reaches CI. The local `check`, which includes `catalog --check`, is the gate before the catalog goes out.
 
 ### Publishing
 

@@ -20,7 +20,9 @@ fn gh() -> Command {
     command
 }
 
-/// Bumps the version, runs the checks, commits, tags and pushes.
+/// Bumps the version, runs the checks, commits, tags and pushes the branch.
+/// The tag stays local: pushing it starts the release build, which must
+/// wait for CI on the branch (the `release` branch runs CI on every push).
 pub fn release(input: &str, skip_checks: bool, no_push: bool) -> anyhow::Result<()> {
     let version = version::parse(input)?;
     let tag = version::tag(&version);
@@ -76,11 +78,10 @@ pub fn release(input: &str, skip_checks: bool, no_push: bool) -> anyhow::Result<
     let push_branch = format!("git push origin {branch}");
     let push_tag = format!("git push origin {tag}");
     if no_push {
-        println!("not pushed; when ready, run:\n  {push_branch}\n  {push_tag}");
+        println!("not pushed; when ready, run:\n  {push_branch}\n  then, once CI passes on {branch}:\n  {push_tag}");
     } else {
         cmd::run(git().args(["push", "origin", &branch]))?;
-        cmd::run(git().args(["push", "origin", &tag]))?;
-        println!("pushed {tag}; the release workflow builds the draft release");
+        println!("pushed {branch}; once CI passes on it, push the tag to build the draft release:\n  {push_tag}");
     }
     Ok(())
 }
