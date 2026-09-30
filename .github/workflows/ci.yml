@@ -17,6 +17,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Runners are idle desktops: run the e2e tests that take window focus.
+  SAVESCUMMER_DESKTOP_TESTS: 1
 
 jobs:
   windows:

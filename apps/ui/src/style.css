@@ -42,7 +42,7 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .empty-character .character-art { position: relative; display: block; width: 100%; height: 100%; }
 .empty-character .character-art svg { display: block; }
 /* The container ignores the pointer; only the drawn skeleton itself is clickable (it startles awake). */
-.empty-character .character-art svg * { pointer-events: visiblePainted; cursor: pointer; }
+.empty-character .pokeable svg * { pointer-events: visiblePainted; cursor: pointer; }
 /* Sits at the top so the pointing hand lands on the first game card. */
 .empty-selection { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 16px; pointer-events: none; color: #aea095; text-align: center; }
 .empty-selection p { margin: 0; }

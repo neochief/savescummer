@@ -8,6 +8,7 @@ import { displayShortcut } from './shortcuts/shortcuts';
 import { failureMessage } from './messages';
 import { GuidancePanel } from './GuidancePanel';
 import { SleepySkeleton } from './SleepySkeleton';
+import { PointingSkeleton } from './PointingSkeleton';
 
 type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush' | 'retry';
 type Feedback = { game: string; action: Action; target?: string; phase: 'busy' | 'success' | 'error'; message?: string };
@@ -39,7 +40,7 @@ function BrandButton({ onClick }: { onClick: (opener: HTMLButtonElement) => void
 // Empty-state skeleton leaning out of an arched window; every character SVG shares the same canvas and pose height.
 function Character({ name, sound = true }: { name: string; sound?: boolean }) {
   return <div className="empty-character" aria-hidden="true">
-    {name === 'no-games-found' ? <SleepySkeleton className="character-art" sound={sound} /> : <img className="character-art" src={`/character/${name}.svg`} alt="" />}
+    {name === 'no-games-found' ? <SleepySkeleton className="character-art pokeable" sound={sound} /> : <PointingSkeleton className="character-art" />}
   </div>;
 }
 

@@ -607,12 +607,17 @@ fn unique() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
 }
 
-/// The screen, for a test whose windows take focus: one such test at a time
-/// (tests in one binary run in parallel), and none on a locked Mac, which
-/// keeps `loginwindow` in front. None: the test can't run; it says so and
-/// passes.
+/// The screen, for a test whose windows take focus: only when
+/// `SAVESCUMMER_DESKTOP_TESTS` is set (CI sets it; locally they would fight
+/// the user for focus), one such test at a time (tests in one binary run in
+/// parallel), and none on a locked Mac, which keeps `loginwindow` in front.
+/// None: the test can't run; it says so and passes.
 pub fn desktop(test: &str) -> Option<std::sync::MutexGuard<'static, ()>> {
     static SCREEN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    if std::env::var_os("SAVESCUMMER_DESKTOP_TESTS").is_none() {
+        eprintln!("{test}: skipped, set SAVESCUMMER_DESKTOP_TESTS=1 to run tests that take the desktop's focus");
+        return None;
+    }
     let screen = SCREEN.lock().unwrap_or_else(|e| e.into_inner());
     #[cfg(target_os = "macos")]
     {

@@ -24,7 +24,7 @@ macOS (13+, Apple Silicon only):
 - **rsvg-convert** (`brew install librsvg`), which renders the app icon from `assets/icon.svg` for every package.
 - **Node.js 22 and pnpm 12.4.2** on `PATH` for the Tauri UI, as on Windows.
 - Every Rust build targets the oldest supported macOS: `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET`, kept equal to `pins::MIN_MACOS` by a test.
-- The end-to-end tests that switch between windows need an unlocked desktop session; while the screen is locked they say so and pass.
+- The end-to-end tests that switch between windows take the desktop's focus, so they run only with `SAVESCUMMER_DESKTOP_TESTS=1` (CI sets it) and an unlocked screen; otherwise they say so and pass.
 
 The old Qt frontend setup is dormant because this tree has no Qt UI project. It is not needed for the current Windows or macOS build:
 
