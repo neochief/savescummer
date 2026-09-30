@@ -1,10 +1,41 @@
 import { useLayoutEffect, useMemo, useRef, type HTMLAttributes } from 'react';
 import source from '../public/character/no-games-found.svg?raw';
 
-// Behaviour for the rigged skeleton in public/character/no-games-found.svg. The SVG stays a plain static drawing
-// (its illustrated crescent gaze); this component inlines a copy with round eyeballs and drives the rig: eyes follow
-// the pointer, the lids slowly close from its illustrated scowl down through the bored look, the skull wakes up
-// surprised, snaps back into the scowl, and the cycle repeats. All geometry is read from the SVG's own guides.
+/*
+ * The empty-library skeleton: bored, sleepy, and mildly responsive to the person using the page.
+ *
+ * One cycle:
+ * - Scowl: it starts in the grumpy face of the original drawing, with deep dark lids over big red eyes.
+ * - Drowse: from there it slowly slides into a bored, half-closed look, then heavier and heavier lids. The brows follow
+ *   the lids, the head tips forward and sinks, and the lower hand's fingers drum on the sill, slower and softer as it
+ *   dozes off.
+ * - Asleep: briefly. The red is gone completely, leaving only the curved eyelid lines; the fingers are still.
+ * - Wake: suddenly and wide-eyed, with small centred red eyes and a jolt of the head. The fingers of both hands spring
+ *   out, and mouse tracking pauses.
+ * - Back to the scowl, quickly, as if it just realised what happened and is a bit annoyed, and the cycle repeats.
+ *
+ * Throughout, both red eyes follow the mouse anywhere in the window, smoothly and within restrained bounds. They're
+ * always whole circles, partly hidden by the eye openings; looking all the way down leaves about a fifth of their
+ * height peeking over a dark lower rim, which gives the eyes depth.
+ *
+ * Poking it (clicking the drawn skeleton) startles it awake at once, with a quick shake of the head and a soft bony
+ * rattle, which follows the app's sound setting and the `sound` prop.
+ *
+ * When the mouse leaves the window, it stops the cycle and settles into the awake, bored look glancing left, head at
+ * rest, and waits there; when the mouse comes back, a fresh cycle starts from the scowl. Before the mouse first moves,
+ * and always under reduced motion, it holds still in the scowl, glancing left.
+ *
+ * Head movement pivots where the cheek rests on the supporting hand, so the cheek stays on the fingers. The body and
+ * arms never move; only the fingers do (the drumming and the startle).
+ *
+ * The SVG (public/character/no-games-found.svg) is the single source of the artwork and of the rig: separate body
+ * parts, a movable head, the original crescent eyes (its standalone static look, never shown here), round eyes, the
+ * shared eye openings that both clip and outline them, and invisible guides for the eyelid motion and gaze limits.
+ * This component shows an ID-prefixed copy of it (so several can share a page) and animates that copy; the file
+ * itself stays a plain static drawing. Editors that drop hidden elements or <defs> on save strip that rig.
+ *
+ * It scales to its container, pauses while the page is hidden, and cleans up on unmount.
+ */
 
 /** Seconds per phase. Drowsiness is slow, waking is quick, the sleep and surprise holds are brief. */
 export const skeletonTiming = {
@@ -33,7 +64,13 @@ export const skeletonMotion = {
   // `sleepyTempo` as the drumming fades; `spread` (start-to-start) and `tap` are shares of one roll, `rise` is the share
   // of a tap spent rising. The top bone lifts only `topShare` of the way, so the lower bones slide up past it.
   drumming: { lift: 44, topShare: 0.4, tempo: 0.9, sleepyTempo: 0.35, spread: 0.2, tap: 0.18, rise: 0.7 },
+  // Startled fingers: the lower hand's fingers fan apart by `fan` degrees and their lower bones stretch `reach` head
+  // units down; the supporting hand's upper finger bones flick `flick` degrees outward, away from the cheek.
+  startle: { fan: 8, reach: 18, flick: 16 },
 };
+
+/** The rattle played when the skeleton is poked: `clacks` quick bone clacks `spacing` seconds apart, fading as they go. */
+export const skeletonSound = { volume: 0.1, clacks: 3, spacing: 0.05 };
 
 type Side = 'left' | 'right';
 type Pose = 'bored' | 'heavy' | 'almost-closed' | 'closed' | 'wake';
@@ -42,8 +79,11 @@ type Phase = {
   follow?: number; // how much the head tilts after the gaze (default 1)
   classic?: number; // blend toward the illustrated scowl: 0 = rigged eyes, 1 = original artwork (default 0)
   drum?: number; // how actively the fingers drum: 0 = still, 1 = wide awake (default 0)
+  startle?: number; // how far the fingers spring out in surprise (default 0)
 };
-type Values = { closure: number; sag: number; follow: number; classic: number; drum: number; radius: Record<Side, number> };
+type Values = {
+  closure: number; sag: number; follow: number; classic: number; drum: number; startle: number; radius: Record<Side, number>;
+};
 
 const sides: Side[] = ['left', 'right'];
 const drummingFingers = ['Short-outer-digit', 'Middle-hanging-finger', 'Left-hanging-finger']; // roll order, rightmost first
@@ -61,8 +101,8 @@ function cycle(): Phase[] {
     { name: 'almost-closed', pose: 'almost-closed', duration: t.almostClosed, sag: 0.8, drum: 0.08, track: true, ease: inOut },
     { name: 'closing', pose: 'closed', duration: t.closing, sag: 1, track: true, ease: inOut },
     { name: 'asleep', pose: 'closed', duration: t.asleep, sag: 1, track: true, ease: inOut },
-    { name: 'wake', pose: 'wake', duration: t.wake, sag: lift, track: false, ease: out, gazeRate: snap },
-    { name: 'surprised', pose: 'wake', duration: t.surprised, sag: lift, track: false, ease: inOut, gazeRate: snap },
+    { name: 'wake', pose: 'wake', duration: t.wake, sag: lift, startle: 1, track: false, ease: out, gazeRate: snap },
+    { name: 'surprised', pose: 'wake', duration: t.surprised, sag: lift, startle: 1, track: false, ease: inOut, gazeRate: snap },
     { name: 'recover', pose: 'bored', duration: t.recover, sag: 0, classic: 1, drum: 1, track: false, ease: inOut },
   ];
 }
@@ -133,6 +173,39 @@ function blendOutlines(from: string, to: Point[], t: number) {
     const q = b[(i + offset) % b.length];
     return `${lerp(p[0], q[0], t).toFixed(1)},${lerp(p[1], q[1], t).toFixed(1)}`;
   }).join('L')}Z`;
+}
+
+/**
+ * A short bony rattle, synthesised so no audio asset is needed. Each clack is a burst of band-passed noise (the tick)
+ * over a quickly falling triangle tone (the hollow knock); pitch and timing vary a little so no two pokes sound alike.
+ */
+function rattle(audio: BaseAudioContext) {
+  const { volume, clacks, spacing } = skeletonSound;
+  const noise = audio.createBuffer(1, Math.round(audio.sampleRate * 0.05), audio.sampleRate);
+  const samples = noise.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+  for (let n = 0; n < clacks; n++) {
+    const at = audio.currentTime + n * spacing * (0.8 + Math.random() * 0.5);
+    const level = audio.createGain();
+    level.gain.setValueAtTime(volume * (1 - n / (clacks + 1)), at);
+    level.gain.exponentialRampToValueAtTime(0.001, at + 0.08);
+    level.connect(audio.destination);
+    const tick = audio.createBufferSource(), band = audio.createBiquadFilter();
+    tick.buffer = noise;
+    band.type = 'bandpass';
+    band.frequency.value = 1800 + Math.random() * 1200;
+    band.Q.value = 3;
+    tick.connect(band).connect(level);
+    tick.start(at);
+    const knock = audio.createOscillator(), knockLevel = audio.createGain();
+    knock.type = 'triangle';
+    knock.frequency.setValueAtTime(650 + Math.random() * 300, at);
+    knock.frequency.exponentialRampToValueAtTime(320, at + 0.07);
+    knockLevel.gain.value = 0.6;
+    knock.connect(knockLevel).connect(level);
+    knock.start(at);
+    knock.stop(at + 0.09);
+  }
 }
 
 // Every instance gets its own ID prefix so clip paths and <use> references never resolve into another copy.
@@ -206,31 +279,40 @@ function rig(root: SVGSVGElement, prefix: string) {
   const presets = Object.fromEntries((['bored', 'heavy', 'almost-closed', 'closed', 'wake'] as Pose[]).map((name) => {
     const preset = el(`pose-${name}`);
     const value = (attr: string) => Number(preset.getAttribute(attr));
-    return [name, { closure: value('data-closure-progress'), sag: 0, follow: 1, classic: 0, drum: 1, radius: { left: value('data-iris-radius-left'), right: value('data-iris-radius-right') } }];
+    return [name, { closure: value('data-closure-progress'), sag: 0, follow: 1, classic: 0, drum: 1, startle: 0, radius: { left: value('data-iris-radius-left'), right: value('data-iris-radius-right') } }];
   })) as Record<Pose, Values>;
   const pose = (name: Pose) => presets[name];
   const head = el<SVGGraphicsElement>('head-pose');
   const pivot = head.getAttribute('data-pivot')!.split(/\s+/).map(Number);
   const between = [(eyes.left.neutral[0] + eyes.right.neutral[0]) / 2, (eyes.left.neutral[1] + eyes.right.neutral[1]) / 2];
   const fingers = drummingFingers.map((id) => {
-    const finger = el(id), drawn = finger.getAttribute('data-drawn-transform')!;
+    const finger = el<SVGGraphicsElement>(id), drawn = finger.getAttribute('data-drawn-transform')!;
     // A straight-up lift in the hand's space, expressed in the finger's own (drawn, rotated) space for its bones.
     const inverse = new DOMMatrix(drawn || 'none').inverse();
     const up = (dy: number) => [inverse.c * -dy, inverse.d * -dy];
     const bones = [...finger.children].map((bone) => ({ bone, drawn: bone.getAttribute('data-drawn-transform')! }));
-    return { finger, drawn, up, bones };
+    // Startled fingers fan around their knuckle: the top middle of the finger, placed as drawn.
+    const box = finger.getBBox(), knuckle = new DOMMatrix(drawn || 'none').transformPoint(new DOMPoint(box.x + box.width / 2, box.y));
+    return { finger, drawn, up, bones, knuckle: [knuckle.x, knuckle.y] };
   });
-  return { eyes, pose, head, pivot, between, fingers };
+  // The supporting hand's upper finger bones, each flicking around its joint with the bone below (its bottom middle).
+  const flickers = ['support-outer-distal', 'support-middle-distal', 'support-inner-distal'].map((id) => {
+    const bone = el<SVGGraphicsElement>(id), box = bone.getBBox();
+    return { bone, joint: [box.x + box.width / 2, box.y + box.height] };
+  });
+  return { eyes, pose, head, pivot, between, fingers, flickers };
 }
 
 /**
  * The bored skeleton from the empty library: eyes follow the pointer while it slowly nods off, then startles awake.
- * Clicking it startles it awake immediately.
+ * Clicking it startles it awake immediately, with a bony rattle unless `sound` is false.
  * Holds still in the illustrated scowl, glancing left, until the pointer first moves, and permanently under
  * reduced motion.
  */
-export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
+export function SleepySkeleton({ sound = true, ...props }: HTMLAttributes<HTMLDivElement> & { sound?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
+  const soundOn = useRef(sound);
+  soundOn.current = sound;
   const prefix = useMemo(() => `skeleton${++instances}-`, []);
   const markup = useMemo(() => ({ __html: inlineSvg(prefix) }), [prefix]);
 
@@ -238,7 +320,7 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
   useLayoutEffect(() => {
     if (typeof window.matchMedia !== 'function') return; // no media queries (e.g. jsdom): hold still
     const root = container.current!.querySelector('svg')!;
-    const { eyes, pose, head, pivot, between, fingers } = rig(root, prefix);
+    const { eyes, pose, head, pivot, between, fingers, flickers } = rig(root, prefix);
     const phases = cycle();
     const motion = skeletonMotion;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -246,6 +328,7 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
     let mode: 'static' | 'cycle' | 'away' = 'static';
     let index = 0, elapsed = 0, frame = 0, last = 0, shaken = Infinity; // seconds since the last click
     let drumClock = 0; // progress through drum rolls
+    let audio: AudioContext | undefined; // created on the first poke, which is a user gesture browsers allow sound from
     const classicPose: Values = { ...pose('bored'), classic: 1 };
     let from = classicPose, current = classicPose;
     let pointer: [number, number] | undefined;
@@ -268,16 +351,23 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
 
     const draw = () => {
       const drumming = motion.drumming;
-      fingers.forEach(({ finger, drawn, up, bones }, i) => {
+      const { fan, reach, flick } = motion.startle;
+      fingers.forEach(({ finger, drawn, up, bones, knuckle: [kx, ky] }, i) => {
         // Rise smoothly, then strike down with growing speed.
         const at = ((((drumClock - i * drumming.spread) % 1) + 1) % 1) / drumming.tap;
         const lift = at >= 1 ? 0 : at < drumming.rise ? inOut(at / drumming.rise) : 1 - ((at - drumming.rise) / (1 - drumming.rise)) ** 2;
         const rise = drumming.lift * current.drum * lift;
         // The whole finger lifts by the top bone's share; the lower bones lift the rest of the way on top of that.
-        finger.setAttribute('transform', `translate(0 ${(-rise * drumming.topShare).toFixed(2)}) ${drawn}`);
-        const [x, y] = up(rise * (1 - drumming.topShare));
+        // Startled, the outer fingers fan away from the middle one and the lower bones stretch down.
+        const spread = (i - (fingers.length - 1) / 2) * fan * current.startle;
+        finger.setAttribute('transform',
+          `rotate(${spread.toFixed(2)} ${kx.toFixed(1)} ${ky.toFixed(1)}) translate(0 ${(-rise * drumming.topShare).toFixed(2)}) ${drawn}`);
+        const [x, y] = up(rise * (1 - drumming.topShare) - reach * current.startle);
         bones.slice(1).forEach(({ bone, drawn: placed }) => bone.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) ${placed}`));
       });
+      for (const { bone, joint: [jx, jy] } of flickers) {
+        bone.setAttribute('transform', `rotate(${(flick * current.startle).toFixed(2)} ${jx.toFixed(1)} ${jy.toFixed(1)})`);
+      }
       const tilt = gaze[0] * motion.headGazeTilt[0] - Math.min(gaze[1], 0) * motion.headGazeTilt[1];
       const { degrees, frequency, duration } = motion.clickShake;
       const shake = shaken < duration ? degrees * (1 - shaken / duration) ** 2 * Math.sin(2 * Math.PI * frequency * shaken) : 0;
@@ -311,14 +401,17 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
       shaken += dt;
       while (mode === 'cycle' && elapsed >= step.duration) {
         elapsed -= step.duration;
-        from = { ...pose(step.pose), sag: step.sag, follow: step.follow ?? 1, classic: step.classic ?? 0, drum: step.drum ?? 0 };
+        from = {
+          ...pose(step.pose), sag: step.sag, follow: step.follow ?? 1, classic: step.classic ?? 0, drum: step.drum ?? 0,
+          startle: step.startle ?? 0,
+        };
         index = (index + 1) % phases.length; step = phase();
       }
       const t = step.ease(Math.min(elapsed / step.duration, 1));
       const to = pose(step.pose);
       current = {
         closure: lerp(from.closure, to.closure, t), sag: lerp(from.sag, step.sag, t), follow: lerp(from.follow, step.follow ?? 1, t),
-        drum: lerp(from.drum, step.drum ?? 0, t),
+        drum: lerp(from.drum, step.drum ?? 0, t), startle: lerp(from.startle, step.startle ?? 0, t),
         classic: lerp(from.classic, step.classic ?? 0, t),
         radius: { left: lerp(from.radius.left, to.radius.left, t), right: lerp(from.radius.right, to.radius.right, t) },
       };
@@ -357,6 +450,11 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
     };
     // A click startles the skeleton awake from wherever it is in the cycle, with a quick shake of the head.
     const onClick = (event: MouseEvent) => {
+      if (soundOn.current && typeof AudioContext === 'function') {
+        audio ??= new AudioContext();
+        if (audio.state === 'suspended') audio.resume().catch(() => undefined);
+        rattle(audio);
+      }
       if (reduced.matches) return;
       onMove(event as PointerEvent);
       enter('cycle', 'wake');
@@ -383,6 +481,7 @@ export function SleepySkeleton(props: HTMLAttributes<HTMLDivElement>) {
       document.removeEventListener('mouseout', onOut);
       document.removeEventListener('visibilitychange', onVisibility);
       reduced.removeEventListener('change', onReducedMotion);
+      audio?.close().catch(() => undefined);
     };
   }, [prefix]);
 

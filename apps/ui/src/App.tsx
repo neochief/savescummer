@@ -37,9 +37,9 @@ function BrandButton({ onClick }: { onClick: (opener: HTMLButtonElement) => void
 }
 
 // Empty-state skeleton leaning out of an arched window; every character SVG shares the same canvas and pose height.
-function Character({ name }: { name: string }) {
+function Character({ name, sound = true }: { name: string; sound?: boolean }) {
   return <div className="empty-character" aria-hidden="true">
-    {name === 'no-games-found' ? <SleepySkeleton className="character-art" /> : <img className="character-art" src={`/character/${name}.svg`} alt="" />}
+    {name === 'no-games-found' ? <SleepySkeleton className="character-art" sound={sound} /> : <img className="character-art" src={`/character/${name}.svg`} alt="" />}
   </div>;
 }
 
@@ -602,7 +602,7 @@ export function App({ bridge }: { bridge: Bridge }) {
         {!mac && <WindowControls />}
       </header>
       <aside className="sidebar">
-        {noGames && <Character name="no-games-found" />}
+        {noGames && <Character name="no-games-found" sound={state?.settings?.play_sounds ?? true} />}
         <div className="sidebar-surface">
           {installed.length > 0 && <h2 className="library-heading">INSTALLED</h2>}
           <div className={`library-scroll ${installed.length ? 'has-games' : ''}`} style={fadeStyle(sidebarScroll.top, sidebarScrollable ? sidebarScroll.content - sidebarScroll.viewport - sidebarScroll.top : 0)}>
