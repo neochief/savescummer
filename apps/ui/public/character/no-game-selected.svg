@@ -67,17 +67,17 @@
         <path id="Nose" d="M650,654C657,631 670,607 682,594C693,584 706,592 719,602C733,612 747,625 755,636C764,649 751,661 739,664C727,667 715,658 706,654C699,670 685,685 669,685C649,685 644,673 650,654Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
     </g>
     <g id="_04-·-Controller-arm-and-palm---viewer-right" serif:id="04 · Controller arm and palm — viewer right">
-        <g id="Controller-upper-arm-bone" serif:id="Controller upper arm bone">
+        <g id="controller-upper-arm">
             <path id="Humerus-controller" serif:id="Humerus controller" d="M841,790C858,772 884,770 900,785C906,790 910,796 912,802C929,803 938,818 931,834C927,843 920,848 910,850L960,937C979,940 989,957 982,973C978,985 967,992 956,990C942,1000 925,992 918,979C914,972 914,965 917,957L872,865L858,838C842,839 829,828 829,814C828,804 833,796 841,790Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
-        <g id="Controller-forearm-bone" serif:id="Controller forearm bone">
+        <g id="controller-forearm">
             <path id="Forearm-bone-controller" serif:id="Forearm bone controller" d="M945,948C960,934 989,937 1004,954C1015,977 1038,996 1055,1013C1071,1029 1080,1057 1067,1069C1057,1080 1042,1078 1026,1072C982,1057 960,1027 947,992C934,988 930,967 939,955L945,948Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
-        <g id="Controller-palm" serif:id="Controller palm">
+        <g id="controller-palm">
             <path id="Controller-palm-bone" serif:id="Controller palm bone" d="M1047,1002C1061,989 1078,989 1092,1000C1107,981 1137,978 1156,990C1174,1002 1183,1025 1180,1044C1178,1073 1160,1092 1135,1095C1116,1098 1093,1097 1074,1094C1054,1095 1036,1085 1029,1068C1022,1050 1030,1023 1047,1002Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
     </g>
-    <g id="_05-·-Gamepad" serif:id="05 · Gamepad" transform="matrix(0.992201,-0.124649,0.124649,0.992201,2.09699,366.711)">
+    <g id="gamepad" transform="matrix(0.992201,-0.124649,0.124649,0.992201,2.09699,366.711)">
         <g id="outer-outline" transform="matrix(0.327734,0,0,0.327734,604.501,560.982)">
             <path d="M494,122C530.86,119.16 566.76,130.44 597,151C606.86,157.7 615.89,166.31 624.29,174.71C629.95,180.38 634.86,189.31 642.86,192.14C646.99,193.61 651.66,194 656,194C709.55,194 763.34,193 817,193L868,193C875.7,193 884.97,194.76 892.43,192.43C899.89,190.1 904.79,182.13 909.71,176.71C919.85,165.56 932.1,153.94 945,146C1001.52,111.22 1071.23,117.65 1130,144C1162.6,158.61 1191.79,182.39 1213.14,210.86C1228.7,231.6 1240.72,256.09 1253.29,278.71C1272.58,313.45 1289.74,348.74 1306,385C1321.92,420.52 1333.58,457.83 1346.57,494.43C1367.3,552.83 1382.69,613.52 1391,675C1394.96,704.3 1398.98,736.23 1395.86,765.86C1395.11,772.97 1393.89,780.02 1393.14,787.14C1389.96,817.37 1379.7,847.47 1360.14,871.14C1347.69,886.21 1331.76,898.04 1314,906C1303.52,910.7 1292.7,913.74 1281.29,915.29C1247.86,919.8 1216.54,909.73 1189,891C1172.41,879.72 1159.01,865.1 1144.29,851.71C1123.33,832.67 1104.73,811.3 1084.71,791.29C1067.51,774.08 1051.91,749.27 1029,739C1015.62,733 1001.31,733.35 987,733C971.38,732.62 955.72,732 940,732C885.42,732 830.68,731 776,731C716.78,731 658.13,732 599,732C584.25,732 569.71,733 555,733C539.87,733 523.44,731.94 509.29,738.29C497.46,743.59 487.81,752.91 479.29,762.29C468.82,773.8 457.75,784.77 447.29,796.29C439.25,805.13 429.41,812.71 421.86,821.86C413.34,832.17 403.18,841.25 393.71,850.71C358.77,885.66 315.37,922.46 262.14,916.86C247.95,915.36 234.7,911.88 221.43,906.57C208.61,901.45 195.43,892 185.71,882.29C134.56,831.13 136.85,752.44 143.86,685.86C145.6,669.35 148.17,652.73 151.43,636.43C163.24,577.36 180.29,520.19 200.43,463.43C222.31,401.76 247.93,341.93 279.71,284.71C297.13,253.36 314.2,220.08 338.43,193.43C377.64,150.29 436.68,126.41 494,122Z" style="fill:rgb(9,3,3);fill-rule:nonzero;"/>
         </g>
@@ -140,7 +140,7 @@
             <circle cx="1095.7" cy="464.3" r="38.5" style="fill:rgb(252,0,40);"/>
         </g>
     </g>
-    <g id="_06-·-Controller-fingers---viewer-right" serif:id="06 · Controller fingers — viewer right">
+    <g id="controller-fingers">
         <g id="Controller-ring-finger" serif:id="Controller ring finger">
             <g id="Section-1---proximal" serif:id="Section 1 — proximal">
                 <path id="Controller-ring-proximal" serif:id="Controller ring proximal" d="M1143,1047C1156,1046 1170,1040 1181,1043C1196,1046 1205,1057 1207,1069C1208,1084 1196,1095 1182,1100C1168,1107 1151,1106 1138,1103C1125,1100 1120,1088 1123,1075C1125,1061 1131,1050 1143,1047Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
@@ -199,6 +199,9 @@
         <circle id="pivot-shoulder" cx="458" cy="811" r="6" style="fill:rgb(0,160,255);"/>
         <circle id="pivot-elbow" cx="353" cy="996" r="6" style="fill:rgb(0,160,255);"/>
         <circle id="pivot-wrist" cx="277" cy="888" r="6" style="fill:rgb(0,160,255);"/>
+        <circle id="pivot-shoulder-controller" cx="850" cy="816" r="6" style="fill:rgb(0,160,255);"/>
+        <circle id="pivot-elbow-controller" cx="959" cy="966" r="6" style="fill:rgb(0,160,255);"/>
+        <circle id="pivot-wrist-controller" cx="1049" cy="1045" r="6" style="fill:rgb(0,160,255);"/>
         <ellipse id="gaze-bounds-left" cx="530" cy="643.78" rx="24" ry="48.78" style="fill:rgb(0,160,255);fill-opacity:0.5;"/>
         <circle id="gaze-neutral-left" cx="530" cy="607" r="4" style="fill:rgb(0,160,255);"/>
         <ellipse id="gaze-bounds-right" cx="815" cy="556.28" rx="24" ry="58.28" style="fill:rgb(0,160,255);fill-opacity:0.5;"/>
