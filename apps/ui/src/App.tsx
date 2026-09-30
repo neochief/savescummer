@@ -175,6 +175,8 @@ export function App({ bridge }: { bridge: Bridge }) {
   const historyGame = useRef<string | undefined>(undefined);
   // Game whose history finished loading at least once; only refreshes of it can reveal new rows.
   const loadedGame = useRef<string | undefined>(undefined);
+  // Whether the selected game's first history page has arrived; the empty state waits for it to avoid flicker.
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const historyRef = useRef(history);
   historyRef.current = history;
   const previousActiveStack = useRef<string[]>([]);
@@ -324,6 +326,7 @@ export function App({ bridge }: { bridge: Bridge }) {
       revealTimer.current = setTimeout(() => setRevealing(false), 1000);
     }
     loadedGame.current = game;
+    setHistoryLoaded(true);
     setHistory(rows);
   }, []);
 
@@ -332,6 +335,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     if (historyGame.current !== selectedGame?.id) {
       historyGame.current = selectedGame?.id;
       loadedGame.current = undefined;
+      setHistoryLoaded(false);
       setArrived(new Set());
       setHistory([]);
       setNext(undefined);
@@ -683,7 +687,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             <div key={selectedGame.id} className={`history history-${historyDirection}${revealing ? ' revealing' : ''}`}
               ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
-              {virtualItems.length === 0 && !historyError && <div className="empty-history"><Character name="no-checkpoints" /><p>Checkpoints will appear here when you Save them.</p></div>}
+              {historyLoaded && virtualItems.length === 0 && !historyError && <div className="empty-history"><Character name="no-checkpoints" /><p>Checkpoints will appear here when you Save them.</p></div>}
               <div className="history-virtual" style={{ height: historyTotal + (next ? 52 : 0) }}>
                 {dayLanes.filter((lane) => lane.end > firstVisible && lane.start < lastVisible).map(({ key, day, start, end }) => {
                   const top = itemTop[start];
