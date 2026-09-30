@@ -2,3 +2,6 @@ allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
   - '@tauri-apps/plugin-dialog@2.8.0'
+  - '@vitest/mocker@5.0.3'
+  - '@vitest/spy@5.0.3'
+  - vitest@5.0.3

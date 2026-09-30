@@ -17,6 +17,10 @@ For a macOS WebKit bundle smoke test, build an unsigned trial app from `apps/ui`
 
 On Windows, `cargo xtask dist` builds and tests the host, CLI and Tauri UI, assembles the package, and produces the Inno Setup installer in `dist/`. For a standalone debug UI binary, run `pnpm tauri build --debug --no-bundle` from `apps/ui`. The Tauri build embeds the Vite assets in the executable. A plain `cargo build -p savescummer-ui` builds the development executable, which expects the Vite server and otherwise shows a connection error. The Tauri Windows build also requires `src-tauri/icons/icon.ico`.
 
+## Preview UI states
+
+`pnpm dev` in a plain browser swaps the Tauri bridge for `src/mock/mockBridge.ts`, which serves a snapshot of the demo host. Add `?scenario=<name>` to preview a named state (empty library, running game, interrupted operation, missing access, failed save, …), or open `/scenarios.html` for the list; the JetBrains **Run UI scenarios** configuration opens it. Scenarios in `src/mock/scenarios.ts` state host facts, and `src/mock/policy.ts` mirrors `apps/host/src/policy.rs` to derive what the host would publish; keep the two in step.
+
 ## Checks
 
 Run `pnpm test` and `pnpm build` in `apps/ui`, then `cargo test -p savescummer-ui` and `cargo test -p savescummer-host` from the root. The UI tests use a fake bridge for deterministic state, operation, delete, and dialog flows. The demo host exercises the actual host launch and local socket boundary.

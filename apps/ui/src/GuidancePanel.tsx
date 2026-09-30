@@ -51,7 +51,7 @@ export function GuidancePanel({ game, bridge, retrying, onRetry, onConfigure }: 
   return <section className={`guidance-panel covers-${coverage}`} data-kind={guidance.kind} role="status"
     aria-label={guidance.kind === 'game_running' ? 'Exit the game first' : title}>
     <div className="guidance-content">
-      <strong>{action}{detail && <span className="guidance-title-detail"> {detail}</span>}</strong>
+      <strong>{action}{detail && <>{' '}<span className="guidance-title-detail">{detail}</span></>}</strong>
       {(message || error) && <div className="guidance-text">
         {message && <p className="guidance-description">{message}</p>}
         {error && <p role="alert">{error}</p>}

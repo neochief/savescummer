@@ -5,7 +5,7 @@
   "identifier": "com.savescummer.ui.trial",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:41987",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },

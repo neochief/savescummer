@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UI scenarios — SaveScummer</title>
+    <style>
+      :root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif; }
+      body { margin: 32px auto; max-width: 640px; padding: 0 16px; }
+      li { margin: 4px 0; }
+      code { opacity: .6; margin-left: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>UI scenarios</h1>
+    <p>Dev-only previews served by the mock bridge. Defined in <code>src/mock/scenarios.ts</code>.</p>
+    <ul id="list"></ul>
+    <script type="module">
+      import { scenarios } from '/src/mock/scenarios.ts';
+      document.getElementById('list').append(...Object.entries(scenarios).map(([name, { title }]) => {
+        const item = document.createElement('li');
+        item.innerHTML = `<a href="/?scenario=${name}"></a><code>${name}</code>`;
+        item.firstChild.textContent = title;
+        return item;
+      }));
+    </script>
+  </body>
+</html>

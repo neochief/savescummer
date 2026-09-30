@@ -1,231 +1,119 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:serif="http://www.serif.com/" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 1254 1254" version="1.1" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;" aria-labelledby="character-title character-description">
-    <title id="character-title">Bored skeleton — layered eye rig</title>
-    <desc id="character-description">One complete skull, separate bone and finger layers, preserved illustrated gaze, and hidden circular irises with five reusable sleep and wake poses. No animation.</desc>
-    <metadata id="eye-rig-controls">{
-  "version": 4,
-  "coordinates": "1254 × 1254; left and right mean viewer left and right",
-  "head": {
-    "target": "head-pose",
-    "pivot": [
-      867,
-      725
-    ]
-  },
-  "initial": {
-    "mode": "static",
-    "pose": "illustrated"
-  },
-  "pointerExit": {
-    "mode": "dynamic",
-    "pose": "bored",
-    "gaze": [
-      -24,
-      0
-    ],
-    "headTransform": "identity"
-  },
-  "wake": {
-    "mode": "dynamic",
-    "pose": "wake",
-    "gaze": [
-      0,
-      0
-    ]
-  },
-  "dynamicPoses": [
-    "bored",
-    "heavy",
-    "almost-closed",
-    "closed",
-    "wake"
-  ],
-  "morphing": "Interpolate every corresponding anchor and cubic control point between the two hidden guides, using one closure progress value. Openings and brows use M C C C C Z. One opening path drives the black socket fill, iris clip and continuous 16 px eye outline. At full closure the lower half retraces the upper half exactly, leaving the same eyelid line. Illustrated geometry is a separate static preset.",
-  "applyPose": "Read pose-{name}.data-closure-progress. For each side interpolate the opening and brow guide pairs into eye-opening-{side}.d and brow-{side}.d. The socket, iris clip and upper-lid-line-{side} all reference eye-opening-{side}; no separate lid geometry needs updating. Set iris-circle-{side}.r from the preset data-iris-radius-{side}.",
-  "selectMode": "Show iris-static-{side} OR iris-dynamic-{side} for both eyes. Static uses the illustrated opening and brow templates and hides eye-upper-lid-{side} because the original socket already includes its outline. Dynamic displays eye-upper-lid-{side} at every closure value, including fully closed.",
-  "gaze": "Use gaze-bounds-{side} for each iris center, relative to gaze-neutral-{side}, in head-pose coordinates. Keep translated iris-gaze-{side} inside that asymmetric oval: (dx/24)^2 + (dy/(dy&lt;0?12:maxDown))^2 &lt;= 1. Both eyes share a normalized gaze direction but use their own calibrated downward extent. Read maxDown from data-max-down. Translation stays inside the fixed clip. Radii remain unchanged during tracking.",
-  "notes": "All guide paths live in defs and never render. Standalone default artwork remains the original illustrated gaze. The continuous dark eye rim stays above the iris to preserve depth at both lids. Metadata is descriptive; no script or animation is embedded. Apply future head motion to head-pose; supporting hand remains in front.",
-  "guides": {
-    "open": "guide-open-{part}-{side}",
-    "closed": "guide-closed-{part}-{side}",
-    "parts": [
-      "opening",
-      "brow"
-    ],
-    "progress": "0 = fully open; 1 = fully closed"
-  },
-  "gazeGuides": {
-    "group": "eye-gaze-guides",
-    "boundary": "gaze-bounds-{side}",
-    "neutral": "gaze-neutral-{side}",
-    "downLimit": "gaze-down-limit-{side}",
-    "coordinateSpace": "head-pose",
-    "maxHorizontal": 24,
-    "maxUp": 12,
-    "maxDown": {
-      "left": 82.32,
-      "right": 79.06
-    },
-    "mapping": "Clamp normalized pointer vector (u,v) to the unit disk. Then dx=24*u; dy=(v&lt;0?12:maxDown)*v. Use the same (u,v) for both eyes; convert from viewport to head coordinates first.",
-    "downCalibration": {
-      "pose": "bored",
-      "closureProgress": 0.6,
-      "horizontalOffset": 0,
-      "visibleHeightFraction": 0.3,
-      "measurement": "Rendered vertical height of visible red after clipping and the dark outline, divided by the full circle diameter; not visible area.",
-      "radii": {
-        "left": 58,
-        "right": 52
-      }
-    },
-    "sleep": "Keep travel guides fixed while eyelids close; later sleepy poses may show less than 30%, reaching zero at full closure. Wake hold remains centered."
-  },
-  "depthRim": {
-    "outline": "upper-lid-line-{side}",
-    "strokeWidth": 16,
-    "mechanism": "The same continuous dark outline masks the top, bottom and sides of the clipped iris. It covers 8 units inside the opening and extends 8 units outside, leaving a nominal 16-unit dark band between visible red and white skull. Never move this clip or outline with gaze; do not add a separate mismatched lower stroke."
-  }
-}</metadata>
-    <defs>
-        <path id="eye-opening-left" d="M406,565C403,565 405,552 410,541C428,510 459,496 489,500C529,500 560,524 587,542C607,557 620,558 629,546C636,536 641,538 645,548C648,558 638,572 632,577C637,593 628,614 617,620C610,623 605,618 592,618C551,614 503,627 468,648C460,654 452,646 445,637C426,611 424,574 442,542C430,546 417,555 406,565Z" />
-        <clipPath id="eye-clip-left" clipPathUnits="userSpaceOnUse">
-            <use href="#eye-opening-left" xlink:href="#eye-opening-left" />
-        </clipPath>
-        <path id="eye-opening-right" d="M699,486C707,494 716,492 723,481C749,439 771,399 808,363C837,335 862,316 887,322C901,323 912,329 914,335C916,339 893,335 875,349C902,362 919,389 925,421C934,470 915,516 880,545C850,571 810,578 779,563C759,554 741,541 728,520C713,525 705,514 699,505C695,497 693,488 699,486Z" />
-        <clipPath id="eye-clip-right" clipPathUnits="userSpaceOnUse">
-            <use href="#eye-opening-right" xlink:href="#eye-opening-right" />
-        </clipPath>
-        <g id="eye-motion-guides">
-            <g id="guide-open" data-closure-progress="0">
-                <path id="guide-open-opening-left" d="M 433.117 579.867 C 422.539 540.391 455.913 497.148 507.659 483.283 C 559.406 469.418 609.929 490.18 620.507 529.656 C 631.084 569.132 597.711 612.375 545.964 626.24 C 494.218 640.105 443.695 619.343 433.117 579.867 Z" />
-                <path id="guide-open-brow-left" d="M 468.109 466.242 C 487.021 444.093 538.625 417.842 576.58 418.543 C 594.241 417.693 602.673 423.198 590.468 429.574 C 556.072 431.026 512.921 448.024 475.42 471.272 C 468.584 475.433 462.05 473.301 468.109 466.242 Z" />
-                <path id="guide-open-opening-right" d="M 754.36 493.854 C 743.783 454.378 772.122 412.485 817.659 400.283 C 863.196 388.081 908.685 410.192 919.263 449.669 C 929.841 489.145 901.501 531.038 855.964 543.24 C 810.427 555.442 764.938 533.331 754.36 493.854 Z" />
-                <path id="guide-open-brow-right" d="M 876.593 350.155 C 850.106 340.17 794.57 342.628 763.519 361.818 C 748.494 369.726 744.214 378.638 757.432 378.202 C 786.593 362.623 830.608 356.265 873.008 358.104 C 880.7 358.372 885.061 353.321 876.593 350.155 Z" />
-            </g>
-            <g id="guide-closed" data-closure-progress="1">
-                <path id="guide-closed-opening-left" d="M 438.621 604.274 C 477.226 620.847 509.241 620.551 542.082 611.751 C 574.924 602.951 602.797 587.2 627.943 553.545 C 602.797 587.2 574.924 602.951 542.082 611.751 C 509.241 620.551 477.226 620.847 438.621 604.274 Z" />
-                <path id="guide-closed-brow-left" d="M 478.025 545.98 C 506.985 522.691 559.722 507.007 604.363 507.469 C 610.547 507.365 614.42 514.092 609.401 518.543 C 565.347 524.135 521.303 537.49 482.485 558.761 C 475.534 563.729 470.307 555.812 478.025 545.98 Z" />
-                <path id="guide-closed-opening-right" d="M 759.981 518.23 C 794.761 535.828 823.182 536.495 852.082 528.751 C 880.983 521.007 905.262 506.219 926.584 473.589 C 905.262 506.219 880.983 521.007 852.082 528.751 C 823.182 536.495 794.761 535.828 759.981 518.23 Z" />
-                <path id="guide-closed-brow-right" d="M 879.528 432.816 C 842.804 427.127 789.29 439.913 750.861 462.633 C 745.453 465.635 745.463 473.397 752.035 474.742 C 792.982 457.558 837.803 447.102 882.056 446.115 C 890.56 446.942 891.128 437.472 879.528 432.816 Z" />
-            </g>
-        </g>
-        <g id="eye-poses">
-            <g id="pose-illustrated" data-family="static" data-iris-mode="static">
-                <path id="pose-illustrated-opening-left" d="M406,565C403,565 405,552 410,541C428,510 459,496 489,500C529,500 560,524 587,542C607,557 620,558 629,546C636,536 641,538 645,548C648,558 638,572 632,577C637,593 628,614 617,620C610,623 605,618 592,618C551,614 503,627 468,648C460,654 452,646 445,637C426,611 424,574 442,542C430,546 417,555 406,565Z" />
-                <path id="pose-illustrated-brow-left" d="M447,438C467,412 495,406 522,417C551,428 578,454 586,482C589,491 586,494 579,489C535,460 493,440 447,438Z" />
-                <path id="pose-illustrated-opening-right" d="M699,486C707,494 716,492 723,481C749,439 771,399 808,363C837,335 862,316 887,322C901,323 912,329 914,335C916,339 893,335 875,349C902,362 919,389 925,421C934,470 915,516 880,545C850,571 810,578 779,563C759,554 741,541 728,520C713,525 705,514 699,505C695,497 693,488 699,486Z" />
-                <path id="pose-illustrated-brow-right" d="M707,401C693,373 710,327 738,300C761,277 789,260 812,259C818,259 818,263 813,267C776,307 745,347 713,398C710,403 709,405 707,401Z" />
-            </g>
-            <g id="pose-bored" data-family="dynamic" data-iris-mode="dynamic" data-iris-radius-left="58" data-iris-radius-right="52" data-closure-progress="0.6" />
-            <g id="pose-heavy" data-family="dynamic" data-iris-mode="dynamic" data-iris-radius-left="58" data-iris-radius-right="52" data-closure-progress="0.82" />
-            <g id="pose-almost-closed" data-family="dynamic" data-iris-mode="dynamic" data-iris-radius-left="58" data-iris-radius-right="52" data-closure-progress="0.96" />
-            <g id="pose-closed" data-family="dynamic" data-iris-mode="dynamic" data-iris-radius-left="58" data-iris-radius-right="52" data-closure-progress="1" />
-            <g id="pose-wake" data-family="dynamic" data-iris-mode="dynamic" data-iris-radius-left="34" data-iris-radius-right="32" data-closure-progress="0" />
-        </g>
-        <g id="eye-gaze-guides" data-coordinate-space="head-pose" data-calibration-pose="bored" inkscape:groupmode="layer" inkscape:label="Gaze center limits · hidden guides">
-            <!-- Center travel only, not eyeball outlines. The upper/lower half-ovals have different heights. Never render these guides in the character. -->
-            <path id="gaze-bounds-left" d="M 525 543 C 538.255 543 549 548.373 549 555 C 549 600.464 538.255 637.32 525 637.32 C 511.745 637.32 501 600.464 501 555 C 501 548.373 511.745 543 525 543 Z" data-center-x="525" data-center-y="555" data-max-horizontal="24" data-max-up="12" data-max-down="82.32" data-normal-iris-radius="58" data-down-visible-height-fraction="0.3" data-calibration-closure-progress="0.6" />
-            <circle id="gaze-neutral-left" cx="525" cy="555" r="1" />
-            <circle id="gaze-down-limit-left" cx="525" cy="637.32" r="1" data-target-visible-height-fraction="0.3" />
-            <path id="gaze-bounds-right" d="M 835 460 C 848.255 460 859 465.373 859 472 C 859 515.664 848.255 551.06 835 551.06 C 821.745 551.06 811 515.664 811 472 C 811 465.373 821.745 460 835 460 Z" data-center-x="835" data-center-y="472" data-max-horizontal="24" data-max-up="12" data-max-down="79.06" data-normal-iris-radius="52" data-down-visible-height-fraction="0.3" data-calibration-closure-progress="0.6" />
-            <circle id="gaze-neutral-right" cx="835" cy="472" r="1" />
-            <circle id="gaze-down-limit-right" cx="835" cy="551.06" r="1" data-target-visible-height-fraction="0.3" />
-        </g>
-    </defs>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1254 1254" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;">
     <g id="_01-·-Body" serif:id="01 · Body">
         <g id="Rib-cage-and-sternum" serif:id="Rib cage and sternum">
-            <path id="ribs-and-sternum" d="M436.52,812.705C440.52,842.705 476,875 506,891C542,912 580,924 610,921C622,922 618,907 619,894C619,871 630,860 651,858C680,854 706,869 703,898L700,912C730,919 787,899 818,878C831,868 842,854 851,853C865,849 872,861 869,878C866,914 832,939 803,952C773,966 737,970 707,968C695,966 690,968 693,976C703,991 733,997 758,996C807,994 857,971 875,935C881,925 883,914 882,906C901,934 899,964 884,988C857,1033 813,1045 770,1042C740,1043 716,1033 687,1020L686,1040C684,1058 671,1070 652,1065C629,1067 612,1053 612,1032L612,1018C579,1033 546,1033 514,1027C475,1023 438,1008 413,989C393,971 389,948 394,919C396,889 406,864 428,845C414,868 416,897 428,921C451,962 492,982 535,986C565,990 594,983 613,974C621,969 619,962 612,963C577,969 539,961 506,948C462,929 438.645,898.886 433.903,858C434.903,840 431.52,825.705 436.52,812.705Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+            <path id="ribs-and-sternum" d="M436.52,812.705C440.52,842.705 476,875 506,891C542,912 580,924 610,921C622,922 618,907 619,894C619,871 630,860 651,858C680,854 706,869 703,898L700,912C730,919 787,899 818,878C831,868 842,854 851,853C865,849 872,861 869,878C866,914 832,939 803,952C773,966 737,970 707,968C695,966 690,968 693,976C703,991 733,997 758,996C807,994 857,971 875,935C881,925 883,914 882,906C901,934 899,964 884,988C857,1033 813,1045 770,1042C740,1043 716,1033 687,1020L686,1040C684,1058 671,1070 652,1065C629,1067 612,1053 612,1032L612,1018C579,1033 546,1033 514,1027C475,1023 438,1008 413,989C393,971 389,948 394,919C396,889 406,864 428,845C414,868 416,897 428,921C451,962 492,982 535,986C565,990 594,983 613,974C621,969 619,962 612,963C577,969 539,961 506,948C462,929 438.645,898.886 433.903,858C434.903,840 431.52,825.705 436.52,812.705Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
         <g id="Collarbones">
-            <path id="clavicle-left" d="M380,752C395,732 423,744 450,754C502,774 543,805 592,821C614,828 631,839 625,860C621,881 601,887 581,878C530,854 487,824 438,813C412,808 389,794 379,780C372,770 373,761 380,752Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
-            <path id="clavicle-right" d="M718,833C751,831 779,817 805,802C827,788 846,797 851,815C856,833 845,843 829,849C800,863 773,876 742,885C723,891 704,886 699,872C692,854 701,839 718,833Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+            <path id="clavicle-left" d="M380,752C395,732 423,744 450,754C502,774 543,805 592,821C614,828 631,839 625,860C621,881 601,887 581,878C530,854 487,824 438,813C412,808 389,794 379,780C372,770 373,761 380,752Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
+            <path id="clavicle-right" d="M718,833C751,831 779,817 805,802C827,788 846,797 851,815C856,833 845,843 829,849C800,863 773,876 742,885C723,891 704,886 699,872C692,854 701,839 718,833Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
         <g id="Neck" transform="matrix(1,0,0,1.07277,0,-56.1922)">
-            <path id="neck-bone" d="M645,778C660,769 686,770 703,784C716,795 719,817 710,832C701,851 678,856 655,850C633,845 624,833 626,815C627,799 634,785 645,778Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+            <path id="neck-bone" d="M645,778C660,769 686,770 703,784C716,795 719,817 710,832C701,851 678,856 655,850C633,845 624,833 626,815C627,799 634,785 645,778Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
     </g>
     <g id="_02-·-Lower-arm---viewer-left" serif:id="02 · Lower arm — viewer left">
         <g id="Upper-arm-bone" serif:id="Upper arm bone">
-            <path id="humerus-left" d="M150,974C211,918 271,849 300,806C289,787 301,759 324,749C348,737 373,746 384,768C408,764 426,782 425,808C426,837 404,862 377,860L359,855C317,897 273,946 237,996C212,1013 176,1008 159,993L150,974Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+            <path id="humerus-left" d="M150,974C211,918 271,849 300,806C289,787 301,759 324,749C348,737 373,746 384,768C408,764 426,782 425,808C426,837 404,862 377,860L359,855C317,897 273,946 237,996C212,1013 176,1008 159,993L150,974Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
         <g id="Forearm-bone" serif:id="Forearm bone">
-            <path id="forearm-bone-left" d="M137,975C153,967 176,978 183,991C215,989 246,1004 270,1005C292,1007 307,989 329,997C345,1001 349,1019 339,1034C342,1046 333,1067 316,1078C302,1090 287,1084 274,1079C251,1069 219,1072 191,1074C176,1076 176,1077 170,1091C159,1108 138,1115 118,1107C92,1099 81,1077 90,1054C97,1034 111,1025 126,1024C109,1015 110,990 125,980L137,975Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+            <path id="forearm-bone-left" d="M137,975C153,967 176,978 183,991C215,989 246,1004 270,1005C292,1007 307,989 329,997C345,1001 349,1019 339,1034C342,1046 333,1067 316,1078C302,1090 287,1084 274,1079C251,1069 219,1072 191,1074C176,1076 176,1077 170,1091C159,1108 138,1115 118,1107C92,1099 81,1077 90,1054C97,1034 111,1025 126,1024C109,1015 110,990 125,980L137,975Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
     </g>
-    <g id="_03-·-Head---complete-skull" serif:id="03 · Head — complete skull and eye controls" inkscape:groupmode="layer" inkscape:label="03 · Head — complete skull and eye controls">
-        <g id="head-pose" data-pivot="867 725">
-            <path id="skull" d="M355,573C316,555 287,505 291,450C289,403 315,354 346,315C416,218 528,143 629,111C696,89 760,89 815,114C903,153 955,246 957,338C960,357 955,383 955,403C954,425 966,435 991,448C1016.4,468.733 1038.93,484.582 1022.62,556.197C1005.69,630.572 925.526,619 895.526,627C882.526,637 922.908,663.662 901.408,699C888.746,719.81 840,711 825,689L808,660C815,683 826,710 821,729C816,752 801,765 780,766C748,767 737,745 731,720L723,699C730,731 733,760 717,778C705,792 685,795 668,790C639,786 630,770 633,745L633,709C627,728 629,752 613,770C601,784 581,786 564,779C538,770 532,748 540,721C544,706 557,686 553,681C544,670 517,692 490,708C463,725 440,734 416,725C388,717 373,696 374,674C372,650 384,631 394,617C400,608 382,598 374,586C370,581 366,577 355,573Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
-            <g id="Right-eye" serif:id="Right eye · socket, iris modes, upper lid, brow" inkscape:groupmode="layer" inkscape:label="Right eye · socket, iris modes, upper lid, brow" data-side="viewer-right">
-                <use href="#eye-opening-right" xlink:href="#eye-opening-right" id="eye-socket-right" fill="#0a0505" fill-rule="nonzero" />
-                <g id="eye-contents-right" clip-path="url(#eye-clip-right)">
-                    <g id="iris-static-right" serif:id="Static iris · right · original curved cutout" inkscape:groupmode="layer" inkscape:label="Static iris · right · original curved cutout">
-                        <path id="eye-red-right" d="M827,394C853,400 873,426 875,457C879,493 856,526 827,535C810,540 794,534 781,526C806,506 818,466 793,431L827,394Z" style="fill:rgb(255,0,40);fill-rule:nonzero;" />
-                    </g>
-                    <g id="iris-dynamic-right" style="display:none;" serif:id="Dynamic iris · right · full circle" inkscape:groupmode="layer" inkscape:label="Dynamic iris · right · full circle">
-                        <g id="iris-gaze-right" transform="translate(-24 0)" data-neutral-transform="translate(0 0)" data-bounds-guide="gaze-bounds-right">
-                            <circle id="iris-circle-right" cx="835" cy="472" r="52" fill="#ff0028" />
+    <g id="_03-·-Head---complete-skull" serif:id="03 · Head — complete skull">
+        <g id="head-pose">
+            <path id="skull" d="M355,573C316,555 287,505 291,450C289,403 315,354 346,315C416,218 528,143 629,111C696,89 760,89 815,114C903,153 955,246 957,338C960,357 955,383 955,403C954,425 966,435 991,448C1016.4,468.733 1038.93,484.582 1022.62,556.197C1005.69,630.572 925.526,619 895.526,627C882.526,637 922.908,663.662 901.408,699C888.746,719.81 840,711 825,689L808,660C815,683 826,710 821,729C816,752 801,765 780,766C748,767 737,745 731,720L723,699C730,731 733,760 717,778C705,792 685,795 668,790C639,786 630,770 633,745L633,709C627,728 629,752 613,770C601,784 581,786 564,779C538,770 532,748 540,721C544,706 557,686 553,681C544,670 517,692 490,708C463,725 440,734 416,725C388,717 373,696 374,674C372,650 384,631 394,617C400,608 382,598 374,586C370,581 366,577 355,573Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
+            <g id="Right-eye" serif:id="Right eye">
+                <path id="eye-socket-right" d="M699,486C707,494 716,492 723,481C749,439 771,399 808,363C837,335 862,316 887,322C901,323 912,329 914,335C916,339 893,335 875,349C902,362 919,389 925,421C934,470 915,516 880,545C850,571 810,578 779,563C759,554 741,541 728,520C713,525 705,514 699,505C695,497 693,488 699,486Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
+                <g id="eye-contents-right">
+                    <clipPath id="_clip1">
+                        <path d="M699,486C707,494 716,492 723,481C749,439 771,399 808,363C837,335 862,316 887,322C901,323 912,329 914,335C916,339 893,335 875,349C902,362 919,389 925,421C934,470 915,516 880,545C850,571 810,578 779,563C759,554 741,541 728,520C713,525 705,514 699,505C695,497 693,488 699,486Z"/>
+                    </clipPath>
+                    <g clip-path="url(#_clip1)">
+                        <g id="iris-static-right">
+                            <path id="eye-red-right" d="M827,394C853,400 873,426 875,457C879,493 856,526 827,535C810,540 794,534 781,526C806,506 818,466 793,431L827,394Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+                        </g>
+                        <g id="iris-dynamic-right" opacity="0">
+                            <g id="iris-gaze-right">
+                                <circle id="iris-circle-right" cx="835" cy="472" r="52" style="fill:rgb(255,0,40);"/>
+                            </g>
                         </g>
                     </g>
                 </g>
-                <g id="eye-upper-lid-right" style="display:none;" inkscape:groupmode="layer" inkscape:label="Upper eyelid and continuous socket rim · right" serif:id="Upper eyelid and continuous socket rim · right">
-                    <use id="upper-lid-line-right" fill="none" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" href="#eye-opening-right" xlink:href="#eye-opening-right" />
-                </g>
-                <g id="eyebrow-right" serif:id="Brow · right" inkscape:groupmode="layer" inkscape:label="Brow · right">
-                    <path id="brow-right" d="M707,401C693,373 710,327 738,300C761,277 789,260 812,259C818,259 818,263 813,267C776,307 745,347 713,398C710,403 709,405 707,401Z" style="fill:rgb(10,5,5);fill-rule:nonzero;" />
+                <g id="eyebrow-right">
+                    <path id="brow-right" d="M707,401C693,373 710,327 738,300C761,277 789,260 812,259C818,259 818,263 813,267C776,307 745,347 713,398C710,403 709,405 707,401Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
                 </g>
             </g>
-            <g id="Left-eye" serif:id="Left eye · socket, iris modes, upper lid, brow" inkscape:groupmode="layer" inkscape:label="Left eye · socket, iris modes, upper lid, brow" data-side="viewer-left">
-                <use href="#eye-opening-left" xlink:href="#eye-opening-left" id="eye-socket-left" fill="#0a0505" fill-rule="nonzero" />
-                <g id="eye-contents-left" clip-path="url(#eye-clip-left)">
-                    <g id="iris-static-left" serif:id="Static iris · left · original curved cutout" inkscape:groupmode="layer" inkscape:label="Static iris · left · original curved cutout">
-                        <path id="eye-red-left" d="M467,609C467,583 486,558 511,551C540,543 571,559 591,586C550,577 505,579 467,609Z" style="fill:rgb(255,0,40);fill-rule:nonzero;" />
-                    </g>
-                    <g id="iris-dynamic-left" style="display:none;" serif:id="Dynamic iris · left · full circle" inkscape:groupmode="layer" inkscape:label="Dynamic iris · left · full circle">
-                        <g id="iris-gaze-left" transform="translate(-24 0)" data-neutral-transform="translate(0 0)" data-bounds-guide="gaze-bounds-left">
-                            <circle id="iris-circle-left" cx="525" cy="555" r="58" fill="#ff0028" />
+            <g id="Left-eye" serif:id="Left eye">
+                <path id="eye-socket-left" d="M406,565C403,565 405,552 410,541C428,510 459,496 489,500C529,500 560,524 587,542C607,557 620,558 629,546C636,536 641,538 645,548C648,558 638,572 632,577C637,593 628,614 617,620C610,623 605,618 592,618C551,614 503,627 468,648C460,654 452,646 445,637C426,611 424,574 442,542C430,546 417,555 406,565Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
+                <g id="eye-contents-left">
+                    <clipPath id="_clip2">
+                        <path d="M406,565C403,565 405,552 410,541C428,510 459,496 489,500C529,500 560,524 587,542C607,557 620,558 629,546C636,536 641,538 645,548C648,558 638,572 632,577C637,593 628,614 617,620C610,623 605,618 592,618C551,614 503,627 468,648C460,654 452,646 445,637C426,611 424,574 442,542C430,546 417,555 406,565Z"/>
+                    </clipPath>
+                    <g clip-path="url(#_clip2)">
+                        <g id="iris-static-left">
+                            <path id="eye-red-left" d="M467,609C467,583 486,558 511,551C540,543 571,559 591,586C550,577 505,579 467,609Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+                        </g>
+                        <g id="iris-dynamic-left" opacity="0">
+                            <g id="iris-gaze-left">
+                                <circle id="iris-circle-left" cx="525" cy="555" r="58" style="fill:rgb(255,0,40);"/>
+                            </g>
                         </g>
                     </g>
                 </g>
-                <g id="eye-upper-lid-left" style="display:none;" inkscape:groupmode="layer" inkscape:label="Upper eyelid and continuous socket rim · left" serif:id="Upper eyelid and continuous socket rim · left">
-                    <use id="upper-lid-line-left" fill="none" stroke="#0a0505" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" href="#eye-opening-left" xlink:href="#eye-opening-left" />
-                </g>
-                <g id="eyebrow-left" serif:id="Brow · left" inkscape:groupmode="layer" inkscape:label="Brow · left">
-                    <path id="brow-left" d="M447,438C467,412 495,406 522,417C551,428 578,454 586,482C589,491 586,494 579,489C535,460 493,440 447,438Z" style="fill:rgb(10,5,5);fill-rule:nonzero;" />
+                <g id="eyebrow-left">
+                    <path id="brow-left" d="M447,438C467,412 495,406 522,417C551,428 578,454 586,482C589,491 586,494 579,489C535,460 493,440 447,438Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
                 </g>
             </g>
             <g id="temple-detail" transform="matrix(1.06301,0,0,1.0332,-21.8769,-16.0378)">
-                <path d="M354,574C341,544 345,509 381,484C384,482 387,483 384,489C368,520 366,542 374,568C378,582 386,593 395,602L384,615C369,598 359,588 354,574Z" style="fill:rgb(10,5,5);fill-rule:nonzero;" />
+                <path d="M354,574C341,544 345,509 381,484C384,482 387,483 384,489C368,520 366,542 374,568C378,582 386,593 395,602L384,615C369,598 359,588 354,574Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
             </g>
-            <path id="nose" d="M658,627C665,603 675,582 687,568C698,554 712,561 726,570C742,581 757,596 767,608C777,620 771,632 758,639C744,647 729,635 718,629C710,646 695,662 679,662C660,663 652,650 658,627Z" style="fill:rgb(10,5,5);fill-rule:nonzero;" />
+            <path id="nose" d="M658,627C665,603 675,582 687,568C698,554 712,561 726,570C742,581 757,596 767,608C777,620 771,632 758,639C744,647 729,635 718,629C710,646 695,662 679,662C660,663 652,650 658,627Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
+            <g id="rig" opacity="0">
+                <circle id="pivot-head" cx="867" cy="725" r="6" style="fill:rgb(0,160,255);"/>
+                <ellipse id="gaze-bounds-left" cx="525" cy="590.16" rx="24" ry="47.16" style="fill:rgb(0,160,255);fill-opacity:0.5;"/>
+                <circle id="gaze-neutral-left" cx="525" cy="555" r="4" style="fill:rgb(0,160,255);"/>
+                <ellipse id="gaze-bounds-right" cx="835" cy="505.53" rx="24" ry="45.53" style="fill:rgb(0,160,255);fill-opacity:0.5;"/>
+                <circle id="gaze-neutral-right" cx="835" cy="472" r="4" style="fill:rgb(0,160,255);"/>
+                <path id="guide-open-opening-left" d="M433.117,579.867C422.539,540.391 455.913,497.148 507.659,483.283C559.406,469.418 609.929,490.18 620.507,529.656C631.084,569.132 597.711,612.375 545.964,626.24C494.218,640.105 443.695,619.343 433.117,579.867Z" style="fill:rgb(0,160,255);fill-opacity:0.4;stroke:rgb(0,160,255);stroke-width:2px;"/>
+                <path id="guide-open-opening-right" d="M754.36,493.854C743.783,454.378 772.122,412.485 817.659,400.283C863.196,388.081 908.685,410.192 919.263,449.669C929.841,489.145 901.501,531.038 855.964,543.24C810.427,555.442 764.938,533.331 754.36,493.854Z" style="fill:rgb(0,160,255);fill-opacity:0.4;stroke:rgb(0,160,255);stroke-width:2px;"/>
+                <path id="guide-open-brow-left" d="M468.109,466.242C487.021,444.093 538.625,417.842 576.58,418.543C594.241,417.693 602.673,423.198 590.468,429.574C556.072,431.026 512.921,448.024 475.42,471.272C468.584,475.433 462.05,473.301 468.109,466.242Z" style="fill:rgb(0,160,255);fill-opacity:0.4;stroke:rgb(0,160,255);stroke-width:2px;"/>
+                <path id="guide-open-brow-right" d="M876.593,350.155C850.106,340.17 794.57,342.628 763.519,361.818C748.494,369.726 744.214,378.638 757.432,378.202C786.593,362.623 830.608,356.265 873.008,358.104C880.7,358.372 885.061,353.321 876.593,350.155Z" style="fill:rgb(0,160,255);fill-opacity:0.4;stroke:rgb(0,160,255);stroke-width:2px;"/>
+                <path id="guide-closed-opening-left" d="M438.621,604.274C477.226,620.847 509.241,620.551 542.082,611.751C574.924,602.951 602.797,587.2 627.943,553.545C602.797,587.2 574.924,602.951 542.082,611.751C509.241,620.551 477.226,620.847 438.621,604.274Z" style="fill:rgb(255,140,0);fill-opacity:0.4;stroke:rgb(255,140,0);stroke-width:2px;"/>
+                <path id="guide-closed-opening-right" d="M759.981,518.23C794.761,535.828 823.182,536.495 852.082,528.751C880.983,521.007 905.262,506.219 926.584,473.589C905.262,506.219 880.983,521.007 852.082,528.751C823.182,536.495 794.761,535.828 759.981,518.23Z" style="fill:rgb(255,140,0);fill-opacity:0.4;stroke:rgb(255,140,0);stroke-width:2px;"/>
+                <path id="guide-closed-brow-left" d="M478.025,545.98C506.985,522.691 559.722,507.007 604.363,507.469C610.547,507.365 614.42,514.092 609.401,518.543C565.347,524.135 521.303,537.49 482.485,558.761C475.534,563.729 470.307,555.812 478.025,545.98Z" style="fill:rgb(255,140,0);fill-opacity:0.4;stroke:rgb(255,140,0);stroke-width:2px;"/>
+                <path id="guide-closed-brow-right" d="M879.528,432.816C842.804,427.127 789.29,439.913 750.861,462.633C745.453,465.635 745.463,473.397 752.035,474.742C792.982,457.558 837.803,447.102 882.056,446.115C890.56,446.942 891.128,437.472 879.528,432.816Z" style="fill:rgb(255,140,0);fill-opacity:0.4;stroke:rgb(255,140,0);stroke-width:2px;"/>
+            </g>
         </g>
     </g>
     <g id="_04-·-Supporting-arm-and-hand---viewer-right" serif:id="04 · Supporting arm and hand — viewer right" transform="matrix(1,0,0,1,-15.8474,28.5139)">
         <g id="Hand">
             <g id="Outer-finger" serif:id="Outer finger">
-                <path id="support-outer-proximal" d="M964,730C986,715 1004,703 1018,688C1028,676 1040,675 1048,684C1059,698 1050,712 1036,721C1018,732 998,739 982,751C964,764 950,744 964,730Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
-                <path id="support-outer-distal" d="M1005,575C1016,565 1035,572 1043,587C1054,607 1052,635 1060,657C1067,674 1069,684 1058,691C1046,700 1033,689 1028,676C1016,651 1014,628 1003,605C996,590 997,582 1005,575Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+                <path id="support-outer-proximal" d="M964,730C986,715 1004,703 1018,688C1028,676 1040,675 1048,684C1059,698 1050,712 1036,721C1018,732 998,739 982,751C964,764 950,744 964,730Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
+                <path id="support-outer-distal" d="M1005,575C1016,565 1035,572 1043,587C1054,607 1052,635 1060,657C1067,674 1069,684 1058,691C1046,700 1033,689 1028,676C1016,651 1014,628 1003,605C996,590 997,582 1005,575Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
             <g id="Middle-finger" serif:id="Middle finger">
-                <path id="support-middle-proximal" d="M936,728C953,714 975,706 985,688C991,675 1006,668 1018,676C1034,687 1026,705 1015,717C998,735 970,745 953,756C935,767 921,743 936,728Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
-                <path id="support-middle-distal" d="M946,560C958,544 976,542 991,549C1004,555 1013,568 1012,586C1010,610 1018,632 1027,656C1033,672 1030,682 1018,686C1003,692 991,682 987,668C980,646 969,625 965,603C962,590 950,586 944,577C940,571 942,566 946,560Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+                <path id="support-middle-proximal" d="M936,728C953,714 975,706 985,688C991,675 1006,668 1018,676C1034,687 1026,705 1015,717C998,735 970,745 953,756C935,767 921,743 936,728Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
+                <path id="support-middle-distal" d="M946,560C958,544 976,542 991,549C1004,555 1013,568 1012,586C1010,610 1018,632 1027,656C1033,672 1030,682 1018,686C1003,692 991,682 987,668C980,646 969,625 965,603C962,590 950,586 944,577C940,571 942,566 946,560Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
             <g id="Inner-finger" serif:id="Inner finger">
-                <path id="support-inner-proximal" d="M924,692C938,683 945,672 949,660C952,647 966,644 976,654C988,665 984,685 978,699C973,711 961,721 948,721C931,725 914,707 924,692Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
-                <path id="support-inner-distal" d="M896,579C906,567 920,561 935,568C951,574 959,586 962,604C965,624 971,639 980,655C988,670 979,681 967,681C954,682 948,669 938,668C929,668 927,661 929,651C930,640 922,630 919,620C905,626 894,620 889,609C883,597 887,588 896,579Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+                <path id="support-inner-proximal" d="M924,692C938,683 945,672 949,660C952,647 966,644 976,654C988,665 984,685 978,699C973,711 961,721 948,721C931,725 914,707 924,692Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
+                <path id="support-inner-distal" d="M896,579C906,567 920,561 935,568C951,574 959,586 962,604C965,624 971,639 980,655C988,670 979,681 967,681C954,682 948,669 938,668C929,668 927,661 929,651C930,640 922,630 919,620C905,626 894,620 889,609C883,597 887,588 896,579Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
             <g id="Palm">
-                <path id="support-palm-bone" d="M848,810C826,801 810,786 813,764C817,741 836,727 858,715C882,702 904,693 923,679C936,668 947,666 960,674C975,682 985,682 991,692C1000,709 982,727 964,736C941,749 919,764 902,785C887,804 869,819 848,810Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+                <path id="support-palm-bone" d="M848,810C826,801 810,786 813,764C817,741 836,727 858,715C882,702 904,693 923,679C936,668 947,666 960,674C975,682 985,682 991,692C1000,709 982,727 964,736C941,749 919,764 902,785C887,804 869,819 848,810Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
         </g>
         <g id="Forearm-bone1" serif:id="Forearm bone">
-            <path id="forearm-bone-support" d="M869,781C890,766 920,773 938,792C949,808 949,831 941,849C979,920 1002.42,934.946 1041.42,974.946C1051.42,985.946 1056.42,986.946 1071.42,987.946C1098.42,989.946 1114.42,1007.95 1116.42,1032.95C1122.42,1051.95 1109.42,1068.95 1096.42,1074.95C1087.42,1086.95 1073.42,1088.95 1063.42,1082.95L1063.42,1070.95C1054.42,1108.95 1018.42,1116.95 992.423,1097.95C968.423,1080.95 962.423,1052.95 977.423,1019.95C946.423,953.946 932,936 898,864C874,862 849,845 844,823C841,806 851,791 869,781Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;" />
+            <path id="forearm-bone-support" d="M869,781C890,766 920,773 938,792C949,808 949,831 941,849C979,920 1002.42,934.946 1041.42,974.946C1051.42,985.946 1056.42,986.946 1071.42,987.946C1098.42,989.946 1114.42,1007.95 1116.42,1032.95C1122.42,1051.95 1109.42,1068.95 1096.42,1074.95C1087.42,1086.95 1073.42,1088.95 1063.42,1082.95L1063.42,1070.95C1054.42,1108.95 1018.42,1116.95 992.423,1097.95C968.423,1080.95 962.423,1052.95 977.423,1019.95C946.423,953.946 932,936 898,864C874,862 849,845 844,823C841,806 851,791 869,781Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
     </g>
     <g id="_05-·-Lower-hand---viewer-left" serif:id="05 · Lower hand — viewer left">
         <g id="Palm1" serif:id="Palm">
             <path id="lower-palm-bone" d="M357,996C342,996 328,1004 326,1017C325,1022 327,1025 331,1027C311,1028 296,1041 290,1057C286,1069 288,1082 298,1086C307,1090 325,1096 326,1086C326,1076 344,1068.14 357,1066.14C369,1064.14 365,1060 372,1060C384,1060 465.176,1032.15 465.176,1016.15C467.176,1003.15 443.065,966.619 407.262,983.21C402.262,980.21 363,996 357,996Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
         </g>
-        <g id="Short-outer-digit" serif:id="Short outer digit" transform="matrix(0.901135,0.433538,-0.433538,0.901135,501.331,-25.9114)">
+        <g id="hanging-finger-outer" transform="matrix(0.901135,0.433538,-0.433538,0.901135,501.331,-25.9114)">
             <g id="lower-finger-center-bone-1" transform="matrix(0.909156,-0.416457,0.416457,0.909156,-392.938,182.953)">
                 <g id="Section-1" serif:id="Section 1">
                     <path id="lower-finger-center-bone-11" serif:id="lower-finger-center-bone-1" d="M402,1028C390,1024 378,1031 373,1041C367,1053 372,1066 382,1071C394,1076 399,1088 405,1096C411,1105 420,1104 427,1095C433,1087 444,1084 451,1080C457,1077 456,1069 449,1064C438,1056 430,1051 423,1042C418,1034 411,1030 402,1028Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
@@ -238,7 +126,7 @@
                 <path id="lower-finger-short-bone-2" d="M522,1029C510,1026 499,1034 495,1044C490,1056 495,1068 504,1075C511,1082 515,1092 523,1097C533,1103 545,1099 553,1092C562,1083 557,1073 549,1065C542,1058 539,1052 536,1043C534,1036 529,1031 522,1029Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
         </g>
-        <g id="Middle-hanging-finger" serif:id="Middle hanging finger" transform="matrix(0.97996,0.199193,-0.199193,0.97996,207.878,-63.3099)">
+        <g id="hanging-finger-middle" transform="matrix(0.97996,0.199193,-0.199193,0.97996,207.878,-63.3099)">
             <g id="Section-12" serif:id="Section 1">
                 <path id="lower-finger-center-bone-12" serif:id="lower-finger-center-bone-1" d="M402,1028C390,1024 378,1031 373,1041C367,1053 372,1066 382,1071C394,1076 399,1088 405,1096C411,1105 420,1104 427,1095C433,1087 444,1084 451,1080C457,1077 456,1069 449,1064C438,1056 430,1051 423,1042C418,1034 411,1030 402,1028Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
@@ -249,7 +137,7 @@
                 <path id="lower-finger-center-bone-3" d="M469,1146C457,1147 447,1153 443,1158C440,1164 445,1177 448,1187C452,1198 460,1204 471,1202C483,1200 490,1191 488,1178C487,1166 487,1153 482,1148C479,1145 474,1145 469,1146Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>
         </g>
-        <g id="Left-hanging-finger" serif:id="Left hanging finger" transform="matrix(0.981096,0.193522,-0.193522,0.981096,209.354,-49.4728)">
+        <g id="hanging-finger-left" transform="matrix(0.981096,0.193522,-0.193522,0.981096,209.354,-49.4728)">
             <g id="Section-13" serif:id="Section 1">
                 <path id="lower-finger-left-bone-1" d="M349,1053C337,1050 326,1057 322,1067C317,1079 322,1090 332,1098C336,1101 338,1109 340,1115C350,1120 368,1110 375,1103C383,1097 379,1087 373,1081C366,1073 365,1061 357,1056C354,1054 351,1053 349,1053Z" style="fill:white;fill-rule:nonzero;stroke:rgb(10,5,5);stroke-width:16px;"/>
             </g>

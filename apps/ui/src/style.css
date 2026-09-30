@@ -285,6 +285,8 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .delete-button { flex: none; width: 32px; height: 30px; border: 0; margin-left: auto; border-radius: 5px; background: transparent; opacity: .5; display: grid; place-items: center; }
 .history-row:hover .delete-button, .delete-button:focus-visible { opacity: 1; background: #3c302d; }
 .empty-history, .empty-library, .history-error { color: #aea095; text-align: center; padding: 32px; }
+.empty-history { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.empty-history p { margin: 0; }
 .load-more { position: absolute; left: 50%; transform: translateX(-50%); display: block; margin: 8px auto; background: transparent; color: #f3eee7; border: 1px solid #5b4c42; border-radius: 6px; padding: 8px 16px; }
 dialog.dialog { position: fixed; width: min(680px, calc(100vw - 48px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid #3d342d; border-radius: 12px; background: #2a2420; color: #faf8ee; box-shadow: 0 20px 64px #0d0707aa; animation: dialog-rise .16s ease-out; }
 dialog.dialog-settings { width: min(480px, calc(100vw - 48px)); }

@@ -9,6 +9,7 @@ import { failureMessage } from './messages';
 import { GuidancePanel } from './GuidancePanel';
 import { SleepySkeleton } from './SleepySkeleton';
 import { PointingSkeleton } from './PointingSkeleton';
+import { CrouchingSkeleton } from './CrouchingSkeleton';
 
 type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush' | 'retry';
 type Feedback = { game: string; action: Action; target?: string; phase: 'busy' | 'success' | 'error'; message?: string };
@@ -40,7 +41,10 @@ function BrandButton({ onClick }: { onClick: (opener: HTMLButtonElement) => void
 // Empty-state skeleton leaning out of an arched window; every character SVG shares the same canvas and pose height.
 function Character({ name, sound = true }: { name: string; sound?: boolean }) {
   return <div className="empty-character" aria-hidden="true">
-    {name === 'no-games-found' ? <SleepySkeleton className="character-art pokeable" sound={sound} /> : <PointingSkeleton className="character-art" />}
+    {name === 'no-games-found' ? <SleepySkeleton className="character-art pokeable" sound={sound} />
+      : name === 'no-game-selected' ? <PointingSkeleton className="character-art" />
+      : name === 'no-checkpoints' ? <CrouchingSkeleton className="character-art" />
+      : <img className="character-art" src={`/character/${name}.svg`} alt="" />}
   </div>;
 }
 
@@ -676,7 +680,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             <div key={selectedGame.id} className={`history history-${historyDirection}${revealing ? ' revealing' : ''}`}
               ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
-              {virtualItems.length === 0 && !historyError && <p className="empty-history">Checkpoints will appear here when you Save them.</p>}
+              {virtualItems.length === 0 && !historyError && <div className="empty-history"><Character name="no-checkpoints" /><p>Checkpoints will appear here when you Save them.</p></div>}
               <div className="history-virtual" style={{ height: historyTotal + (next ? 52 : 0) }}>
                 {dayLanes.filter((lane) => lane.end > firstVisible && lane.start < lastVisible).map(({ key, day, start, end }) => {
                   const top = itemTop[start];

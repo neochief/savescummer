@@ -1,14 +1,20 @@
 // Dev-only in-browser stand-in for the Tauri host bridge (`pnpm dev` in a plain browser).
-// Serves a snapshot of the dev demo host: demo-snapshot.json and art/<game id>/<kind>.*.
-import { platformName, type Bridge } from '../bridge';
+// Serves a snapshot of the dev demo host: demo-snapshot.json and art/<game id>/<kind>.*,
+// reshaped by the `?scenario=` named in scenarios.ts.
+import { HostError, platformName, type Bridge } from '../bridge';
 import type { HistoryEntry, HistoryPage, HostState, Operation, SaveTarget, UiRequest } from '../types';
 import snapshot from './demo-snapshot.json';
+import { applyPolicy, type Facts } from './policy';
+import { scenarios } from './scenarios';
 
 const files = import.meta.glob<string>('./art/*/*', { eager: true, import: 'default', query: '?url' });
 const art = (game: string, kind: string) =>
   Object.entries(files).find(([path]) => path.startsWith(`./art/${game}/${kind}.`))?.[1];
 
 export function createMockBridge(): Bridge {
+  const name = new URLSearchParams(location.search).get('scenario') ?? 'library';
+  const scenario = scenarios[name] ?? scenarios.library;
+  if (!scenarios[name]) console.warn(`[mock bridge] unknown scenario "${name}"; see /scenarios.html`);
   const state = structuredClone(snapshot.state) as unknown as HostState;
   const history = structuredClone(snapshot.history) as unknown as Record<string, HistoryEntry[]>;
   let seq = 0;
@@ -16,6 +22,15 @@ export function createMockBridge(): Bridge {
   const stateListeners = new Set<(state: HostState) => void>();
   const publish = () => { state.revision++; for (const listener of stateListeners) listener(structuredClone(state)); };
   const find = (id: string) => state.games.find((g) => g.id === id)!;
+  const facts: Record<string, Facts> = {};
+  const lock = (g: HostState['games'][number]) => applyPolicy(g, facts[g.id], state.phase);
+  const ops = new Map<string, Operation>();
+  const operation = (game: string, kind: keyof NonNullable<typeof scenario.fail>): Operation => {
+    const id = `op-${++seq}`;
+    const error = scenario.fail?.[kind];
+    ops.set(id, { id, game, kind, status: error ? 'failed' : 'succeeded', error });
+    return { id, game, kind, status: 'accepted' };
+  };
   // Deletes run as soon as the UI commits them.
   const deletes = new Map<string, { done: Promise<Operation> }>();
   const dropDelete = (id: string) => { state.deletes = state.deletes.filter((op) => op.id !== id); deletes.delete(id); };
@@ -23,12 +38,13 @@ export function createMockBridge(): Bridge {
     const id = `op-${++seq}`;
     let finish!: (op: Operation) => void;
     const done = new Promise<Operation>((resolve) => { finish = resolve; });
+    const error = scenario.fail?.delete;
     setTimeout(() => {
-      history[game] = history[game].filter((row) => row.checkpoint !== checkpoint);
+      if (!error) history[game] = history[game].filter((row) => row.checkpoint !== checkpoint);
       find(game).history_version++;
       dropDelete(id);
       publish();
-      finish({ id, game, kind: 'delete', status: 'succeeded' });
+      finish({ id, game, kind: 'delete', status: error ? 'failed' : 'succeeded', error });
     }, 400);
     deletes.set(id, { done });
     state.deletes = [...state.deletes, { id, game, kind: 'delete', status: 'running', checkpoint }];
@@ -36,24 +52,23 @@ export function createMockBridge(): Bridge {
     return { id, game, kind: 'delete', status: 'accepted' };
   };
 
-  // Dev fixtures explicitly supply the same capabilities as the real host.
-  const lock = (g: HostState['games'][number]) => {
-    g.delete = { available: true }; g.flush = { available: true }; g.configure = { available: true };
-    g.retry = { available: false };
-    g.save = { available: true }; g.load = { available: Boolean(g.latest) }; g.restore = { available: true };
-    g.guidance = g.latest ? undefined : { kind: 'no_saves', save: false, load: true };
-    if (!g.running || g.expert_mode) return;
-    g.save = g.load = g.restore = { available: false, reason: 'game_running' };
-    g.guidance = { kind: 'game_running', save: true, load: true };
-  };
-  state.games.forEach(lock); state.games.forEach((g) => { g.running = false; }); state.active_stack = []; // TEMP-IDLE
-  // `?no-games` previews the empty library.
-  if (new URLSearchParams(location.search).has('no-games')) state.games = [];
+  // Baseline: every game idle and healthy; the scenario then states what differs.
+  for (const g of state.games) {
+    g.running = false; g.can_close = false;
+    facts[g.id] = { hasData: true, hasSaves: Boolean(g.latest) };
+  }
+  state.active_stack = [];
+  scenario.setup?.({ state, facts, game: find });
+  if (scenario.focus && !state.active_stack.includes(scenario.focus)) state.active_stack = [scenario.focus, ...state.active_stack];
+  state.games.forEach(lock);
 
   return {
     async request<T>(request: UiRequest): Promise<T> {
       console.debug('[mock bridge]', request);
+      if (scenario.offline) return new Promise(() => undefined);
       await new Promise((r) => setTimeout(r, 120));
+      const refusal = scenario.refuse?.[request.type];
+      if (refusal) throw new HostError(refusal, 'Host rejected the request');
       switch (request.type) {
         case 'state': return structuredClone(state) as T;
         case 'play': case 'close_game': {
@@ -74,20 +89,37 @@ export function createMockBridge(): Bridge {
           return page as T;
         }
         case 'delete': return startDelete(request.game, request.checkpoint) as T;
-        case 'save': case 'load': case 'revert': {
+        case 'save': case 'load': case 'revert': case 'retry': {
           const g = find(request.game);
+          const op = operation(g.id, request.type);
+          if (ops.get(op.id)!.error) return op as T;
+          if (request.type === 'retry') { facts[g.id].blocked = facts[g.id].recovery = g.blocked = undefined; lock(g); }
           if (request.type === 'save') {
             const id = `mock-cp-${++seq}`;
             const at = new Date().toISOString();
             history[g.id].unshift({ id, kind: 'saved', at, checkpoint: id, cloud_replaced: false, actions: { load: true, revert: false, delete: true } });
             g.latest = { id, created_at: at };
+            facts[g.id].hasSaves = true;
             lock(g);
           }
           g.history_version++;
           publish();
-          return { id: `op-${++seq}`, game: g.id, kind: request.type, status: 'accepted' } as T;
+          return op as T;
+        }
+        case 'flush': return operation(request.game, 'flush') as T;
+        case 'request_access': {
+          const f = facts[request.game];
+          for (const key of ['recovery', 'store', 'location', 'target'] as const) if (f[key]?.kind === 'access_needed') f[key] = undefined;
+          lock(find(request.game));
+          publish();
+          return {} as T;
         }
         case 'configure': {
+          if (request.save_location) {
+            facts[request.game].location = facts[request.game].target = undefined;
+            lock(find(request.game));
+            publish();
+          }
           if (request.expert_mode !== undefined) {
             const g = find(request.game);
             g.expert_mode = request.expert_mode;
@@ -100,7 +132,7 @@ export function createMockBridge(): Bridge {
         case 'outcome': {
           const pending = deletes.get(request.operation);
           if (pending) return await pending.done as T;
-          return { id: request.operation, kind: 'save', status: 'succeeded' } satisfies Operation as T;
+          return (ops.get(request.operation) ?? { id: request.operation, kind: 'save', status: 'succeeded' } satisfies Operation) as T;
         }
         case 'set_label': {
           for (const rows of Object.values(history)) for (const row of rows) if (row.checkpoint === request.checkpoint) row.label = request.label;
@@ -116,6 +148,7 @@ export function createMockBridge(): Bridge {
           state.games.push({ id, name: request.name, kind: 'custom', executable: request.executable, installed: true, running: false,
             save: { available: true }, load: { available: false }, restore: { available: true }, delete: { available: true }, flush: { available: true }, configure: { available: true }, retry: { available: false }, history_version: 1, labels_version: 0 });
           history[id] = [];
+          facts[id] = { hasData: true, hasSaves: false };
           lock(find(id));
           publish();
           return { game: id } as T;

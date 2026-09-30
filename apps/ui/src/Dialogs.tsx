@@ -245,7 +245,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
 
   // The game name reads dimmer than the action, like the guidance panel's title detail.
   const title = kind === 'settings' ? 'Settings' : kind === 'add' ? 'Add custom game'
-    : <>{kind === 'configure' ? 'Configure' : 'Flush checkpoints'}<span className="dialog-title-detail"> {gameName}</span></>;
+    : <>{kind === 'configure' ? 'Configure' : 'Flush checkpoints'}{' '}<span className="dialog-title-detail">{gameName}</span></>;
   // Configure opens once its paths have arrived, so its contents don't rearrange while it's visible.
   if (kind === 'configure' && !((saveSet || error) && checkpointsPath !== undefined)) return null;
   return <DialogFrame title={title} kind={kind} close={close} opener={opener}>

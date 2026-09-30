@@ -17,10 +17,12 @@ import source from '../public/character/no-game-selected.svg?raw';
  *   seconds, so a restless mouse doesn't turn it into constant jabbing.
  * - Nothing else moves: head, body, the other hand and the gamepad stay as drawn.
  *
- * The SVG (public/character/no-game-selected.svg) is the single source of the artwork and its rig: round eyes hidden
- * behind the drawn crescents, eye openings that clip them, and invisible guides for the gaze limits. This component
- * shows an ID-prefixed copy of it (so several can share a page) and animates that copy; the file itself stays a plain
- * static drawing with the crescent eyes. Editors that drop hidden elements or <defs> on save strip that rig.
+ * The SVG (public/character/no-game-selected.svg) is the single source of the artwork and its rig: round eyes at 0%
+ * opacity inside each eye's clipped group, and a 0%-opacity `rig` layer with the arm's pivot markers and an oval per
+ * eye for how far it may look. This component shows an ID-prefixed copy of it (so several can share a page) and
+ * animates that copy; the file itself stays a plain static drawing with the crescent eyes. The rig is only named,
+ * transparent shapes, so it survives an Affinity Designer round trip; hidden layers, data attributes and hand-written
+ * <defs> would not. Layer names are the IDs this component looks up.
  *
  * It scales to its container, only animates while the eyes are catching up with the mouse or a jab is playing, pauses
  * while the page is hidden, and cleans up on unmount. It shares no code with the sleepy skeleton.
@@ -64,59 +66,9 @@ function gazeOffset(u: number, v: number, limits: { horizontal: number; up: numb
 
 // Every instance gets its own ID prefix so clip paths and <use> references never resolve into another copy.
 let instances = 0;
-function restoreRig(svg: Element, doc: Document) {
-  // Vector editors can flatten the animation helpers while retaining the visible drawing.
-  // Rebuild them from the eye sockets so an exported illustration remains usable in the UI.
-  if (svg.querySelector('#iris-static-left')) return;
-  const ns = 'http://www.w3.org/2000/svg';
-  const create = (tag: string, attrs: Record<string, string>) => {
-    const node = doc.createElementNS(ns, tag);
-    for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
-    return node;
-  };
-  const required = (id: string) => {
-    const node = svg.querySelector(`[id="${id}"]`);
-    if (!node) throw new Error(`Pointing skeleton SVG is missing ${id}`);
-    return node;
-  };
-  let defs: Element | null = svg.querySelector('defs');
-  if (!defs) {
-    defs = create('defs', {});
-    svg.prepend(defs);
-  }
-  for (const [from, to, pivot] of [
-    ['Upper-arm-bone', 'upper-arm-left', '458 811'],
-    ['Forearm-bone', 'forearm-left', '353 996'],
-    ['_07-·-Pointing-hand---viewer-left', '_07-·-Pointing-hand---viewer-left', '277 888'],
-  ]) {
-    const joint = required(from);
-    joint.setAttribute('id', to);
-    joint.setAttribute('data-pivot', pivot);
-  }
-  for (const side of sides) {
-    required(`Brow-${side}`).setAttribute('id', `brow-${side}`);
-    const socket = required(`eye-socket-${side}`);
-    const path = create('path', { id: `eye-opening-${side}`, d: socket.getAttribute('d')! });
-    const clip = create('clipPath', { id: `eye-clip-${side}` });
-    clip.append(create('use', { href: `#eye-opening-${side}` }));
-    const [cx, cy, down] = side === 'left' ? [530, 607, 85.56] : [815, 510, 104.56];
-    defs.append(path, clip,
-      create('path', { id: `gaze-bounds-${side}`, 'data-max-horizontal': '24', 'data-max-up': '12', 'data-max-down': String(down) }),
-      create('circle', { id: `gaze-neutral-${side}`, cx: String(cx), cy: String(cy) }));
-    const contents = required(`eye-contents-${side}`);
-    contents.setAttribute('clip-path', `url(#eye-clip-${side})`);
-    const gaze = create('g', { id: `iris-gaze-${side}` });
-    gaze.append(create('circle', { id: `iris-circle-${side}`, fill: '#ff0028' }));
-    const dynamic = create('g', { id: `iris-dynamic-${side}` });
-    dynamic.append(gaze);
-    contents.replaceChildren(dynamic,
-      create('use', { id: `eye-outline-${side}`, href: `#eye-opening-${side}`, fill: 'none', stroke: '#0a0505', 'stroke-width': '16' }));
-  }
-}
-function inlineSvg(prefix: string) {
+function inlineSvg(prefix: string, rigged = true): { __html: string; rigged: boolean } {
   const doc = new DOMParser().parseFromString(source, 'image/svg+xml');
   const svg = doc.documentElement;
-  restoreRig(svg, doc);
   svg.querySelectorAll('title, desc').forEach((node) => node.remove());
   svg.removeAttribute('aria-labelledby');
   svg.removeAttribute('role');
@@ -125,26 +77,35 @@ function inlineSvg(prefix: string) {
   // Fill the container, whatever size the file itself declares.
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', '100%');
-  const { expression } = pointingSkeletonMotion;
-  for (const side of sides) {
-    const part = (id: string) => svg.querySelector(`[id="${id}-${side}"]`)!;
-    // Round eyeballs instead of the drawn crescents, resting where the crescents were. The drawn openings already
-    // outline themselves, so the separate rim stays hidden; lids (the opening's outline again, drawn inside the eye's
-    // clip so it only reaches inward) set how open the eyes look.
-    part('iris-static')?.remove();
-    part('iris-dynamic').removeAttribute('style');
-    const circle = part('iris-circle'), { center: [cx, cy], radius } = expression.neutral.eyes[side];
-    circle.setAttribute('cx', String(cx));
-    circle.setAttribute('cy', String(cy));
-    circle.setAttribute('r', String(radius));
-    const lids = doc.createElementNS('http://www.w3.org/2000/svg', 'use');
-    lids.setAttribute('id', `eye-lids-${side}`);
-    lids.setAttribute('href', `#eye-opening-${side}`);
-    lids.setAttribute('fill', 'none');
-    lids.setAttribute('stroke', part('eye-outline').getAttribute('stroke')!);
-    lids.setAttribute('stroke-width', String(2 * expression.neutral.lidDepth));
-    lids.setAttribute('stroke-linejoin', 'round');
-    part('eye-contents').append(lids);
+  if (rigged) {
+    try {
+      const { expression } = pointingSkeletonMotion;
+      for (const side of sides) {
+        const part = (id: string) => svg.querySelector<SVGElement>(`[id="${id}-${side}"]`)!;
+        // Round eyeballs instead of the drawn crescents, resting where the crescents were. Lids (the socket's outline,
+        // drawn inside the eye's clip so it only reaches inward) set how open the eyes look.
+        part('iris-static').remove();
+        const dynamic = part('iris-dynamic');
+        dynamic.removeAttribute('opacity');
+        const circle = part('iris-circle'), { center: [cx, cy], radius } = expression.neutral.eyes[side];
+        circle.setAttribute('cx', String(cx));
+        circle.setAttribute('cy', String(cy));
+        circle.setAttribute('r', String(radius));
+        const socket = part('eye-socket');
+        const lids = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        lids.setAttribute('id', `eye-lids-${side}`);
+        lids.setAttribute('d', socket.getAttribute('d')!);
+        lids.setAttribute('fill', 'none');
+        lids.setAttribute('stroke', socket.style.fill);
+        lids.setAttribute('stroke-width', String(2 * expression.neutral.lidDepth));
+        lids.setAttribute('stroke-linejoin', 'round');
+        dynamic.after(lids);
+      }
+    } catch (error) {
+      // A re-export that lost a rig part shows the static drawing instead of taking down the page.
+      console.error('Pointing skeleton: the drawing is missing rig parts; showing it static.', error);
+      return inlineSvg(prefix, false);
+    }
   }
   for (const node of [svg, ...svg.querySelectorAll('*')]) {
     for (const attr of [...node.attributes]) {
@@ -153,33 +114,49 @@ function inlineSvg(prefix: string) {
       else if (attr.value.includes('url(#')) attr.value = attr.value.replace(/url\(#/g, `url(#${prefix}`);
     }
   }
-  return new XMLSerializer().serializeToString(svg);
+  return { __html: new XMLSerializer().serializeToString(svg), rigged };
 }
 
 function rig(root: SVGSVGElement, prefix: string) {
-  const el = <T extends Element = SVGElement>(id: string) => root.getElementById(prefix + id) as T;
+  const el = <T extends Element = SVGElement>(id: string) => {
+    const node = root.getElementById(prefix + id);
+    if (!node) throw new Error(`The drawing has no "${id}" layer`);
+    return node as T;
+  };
   const num = (id: string, attr: string) => Number(el(id).getAttribute(attr));
+  // A point on a guide shape, in the coordinates of `space` (the guides may sit in any group, under any transform).
+  const at = (id: string, space: SVGGraphicsElement, dx = 0, dy = 0) => {
+    const matrix = space.getScreenCTM()!.inverse().multiply(el<SVGGraphicsElement>(id).getScreenCTM()!);
+    const p = new DOMPoint(num(id, 'cx') + dx, num(id, 'cy') + dy).matrixTransform(matrix);
+    return [p.x, p.y];
+  };
   const { reach } = pointingSkeletonMotion;
+  // The eyes' parent groups sit untransformed in the head, so their space is head coordinates. Each gaze oval spans
+  // how far the eye may travel: its width sideways, its top and bottom up and down from the resting point.
+  const headSpace = el<SVGGraphicsElement>('iris-dynamic-left');
   const eyes = sides.map((side) => {
-    const bounds = `gaze-bounds-${side}`;
+    const bounds = `gaze-bounds-${side}`, rx = num(bounds, 'rx'), ry = num(bounds, 'ry');
+    const neutral = at(`gaze-neutral-${side}`, headSpace);
+    const [left, right, top, bottom] = [at(bounds, headSpace, -rx), at(bounds, headSpace, rx), at(bounds, headSpace, 0, -ry), at(bounds, headSpace, 0, ry)];
     return {
       side, gaze: el(`iris-gaze-${side}`), circle: el(`iris-circle-${side}`), lids: el(`eye-lids-${side}`), brow: el(`brow-${side}`),
       limits: {
-        horizontal: num(bounds, 'data-max-horizontal') * reach.horizontal, up: num(bounds, 'data-max-up') * reach.up,
-        down: num(bounds, 'data-max-down') * reach.down,
+        horizontal: (right[0] - left[0]) / 2 * reach.horizontal, up: (neutral[1] - top[1]) * reach.up,
+        down: (bottom[1] - neutral[1]) * reach.down,
       },
-      neutral: [num(`gaze-neutral-${side}`, 'cx'), num(`gaze-neutral-${side}`, 'cy')],
+      neutral,
     };
   });
-  // The eyes' parent groups sit untransformed in the head, so their screen matrix maps into head coordinates.
-  const headSpace = el<SVGGraphicsElement>('iris-dynamic-left');
   const between = [(eyes[0].neutral[0] + eyes[1].neutral[0]) / 2, (eyes[0].neutral[1] + eyes[1].neutral[1]) / 2];
-  // The pointing arm's chain, each turning at the pivot the SVG suggests: shoulder, elbow, wrist.
-  const joint = (id: string) => {
-    const bone = el(id);
-    return { bone, pivot: bone.getAttribute('data-pivot')! };
+  // The pointing arm's chain, each bone turning at its pivot marker: shoulder, elbow, wrist.
+  const joint = (id: string, pivot: string) => {
+    const bone = el<SVGGraphicsElement>(id);
+    return { bone, pivot: at(pivot, bone.parentNode as SVGGraphicsElement).map((v) => v.toFixed(2)).join(' ') };
   };
-  const arm = [joint('upper-arm-left'), joint('forearm-left'), joint('_07-·-Pointing-hand---viewer-left')];
+  const arm = [
+    joint('upper-arm-left', 'pivot-shoulder'), joint('forearm-left', 'pivot-elbow'),
+    joint('hand-left', 'pivot-wrist'),
+  ];
   return { eyes, headSpace, between, arm };
 }
 
@@ -191,13 +168,21 @@ function rig(root: SVGSVGElement, prefix: string) {
 export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
   const container = useRef<HTMLDivElement>(null);
   const prefix = useMemo(() => `pointing${++instances}-`, []);
-  const markup = useMemo(() => ({ __html: inlineSvg(prefix) }), [prefix]);
+  const markup = useMemo(() => inlineSvg(prefix), [prefix]);
 
   // Layout effect: the resting gaze is drawn before the browser paints, so the eyes never jump into place.
   useLayoutEffect(() => {
     if (typeof window.matchMedia !== 'function') return; // no media queries (e.g. jsdom): hold still
     const root = container.current!.querySelector('svg')!;
-    const { eyes, headSpace, between, arm } = rig(root, prefix);
+    if (!markup.rigged) return;
+    let parts: ReturnType<typeof rig>;
+    try {
+      parts = rig(root, prefix);
+    } catch (error) {
+      console.error('Pointing skeleton: the drawing is missing rig parts; holding still.', error);
+      return;
+    }
+    const { eyes, headSpace, between, arm } = parts;
     const motion = pointingSkeletonMotion;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     const gaze = [...motion.restingGaze];
@@ -324,7 +309,7 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
       document.removeEventListener('visibilitychange', onVisibility);
       reduced.removeEventListener('change', onReducedMotion);
     };
-  }, [prefix]);
+  }, [prefix, markup]);
 
   return <div {...props} ref={container} dangerouslySetInnerHTML={markup} />;
 }

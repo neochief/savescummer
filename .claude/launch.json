@@ -17,7 +17,7 @@
         "apps/ui",
         "dev"
       ],
-      "port": 1420
+      "port": 41987
     },
     {
       "name": "ui-prototype",
@@ -48,6 +48,21 @@
         "--strictPort"
       ],
       "port": 1431
+    },
+    {
+      "name": "ui-vite-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "apps/ui",
+        "exec",
+        "vite",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "1423"
+      ],
+      "port": 1423
     }
   ]
 }
