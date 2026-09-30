@@ -182,7 +182,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .library-controls button .icon { width: 15px; height: 15px; }
 .action-error-block { margin: 0 0 var(--section-gap); color: #ffb5b8; background: #482427; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
 .library-notice { margin: 0 0 var(--section-gap); color: #f3eee7; background: #3a322e; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
-.game-info { flex: none; margin: -8px 0 var(--section-gap); color: #cfc4b8; font-size: 13px; line-height: 1.45; }
+.game-info { position: relative; flex: none; margin: -8px 0 var(--section-gap); color: #cfc4b8; font-size: 13px; line-height: 1.45; }
 .game-info-controls { display: flex; justify-content: space-between; gap: 8px; }
 .game-info-controls > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 72px; height: 32px; padding: 5px 10px; border: 0; border-radius: 6px; background: #3a322e; color: #f3eee7; font: 600 13px Chakra Petch, sans-serif; text-transform: uppercase; }
 .game-info-controls > button:hover { background: #51423a; }

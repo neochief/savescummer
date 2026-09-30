@@ -119,7 +119,7 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
   const logo = useArtwork(bridge, game, 'logo');
   const runningFace = <span className="running-badge-face"><span className="running-icon" />RUNNING</span>;
   return (
-    <div className={`game-card-wrap ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`}>
+    <div className={`game-card-wrap ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`} data-game={game.id}>
       <button className={`game-card ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`}
         onClick={onSelect} aria-current={selected ? 'true' : undefined}
         aria-label={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ', Not running'}`}
@@ -293,8 +293,9 @@ export function App({ bridge }: { bridge: Bridge }) {
     const focusedAnotherRunningGame = formerTop && active !== formerTop
       && previousActiveStack.current.includes(active)
       && visibleGames.some((game) => game.id === formerTop && game.running);
-    if (selected && !known(selected)) setSelected(undefined);
-    else if (!selected && known(active)) setSelected(active);
+    // A newly active game gets selected, but a selection the person cleared stays cleared until the active game changes.
+    if (selected && !known(selected)) setSelected(known(active) ? active : undefined);
+    else if (!selected && known(active) && active !== formerTop) setSelected(active);
     else if (focusedAnotherRunningGame && known(active)) {
       setHistoryDirection(visibleGames.findIndex((game) => game.id === active) < visibleGames.findIndex((game) => game.id === selected) ? 'up' : 'down');
       setSelected(active);
@@ -359,6 +360,12 @@ export function App({ bridge }: { bridge: Bridge }) {
   }, [bridge, selected, next]);
 
   const selectGame = useCallback((id: string) => {
+    // Clicking the selected card again clears the selection.
+    if (id === selected) {
+      setSelected(undefined);
+      setFeedback(undefined);
+      return;
+    }
     const oldPosition = visibleGames.findIndex((game) => game.id === selected);
     const newPosition = visibleGames.findIndex((game) => game.id === id);
     setHistoryDirection(newPosition < oldPosition ? 'up' : 'down');
@@ -519,6 +526,30 @@ export function App({ bridge }: { bridge: Bridge }) {
   const stackIndex = (game: Game) => { const index = state?.active_stack.indexOf(game.id) ?? -1; return index < 0 ? Infinity : index; };
   const running = visibleGames.filter((game) => game.running).sort((a, b) => stackIndex(a) - stackIndex(b));
   const installed = [...running, ...visibleGames.filter((game) => !game.running)];
+  // When the order changes, each card slides from where it was to its new place (FLIP), clipped by the list.
+  const libraryPanelRef = useRef<HTMLDivElement>(null);
+  const cardTops = useRef(new Map<string, number>());
+  const libraryOrder = installed.map((game) => game.id).join('\n');
+  const shownLibraryOrder = useRef(libraryOrder);
+  useLayoutEffect(() => {
+    const previous = cardTops.current;
+    cardTops.current = new Map();
+    const reordered = shownLibraryOrder.current !== libraryOrder;
+    shownLibraryOrder.current = libraryOrder;
+    const animate = reordered && typeof Element.prototype.animate === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (const card of libraryPanelRef.current?.querySelectorAll<HTMLElement>('[data-game]') ?? []) {
+      const top = card.offsetTop;
+      const before = previous.get(card.dataset.game!);
+      cardTops.current.set(card.dataset.game!, top);
+      if (!animate || before === undefined || before === top) continue;
+      // A card still sliding from an earlier reorder continues from where it is drawn now.
+      const drawnShift = parseFloat(getComputedStyle(card).translate.split(' ')[1]) || 0;
+      card.getAnimations().filter((animation) => animation.id === 'reorder').forEach((animation) => animation.cancel());
+      // Rising cards pass over the ones they overtake.
+      const zIndex = before > top ? 1 : 0;
+      card.animate({ translate: [`0 ${before + drawnShift - top}px`, '0 0'], zIndex: [zIndex, zIndex] }, { id: 'reorder', duration: 400, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    }
+  });
   const measureSidebar = useCallback(() => {
     const scroller = sidebarScrollRef.current;
     const track = sidebarTrackRef.current;
@@ -628,7 +659,7 @@ export function App({ bridge }: { bridge: Bridge }) {
           {installed.length > 0 && <h2 className="library-heading">INSTALLED</h2>}
           <div className={`library-scroll ${installed.length ? 'has-games' : ''}`} style={fadeStyle(sidebarScroll.top, sidebarScrollable ? sidebarScroll.content - sidebarScroll.viewport - sidebarScroll.top : 0)}>
             <div className="sidebar-content" ref={sidebarScrollRef} onScroll={measureSidebar}>
-              {installed.length > 0 && <div className="library-panel">
+              {installed.length > 0 && <div className="library-panel" ref={libraryPanelRef}>
                 {installed.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected}
                   pending={cardPending?.game === game.id} error={cardError?.game === game.id ? cardError.message : undefined}
                   onSelect={() => selectGame(game.id)} onLifecycle={(type) => runLifecycle(game, type)}
@@ -714,7 +745,7 @@ export function App({ bridge }: { bridge: Bridge }) {
               </div>
             </div>
           </div>
-        </> : state && visibleGames.length ? <div className="empty-selection"><Character name="no-game-selected" /><p>No known games are running.</p></div>
+        </> : state && visibleGames.length ? <div className="empty-selection"><Character name="no-game-selected" /><p>{running.length ? 'Select a game to see its checkpoints.' : 'No known games are running.'}</p></div>
           : <div className="empty-library">{!state ? 'Waiting for the host…' : 'No games found.'}</div>}
       </main>
       {dialog === 'about' && <AboutDialog bridge={bridge} opener={dialogOpener.current} close={() => setDialog(undefined)} />}

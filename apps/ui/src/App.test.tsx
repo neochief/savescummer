@@ -145,7 +145,7 @@ test('a game starting or closing does not replace the selected view', async () =
   bridge.state.games = [{ ...game('a', 'Game A'), running: true }, game('b', 'Game B')];
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
-  fireEvent.click(screen.getByRole('button', { name: 'Game A' }));
+  expect(screen.getByRole('button', { name: 'Game A' }).getAttribute('aria-current')).toBe('true');
 
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2, active_stack: ['b', 'a'],
     games: bridge.state.games.map((value) => ({ ...value, running: true })) }));
@@ -154,6 +154,22 @@ test('a game starting or closing does not replace the selected view', async () =
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3, active_stack: ['b'],
     games: [game('a', 'Game A'), { ...game('b', 'Game B'), running: true }] }));
   expect(screen.getByRole('button', { name: /Game A, Not running/ }).getAttribute('aria-current')).toBe('true');
+});
+
+test('clicking the selected card clears the selection until another game becomes active', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games = bridge.state.games.map((value) => ({ ...value, running: true }));
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Game A' }));
+  expect(screen.getByRole('button', { name: 'Game A' }).getAttribute('aria-current')).toBeNull();
+
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2 }));
+  expect(screen.getByRole('button', { name: 'Game A' }).getAttribute('aria-current')).toBeNull();
+  expect(screen.getByText('Select a game to see its checkpoints.')).toBeTruthy();
+
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3, active_stack: ['b', 'a'] }));
+  expect(screen.getByRole('button', { name: 'Game B' }).getAttribute('aria-current')).toBe('true');
 });
 
 test('focusing another already running game selects it', async () => {
