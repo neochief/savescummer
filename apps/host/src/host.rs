@@ -72,6 +72,9 @@ pub struct Inner {
     pub derived: HashMap<String, Derived>,
     pub caches: HashMap<String, GameCache>,
     pub stack: ActiveStack,
+    /// When the user last switched to each game, as saved in the database.
+    /// Orders the library.
+    pub last_focused: HashMap<String, String>,
     /// Running games' current session ids.
     pub sessions: HashMap<String, String>,
     /// Running games' processes, as the monitor last saw them.
@@ -222,7 +225,9 @@ impl Host {
     }
 
     pub fn build_state(&self, inner: &Inner) -> State {
-        let games = inner.games.values().filter(|g| g.installed).map(|g| self.summary(inner, g)).collect();
+        let mut installed: Vec<&Game> = inner.games.values().filter(|g| g.installed).collect();
+        sort_library(&mut installed, inner.stack.entries(), &inner.last_focused);
+        let games = installed.into_iter().map(|g| self.summary(inner, g)).collect();
         let catalog = self.catalog.read().unwrap_or_else(|e| e.into_inner());
         State {
             instance: self.instance.clone(),
@@ -493,6 +498,19 @@ pub fn hotkey_target(inner: &Inner) -> Option<(String, &'static str)> {
     inner.stack.active().filter(|g| inner.games.contains_key(*g)).map(|g| (g.to_string(), "active"))
 }
 
+/// Library order: running games in stack order, then the rest by when the
+/// user last switched to them, newest first, then games never focused, by
+/// name. The game just quit stays at the top instead of dropping to
+/// wherever its name sorts.
+pub fn sort_library(games: &mut [&Game], stack: &[String], last_focused: &HashMap<String, String>) {
+    games.sort_by_cached_key(|g| {
+        let running = stack.iter().position(|s| *s == g.id).unwrap_or(usize::MAX);
+        let focused = last_focused.get(&g.id).map(|at| std::cmp::Reverse(at.clone()));
+        // `None` sorts first; never-focused games go last.
+        (running, focused.is_none(), focused, g.name.to_lowercase(), g.id.clone())
+    });
+}
+
 fn placeholder_state(instance: &str) -> State {
     State {
         instance: instance.to_string(),
@@ -527,6 +545,7 @@ impl Inner {
             derived: HashMap::new(),
             caches: HashMap::new(),
             stack: ActiveStack::default(),
+            last_focused: HashMap::new(),
             sessions: HashMap::new(),
             processes: BTreeMap::new(),
             processes_observed: false,
@@ -576,4 +595,32 @@ pub fn kind_name(kind: &GameKind) -> &'static str {
 
 pub fn path_text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game(id: &str, name: &str) -> Game {
+        Game::from_record_json(&format!(r#"{{"id":"{id}","kind":"custom","name":"{name}","installed":true}}"#)).unwrap()
+    }
+
+    #[test]
+    fn the_library_is_ordered_by_last_focus() {
+        let games = [game("a", "Alpha"), game("b", "beta"), game("c", "Gamma"), game("d", "Delta"), game("e", "Echo")];
+        let mut list: Vec<&Game> = games.iter().collect();
+        let stack = vec!["e".to_string()];
+        let focused: HashMap<String, String> = [
+            ("c", "2026-10-01T10:00:00.000Z"),
+            ("d", "2026-10-01T12:00:00.000Z"),
+            ("e", "2026-09-01T00:00:00.000Z"),
+        ]
+        .into_iter()
+        .map(|(g, at)| (g.to_string(), at.to_string()))
+        .collect();
+        sort_library(&mut list, &stack, &focused);
+        let ids: Vec<&str> = list.iter().map(|g| g.id.as_str()).collect();
+        // Running first; then newest focus; then never focused, by name.
+        assert_eq!(ids, ["e", "d", "c", "a", "b"]);
+    }
 }

@@ -25,7 +25,18 @@ pub fn observe_startup(host: &Host, monitor: &mut Monitor) -> Vec<Event> {
     events
 }
 
-pub fn run(host: Arc<Host>, mut monitor: Monitor, initial: Vec<Event>) {
+pub fn run(host: Arc<Host>, mut monitor: Monitor, mut initial: Vec<Event>) {
+    // Games already running go on the stack in the order the user left them.
+    {
+        let inner = host.lock();
+        initial.sort_by_cached_key(|event| match event {
+            Event::Started { game, .. } => {
+                let focused = inner.last_focused.get(game).cloned();
+                (focused.is_none(), focused.map(std::cmp::Reverse))
+            }
+            _ => (true, None),
+        });
+    }
     for event in initial {
         handle(&host, event);
     }
@@ -226,9 +237,13 @@ fn handle(host: &Arc<Host>, event: Event) {
         }
         Event::Focused { game } => {
             let mut inner = host.lock();
-            if inner.stack.focused(&game) {
-                host.publish(&mut inner);
+            inner.stack.focused(&game);
+            // Kept across exits and restarts: it orders the library.
+            let at = now();
+            if host.db().write(|c| db::set_last_focused(c, &game, &at)).is_ok() {
+                inner.last_focused.insert(game, at);
             }
+            host.publish(&mut inner);
         }
     }
 }

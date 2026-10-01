@@ -785,9 +785,10 @@ test('no-games layout keeps Scan, Add, Settings in keyboard order', async () => 
   ]);
 });
 
-test('running games surface to the top of the one list in active-stack order with a badge', async () => {
+test('running games surface to the top of the one list in active-stack order; stopped games keep the host order', async () => {
   const bridge = new FakeBridge();
-  bridge.state.games = [game('a', 'Game A'), game('b', 'Game B'), game('c', 'Game C'), game('d', 'Game D')];
+  // The host sends stopped games by last focus, not by name.
+  bridge.state.games = [game('c', 'Game C'), game('b', 'Game B'), game('a', 'Game A'), game('d', 'Game D')];
   bridge.state.games[1].running = true;
   bridge.state.games[3].running = true;
   bridge.state.active_stack = ['d', 'b'];
@@ -796,7 +797,7 @@ test('running games surface to the top of the one list in active-stack order wit
   await screen.findByRole('button', { name: 'Game D' });
   const cards = [...container.querySelectorAll('.library-panel .game-card-wrap')];
   expect(cards.map((card) => card.querySelector('.game-card')!.getAttribute('aria-label'))).toEqual([
-    'Game D', 'Game B', 'Game A, Not running', 'Game C, Not running',
+    'Game D', 'Game B', 'Game C, Not running', 'Game A, Not running',
   ]);
   expect(cards.map((card) => Boolean(card.querySelector('.running-badge')))).toEqual([true, true, false, false]);
   expect(container.querySelectorAll('.sidebar h2')).toHaveLength(1);

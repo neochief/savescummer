@@ -709,8 +709,9 @@ fn user_location(host: &Host, text: &str) -> Result<UserLocation, Failure> {
     Ok(UserLocation { text: path.to_string_lossy().into_owned(), real_root })
 }
 
-/// Loads game records from the database.
+/// Loads game records and their last-focused times from the database.
 pub fn load_games(host: &Host, inner: &mut Inner) {
+    inner.last_focused = db::last_focused(host.db().conn()).unwrap_or_default();
     let rows = db::games(host.db().conn()).unwrap_or_default();
     for (id, data) in rows {
         if let Ok(game) = host.portable().load(&data) {

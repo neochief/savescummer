@@ -510,7 +510,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     }
   }, [bridge]);
 
-  // Running games surface to the top of the one list, in active-stack order.
+  // Running games surface to the top of the one list, in active-stack order;
+  // the rest keep the host's order (last focused first).
   const stackIndex = (game: Game) => { const index = state?.active_stack.indexOf(game.id) ?? -1; return index < 0 ? Infinity : index; };
   const running = visibleGames.filter((game) => game.running).sort((a, b) => stackIndex(a) - stackIndex(b));
   const installed = [...running, ...visibleGames.filter((game) => !game.running)];

@@ -1,5 +1,5 @@
-//! SQLite storage, owned only by the host: settings, game records,
-//! checkpoint records (with labels), history and the operation journal.
+//! SQLite storage, owned only by the host: settings, game records and their
+//! last-focused times, checkpoint records (with labels), history and the operation journal.
 //! Game files never go in here.
 //!
 //! Every function takes a `&Connection`, so the host can group several
@@ -18,7 +18,7 @@ use savescummer_core::history::RowKind;
 pub use rusqlite::Error;
 pub type Result<T> = rusqlite::Result<T>;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -97,6 +97,12 @@ CREATE INDEX history_by_game ON history (game_id, seq);
 CREATE INDEX checkpoints_in_order ON checkpoints (game_id, seq);
 "#;
 
+/// When the user last switched to each game, kept across exits and
+/// restarts: it orders the library and the stack rebuilt after a restart.
+const MIGRATION_4: &str = r#"
+CREATE TABLE last_focused (game_id TEXT PRIMARY KEY, at TEXT NOT NULL);
+"#;
+
 pub struct Storage {
     conn: Connection,
 }
@@ -139,6 +145,12 @@ impl Storage {
             let tx = self.conn.transaction()?;
             tx.execute_batch(MIGRATION_3)?;
             tx.pragma_update(None, "user_version", 3)?;
+            tx.commit()?;
+        }
+        if version < 4 {
+            let tx = self.conn.transaction()?;
+            tx.execute_batch(MIGRATION_4)?;
+            tx.pragma_update(None, "user_version", 4)?;
             tx.commit()?;
         }
         Ok(())
@@ -188,6 +200,21 @@ pub fn put_game(c: &Connection, id: &str, data: &str) -> Result<()> {
     c.execute(
         "INSERT INTO games (id, data) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET data = excluded.data WHERE data <> excluded.data",
         params![id, data],
+    )?;
+    Ok(())
+}
+
+/// Every game's last-focused time, by game id.
+pub fn last_focused(c: &Connection) -> Result<std::collections::HashMap<String, String>> {
+    let mut stmt = c.prepare("SELECT game_id, at FROM last_focused")?;
+    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    rows.collect()
+}
+
+pub fn set_last_focused(c: &Connection, game_id: &str, at: &str) -> Result<()> {
+    c.execute(
+        "INSERT INTO last_focused (game_id, at) VALUES (?1, ?2) ON CONFLICT(game_id) DO UPDATE SET at = excluded.at",
+        params![game_id, at],
     )?;
     Ok(())
 }
@@ -830,6 +857,23 @@ mod tests {
         assert_eq!(setting(s.conn(), "k").unwrap().as_deref(), Some("v"));
         start_run(s.conn(), "r", "t").unwrap();
         assert_eq!(runs(s.conn(), 1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn last_focused_times_are_kept_per_game() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("host.db");
+        {
+            let s = Storage::open(&path).unwrap();
+            set_last_focused(s.conn(), "a", "t1").unwrap();
+            set_last_focused(s.conn(), "b", "t2").unwrap();
+            set_last_focused(s.conn(), "a", "t3").unwrap();
+        }
+        let s = Storage::open(&path).unwrap();
+        let times = last_focused(s.conn()).unwrap();
+        assert_eq!(times.len(), 2);
+        assert_eq!(times["a"], "t3");
+        assert_eq!(times["b"], "t2");
     }
 
     #[test]

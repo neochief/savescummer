@@ -237,7 +237,7 @@ The main view changes automatically only when:
 
 Consequences:
 
-- **At startup,** select the most recently focused running game if the order is known, otherwise the top running game. If no game is running, select nothing. Don't preselect a game just because it's installed. The main view then shows only the quiet line `No known games are running.`
+- **At startup,** select the top running game; the host restores the stack in last-focused order. If no game is running, select nothing. Don't preselect a game just because it's installed. The main view then shows only the quiet line `No known games are running.`
 - **When a game closes,** the view stays. The active game stays active and moves from `RUNNING` to the library, so the user can load it before relaunching; the view moves on when another game takes over as the active game.
 - **When the user picks a game in the sidebar** (running or not), only the view changes, not the stack.
 
@@ -278,6 +278,8 @@ Cards trade some density for recognition: about eight fit in a default-height wi
 - The first group heading shares a fixed-height horizontal band with the shortcut hints above the main buttons. Do not collapse that band when there is only one group; the first card and the main buttons must keep matching top edges.
 - There is no overall `GAMES` heading. The sidebar is obviously a game list, so it would only take space.
 - Never show an empty group.
+
+**Order:** both groups are sorted by when the user last switched to the game, newest first; `RUNNING` is the ACTIVE STACK. Games never played go last in `INSTALLED`, by name. The host supplies the order (PLAN-HOST, Library order), and it survives restarts. Why: savescumming is quitting, loading and relaunching, so the game just quit moves from `RUNNING` to the top of `INSTALLED`, right where the user's eye already is, instead of dropping to wherever its name sorts. The game played last is also the one most likely wanted next time. A game starting in the background doesn't move it; only switching to it does.
 
 **Visibility:**
 
@@ -762,6 +764,7 @@ For the Tauri UI, test React views against a fake typed bridge that can simulate
   - the install tag on the card, tooltip and per-game dialog title, only for games installed twice;
     - headings for every non-empty group, including one game, all running and none running; no heading for an empty group;
     - hidden uninstalled games;
+    - stopped games kept in the host's order, running games in stack order;
     - the switch to the zero-games layout based on *visible* games;
     - first-card/button alignment stays unchanged when the library moves between one and two non-empty groups.
 - **Selection:**
