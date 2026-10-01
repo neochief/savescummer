@@ -77,7 +77,7 @@ export function AboutDialog({ bridge, close, opener }: { bridge: Bridge; close: 
       <img className="about-icon" src="/app-icon.svg" alt="" aria-hidden="true" />
       <span className="wordmark" aria-label="SaveScummer"><span>Save</span><strong>Scummer</strong></span>
       <p className="about-version">Version {version}</p>
-      <p className="about-copyright">© {copyrightYears()} Oleksandr Shvets. All rights reserved.</p>
+      <p className="about-copyright">© {copyrightYears()} Alexander Shvets. All rights reserved.</p>
       {error && <p className="dialog-error" role="alert">{error}</p>}
     </div>
     <footer>

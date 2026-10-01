@@ -309,7 +309,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .history-row.secondary .row-button:not(:disabled):hover { background: #3a322e; color: #e4d7c9; }
 .history-row.secondary .row-button:not(:disabled):hover .icon { filter: brightness(0) invert(88%) sepia(8%) saturate(420%) hue-rotate(335deg); }
 .delete-button { flex: none; width: 32px; height: 30px; border: 0; margin-left: auto; border-radius: 5px; background: transparent; opacity: .5; display: grid; place-items: center; }
-.history-row:hover .delete-button, .delete-button:focus-visible { opacity: 1; background: #3c302d; }
+.delete-button:is(:hover, :focus-visible) { opacity: 1; background: #3c302d; }
 .empty-history, .empty-library, .history-error { color: #aea095; text-align: center; padding: 32px; }
 .empty-history { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .empty-history p { margin: 0; }

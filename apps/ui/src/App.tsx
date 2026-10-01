@@ -735,7 +735,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             </span> : <button type="button" className="library-filter-toggle" aria-label="Filter installed games"
               onClick={() => setFilterOpen(true)}>
               <svg className="library-search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.75" cy="6.75" r="4.5" /><path d="m10.2 10.2 4 4" /></svg>
-              INSTALLED
+              INSTALLED GAMES
             </button>}
           </h2>}
           <div className={`library-scroll ${installed.length ? 'has-games' : ''}`} style={fadeStyle(sidebarScroll.top, sidebarScrollable ? sidebarScroll.content - sidebarScroll.viewport - sidebarScroll.top : 0)}>

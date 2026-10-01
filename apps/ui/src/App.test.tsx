@@ -763,7 +763,7 @@ test('the sidebar logo opens About, whose Website button opens the site', async 
   fireEvent.click(await screen.findByRole('button', { name: 'About SaveScummer' }));
   const about = screen.getByRole('dialog', { name: 'About' });
   expect(about.textContent).toMatch(/Version \d+\.\d+\.\d+/);
-  expect(about.textContent).toContain('Oleksandr Shvets. All rights reserved.');
+  expect(about.textContent).toContain('Alexander Shvets. All rights reserved.');
   fireEvent.click(within(about).getByRole('button', { name: 'Website' }));
   expect(bridge.openWebsite).toHaveBeenCalledOnce();
   fireEvent.click(within(about).getByRole('button', { name: 'Close' }));

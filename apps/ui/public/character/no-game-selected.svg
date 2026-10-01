@@ -26,16 +26,18 @@
         <g id="Right-eye" serif:id="Right eye">
             <path id="eye-socket-right" d="M688,525C698,535 706,523 717,506C748,455 783,410 818,385C842,368 872,370 887,382C892,386 891,388 885,388C874,389 860,393 852,399C885,417 900,450 900,484C902,527 879,568 846,589C815,608 780,604 752,590C735,581 723,567 715,555C706,560 698,556 692,548C685,539 682,527 688,525Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
             <g id="eye-contents-right">
-                <clipPath id="_clip1">
-                    <path d="M688,525C698,535 706,523 717,506C748,455 783,410 818,385C842,368 872,370 887,382C892,386 891,388 885,388C874,389 860,393 852,399C885,417 900,450 900,484C902,527 879,568 846,589C815,608 780,604 752,590C735,581 723,567 715,555C706,560 698,556 692,548C685,539 682,527 688,525Z"/>
-                </clipPath>
-                <g clip-path="url(#_clip1)">
-                    <g id="iris-static-right">
-                        <path id="Eye-red-right" serif:id="Eye red right" d="M810,440C834,448 851,472 853,499C855,529 837,557 812,567C795,574 779,572 764,563C789,542 796,509 776,476L810,440Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
-                    </g>
-                    <g id="iris-dynamic-right" opacity="0">
-                        <g id="iris-gaze-right">
-                            <circle id="iris-circle-right" cx="815" cy="510" r="52" style="fill:rgb(255,0,40);"/>
+                <g>
+                    <clipPath id="_clip1">
+                        <path d="M688,525C698,535 706,523 717,506C748,455 783,410 818,385C842,368 872,370 887,382C892,386 891,388 885,388C874,389 860,393 852,399C885,417 900,450 900,484C902,527 879,568 846,589C815,608 780,604 752,590C735,581 723,567 715,555C706,560 698,556 692,548C685,539 682,527 688,525Z"/>
+                    </clipPath>
+                    <g clip-path="url(#_clip1)">
+                        <g id="iris-static-right">
+                            <path id="Eye-red-right" serif:id="Eye red right" d="M810,440C834,448 851,472 853,499C855,529 837,557 812,567C795,574 779,572 764,563C744.513,551.308 731.322,533.533 731.322,533.533C755.418,499.832 781.46,468.437 810,440Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+                        </g>
+                        <g id="iris-dynamic-right" opacity="0">
+                            <g id="iris-gaze-right">
+                                <circle id="iris-circle-right" cx="815" cy="510" r="52" style="fill:rgb(255,0,40);"/>
+                            </g>
                         </g>
                     </g>
                 </g>
@@ -45,16 +47,18 @@
         <g id="Left-eye" serif:id="Left eye">
             <path id="eye-socket-left" d="M416,612C413,613 416,598 421,588C437,558 461,547 488,547C521,545 547,559 570,575C595,591 607,603 622,587C626,582 629,576 634,581C643,590 635,605 625,612C629,626 622,642 612,648C605,651 600,647 588,647C548,646 506,658 476,680C467,688 459,682 451,671C436,650 437,616 451,590C437,596 426,604 416,612Z" style="fill:rgb(10,5,5);fill-rule:nonzero;"/>
             <g id="eye-contents-left">
-                <clipPath id="_clip2">
-                    <path d="M416,612C413,613 416,598 421,588C437,558 461,547 488,547C521,545 547,559 570,575C595,591 607,603 622,587C626,582 629,576 634,581C643,590 635,605 625,612C629,626 622,642 612,648C605,651 600,647 588,647C548,646 506,658 476,680C467,688 459,682 451,671C436,650 437,616 451,590C437,596 426,604 416,612Z"/>
-                </clipPath>
-                <g clip-path="url(#_clip2)">
-                    <g id="iris-static-left">
-                        <path id="Eye-red-left" serif:id="Eye red left" d="M476,646C474,625 489,602 510,594C537,581 568,599 584,620C548,612 507,618 476,646Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
-                    </g>
-                    <g id="iris-dynamic-left" opacity="0">
-                        <g id="iris-gaze-left">
-                            <circle id="iris-circle-left" cx="530" cy="607" r="58" style="fill:rgb(255,0,40);"/>
+                <g>
+                    <clipPath id="_clip2">
+                        <path d="M416,612C413,613 416,598 421,588C437,558 461,547 488,547C521,545 547,559 570,575C595,591 607,603 622,587C626,582 629,576 634,581C643,590 635,605 625,612C629,626 622,642 612,648C605,651 600,647 588,647C548,646 506,658 476,680C467,688 459,682 451,671C436,650 437,616 451,590C437,596 426,604 416,612Z"/>
+                    </clipPath>
+                    <g clip-path="url(#_clip2)">
+                        <g id="iris-static-left">
+                            <path id="Eye-red-left" serif:id="Eye red left" d="M476,646C474,625 489,602 510,594C537,581 568,599 584,620C548,612 507,618 476,646Z" style="fill:rgb(255,0,40);fill-rule:nonzero;"/>
+                        </g>
+                        <g id="iris-dynamic-left" opacity="0">
+                            <g id="iris-gaze-left">
+                                <circle id="iris-circle-left" cx="530" cy="607" r="58" style="fill:rgb(255,0,40);"/>
+                            </g>
                         </g>
                     </g>
                 </g>
