@@ -177,7 +177,7 @@ a locked folder is never partially deleted under its real name.
 |---|---|---|
 | E-L1 | A target root is a symbolic link or junction | Resolved to the real directory at Configure time and rechecked before every operation. All operations run against the real directory; the link is never renamed, replaced or copied. Not an error. |
 | E-L2 | Link repointed, broken or no longer resolving | Validation fails: "This save location is a shortcut that changed or can't be resolved. Configure the real folder." Buttons: Configure paths… · Open save location. |
-| E-L3 | Link inside a target | Copy/fingerprint rejects it; E-C6. |
+| E-L3 | Link inside a target | Copy/fingerprint rejects it; E-C6. A pattern only searching past a link (one it doesn't match) leaves it out and never goes into it. Folders nesting more than 64 levels below the root fail the same way: that catches a loop that isn't a link, such as a Linux bind mount of a parent inside its own child. |
 | E-L4 | Checkpoint folder replaced by a link | Treated as changed externally (E-A5/E-C7); restoring from it is refused. |
 | E-N1 | No target exists yet, or none matches anything | The lockdown panel: **Play first**, or **No game data** over Save when checkpoints exist (PLAN-LOCKDOWN); the status stays `Running`/`Stopped` and the game is provisional. Open save location (may not exist). |
 | E-N2 | A target root that held data at Save time is missing at Load | Load of that checkpoint is refused: restoring only the other targets would be half a save, and roots are never recreated. Known game: the catalog resolves the save set again; if the set changes, old checkpoints are unavailable until it returns (E-C8). Override or custom game: unavailable until the folder returns or is reconfigured. |

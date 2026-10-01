@@ -29,6 +29,8 @@ A wrong path no longer backs up or restores the wrong thing: its target is just 
 - **State of Decay 2, Roboquest, Shogun 2 (Windows), Don't Starve (Linux, macOS).** The addendum narrows these to the standard save folder (`Saved/SaveGames` for the Unreal games, `save_games`, `DoNotStarve/save`). Confirm the saves are there.
 - **Terraria (macOS).** The addendum uses `Players/*.plr` and `Worlds/*.wld` instead of the whole Terraria folder. Windows confirmed 2026-09-24: `Players` and `Worlds` next to `tModLoader`, `ResourcePacks`, `Retro` and the config files. Confirm the names on macOS.
 - **Enter the Gungeon, Into the Breach, Dome Keeper (macOS, Linux).** The addendum narrows these to `Slot*.save`, `profile_*` and `savegame*`, checked on Windows only. Confirm the same names on the other platforms.
+- **NEO Scavenger (macOS, Linux native, Proton).** The save is a Flash shared object below a random per-user folder and the game's own path. Windows confirmed 2026-10-01: `%APPDATA%\Macromedia\Flash Player\#SharedObjects\<random>\localhost\<install path without the drive>\NEOScavenger.exe\nsSGv1.sol`. The addendum guesses `~/Library/Preferences/Macromedia/Flash Player/#SharedObjects/*/**/NEOScavenger.app/nsSGv1.sol` on macOS and `~/.macromedia/Flash_Player/#SharedObjects/*/**/NEOScavenger/nsSGv1.sol` on Linux, and the Windows path inside the Proton prefix. Does the game run there at all, and is `nsSGv1.sol` where the pattern looks?
+  - If the folder holding the save has another name (the `.swf` instead of the app, say): change that segment in the override. Note that the game deletes `nsSGv1.sol` when the survivor dies, so look for it while a survivor is alive.
 
 
 ## 2. Files the running game keeps open

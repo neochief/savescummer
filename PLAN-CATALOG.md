@@ -61,6 +61,21 @@ game; the first row is the header.
   quoted CSV content. It is the only source of game instructions.
 - The file may contain extra columns; the builder ignores any column beyond
   `Name`, `Product fit` and `Info`.
+- `Tested Windows`, `Tested MacOS`, `Tested Linux (Native)` and `Tested Linux
+  (Proton)` track, for development only, which platforms a person has checked
+  the game on. The app never reads them. Tested means a person ran the game
+  through the save-and-restore part of `TEST-RELEASE.md` (play, Save, play on,
+  Load, the game resumes at the saved point) on that platform, which proves
+  the combined manifest and addendum paths are where the game really reads and
+  writes. A cell holds:
+  - the date of the last such run (`2026-10-01`). Why a date and not yes/no:
+    the manifest, the addendum and our code keep changing, and a date shows
+    how old the check is;
+  - nothing when it hasn't been checked;
+  - `-` when the game has no build for that platform. It was first filled from
+    the Steam store's platform flags (2026-10-01), so a build only another
+    store sells may still be marked `-`. Proton is `-` only for a game with no
+    Windows build.
 - `catalog/games.csv` is committed and is the only editing surface; the builder
   reads it directly. Git diffs, agents and scripts read the same file.
 

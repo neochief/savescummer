@@ -135,6 +135,29 @@
       - when: { os: linux }
         path: "{XDG_DATA_HOME}/Hinterland/TheLongDark"
 
+# NEO Scavenger: a Flash projector, so the save `nsSGv1.sol` is a Flash
+# shared object. The manifest reads Flash's folder under `#SharedObjects` as
+# a Steam user id, but it's a random name Flash picks once per OS user (all
+# Flash apps share it), and below it Flash repeats the path of the running
+# executable, without the drive on Windows. Checked on Windows (Steam,
+# 2026-10-01): `#SharedObjects/CUSULSR3/localhost/Program Files (x86)/Steam/
+# steamapps/common/NEO Scavenger/NEOScavenger.exe/nsSGv1.sol`. So `*` stands
+# for the random folder and `**` for the executable's path. Under Proton
+# `{APPDATA}` is in the prefix and `**` takes whatever path Wine reports.
+# macOS and Linux follow PCGamingWiki and the Steam forums
+# (`<random>/<path to game>/NEOScavenger.app/nsSGv1.sol`, and `.../NEOScavenger/
+# nsSGv1.sol` under `~/.macromedia/Flash_Player`), with `**` also covering a
+# `localhost` folder if there is one. Not yet checked on macOS or Linux.
+"NEO Scavenger":
+  override:
+    save:
+      - when: { os: windows }
+        path: "{APPDATA}/Macromedia/Flash Player/#SharedObjects/*/localhost/**/NEOScavenger.exe/nsSGv1.sol"
+      - when: { os: macos }
+        path: "{HOME}/Library/Preferences/Macromedia/Flash Player/#SharedObjects/*/**/NEOScavenger.app/nsSGv1.sol"
+      - when: { os: linux }
+        path: "{HOME}/.macromedia/Flash_Player/#SharedObjects/*/**/NEOScavenger/nsSGv1.sol"
+
 # Entries below were checked against real folders (Windows, 2026-09-24).
 
 # Enter the Gungeon: the Unity folder also holds `Unity/` (engine cache),

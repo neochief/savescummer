@@ -766,6 +766,50 @@ fn placeholders_inside_a_proton_prefix() {
 }
 
 #[test]
+fn flash_shared_objects_split_at_the_random_folder() {
+    // NEO Scavenger's addendum override: `*` is Flash's random per-user
+    // folder, `**` the running executable's path.
+    let mut g = game(
+        "steam-248860",
+        &[
+            win("{APPDATA}/Macromedia/Flash Player/#SharedObjects/*/localhost/**/NEOScavenger.exe/nsSGv1.sol"),
+            lin("{HOME}/.macromedia/Flash_Player/#SharedObjects/*/**/NEOScavenger/nsSGv1.sol"),
+        ],
+    );
+    g.executables.windows = vec!["NEOScavenger.exe".into()];
+    g.executables.linux = vec!["NEOScavenger".into()];
+    let windows_pattern = pattern("*/localhost/**/NEOScavenger.exe/nsSGv1.sol");
+
+    let dir = "C:/Program Files (x86)/Steam/steamapps/common/NEO Scavenger";
+    let probe = FakeProbe::windows().file(&format!("{dir}/NEOScavenger.exe"));
+    let d = resolve(&g, &install(Store::Steam, Platform::Windows, dir), &probe);
+    assert_eq!(
+        set(&d),
+        vec![("C:/Users/u/AppData/Roaming/Macromedia/Flash Player/#SharedObjects".into(), windows_pattern.clone())]
+    );
+
+    let neo = "/home/u/.steam/steam/steamapps/common/NEO Scavenger";
+    let pfx = "/home/u/.steam/steam/steamapps/compatdata/248860/pfx";
+    let probe =
+        FakeProbe::linux().file(&format!("{neo}/NEOScavenger.exe")).dir(&format!("{pfx}/drive_c/users/steamuser"));
+    let d = resolve(&g, &proton(neo, pfx), &probe);
+    assert_eq!(
+        set(&d),
+        vec![(
+            format!("{pfx}/drive_c/users/steamuser/AppData/Roaming/Macromedia/Flash Player/#SharedObjects"),
+            windows_pattern
+        )]
+    );
+
+    let probe = FakeProbe::linux().file(&format!("{neo}/NEOScavenger"));
+    let d = resolve(&g, &proton(neo, pfx), &probe);
+    assert_eq!(
+        set(&d),
+        vec![("/home/u/.macromedia/Flash_Player/#SharedObjects".into(), pattern("*/**/NEOScavenger/nsSGv1.sol"))]
+    );
+}
+
+#[test]
 fn windows_placeholders_are_dropped_for_a_linux_build() {
     let g = game("g", &[rule("{APPDATA}/G"), rule("{XDG_DATA_HOME}/G")]);
     let d = resolve(&g, &install(Store::Steam, Platform::Linux, "/g"), &FakeProbe::linux());

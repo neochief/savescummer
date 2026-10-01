@@ -170,4 +170,32 @@ mod tests {
         assert!(!could_match_below("C*/SGS*", "D1", false));
         assert!(!could_match_below("C*/SGS*", "C1/SGS1", false));
     }
+
+    #[test]
+    fn double_star_in_the_middle() {
+        let p = "*/localhost/**/NEO.exe/s.sol";
+        assert!(match_path(p, "U/localhost/NEO.exe/s.sol", false), "zero folders");
+        assert!(match_path(p, "U/localhost/a/NEO.exe/s.sol", false), "one folder");
+        assert!(match_path(p, "U/localhost/a/b/c/NEO.exe/s.sol", false), "many folders");
+        assert!(!match_path(p, "U/www/a/NEO.exe/s.sol", false), "the part before must match");
+        assert!(!match_path(p, "U/localhost/a/NEO.exe", false), "the part after must match whole");
+        assert!(!match_path(p, "U/localhost/a/NEO.exe/s.sol/x", false), "nothing past the end");
+        assert!(match_path("a/**/b/**/c", "a/x/b/y/z/c", false), "two double stars");
+        assert!(match_path("a/**", "a/x/y", false));
+        assert!(match_path("a/**", "a", false), "a trailing double star matches no folder too");
+        assert!(match_path("*/LOCALHOST/**/neo.EXE/S.sol", "U/localhost/a/NEO.exe/s.sol", true));
+        assert!(!match_path("*/LOCALHOST/**/neo.EXE/S.sol", "U/localhost/a/NEO.exe/s.sol", false));
+    }
+
+    #[test]
+    fn could_match_below_through_a_double_star() {
+        let p = "*/localhost/**/NEO.exe/s.sol";
+        assert!(could_match_below(p, "U", false));
+        assert!(could_match_below(p, "U/localhost", false));
+        assert!(could_match_below(p, "U/localhost/a/b/c", false), "anything below the double star");
+        assert!(could_match_below(p, "U/localhost/a/NEO.exe", false));
+        assert!(!could_match_below(p, "U/www", false), "pruned before the double star");
+        assert!(could_match_below(p, "U/LOCALHOST", true));
+        assert!(!could_match_below(p, "U/LOCALHOST", false));
+    }
 }

@@ -1851,27 +1851,21 @@
       "save": [
         {
           "when": {
-            "os": "macos"
-          },
-          "path": "{HOME}/Library/Preferences/Macromedia/Flash Player/#SharedObjects/{STEAM_ID64}/localhost/nsSGv1.sol"
-        },
-        {
-          "when": {
-            "os": "macos"
-          },
-          "path": "{HOME}/Library/Preferences/Macromedia/Flash Player/#SharedObjects/{STEAM_ACCOUNT_ID}/localhost/nsSGv1.sol"
-        },
-        {
-          "when": {
             "os": "windows"
           },
-          "path": "{APPDATA}/Macromedia/Flash Player/#SharedObjects/{STEAM_ID64}/localhost/nsSGv1.sol"
+          "path": "{APPDATA}/Macromedia/Flash Player/#SharedObjects/*/localhost/**/NEOScavenger.exe/nsSGv1.sol"
         },
         {
           "when": {
-            "os": "windows"
+            "os": "macos"
           },
-          "path": "{APPDATA}/Macromedia/Flash Player/#SharedObjects/{STEAM_ACCOUNT_ID}/localhost/nsSGv1.sol"
+          "path": "{HOME}/Library/Preferences/Macromedia/Flash Player/#SharedObjects/*/**/NEOScavenger.app/nsSGv1.sol"
+        },
+        {
+          "when": {
+            "os": "linux"
+          },
+          "path": "{HOME}/.macromedia/Flash_Player/#SharedObjects/*/**/NEOScavenger/nsSGv1.sol"
         }
       ]
     },
