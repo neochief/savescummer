@@ -52,6 +52,15 @@ export const scenarios: Record<string, Scenario> = {
   starting: { title: 'Host still starting', focus: FTL, setup: ({ state }) => { state.phase = 'starting'; } },
 
   playing: { title: 'Game running', focus: FTL, setup: run(FTL) },
+  'playing-first': { title: 'Running, no progress or checkpoints', focus: SLAY_THE_SPIRE, setup: (preview) => {
+    run(SLAY_THE_SPIRE)(preview);
+    preview.facts[SLAY_THE_SPIRE].hasData = false;
+  } },
+  'playing-load': { title: 'Running, checkpoints but no progress', focus: GUNGEON, setup: (preview) => {
+    run(GUNGEON)(preview);
+    preview.facts[GUNGEON].hasData = false;
+  } },
+  'playing-save-first': { title: 'Running, progress but no checkpoints', focus: SLAY_THE_SPIRE, setup: run(SLAY_THE_SPIRE) },
   'playing-expert': { title: 'Game running, expert mode', focus: FTL, setup: run(FTL, true) },
   busy: { title: 'Save in progress', focus: FTL, setup: ({ facts, game }) => {
     facts[FTL].busy = true;

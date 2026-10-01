@@ -64,7 +64,12 @@ function guidance(facts: Facts, exitLocked: boolean): Guidance | undefined {
     if (!match) return; // The checkpoint store has its own app-wide notice.
     return { kind: match[0], save: true, load: true, failure: problem, remedy: match[1] };
   }
-  if (exitLocked) return { kind: 'game_running', save: true, load: true };
+  if (exitLocked) {
+    const kind = !facts.hasData
+      ? (facts.hasSaves ? 'running_load' : 'running_play_first')
+      : (facts.hasSaves ? 'running_save_or_load' : 'running_save_first');
+    return { kind, save: true, load: true };
+  }
   if (facts.hasData && facts.hasSaves) return;
   return { kind: !facts.hasData ? (facts.hasSaves ? 'no_game_data' : 'play_first') : 'no_saves', save: !facts.hasData, load: !facts.hasSaves };
 }

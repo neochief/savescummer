@@ -26,7 +26,8 @@ export interface Artwork {
 export interface Availability { available: boolean; reason?: string; failure?: Failure }
 export interface Guidance {
   kind: 'blocked' | 'access_needed' | 'no_save_location' | 'invalid_target' | 'target_unavailable'
-    | 'game_running' | 'play_first' | 'no_game_data' | 'no_saves';
+    | 'running_play_first' | 'running_load' | 'running_save_first' | 'running_save_or_load'
+    | 'play_first' | 'no_game_data' | 'no_saves';
   save: boolean;
   load: boolean;
   failure?: Failure;

@@ -115,7 +115,8 @@ test('play-first guidance launches the game through the shared play action', asy
   bridge.state.games[0].can_play = true;
   render(<App bridge={bridge} />);
 
-  const panel = await screen.findByRole('status', { name: 'Play the game first to save progress' });
+  const panel = await screen.findByRole('status', { name: 'Nothing to save yet' });
+  expect(panel.textContent).toContain('If the game saved progress,');
   const play = within(panel).getByRole('button', { name: 'Play game' }) as HTMLButtonElement;
   fireEvent.click(play);
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'play', game: 'a' }));
@@ -204,15 +205,34 @@ test('a running game that saves on exit covers the actions and hides row loads u
   await screen.findByText('First checkpoint');
   const locked = { available: false, reason: 'game_running' };
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
-    games: bridge.state.games.map((game) => game.id === 'a' ? { ...game, running: true, save: locked, load: locked, restore: locked, guidance: { kind: 'game_running', save: true, load: true } } : game) }));
-  const panel = screen.getByRole('status', { name: 'Exit the game first' });
-  expect(panel.querySelector('strong')?.textContent).toContain('Exit the game');
+    games: bridge.state.games.map((game) => game.id === 'a' ? { ...game, running: true, save: locked, load: locked, restore: locked, guidance: { kind: 'running_save_or_load', save: true, load: true } } : game) }));
+  const panel = screen.getByRole('status', { name: 'Quit the game to save or load' });
+  expect(panel.querySelector('strong')?.textContent).toContain('Quit the game');
   expect((screen.getByRole('button', { name: 'save Game A' }) as HTMLButtonElement).disabled).toBe(true);
   expect(document.querySelectorAll('.row-button:not(.locked)')).toHaveLength(0);
 
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3 }));
-  expect(screen.queryByRole('status', { name: 'Exit the game first' })).toBeNull();
+  expect(screen.queryByRole('status', { name: 'Quit the game to save or load' })).toBeNull();
   expect(document.querySelectorAll('.row-button.locked')).toHaveLength(0);
+});
+
+test.each([
+  ['running_play_first', 'Play a bit before your first checkpoint', "Quit normally when you're done. If the game saved progress,\nyou can make a checkpoint here."],
+  ['running_load', 'Quit the game to load a checkpoint', 'Your checkpoints are still here. Load one after the game closes,\nthen relaunch.'],
+  ['running_save_first', 'Quit the game to make your first checkpoint', "There's progress to keep. Hit Save once the game closes."],
+  ['running_save_or_load', 'Quit the game to save or load', 'Let it close normally first. Then make a checkpoint,\nor load one before relaunching.'],
+] as const)('%s locks both actions with state-specific guidance', async (kind, title, message) => {
+  const bridge = new FakeBridge();
+  const locked = { available: false, reason: 'game_running' };
+  bridge.state.games[0] = { ...bridge.state.games[0], running: true, save: locked, load: locked,
+    guidance: { kind, save: true, load: true } };
+  render(<App bridge={bridge} />);
+  const panel = await screen.findByRole('status', { name: title });
+  expect(panel.classList.contains('covers-both')).toBe(true);
+  expect(panel.querySelector('.guidance-description')?.textContent).toBe(message);
+  expect(within(panel).queryByRole('button')).toBeNull();
+  expect((screen.getByRole('button', { name: 'save Game A' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'load Game A' }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 test('Configure turns Expert mode on', async () => {
@@ -232,7 +252,7 @@ test('Configure turns Expert mode on', async () => {
 
 test('stable guidance survives Delete while history follows the current host gate', async () => {
   const bridge = new FakeBridge();
-  bridge.state.games[0].guidance = { kind: 'game_running', save: true, load: true };
+  bridge.state.games[0].guidance = { kind: 'running_save_or_load', save: true, load: true };
   bridge.state.games[0].restore = { available: false, reason: 'game_running' };
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
@@ -240,7 +260,7 @@ test('stable guidance survives Delete while history follows the current host gat
     { ...bridge.state.games[0], save: { available: false, reason: 'busy' },
       busy: { id: 'delete-1', kind: 'delete', status: 'running' } }, bridge.state.games[1],
   ] }));
-  expect(screen.getByRole('status', { name: 'Exit the game first' })).toBeTruthy();
+  expect(screen.getByRole('status', { name: 'Quit the game to save or load' })).toBeTruthy();
   expect((screen.getByRole('button', { name: /Load save from/ }) as HTMLButtonElement).disabled).toBe(true);
   await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3, games: [game('a', 'Game A'), game('b', 'Game B')] }));
   expect((screen.getByRole('button', { name: /Load save from/ }) as HTMLButtonElement).disabled).toBe(false);
@@ -299,9 +319,9 @@ test('a Load-only empty state leaves Save usable', async () => {
   bridge.state.games[0].guidance = { kind: 'no_saves', save: false, load: true };
   bridge.state.games[0].latest = undefined;
   render(<App bridge={bridge} />);
-  const panel = await screen.findByRole('status', { name: 'No checkpoints yet' });
+  const panel = await screen.findByRole('status', { name: "You've got progress worth keeping" });
   expect(panel.classList.contains('covers-load')).toBe(true);
-  expect(panel.textContent).toContain('Go and play the game first.');
+  expect(panel.textContent).toContain('Hit Save to make your first checkpoint.');
   expect(document.querySelector('.action-slot:first-child .shortcut-tab')).toBeTruthy();
   expect(document.querySelector('.action-slot:nth-child(2) .shortcut-tab')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'save Game A' }));
@@ -312,7 +332,8 @@ test('guidance hides only the shortcut for its covered action', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].guidance = { kind: 'no_game_data', save: true, load: false };
   render(<App bridge={bridge} />);
-  await screen.findByRole('status', { name: 'No game data to save' });
+  const panel = await screen.findByRole('status', { name: 'Nothing to back up yet' });
+  expect(panel.textContent).toContain('Your checkpoints are still here. Hit Load to bring one back.');
   const save = document.querySelector('.action-slot:first-child')!;
   const load = document.querySelector('.action-slot:nth-child(2)')!;
   expect(save.hasAttribute('inert')).toBe(true);

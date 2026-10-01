@@ -162,8 +162,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .guidance-title-detail { color: #cfc2b3; }
 .guidance-text { width: 100%; }
 .guidance-panel p { margin: 0; font-size: 13px; line-height: 1.35; color: #a99b90; overflow-wrap: anywhere; }
-.guidance-panel p.guidance-description { text-wrap: balance; }
-.guidance-panel[data-kind="game_running"] p.guidance-description { white-space: pre-line; }
+.guidance-panel p.guidance-description { text-wrap: balance; white-space: pre-line; }
 .guidance-buttons { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; width: 100%; margin-top: 12px; }
 .guidance-panel button { padding: 4px 16px; border: 1px solid #897362; border-radius: 5px; background: #44372d; color: #f3eee7; cursor: pointer; }
 .guidance-panel p[role="alert"] { margin-top: 10px; }

@@ -23,7 +23,7 @@
 
 **How progress is saved:** The game keeps a single current survivor state rather than manual rollback slots.
 
-**SaveScummer value:** Checkpoint before combat, risky scavenging, travel while injured, or an uncertain encounter. Restore a known-good survivor instead of rebuilding the entire survival setup.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before combat, risky scavenging, travel while injured, or an uncertain encounter. Restore a known-good survivor instead of rebuilding the entire survival setup.","Keep","","2026-10-01","TBD","2026-10-01","TBD"
 "Cogmind","yes","Permadeath roguelike/roguelite runs","no","**Context:** A deep run can have a highly specific robot assembled from rare propulsion, weapons, utilities, storage, and route choices.
 
 **How progress is saved:** Normal play saves an unfinished run for continuation; built-in rollback aids depend on mode, so the value is highest where those aids are absent.
@@ -48,7 +48,7 @@
 
 **How progress is saved:** FTL keeps one active-run continuation save that is overwritten as the run advances and disappears when the run ends.
 
-**SaveScummer value:** Checkpoint before a dangerous beacon, sector exit, or Flagship phase. Retry the same ship and strategy after a catastrophic fight instead of rebuilding the run.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a dangerous beacon, sector exit, or Flagship phase. Retry the same ship and strategy after a catastrophic fight instead of rebuilding the run.","Keep","","TBD","TBD","TBD","TBD"
 "Tales of Maj'Eyal","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A high-level character can carry a specialized talent build, artifacts, inscriptions, escorts, and quest progress that are expensive to reproduce.
 
 **How progress is saved:** Permadeath depends on mode; the character is persisted for continuation, but normal play does not provide arbitrary rollback slots.
@@ -68,12 +68,12 @@
 
 **How progress is saved:** Save & Quit persists the whole active world/run across a large save set, so a safe checkpoint needs the complete save state.
 
-**SaveScummer value:** Checkpoint before testing a volatile wand, entering a dangerous biome or boss, or starting a parallel-world expedition. Restore after polymorph, self-damage, or another sudden run-ending mistake.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before testing a volatile wand, entering a dangerous biome or boss, or starting a parallel-world expedition. Restore after polymorph, self-damage, or another sudden run-ending mistake.","Keep","","TBD","-","-","TBD"
 "The Binding of Isaac: Rebirth","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A rare item synergy or completion-mark run can be hard to reproduce once a late death ends it.
 
 **How progress is saved:** An active run has continuation data for Continue, but the game does not keep a reusable history of earlier run states.
 
-**SaveScummer value:** Checkpoint before a late boss, sacrifice sequence, or route decision. Restore the exact build after failure instead of rerolling until the same synergy appears again.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a late boss, sacrifice sequence, or route decision. Restore the exact build after failure instead of rerolling until the same synergy appears again.","Keep","","TBD","TBD","TBD","TBD"
 "Catacomb Kids","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A good run can hinge on a particular kid, weapon, spell set, stats, and resources that are hard to recreate.
 
 **How progress is saved:** Permadeath runs can be saved between floors; that floor transition is the reliable serialization boundary.
@@ -88,7 +88,7 @@
 
 **How progress is saved:** The active run is autosaved and persistent progression is stored separately; permadeath still ends a run rather than leaving reusable rollback points.
 
-**SaveScummer value:** Checkpoint before a dangerous encounter, boss, or boarding action. Restore the same ship, crew and build after a fatal fight instead of starting a new galaxy.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before a dangerous encounter, boss, or boarding action. Restore the same ship, crew and build after a fatal fight instead of starting a new galaxy.","Keep","","TBD","-","-","TBD"
 "Caveblazers","yes","Permadeath roguelike/roguelite runs","no","**Context:** The useful case would be protecting a strong perk/equipment build before a late cave or boss.
 
 **How progress is saved:** The released game does not normally save and resume an active run.
@@ -173,12 +173,12 @@
 
 **How progress is saved:** The survivor and persistent world are saved together continuously rather than through manual slots, so a useful rollback must restore the matching save state.
 
-**SaveScummer value:** Checkpoint before Louisville runs, clearing dense buildings, moving loaded vehicles, or continuing after a suspicious bite. Restore both character and world after a fatal mistake.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before Louisville runs, clearing dense buildings, moving loaded vehicles, or continuing after a suspicious bite. Restore both character and world after a fatal mistake.","Keep","","TBD","TBD","TBD","TBD"
 "Terraria","yes","Hardcore one-life characters or worlds","yes","**Context:** Hardcore is mostly an optional challenge, but it is specifically required for the **Extra Life** achievement.
 
 **How progress is saved:** Character and world saves are separate, so checkpoint both when you want a clean pre-attempt rollback.
 
-**SaveScummer value:** Checkpoint before the **Extra Life** attempt or another high-risk Hardcore milestone. If the character is lost or the attempt goes wrong, restore instead of rebuilding the geared Hardcore character.","Keep","Keep specifically for Hardcore-character play; normal-mode saving is not the value proposition.","","","",""
+**SaveScummer value:** Checkpoint before the **Extra Life** attempt or another high-risk Hardcore milestone. If the character is lost or the attempt goes wrong, restore instead of rebuilding the geared Hardcore character.","Keep","Keep specifically for Hardcore-character play; normal-mode saving is not the value proposition.","TBD","TBD","TBD","TBD"
 "My Summer Car","yes","Hardcore one-life characters or worlds","no","**Context:** Permadeath has its own achievements, including **And it is gone!** for dying with permadeath enabled, while the same save may contain hours of Satsuma work and money progression.
 
 **How progress is saved:** Permadeath can remove the main save on death, so the checkpoint must be taken before the fatal attempt.
@@ -188,12 +188,12 @@
 
 **How progress is saved:** Hardcore character progress is stored in local save data and death permanently ends that character.
 
-**SaveScummer value:** Checkpoint before an act boss, Phase Beast challenge, or dangerous Mapworks run. Restore a dead achievement-run character instead of leveling and gearing another one from scratch.","Keep","Keep specifically for Hardcore achievement runs.","","","",""
+**SaveScummer value:** Checkpoint before an act boss, Phase Beast challenge, or dangerous Mapworks run. Restore a dead achievement-run character instead of leveling and gearing another one from scratch.","Keep","Keep specifically for Hardcore achievement runs.","TBD","","TBD","TBD"
 "Grim Dawn","yes","Hardcore one-life characters or worlds","yes","**Context:** Grim Dawn has multiple Hardcore-only achievements, including high-level and Ultimate-difficulty goals that can take a long time to reach.
 
 **How progress is saved:** Hardcore character progress is stored locally and death permanently ends the character.
 
-**SaveScummer value:** Checkpoint before a nemesis, roguelike dungeon, celestial boss, or deep Shattered Realm push. Restore the same achievement-run character after a death instead of rebuilding its level, devotion map, and gear.","Keep","Keep specifically for Hardcore achievement runs.","","-","-",""
+**SaveScummer value:** Checkpoint before a nemesis, roguelike dungeon, celestial boss, or deep Shattered Realm push. Restore the same achievement-run character after a death instead of rebuilding its level, devotion map, and gear.","Keep","Keep specifically for Hardcore achievement runs.","TBD","-","-","TBD"
 "Darkwood","yes","Hardcore one-life characters or worlds","yes","**Context:** Nightmare makes death final, while even normal play relies on autosaves rather than free manual rollback.
 
 **How progress is saved:** The current autosave is overwritten as the game advances; Nightmare death ends the playthrough.
@@ -203,7 +203,7 @@
 
 **How progress is saved:** The current world is saved automatically; a terminal death ends that run rather than leaving a normal rollback slot.
 
-**SaveScummer value:** Checkpoint before a boss, winter expedition, cave trip, or other stretch where resurrection is uncertain. Restore the same base and world instead of generating and rebuilding a new one.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a boss, winter expedition, cave trip, or other stretch where resurrection is uncertain. Restore the same base and world instead of generating and rebuilding a new one.","Keep","","TBD","TBD","TBD","TBD"
 "Battle Brothers","yes","Ironman / single-save campaigns","yes","**Context:** Battle Brothers has Ironman-specific achievements, while a single bad battle can kill veteran brothers and destroy famed gear built over a long campaign.
 
 **How progress is saved:** Ironman keeps one automatically updated campaign state with no normal pre-battle rollback.
@@ -213,7 +213,7 @@
 
 **How progress is saved:** Ironman maintains one campaign save and commits tactical casualties and mission results as it advances.
 
-**SaveScummer value:** Checkpoint before a Chosen/Alien Ruler fight, retaliation, facility assault, or critical tactical turn. Restore after a wipe or veteran loss instead of restarting the Valhalla run.","Keep","Keep specifically for Ironman achievement runs.","","","",""
+**SaveScummer value:** Checkpoint before a Chosen/Alien Ruler fight, retaliation, facility assault, or critical tactical turn. Restore after a wipe or veteran loss instead of restarting the Valhalla run.","Keep","Keep specifically for Ironman achievement runs.","TBD","TBD","TBD","TBD"
 "Gears Tactics","yes","Ironman / single-save campaigns","yes","**Context:** The **I am Ironman** achievement requires completing the campaign with Ironman enabled.
 
 **How progress is saved:** Ironman removes normal manual rollback and commits campaign progress through autosaves.
@@ -228,27 +228,27 @@
 
 **How progress is saved:** Ironman keeps one evolving autosave rather than a library of manual rollback saves.
 
-**SaveScummer value:** Checkpoint before a major war, federation/subject change, crisis decision, or other empire-defining commitment. The clearest payoff is protecting a long **Victorious** attempt from one disastrous branch.","Keep","Narrow keep: most achievements no longer need Ironman; value is tied to the remaining Ironman-specific goal.","","","",""
+**SaveScummer value:** Checkpoint before a major war, federation/subject change, crisis decision, or other empire-defining commitment. The clearest payoff is protecting a long **Victorious** attempt from one disastrous branch.","Keep","Narrow keep: most achievements no longer need Ironman; value is tied to the remaining Ironman-specific goal.","TBD","TBD","TBD","TBD"
 "Europa Universalis IV","yes","Ironman / single-save campaigns","yes","**Context:** EU4 achievements require Ironman, so an achievement run can represent centuries of setup that one war, succession, peace deal, or bad click can ruin.
 
 **How progress is saved:** Ironman keeps one evolving campaign save and disables normal manual branching.
 
-**SaveScummer value:** Checkpoint before a major war, PU/succession play, peace deal, or achievement-critical decision. Restore the campaign without abandoning the Ironman achievement attempt.","Keep","Keep specifically for Ironman-compatible achievement runs.","","","",""
+**SaveScummer value:** Checkpoint before a major war, PU/succession play, peace deal, or achievement-critical decision. Restore the campaign without abandoning the Ironman achievement attempt.","Keep","Keep specifically for Ironman-compatible achievement runs.","TBD","TBD","TBD","TBD"
 "Baldur's Gate 3","yes","Ironman / single-save campaigns","yes","**Context:** Completing Honour Mode awards **Foehammer**, but a party wipe can end eligibility after dozens of hours.
 
 **How progress is saved:** Honour Mode keeps a single campaign save, so there is no normal earlier save to return to after a disaster.
 
-**SaveScummer value:** Checkpoint before a dangerous boss, high-stakes dialogue, or other run-ending situation. Restore after a wipe instead of restarting the entire Foehammer attempt.","Keep","","","","-",""
+**SaveScummer value:** Checkpoint before a dangerous boss, high-stakes dialogue, or other run-ending situation. Restore after a wipe instead of restarting the entire Foehammer attempt.","Keep","","TBD","TBD","-","TBD"
 "Crusader Kings II","yes","Ironman / single-save campaigns","yes","**Context:** CK2 achievements are tied to Ironman-compatible campaigns, where a bad succession, ruler death, or war can undo decades of setup.
 
 **How progress is saved:** Ironman continually overwrites one campaign save instead of keeping manual rollback slots.
 
-**SaveScummer value:** Checkpoint before a succession, faction revolt, risky war, imprisonment, or inheritance play. Restore the dynasty after a disastrous outcome without abandoning the achievement run.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a succession, faction revolt, risky war, imprisonment, or inheritance play. Restore the dynasty after a disastrous outcome without abandoning the achievement run.","Keep","","TBD","TBD","TBD","TBD"
 "Hearts of Iron IV","yes","Ironman / single-save campaigns","yes","**Context:** HOI4 achievement runs require Ironman, and one failed offensive or diplomatic commitment can destroy years of buildup.
 
 **How progress is saved:** Ironman relies on autosaves and exit saves rather than manual branching.
 
-**SaveScummer value:** Checkpoint before a major offensive, declaration, focus/decision lock-in, or peace conference. Restore after a catastrophic encirclement or bad outcome instead of restarting the achievement campaign.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a major offensive, declaration, focus/decision lock-in, or peace conference. Restore after a catastrophic encirclement or bad outcome instead of restarting the achievement campaign.","Keep","","TBD","TBD","TBD","TBD"
 "Imperator: Rome","yes","Ironman / single-save campaigns","yes","**Context:** Imperator achievement runs use Ironman, where a civil war, succession crisis, or disastrous war can erase decades of state-building.
 
 **How progress is saved:** Ironman continually overwrites a single campaign state.
@@ -268,7 +268,7 @@
 
 **How progress is saved:** Ironman disables manual and multiple saves, committing tactical casualties and campaign state to one history.
 
-**SaveScummer value:** Checkpoint before a terror mission, base assault, or difficult UFO operation. Restore after a squad wipe or veteran loss instead of restarting the No Looking Back run.","Keep","Keep specifically for Ironman achievement runs.","","-","",""
+**SaveScummer value:** Checkpoint before a terror mission, base assault, or difficult UFO operation. Restore after a squad wipe or veteran loss instead of restarting the No Looking Back run.","Keep","Keep specifically for Ironman achievement runs.","TBD","-","TBD","TBD"
 "BattleTech","yes","Ironman / single-save campaigns","yes","**Context:** The **I Am Iron Man!** achievement requires completing a campaign with Iron Man enabled, where rare Mechs, weapons, pilots, and company finances are all at risk.
 
 **How progress is saved:** Iron Man uses a single campaign save and disables the normal pre/post-mission save history.
@@ -283,7 +283,7 @@
 
 **How progress is saved:** Legendary only exposes the latest automatic campaign state instead of normal manual saves.
 
-**SaveScummer value:** Checkpoint before Realm Divide, a decisive siege, or a risky war declaration. Restore after a campaign-breaking loss instead of replaying dozens of turns.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before Realm Divide, a decisive siege, or a risky war declaration. Restore after a campaign-breaking loss instead of replaying dozens of turns.","Keep","","TBD","-","-","TBD"
 "Total War: Rome II","yes","Ironman / single-save campaigns","yes","**Context:** A Legendary campaign can lose veteran armies, provinces, and political stability to one bad war or civil conflict.
 
 **How progress is saved:** Legendary restricts loading to the current/latest autosave rather than normal manual saves.
@@ -293,7 +293,7 @@
 
 **How progress is saved:** Legendary relies on an evolving autosave history rather than free manual rollback.
 
-**SaveScummer value:** Checkpoint before a Hun battle, exposed-settlement defense, migration, or dangerous End Turn. Restore before the collapse instead of trying to recover from several cascading losses.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a Hun battle, exposed-settlement defense, migration, or dangerous End Turn. Restore before the collapse instead of trying to recover from several cascading losses.","Keep","","TBD","TBD","TBD","TBD"
 "Total War Saga: Thrones of Britannia","yes","Ironman / single-save campaigns","yes","**Context:** Small kingdoms can be crippled by one lost army, succession problem, or declaration that opens multiple fronts.
 
 **How progress is saved:** Legendary commits progress through automatic saves and disables normal manual rollback.
@@ -313,7 +313,7 @@
 
 **How progress is saved:** Those settings heavily restrict rollback and can autosave around tactical actions, so the exact captured state matters.
 
-**SaveScummer value:** Checkpoint before storming a fortified sector, boss encounter, or fight where a favorite merc can die. Restore after a disastrous engagement instead of restarting the full Ironman challenge.","Keep","Keep specifically for the restrictive challenge/achievement configuration.","","-","-",""
+**SaveScummer value:** Checkpoint before storming a fortified sector, boss encounter, or fight where a favorite merc can die. Restore after a disastrous engagement instead of restarting the full Ironman challenge.","Keep","Keep specifically for the restrictive challenge/achievement configuration.","TBD","-","-","TBD"
 "Darkest Dungeon","yes","Permanent roster or asset loss","yes","**Context:** A veteran hero can carry quirks, upgraded skills, rare trinkets, and weeks of investment, while death permanently removes that hero.
 
 **How progress is saved:** The campaign autosaves continuously, so deaths and expedition outcomes are committed instead of sitting behind manual save slots.
@@ -333,7 +333,7 @@
 
 **How progress is saved:** The game advances through automatic day/night saves rather than unrestricted manual slots.
 
-**SaveScummer value:** Checkpoint before a dangerous scavenging trip, theft, combat, or critical winter decision. Restore after a death or catastrophic resource loss instead of replaying several days of shelter management.","Keep","","","-","",""
+**SaveScummer value:** Checkpoint before a dangerous scavenging trip, theft, combat, or critical winter decision. Restore after a death or catastrophic resource loss instead of replaying several days of shelter management.","Keep","","TBD","-","TBD","TBD"
 "Kingdom Come: Deliverance","yes","Restricted or resource-gated saving","yes","**Context:** Manual saves normally cost **Saviour Schnapps**, making frequent pre-risk saving deliberately inconvenient.
 
 **How progress is saved:** SaveScummer can preserve the same game state externally without consuming another Schnapps.
@@ -343,7 +343,7 @@
 
 **How progress is saved:** You normally get one Reset Turn per battle, not an unlimited history of earlier turns or pre-mission states.
 
-**SaveScummer value:** Checkpoint before a difficult island mission or critical turn. Restore after spending Reset Turn and still losing a pilot, objective, or Grid instead of accepting the damaged timeline.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a difficult island mission or critical turn. Restore after spending Reset Turn and still losing a pilot, objective, or Grid instead of accepting the damaged timeline.","Keep","","TBD","TBD","TBD","TBD"
 "Outward","yes","Limited/coarse rollback systems","yes","**Context:** Defeat can trigger capture, relocation, lost time, lost items, or quest consequences instead of a simple reload.
 
 **How progress is saved:** The game autosaves continuously; current versions expose a limited history of older autosaves rather than unrestricted manual slots.
@@ -353,7 +353,7 @@
 
 **How progress is saved:** The campaign autosaves, while Rewind is the built-in limited rollback mechanism.
 
-**SaveScummer value:** Checkpoint before a high-security facility or after spending the last Rewind. Restore after a failed infiltration instead of losing a veteran agent or abandoning the campaign.","Keep","","","","",""
+**SaveScummer value:** Checkpoint before a high-security facility or after spending the last Rewind. Restore after a failed infiltration instead of losing a veteran agent or abandoning the campaign.","Keep","","TBD","TBD","TBD","TBD"
 "King of Dragon Pass","yes","Limited/coarse rollback systems","no","**Context:** A heroquest, raid, exploration choice, or clan decision can damage cattle, magic, relationships, or leadership and reveal its consequences much later.
 
 **How progress is saved:** The modern PC version autosaves rather than offering free decision-point saves.
@@ -363,22 +363,22 @@
 
 **How progress is saved:** The game autosaves whenever the clan state changes rather than exposing manual branch slots.
 
-**SaveScummer value:** Checkpoint before a heroquest, marriage, raid, or major diplomatic decision. Restore to test another outcome without replaying the intervening seasons.","Keep","","","","-",""
+**SaveScummer value:** Checkpoint before a heroquest, marriage, raid, or major diplomatic decision. Restore to test another outcome without replaying the intervening seasons.","Keep","","TBD","TBD","-","TBD"
 "Six Ages 2: Lights Going Out","no","Limited/coarse rollback systems","yes","**Context:** A bad ritual, expedition, battle, or crisis response can consume scarce food/magic and weaken a clan already fighting long-term collapse.
 
 **How progress is saved:** The campaign autosaves through its scenes and long-running clan simulation.
 
-**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.","Keep","","","","-",""
+**SaveScummer value:** Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.","Keep","","TBD","TBD","-","TBD"
 "HighFleet","yes","Limited/coarse rollback systems","yes","**Context:** A bad battle or route gamble can destroy irreplaceable ships, fuel, ammunition, and strategic position far from the last Fleet HQ checkpoint.
 
 **How progress is saved:** The game provides campaign restore points at Fleet HQs rather than fine-grained manual rollback everywhere.
 
-**SaveScummer value:** Checkpoint before a strike-group battle, risky refit, fuel-critical route, or nuclear escalation. Restore without replaying the long stretch since the previous Fleet HQ.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before a strike-group battle, risky refit, fuel-critical route, or nuclear escalation. Restore without replaying the long stretch since the previous Fleet HQ.","Keep","","TBD","-","-","TBD"
 "Pathologic 2","yes","Persistent consequences ordinary reload cannot fully undo","yes","**Context:** Death permanently makes the playthrough harder, and those penalties survive ordinary reloads.
 
 **How progress is saved:** The death penalty is stored beyond the ordinary save being loaded, so SaveScummer must restore that broader state too.
 
-**SaveScummer value:** Checkpoint before a dangerous fight, infected district, or desperate supply run. Restore after death to undo the persistent penalty that the game's own reload cannot remove.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before a dangerous fight, infected district, or desperate supply run. Restore after death to undo the persistent penalty that the game's own reload cannot remove.","Keep","","TBD","-","-","TBD"
 "Sunless Sea","yes","Legacy/succession death systems","yes","**Context:** In Unforgiving mode, losing a veteran captain means moving on through the legacy system rather than simply reloading that same life.
 
 **How progress is saved:** The game autosaves on docking; manual saving switches the run out of Unforgiving mode.
@@ -393,12 +393,12 @@
 
 **How progress is saved:** The life is autosaved as choices are committed; there is no normal library of decision-point saves.
 
-**SaveScummer value:** Checkpoint before an estate, family, romance, trial, or revolutionary branch. Take one outcome, then restore for another instead of replaying whole chapters.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before an estate, family, romance, trial, or revolutionary branch. Take one outcome, then restore for another instead of replaying whole chapters.","Keep","","TBD","-","-","TBD"
 "Suzerain","yes","Committed narrative/autosave choices","yes","**Context:** Constitution, economy, alliances, cabinet choices, and endings branch from decisions that may only show their consequences hours later.
 
 **How progress is saved:** The campaign autosaves committed decisions instead of providing normal manual branch saves.
 
-**SaveScummer value:** Checkpoint before a constitutional vote, budget decision, privatization/nationalization choice, alliance, or cabinet crisis. Restore to pursue another outcome without replaying the presidency from the start.","Keep","","","","-",""
+**SaveScummer value:** Checkpoint before a constitutional vote, budget decision, privatization/nationalization choice, alliance, or cabinet crisis. Restore to pursue another outcome without replaying the presidency from the start.","Keep","","TBD","TBD","-","TBD"
 "Pentiment","yes","Committed narrative/autosave choices","yes","**Context:** Major investigation and dialogue choices are mutually exclusive and can change later acts.
 
 **How progress is saved:** Choices are committed through autosaves rather than user-managed save slots.
@@ -413,7 +413,7 @@
 
 **How progress is saved:** The game autosaves at checkpoints rather than offering unrestricted branch saves.
 
-**SaveScummer value:** Checkpoint before a battle with possible hero loss or a major caravan/story decision. Restore to preserve a different import state for later games without replaying the whole journey.","Keep","","","","-",""
+**SaveScummer value:** Checkpoint before a battle with possible hero loss or a major caravan/story decision. Restore to preserve a different import state for later games without replaying the whole journey.","Keep","","TBD","TBD","-","TBD"
 "Yes, Your Grace","yes","Committed narrative/autosave choices","no","**Context:** A choice made many days earlier can decide alliances, family outcomes, resources, or the war, but the game only keeps a short rolling history.
 
 **How progress is saved:** Only the most recent eight day-end saves are retained.
@@ -443,12 +443,12 @@
 
 **How progress is saved:** Campaign progress is autosaved rather than exposed as manual branch slots.
 
-**SaveScummer value:** Checkpoint before a pivotal encounter, border crossing, or expensive route choice. Restore to see another outcome without replaying several procedural legs to reach a similar point.","Keep","","","-","-",""
+**SaveScummer value:** Checkpoint before a pivotal encounter, border crossing, or expensive route choice. Restore to see another outcome without replaying several procedural legs to reach a similar point.","Keep","","TBD","-","-","TBD"
 "Enter the Gungeon","yes","Run-based games needing serialization validation","yes","**Context:** A deep run can have a rare gun/passive synergy, Master Rounds, keys, health, and secret-route progress that is hard to reproduce.
 
 **How progress is saved:** The Save Button serializes the run only at floor exits and resumes on the next floor.
 
-**SaveScummer value:** Checkpoint at a floor exit before a late floor, secret route, or boss sequence. Restore the same build after death instead of rerolling the run.","Keep","","","-","",""
+**SaveScummer value:** Checkpoint at a floor exit before a late floor, secret route, or boss sequence. Restore the same build after death instead of rerolling the run.","Keep","","TBD","-","TBD","TBD"
 "Wizard of Legend","yes","Run-based games needing serialization validation","no","**Context:** The desired value is protecting a rare arcana/relic build before a Council Member or Sura attempt.
 
 **How progress is saved:** The game does not normally save an active run for later continuation.

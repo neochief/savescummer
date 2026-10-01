@@ -124,7 +124,12 @@ impl Facts {
             guidance.failure = Some(f.clone());
             guidance.remedy = remedy;
         } else if self.exit_locked {
-            guidance.kind = GuidanceKind::GameRunning;
+            guidance.kind = match (self.has_data, self.has_saves) {
+                (false, false) => GuidanceKind::RunningPlayFirst,
+                (false, true) => GuidanceKind::RunningLoad,
+                (true, false) => GuidanceKind::RunningSaveFirst,
+                (true, true) => GuidanceKind::RunningSaveOrLoad,
+            };
         } else {
             guidance.save = !self.has_data;
             guidance.load = !self.has_saves;
@@ -184,12 +189,40 @@ mod tests {
         facts.exit_locked = true;
         facts.busy = true;
         assert_eq!(facts.check(Action::Save).unwrap_err().kind, ErrorKind::Busy);
-        assert_eq!(facts.guidance().unwrap().kind, GuidanceKind::GameRunning);
+        assert_eq!(facts.guidance().unwrap().kind, GuidanceKind::RunningSaveOrLoad);
         assert!(facts.check(Action::Delete).is_ok(), "delete may wait while busy");
         facts.busy = false;
         assert_eq!(facts.check(Action::Restore).unwrap_err().kind, ErrorKind::GameRunning);
         assert!(facts.check(Action::Flush).is_ok());
         assert!(facts.check(Action::Configure).is_ok());
+    }
+
+    #[test]
+    fn guidance_follows_progress_and_checkpoints_in_both_game_states() {
+        let cases = [
+            (false, false, GuidanceKind::RunningPlayFirst, GuidanceKind::PlayFirst),
+            (false, true, GuidanceKind::RunningLoad, GuidanceKind::NoGameData),
+            (true, false, GuidanceKind::RunningSaveFirst, GuidanceKind::NoSaves),
+        ];
+        for (has_data, has_saves, running_kind, closed_kind) in cases {
+            let mut facts = ready();
+            facts.has_data = has_data;
+            facts.has_saves = has_saves;
+            facts.exit_locked = true;
+            let running = facts.guidance().unwrap();
+            assert_eq!(running.kind, running_kind);
+            assert!(running.save && running.load);
+            assert_eq!(running.remedy, None);
+
+            facts.exit_locked = false;
+            let closed = facts.guidance().unwrap();
+            assert_eq!(closed.kind, closed_kind);
+            assert_eq!((closed.save, closed.load), (!has_data, !has_saves));
+        }
+        let mut facts = ready();
+        assert_eq!(facts.guidance(), None);
+        facts.exit_locked = true;
+        assert_eq!(facts.guidance().unwrap().kind, GuidanceKind::RunningSaveOrLoad);
     }
 
     #[test]

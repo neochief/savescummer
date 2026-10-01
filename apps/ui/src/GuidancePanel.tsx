@@ -10,10 +10,13 @@ const content: Record<Guidance['kind'], [string, string, string]> = {
   no_save_location: ['Choose', 'this game’s save folder', ''],
   invalid_target: ['Fix', 'the save location', ''],
   target_unavailable: ['Save location unavailable', '', 'Reconnect the drive or restore access to the saves folder.'],
-  game_running: ['Exit the game', 'to save or load checkpoints', 'Save copies progress after the game writes it on exit.\nLoad replaces it for the game to read on relaunch.'],
-  play_first: ['Play the game first', 'to save progress', 'Start the game, make some progress, then save and exit.'],
-  no_game_data: ['No game data to save', '', 'You can still load a checkpoint.'],
-  no_saves: ['No checkpoints yet', '', 'Go and play the game first.'],
+  running_play_first: ['Play a bit', 'before your first checkpoint', "Quit normally when you're done. If the game saved progress,\nyou can make a checkpoint here."],
+  running_load: ['Quit the game', 'to load a checkpoint', 'Your checkpoints are still here. Load one after the game closes,\nthen relaunch.'],
+  running_save_first: ['Quit the game', 'to make your first checkpoint', "There's progress to keep. Hit Save once the game closes."],
+  running_save_or_load: ['Quit the game', 'to save or load', 'Let it close normally first. Then make a checkpoint,\nor load one before relaunching.'],
+  play_first: ['Nothing to save yet', '', 'Play a bit, then quit normally. If the game saved progress,\nyou can make a checkpoint here.'],
+  no_game_data: ['Nothing to back up yet', '', 'Your checkpoints are still here. Hit Load to bring one back.'],
+  no_saves: ["You've got progress", 'worth keeping', 'Hit Save to make your first checkpoint.'],
 };
 
 export function GuidancePanel({ game, bridge, retrying, playPending, onRetry, onPlay, onConfigure }: {
@@ -50,7 +53,7 @@ export function GuidancePanel({ game, bridge, retrying, playPending, onRetry, on
     : guidance.kind === 'invalid_target' ? failureMessage(guidance.failure, text) : text;
   const coverage = guidance.save && guidance.load ? 'both' : guidance.save ? 'save' : 'load';
   return <section className={`guidance-panel covers-${coverage}`} data-kind={guidance.kind} role="status"
-    aria-label={guidance.kind === 'game_running' ? 'Exit the game first' : title}>
+    aria-label={title}>
     <div className="guidance-content">
       <strong>{action}{detail && <>{' '}<span className="guidance-title-detail">{detail}</span></>}</strong>
       {(message || error) && <div className="guidance-text">
