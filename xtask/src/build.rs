@@ -9,7 +9,7 @@ use anyhow::{Context, bail};
 use crate::naming::{self, CARGO_CLI, CARGO_HOST};
 use crate::package::{self, Inputs};
 use crate::paths::{self, Mode};
-use crate::{catalog, cmd, frontend, platform, procs, version};
+use crate::{cache, catalog, cmd, frontend, platform, procs, version};
 
 pub struct Options {
     pub release: bool,
@@ -49,10 +49,19 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
         // THE APP MUST PROVIDE); dev hosts refuse.
         rust.arg("--release").env("SAVESCUMMER_RELEASE_BUILD", "1");
     }
-    cmd::run(&mut rust)?;
     let out = mode.cargo_out();
     let host = out.join(naming::exe(CARGO_HOST));
     let cli = out.join(naming::exe(CARGO_CLI));
+    let rust_inputs = || {
+        let mut key = cache::Key::new("rust")?;
+        key.cargo_setup()?;
+        for bin in [CARGO_HOST, CARGO_CLI] {
+            key.dep_info(&out.join(format!("{bin}.d")), &[])?;
+        }
+        Ok(key)
+    };
+    cache::Step::new("rust", mode, !options.test, vec![host.clone(), cli.clone()])
+        .run(rust_inputs, || cmd::run(&mut rust))?;
 
     if options.test {
         // Tests always build as dev: they check dev-only behavior too.

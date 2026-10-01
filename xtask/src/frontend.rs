@@ -20,7 +20,7 @@ use std::process::Command;
 use anyhow::Context;
 
 use crate::paths::{self, Mode};
-use crate::{cmd, pins, platform};
+use crate::{cache, cmd, pins, platform};
 
 /// A built UI, ready to be packaged.
 pub struct Ui {
@@ -73,38 +73,53 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
         "Tauri UI minimum macOS version must be {}",
         pins::MIN_MACOS
     );
-    let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
-    let manifest: serde_json::Value = serde_json::from_slice(&fs::read(source.join("package.json"))?)?;
-    let required_pnpm = manifest["packageManager"]
-        .as_str()
-        .and_then(|value| value.strip_prefix("pnpm@"))
-        .context("apps/ui/package.json must specify a pnpm version")?;
-    let installed_pnpm = cmd::output(Command::new(&pnpm).arg("--version"))?;
-    anyhow::ensure!(
-        installed_pnpm == required_pnpm,
-        "the Tauri UI needs pnpm {required_pnpm}, but {} is {installed_pnpm}",
-        paths::show(&pnpm)
-    );
-    cmd::run(Command::new(&pnpm).current_dir(&source).args(["install", "--frozen-lockfile"]))?;
-    if test {
-        cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;
-    }
-    // The frontend is built here rather than by Tauri's beforeBuildCommand, so
-    // its output can be fixed up before Cargo looks at it.
-    cmd::run(Command::new(&pnpm).current_dir(&source).arg("build"))?;
-    keep_unchanged_times(&source.join("dist"), &mode.dir().join("ui-dist.json"))?;
-    let no_frontend = paths::scratch().join("tauri-no-frontend.json");
-    fs::create_dir_all(paths::scratch())?;
-    fs::write(&no_frontend, r#"{ "build": { "beforeBuildCommand": null } }"#)?;
-    let mut build = Command::new(&pnpm);
-    build.current_dir(&source).args(["tauri", "build", "--config"]).arg(&no_frontend);
-    platform::tauri_bundle(&mut build, package)?;
-    if mode == Mode::Dev {
-        build.arg("--debug");
-    }
-    cmd::run(&mut build)?;
-
     let binary = mode.cargo_out().join(crate::naming::exe("savescummer-ui"));
+    let dist = source.join("dist");
+    // Everything under apps/ui (the frontend, its lock file, the Tauri crate
+    // and config), and every Rust file the UI binary was built from. pnpm's
+    // version is pinned in package.json, and checked whenever this runs.
+    let inputs = || {
+        let mut key = cache::Key::new("ui")?;
+        key.text(&format!("package={package}"));
+        key.sources(&["apps/ui"])?;
+        key.cargo_setup()?;
+        key.dep_info(&mode.cargo_out().join("savescummer-ui.d"), std::slice::from_ref(&dist))?;
+        Ok(key)
+    };
+    let work = || -> anyhow::Result<()> {
+        let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
+        let manifest: serde_json::Value = serde_json::from_slice(&fs::read(source.join("package.json"))?)?;
+        let required_pnpm = manifest["packageManager"]
+            .as_str()
+            .and_then(|value| value.strip_prefix("pnpm@"))
+            .context("apps/ui/package.json must specify a pnpm version")?;
+        let installed_pnpm = cmd::output(Command::new(&pnpm).arg("--version"))?;
+        anyhow::ensure!(
+            installed_pnpm == required_pnpm,
+            "the Tauri UI needs pnpm {required_pnpm}, but {} is {installed_pnpm}",
+            paths::show(&pnpm)
+        );
+        cmd::run(Command::new(&pnpm).current_dir(&source).args(["install", "--frozen-lockfile"]))?;
+        if test {
+            cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;
+        }
+        // The frontend is built here rather than by Tauri's beforeBuildCommand, so
+        // its output can be fixed up before Cargo looks at it.
+        cmd::run(Command::new(&pnpm).current_dir(&source).arg("build"))?;
+        keep_unchanged_times(&dist, &mode.dir().join("ui-dist.json"))?;
+        let no_frontend = paths::scratch().join("tauri-no-frontend.json");
+        fs::create_dir_all(paths::scratch())?;
+        fs::write(&no_frontend, r#"{ "build": { "beforeBuildCommand": null } }"#)?;
+        let mut build = Command::new(&pnpm);
+        build.current_dir(&source).args(["tauri", "build", "--config"]).arg(&no_frontend);
+        platform::tauri_bundle(&mut build, package)?;
+        if mode == Mode::Dev {
+            build.arg("--debug");
+        }
+        cmd::run(&mut build)
+    };
+    cache::Step::new("ui", mode, !test, vec![binary.clone()]).run(inputs, work)?;
+
     anyhow::ensure!(binary.is_file(), "the Tauri build did not create {}", paths::show(&binary));
     let install = mode.dir().join("ui-install");
     if install.exists() {

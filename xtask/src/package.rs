@@ -26,7 +26,7 @@ use sha2::{Digest, Sha256};
 
 use crate::frontend::{self, Ui};
 use crate::paths::{self, Mode};
-use crate::{cmd, naming, pins, platform, procs};
+use crate::{cache, cmd, naming, pins, platform, procs};
 
 pub const MANIFEST: &str = ".savescummer-package.json";
 pub const SUMS: &str = "SHA256SUMS.txt";
@@ -63,6 +63,45 @@ pub fn location(mode: Mode) -> PathBuf {
 }
 
 pub fn assemble(inputs: &Inputs) -> anyhow::Result<PathBuf> {
+    let target = location(inputs.mode);
+    cache::Step::new("package", inputs.mode, true, vec![target.clone()])
+        .run(|| package_key(inputs), || assemble_now(inputs).map(drop))?;
+    Ok(target)
+}
+
+/// What a package is made from: the built executables (with their PDBs) and
+/// staged UI, the packaging templates, and the license inputs. The Visual C++
+/// runtime that Windows packages copy isn't included: it changes only with a
+/// Visual Studio update, and `xtask clean` rebuilds after one.
+fn package_key(inputs: &Inputs) -> anyhow::Result<cache::Key> {
+    let mut key = cache::Key::new("package")?;
+    key.text(inputs.version);
+    for exe in [&inputs.host, &inputs.cli] {
+        key.stamp(exe);
+        let stem = exe.file_stem().expect("a file").to_string_lossy().replace('-', "_");
+        key.stamp(&exe.with_file_name(format!("{stem}.pdb")));
+    }
+    if let Some(ui) = inputs.ui {
+        let mut staged = files(&ui.install)?;
+        staged.sort();
+        for file in staged {
+            key.file(&file)?;
+        }
+    }
+    if let Some(licenses) = frontend::licenses() {
+        let mut texts = files(&licenses)?;
+        texts.sort();
+        for file in texts {
+            key.file(&file)?;
+        }
+    }
+    key.sources(&["packaging", "about.toml"])?;
+    key.cargo_setup()?;
+    key.file(&frontend::source().join("pnpm-lock.yaml"))?;
+    Ok(key)
+}
+
+fn assemble_now(inputs: &Inputs) -> anyhow::Result<PathBuf> {
     let parent = inputs.mode.package_parent();
     fs::create_dir_all(&parent).with_context(|| format!("creating {}", parent.display()))?;
     remove_leftovers(&parent);
@@ -286,14 +325,8 @@ fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
 /// change there can link a crate without touching the lock file).
 fn license_inputs() -> anyhow::Result<String> {
     let root = paths::root();
-    let workspace = root.join("Cargo.toml");
-    let text = fs::read_to_string(&workspace).with_context(|| format!("reading {}", workspace.display()))?;
-    let table: toml::Table = toml::from_str(&text).with_context(|| format!("parsing {}", workspace.display()))?;
-    let members = table["workspace"]["members"].as_array().context("the workspace lists no members")?;
-    let mut files = vec![root.join("about.toml"), root.join("Cargo.lock"), workspace];
-    for member in members {
-        files.push(root.join(member.as_str().context("a workspace member isn't a path")?).join("Cargo.toml"));
-    }
+    let mut files = vec![root.join("about.toml"), root.join("Cargo.lock")];
+    files.extend(cache::workspace_manifests()?);
     let mut hasher = Sha256::new();
     hasher.update(format!("{}\n{}\n", pins::CARGO_ABOUT_VERSION, platform::RUST_TARGET));
     for file in files {

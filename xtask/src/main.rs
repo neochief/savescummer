@@ -11,6 +11,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use savescummer_catalog_build::{Options, RunResult};
 
 mod build;
+mod cache;
 mod catalog;
 mod clean;
 mod cmd;
