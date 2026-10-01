@@ -89,8 +89,15 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
     if test {
         cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;
     }
+    // The frontend is built here rather than by Tauri's beforeBuildCommand, so
+    // its output can be fixed up before Cargo looks at it.
+    cmd::run(Command::new(&pnpm).current_dir(&source).arg("build"))?;
+    keep_unchanged_times(&source.join("dist"), &mode.dir().join("ui-dist.json"))?;
+    let no_frontend = paths::scratch().join("tauri-no-frontend.json");
+    fs::create_dir_all(paths::scratch())?;
+    fs::write(&no_frontend, r#"{ "build": { "beforeBuildCommand": null } }"#)?;
     let mut build = Command::new(&pnpm);
-    build.current_dir(&source).args(["tauri", "build"]);
+    build.current_dir(&source).args(["tauri", "build", "--config"]).arg(&no_frontend);
     platform::tauri_bundle(&mut build, package)?;
     if mode == Mode::Dev {
         build.arg("--debug");
@@ -110,4 +117,35 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
         platform::stage_tauri_bundle(mode, &install)?;
     }
     Ok(Ui { install })
+}
+
+/// Gives each file in `dist` whose content is the same as at the last build
+/// its old modification time back. Vite rewrites every file on every build,
+/// and the Tauri crate embeds them, so otherwise Cargo (which goes by
+/// modification times) recompiles the UI each time for identical bytes.
+/// `record` holds each file's hash and time from the last build in this mode.
+fn keep_unchanged_times(dist: &Path, record: &Path) -> anyhow::Result<()> {
+    let previous: serde_json::Map<String, serde_json::Value> =
+        fs::read(record).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+    let mut current = serde_json::Map::new();
+    for file in crate::package::files(dist)? {
+        let name = file.strip_prefix(dist).expect("listed under dist").to_string_lossy().replace('\\', "/");
+        let hash = crate::package::sha256_file(&file)?;
+        let mut modified = fs::metadata(&file)?.modified()?;
+        let old = previous.get(&name);
+        if old.and_then(|old| old["sha256"].as_str()) == Some(hash.as_str())
+            && let Some(nanos) = old.and_then(|old| old["modified_ns"].as_u64())
+        {
+            modified = std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos);
+            fs::File::options()
+                .write(true)
+                .open(&file)
+                .and_then(|f| f.set_modified(modified))
+                .with_context(|| format!("restoring the time of {}", file.display()))?;
+        }
+        let nanos = modified.duration_since(std::time::UNIX_EPOCH)?.as_nanos() as u64;
+        current.insert(name, serde_json::json!({ "sha256": hash, "modified_ns": nanos }));
+    }
+    fs::create_dir_all(record.parent().expect("record is in a folder"))?;
+    fs::write(record, serde_json::to_vec_pretty(&current)?).with_context(|| format!("writing {}", record.display()))
 }

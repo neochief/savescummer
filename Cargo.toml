@@ -93,6 +93,12 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+# Unoptimized SHA-256 runs at a crawl, and xtask hashes every dev package
+# (hundreds of MB with the PDBs) twice. Optimizing just this crate costs one
+# rebuild of it.
+[profile.dev.package.sha2]
+opt-level = 3
+
 [profile.release]
 lto = "thin"
 strip = true

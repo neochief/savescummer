@@ -243,6 +243,7 @@ fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
     let root = paths::root();
     let scratch = paths::scratch();
     fs::create_dir_all(&scratch)?;
+    let inputs = license_inputs()?;
     let mut reports = Vec::new();
     let mut manifests = vec![("host", root.join("apps/host/Cargo.toml")), ("cli", root.join("apps/cli/Cargo.toml"))];
     if frontend::present() {
@@ -250,6 +251,16 @@ fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
     }
     for (app, manifest) in manifests {
         let json = scratch.join(format!("licenses-{app}.json"));
+        // A report from the same inputs is reused: cargo-about takes seconds
+        // per app, and its answer can't change unless the inputs do.
+        let key = scratch.join(format!("licenses-{app}.key"));
+        if json.is_file() && fs::read_to_string(&key).is_ok_and(|saved| saved == inputs) {
+            println!("third-party licenses ({app}): unchanged, reusing {}", paths::show(&json));
+            let text = fs::read_to_string(&json)?;
+            reports.push(serde_json::from_str::<Value>(&text).context("reading cargo-about's report")?);
+            continue;
+        }
+        let _ = fs::remove_file(&key);
         let mut command = Command::new(&tool);
         command
             .current_dir(&root)
@@ -265,8 +276,31 @@ fn third_party_licenses(out: &Path) -> anyhow::Result<()> {
             .context("third-party licenses: a dependency's license isn't in about.toml, or couldn't be identified")?;
         let text = fs::read_to_string(&json)?;
         reports.push(serde_json::from_str::<Value>(&text).context("reading cargo-about's report")?);
+        fs::write(&key, &inputs).with_context(|| format!("writing {}", key.display()))?;
     }
     fs::write(out, render_licenses(&reports)).with_context(|| format!("writing {}", out.display()))
+}
+
+/// A hash of everything cargo-about's reports depend on: its version, the
+/// target, `about.toml`, `Cargo.lock`, and every workspace manifest (a feature
+/// change there can link a crate without touching the lock file).
+fn license_inputs() -> anyhow::Result<String> {
+    let root = paths::root();
+    let workspace = root.join("Cargo.toml");
+    let text = fs::read_to_string(&workspace).with_context(|| format!("reading {}", workspace.display()))?;
+    let table: toml::Table = toml::from_str(&text).with_context(|| format!("parsing {}", workspace.display()))?;
+    let members = table["workspace"]["members"].as_array().context("the workspace lists no members")?;
+    let mut files = vec![root.join("about.toml"), root.join("Cargo.lock"), workspace];
+    for member in members {
+        files.push(root.join(member.as_str().context("a workspace member isn't a path")?).join("Cargo.toml"));
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{}\n{}\n", pins::CARGO_ABOUT_VERSION, platform::RUST_TARGET));
+    for file in files {
+        hasher.update(file.strip_prefix(&root).unwrap_or(&file).to_string_lossy().as_bytes());
+        hasher.update(fs::read(&file).with_context(|| format!("reading {}", file.display()))?);
+    }
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// One page listing each distinct license text once, with the crates under it.

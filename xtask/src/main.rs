@@ -140,6 +140,7 @@ enum Tool {
 }
 
 fn main() -> ExitCode {
+    forget_cargo_run_env();
     let cli = Cli::parse();
     let result = match cli.task {
         Task::Catalog { check, strict, allow_unbuildable } => {
@@ -168,6 +169,33 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => fail(e),
+    }
+}
+
+/// Drops the package variables `cargo run` gave xtask, so the Cargo builds it
+/// starts see the same environment as a plain `cargo build`. Build scripts
+/// watch some of them (ring reruns when `CARGO_MANIFEST_DIR` changes), so
+/// inheriting them made every xtask build and every plain build invalidate
+/// each other's dependencies. `CARGO` stays: it's the cargo to run.
+fn forget_cargo_run_env() {
+    let inherited: Vec<_> = std::env::vars_os()
+        .map(|(name, _)| name)
+        .filter(|name| {
+            let name = name.to_string_lossy();
+            name.starts_with("CARGO_PKG_")
+                || matches!(
+                    &*name,
+                    "CARGO_MANIFEST_DIR"
+                        | "CARGO_MANIFEST_PATH"
+                        | "CARGO_CRATE_NAME"
+                        | "CARGO_BIN_NAME"
+                        | "CARGO_PRIMARY_PACKAGE"
+                )
+        })
+        .collect();
+    for name in inherited {
+        // SAFETY: first thing in main, before xtask starts any threads.
+        unsafe { std::env::remove_var(name) };
     }
 }
 
