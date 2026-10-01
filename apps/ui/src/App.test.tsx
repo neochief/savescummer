@@ -532,7 +532,7 @@ test('Configure shows the host’s portable paths and returns them untouched', a
   const location = within(dialog).getByLabelText('Where the game keeps its save files') as HTMLInputElement;
   await waitFor(() => expect(location.value).toBe('~/Saves/A/*.sav'));
   expect(executable.value).toBe('~/Games/A/a');
-  fireEvent.blur(executable);
+  expect(executable.disabled).toBe(true);
   fireEvent.blur(location);
   expect(within(dialog).queryByRole('alert')).toBeNull();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -572,8 +572,9 @@ test('Configure offers Reset only where a path differs from the default', async 
   fireEvent.click(resets()[0]);
   expect(location.value).toBe('');
   expect(resets()).toHaveLength(0);
-  fireEvent.change(within(dialog).getByLabelText('Game executable'), { target: { value: '/games/a.exe' } });
-  expect(resets()).toHaveLength(1);
+  dialogOpen.mockResolvedValue('/games/a.exe');
+  fireEvent.click(within(dialog).getAllByRole('button', { name: 'Change' })[0]);
+  await waitFor(() => expect(resets()).toHaveLength(1));
   fireEvent.click(resets()[0]);
   expect(resets()).toHaveLength(0);
 });

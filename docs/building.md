@@ -16,13 +16,13 @@ Every platform:
 Windows:
 
 - **Visual Studio 2022+ or its Build Tools** with "Desktop development with C++". Rust links with it, and the Visual C++ runtime DLLs shipped in the package come from it.
-- **Node.js 22 and pnpm 12.4.2** on `PATH` to build and test the Tauri UI. `apps/ui/package.json` pins pnpm; CI installs both tools.
+- **Node.js 22 and pnpm 12** on `PATH` to build and test the Tauri UI. `apps/ui/package.json` pins the exact pnpm, which Corepack and CI use; xtask accepts another pnpm 12 with a warning.
 
 macOS (13+, Apple Silicon only):
 
 - **Xcode command-line tools** (`xcode-select --install`): the linker, `codesign`, `iconutil` and `hdiutil`.
 - **rsvg-convert** (`brew install librsvg`), which renders the app icon from `assets/icon.svg` for every package.
-- **Node.js 22 and pnpm 12.4.2** on `PATH` for the Tauri UI, as on Windows.
+- **Node.js 22 and pnpm 12** on `PATH` for the Tauri UI, as on Windows.
 - Every Rust build targets the oldest supported macOS: `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET`, kept equal to `pins::MIN_MACOS` by a test.
 - The end-to-end tests that switch between windows take the desktop's focus, so they run only with `SAVESCUMMER_DESKTOP_TESTS=1` (CI sets it) and an unlocked screen; otherwise they say so and pass.
 
@@ -31,10 +31,12 @@ Linux (x86_64 or aarch64):
 - **A C toolchain and the WebKitGTK and GTK development packages** Tauri builds against. On Ubuntu or Debian:
 
   ```bash
-  sudo apt install build-essential libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev file
+  sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev
   ```
 
-- **Node.js 22 and pnpm 12.4.2** on `PATH` for the Tauri UI, as on Windows and macOS.
+  The README's [Linux setup](../README.md#linux-setup) walks through a clean Ubuntu, Rust and Node included.
+
+- **Node.js 22 and pnpm 12** on `PATH` for the Tauri UI, as on Windows and macOS.
 - `cargo xtask setup linux-tools` before packaging (`build --package`, `run`, `dist`); plain builds and tests don't need it.
 - Release AppImages are built on Ubuntu 22.04 (glibc 2.35, the minimum), which CI does. One built on a newer system runs only on systems as new as it.
 - On Wayland, focus tracking sees only X11 windows (games run through XWayland, so they're seen). Global hotkeys use the desktop's shortcuts portal where there is one (GNOME 48+, KDE Plasma 6), which asks once to allow them, and otherwise see only X11 windows too; see PLAN-HOST.md.

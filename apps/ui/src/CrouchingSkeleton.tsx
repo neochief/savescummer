@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type HTMLAttributes } from 'react';
 import source from '../public/character/no-checkpoints.svg?raw';
+import { between as midpoint, findEyes, gazeOffset, morph, prepareEyes, type Point } from './skeletonEyes';
 
 /*
  * The "no checkpoints" skeleton: crouched like a sprinter at the start line, gamepad in the back hand, the other hand
@@ -15,16 +16,16 @@ import source from '../public/character/no-checkpoints.svg?raw';
  *   ahead while the mouse is outside the window or before it first moves.
  * - Under reduced motion it holds still in the drawn crouch, looking ahead.
  *
- * The SVG (public/character/no-checkpoints.svg) is the single source of the artwork and its rig. The head holds round
- * eyes at 0% opacity inside each eye's clipped group and a 0%-opacity `head-rig` layer with an oval per eye for how
- * far it may look and the squint guides (each eye opening and brow as squinted, with the same path commands as the
+ * The SVG (public/character/no-checkpoints.svg) is the single source of the artwork and its rig. The head holds the
+ * eyes laid out as skeletonEyes.ts requires, and a 0%-opacity `head-rig` layer with the eyes' gaze guides and the squint
+ * guides (each eye opening and brow as squinted, with the same path commands as the
  * drawn one). A 0%-opacity `body-rig` layer holds the joint pivots. This component shows an ID-prefixed copy of it (so
  * several can share a page) and animates that copy; the file itself stays a plain static drawing. The rig is only
  * named, transparent shapes, so it survives an Affinity Designer round trip; hidden layers, data attributes and
  * hand-written <defs> would not. Layer names are the IDs this component looks up. Timing and amplitudes live here.
  *
- * It scales to its container, pauses while the page is hidden, and cleans up on unmount. It shares no code with the
- * other skeletons.
+ * It scales to its container, pauses while the page is hidden, and cleans up on unmount. It shares only the eye rig
+ * (skeletonEyes.ts) with the other skeletons.
  */
 
 export const crouchingSkeletonMotion = {
@@ -51,29 +52,11 @@ export const crouchingSkeletonMotion = {
   swing: 0.06, swingRate: 10, maxSwing: 10,
 };
 
-type Side = 'left' | 'right';
-type Point = [number, number];
-const sides: Side[] = ['left', 'right'];
 const inOut = (t: number) => 0.5 - Math.cos(Math.PI * Math.min(Math.max(t, 0), 1)) / 2;
 const out = (t: number) => 1 - (1 - Math.min(Math.max(t, 0), 1)) ** 3;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const degrees = (radians: number) => radians * 180 / Math.PI;
 const angle = ([x, y]: Point) => degrees(Math.atan2(y, x));
-const numbers = (d: string) => d.match(/-?\d*\.?\d+/g)!.map(Number);
-
-/** Clamps a gaze direction to the unit disk, then maps it into the eye's asymmetric oval (up is shallower than down). */
-function gazeOffset(u: number, v: number, limits: { horizontal: number; up: number; down: number }) {
-  const length = Math.hypot(u, v);
-  if (length > 1) { u /= length; v /= length; }
-  return [u * limits.horizontal, v * (v < 0 ? limits.up : limits.down)];
-}
-
-/** Interpolates two paths with identical command structure, number by number. */
-function morph(from: string, to: string) {
-  const a = numbers(from), b = numbers(to);
-  if (a.length !== b.length) throw new Error('Squint guides do not correspond to the drawn shapes');
-  return (t: number) => { let i = 0; return from.replace(/-?\d*\.?\d+/g, () => (+lerp(a[i], b[i++], t).toFixed(2)).toString()); };
-}
 
 type Move = 'bounce' | 'spring';
 
@@ -107,41 +90,9 @@ function inlineSvg(prefix: string, rigged = true): { __html: string; rigged: boo
   svg.removeAttribute('aria-labelledby');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  const make = (tag: string, attributes: Record<string, string>) => {
-    const node = doc.createElementNS('http://www.w3.org/2000/svg', tag);
-    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
-    return node;
-  };
   if (rigged) {
     try {
-      const defs = svg.appendChild(make('defs', {}));
-      for (const side of sides) {
-        const part = (id: string) => svg.querySelector<SVGElement>(`[id="${id}-${side}"]`)!;
-        // Round eyeballs only: the illustrated crescents never show.
-        part('iris-static').remove();
-        part('iris-dynamic').removeAttribute('opacity');
-        // The drawn socket is the eye opening. It becomes one shared shape that the squint reshapes and that the socket
-        // fill, the eyeball's clip, the rim and the lids all follow. The drawn opening and brow are kept aside because
-        // setup may run twice under StrictMode.
-        const socket = part('eye-socket'), ink = socket.style.fill, contents = part('eye-contents'), brow = part('brow');
-        defs.append(make('path', { id: `eye-opening-${side}`, d: socket.getAttribute('d')!, 'data-drawn': socket.getAttribute('d')! }));
-        const clip = make('clipPath', { id: `eye-clip-${side}`, clipPathUnits: 'userSpaceOnUse' });
-        clip.append(make('use', { href: `#eye-opening-${side}` }));
-        defs.append(clip);
-        brow.setAttribute('data-drawn', brow.getAttribute('d')!);
-        socket.replaceWith(make('use', { id: `eye-socket-${side}`, href: `#eye-opening-${side}`, fill: ink }));
-        // Affinity exports the socket's clip inline; the shared clip replaces it so it follows the squint.
-        contents.querySelectorAll('clipPath').forEach((node) => node.remove());
-        contents.querySelectorAll('[clip-path]').forEach((node) => node.removeAttribute('clip-path'));
-        contents.setAttribute('clip-path', `url(#eye-clip-${side})`);
-        // The dark rim over the eyeball's edge, and the lids: the opening's outline again, but inside the eyeball's
-        // clip, so a thick stroke only reaches inward over the red and never widens the socket.
-        const outlineOf = (id: string, width: number) => make('use', {
-          id, href: `#eye-opening-${side}`, fill: 'none', stroke: ink, 'stroke-width': String(width), 'stroke-linejoin': 'round',
-        });
-        contents.after(outlineOf(`eye-rim-${side}`, crouchingSkeletonMotion.rimWidth));
-        contents.append(outlineOf(`eye-lids-${side}`, 2 * crouchingSkeletonMotion.lidDepth));
-      }
+      prepareEyes(svg, crouchingSkeletonMotion);
       for (const id of moving) {
         const node = svg.querySelector(`[id="${id}"]`)!;
         node.setAttribute('data-drawn-transform', node.getAttribute('transform') ?? '');
@@ -184,28 +135,13 @@ function rig(root: SVGSVGElement, prefix: string) {
   const placed = (id: string) => ({ node: el(id), drawn: el(id).getAttribute('data-drawn-transform') ?? '' });
 
   const head = el('head');
-  const eye = (side: Side) => {
-    // The gaze oval spans how far the eye may travel: its width sideways, its top and bottom up and down from the
-    // resting point.
-    const bounds = `gaze-bounds-${side}`, rx = Number(el(bounds).getAttribute('rx')), ry = Number(el(bounds).getAttribute('ry'));
-    const shifted = (dx: number, dy: number) => {
-      const [x, y] = at(bounds, head);
-      const m = head.getScreenCTM()!.inverse().multiply(el(bounds).getScreenCTM()!);
-      return [x + m.a * dx + m.c * dy, y + m.b * dx + m.d * dy];
-    };
-    const neutral = at(`gaze-neutral-${side}`, head);
-    const [left, right, top, bottom] = [shifted(-rx, 0), shifted(rx, 0), shifted(0, -ry), shifted(0, ry)];
-    const opening = el(`eye-opening-${side}`), brow = el(`brow-${side}`);
-    return {
-      opening, brow, neutral,
-      openingAt: morph(opening.getAttribute('data-drawn')!, el(`guide-squint-opening-${side}`).getAttribute('d')!),
-      browAt: morph(brow.getAttribute('data-drawn')!, el(`guide-squint-brow-${side}`).getAttribute('d')!),
-      limits: { horizontal: (right[0] - left[0]) / 2, up: neutral[1] - top[1], down: bottom[1] - neutral[1] },
-      gaze: el(`iris-gaze-${side}`), lids: el(`eye-lids-${side}`),
-    };
-  };
-  const eyes = { left: eye('left'), right: eye('right') };
-  const between = [(eyes.left.neutral[0] + eyes.right.neutral[0]) / 2, (eyes.left.neutral[1] + eyes.right.neutral[1]) / 2];
+  // The eyes, each with its squint: the drawn opening and brow morph into their squint guides.
+  const found = findEyes(el, head), between = midpoint(found);
+  const eyes = Object.values(found).map((eye) => ({
+    ...eye,
+    openingAt: morph(eye.drawn.opening, el(`guide-squint-opening-${eye.side}`).getAttribute('d')!),
+    browAt: morph(eye.drawn.brow, el(`guide-squint-brow-${eye.side}`).getAttribute('d')!),
+  }));
 
   // Parts that ride on the body: each is given the body's movement, expressed in its parent's coordinates.
   const riders = ['torso', 'head', 'arm-controller'].map((id) => ({ ...placed(id), space: toRoot(parent(el(id))) }));
@@ -313,12 +249,10 @@ export function CrouchingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
         solve(limb, [p.x, p.y]);
       }
       forearm.node.setAttribute('transform', `rotate(${swing.toFixed(2)} ${elbow[0]} ${elbow[1]}) ${forearm.drawn}`);
-      for (const side of sides) {
-        const eye = eyes[side];
-        const [dx, dy] = gazeOffset(gaze[0], gaze[1], eye.limits);
-        eye.opening.setAttribute('d', eye.openingAt(squint));
+      for (const eye of eyes) {
+        eye.setOpening(eye.openingAt(squint));
         eye.brow.setAttribute('d', eye.browAt(squint));
-        eye.gaze.setAttribute('transform', `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+        eye.look(gazeOffset(gaze[0], gaze[1], eye.limits));
         eye.lids.setAttribute('stroke-width', (2 * lerp(motion.lidDepth, motion.squintLidDepth, squint)).toFixed(2));
       }
     };

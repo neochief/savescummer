@@ -271,7 +271,8 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           {kind === 'configure' && game?.kind === 'custom' && <div className="dialog-field"><label htmlFor="game-name">Name</label><input id="game-name" className="dialog-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
           <div className="dialog-field"><label htmlFor="game-executable">Game executable</label><span className="dialog-input"><input id="game-executable" value={executable}
             onFocus={() => setFocused('executable')} onBlur={() => leave('executable')} aria-invalid={Boolean(shown('executable'))}
-            onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); setChecked((value) => ({ ...value, executable: false })); }} required />
+            onChange={(event) => { setExecutable(event.target.value); setResetExecutable(false); setChecked((value) => ({ ...value, executable: false })); }}
+            disabled={kind === 'configure'} required={kind === 'add'} />
               {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open game executable" title="Show in folder"
                 disabled={resetExecutable || executable !== (game.executable || '')}
                 onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button>}</span>
@@ -310,7 +311,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
                 : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
                   ? <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>
                   : <span className="dialog-hint">When not sure, ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />{' '}
-                    “What is the save game location of {searchName} on {platformName}”</span>}
+                    “What is the save game location of {searchName} on {platformName}”<br />
+                    <strong>Warning:</strong> Online answers can be wrong, hallucinated, or contain someone else's username or Steam ID.
+                    Don't use them as is: find that folder on your computer first, then use its real path.</span>}
             </p>}
           </>}
           {saveSet?.catalog_problem && <p className="dialog-hint">{saveSet.catalog_problem}</p>}

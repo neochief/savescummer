@@ -198,9 +198,15 @@ impl Environment {
     }
 
     /// Steam libraries: the main Steam folder plus `libraryfolders.vdf`.
+    /// Libraries are told apart by their real folder: on Linux the main
+    /// folder is usually found as `~/.steam/steam`, a link to the
+    /// `~/.local/share/Steam` the file lists, and listing it twice would find
+    /// every game in it twice.
     pub fn steam_libraries(&self) -> Vec<PathBuf> {
         let Some(root) = &self.folders.steam_root else { return Vec::new() };
+        let real = |p: &Path| savescummer_snapshots::real_path(p).unwrap_or_else(|_| p.to_path_buf());
         let mut libraries = vec![root.clone()];
+        let mut seen = vec![real(root)];
         let file = root.join("steamapps").join("libraryfolders.vdf");
         if let Some(map) = fs::read_to_string(&file).ok().and_then(|t| vdf::parse(&t))
             && let Some(folders) = map.map("libraryfolders")
@@ -208,7 +214,9 @@ impl Environment {
             for (_, entry) in folders.maps() {
                 if let Some(path) = entry.text("path") {
                     let path = PathBuf::from(path);
-                    if !libraries.iter().any(|l| same_key(l, &path, self.case_insensitive())) {
+                    let key = real(&path);
+                    if !seen.iter().any(|s| same_key(s, &key, self.case_insensitive())) {
+                        seen.push(key);
                         libraries.push(path);
                     }
                 }

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type HTMLAttributes } from 'react';
 import source from '../public/character/no-game-selected.svg?raw';
+import { between as midpoint, findEyes, gazeOffset, prepareEyes, sides } from './skeletonEyes';
 
 /*
  * The "no game selected" skeleton: it points toward the game list, gamepad in the other hand, and eyes the person using
@@ -20,15 +21,15 @@ import source from '../public/character/no-game-selected.svg?raw';
  *   arm pokes left along with it, turning at the shoulder. The gamepad settles back as the glare relaxes.
  * - Nothing else moves: head and body stay as drawn.
  *
- * The SVG (public/character/no-game-selected.svg) is the single source of the artwork and its rig: round eyes at 0%
- * opacity inside each eye's clipped group, and a 0%-opacity `rig` layer with the arm's pivot markers and an oval per
- * eye for how far it may look. This component shows an ID-prefixed copy of it (so several can share a page) and
+ * The SVG (public/character/no-game-selected.svg) is the single source of the artwork and its rig: the eyes laid out as
+ * skeletonEyes.ts requires, and a 0%-opacity `rig` layer with the arm's pivot markers and the eyes' gaze guides. This component shows an ID-prefixed copy of it (so several can share a page) and
  * animates that copy; the file itself stays a plain static drawing with the crescent eyes. The rig is only named,
  * transparent shapes, so it survives an Affinity Designer round trip; hidden layers, data attributes and hand-written
  * <defs> would not. Layer names are the IDs this component looks up.
  *
  * It scales to its container, only animates while the eyes are catching up with the mouse or a jab is playing, pauses
- * while the page is hidden, and cleans up on unmount. It shares no code with the sleepy skeleton.
+ * while the page is hidden, and cleans up on unmount. It shares only the eye rig (skeletonEyes.ts) with the other
+ * skeletons.
  */
 
 export const pointingSkeletonMotion = {
@@ -65,17 +66,8 @@ export const pointingSkeletonMotion = {
 // StrictMode.
 const offering = ['controller-upper-arm', 'controller-forearm', 'controller-palm', 'gamepad', 'controller-fingers'];
 
-type Side = 'left' | 'right';
-const sides: Side[] = ['left', 'right'];
 const inOut = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
 const out = (t: number) => 1 - (1 - t) ** 3;
-
-/** Clamps a gaze direction to the unit disk, then maps it into the eye's asymmetric oval (up is shallower than down). */
-function gazeOffset(u: number, v: number, limits: { horizontal: number; up: number; down: number }) {
-  const length = Math.hypot(u, v);
-  if (length > 1) { u /= length; v /= length; }
-  return [u * limits.horizontal, v * (v < 0 ? limits.up : limits.down)];
-}
 
 // Every instance gets its own ID prefix so clip paths and <use> references never resolve into another copy.
 let instances = 0;
@@ -92,27 +84,15 @@ function inlineSvg(prefix: string, rigged = true): { __html: string; rigged: boo
   svg.setAttribute('height', '100%');
   if (rigged) {
     try {
+      // Round eyeballs instead of the drawn crescents, resting where the crescents were, with no rim; the lids set how
+      // open the eyes look.
       const { expression } = pointingSkeletonMotion;
+      prepareEyes(svg, { rimWidth: 0, lidDepth: expression.neutral.lidDepth });
       for (const side of sides) {
-        const part = (id: string) => svg.querySelector<SVGElement>(`[id="${id}-${side}"]`)!;
-        // Round eyeballs instead of the drawn crescents, resting where the crescents were. Lids (the socket's outline,
-        // drawn inside the eye's clip so it only reaches inward) set how open the eyes look.
-        part('iris-static').remove();
-        const dynamic = part('iris-dynamic');
-        dynamic.removeAttribute('opacity');
-        const circle = part('iris-circle'), { center: [cx, cy], radius } = expression.neutral.eyes[side];
+        const circle = svg.querySelector(`[id="iris-circle-${side}"]`)!, { center: [cx, cy], radius } = expression.neutral.eyes[side];
         circle.setAttribute('cx', String(cx));
         circle.setAttribute('cy', String(cy));
         circle.setAttribute('r', String(radius));
-        const socket = part('eye-socket');
-        const lids = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
-        lids.setAttribute('id', `eye-lids-${side}`);
-        lids.setAttribute('d', socket.getAttribute('d')!);
-        lids.setAttribute('fill', 'none');
-        lids.setAttribute('stroke', socket.style.fill);
-        lids.setAttribute('stroke-width', String(2 * expression.neutral.lidDepth));
-        lids.setAttribute('stroke-linejoin', 'round');
-        dynamic.after(lids);
       }
       for (const id of offering) {
         const node = svg.querySelector(`[id="${id}"]`)!;
@@ -148,23 +128,14 @@ function rig(root: SVGSVGElement, prefix: string) {
     return [p.x, p.y];
   };
   const { reach } = pointingSkeletonMotion;
-  // The eyes' parent groups sit untransformed in the head, so their space is head coordinates. Each gaze oval spans
-  // how far the eye may travel: its width sideways, its top and bottom up and down from the resting point.
+  // The eyes' parent groups sit untransformed in the head, so their space is head coordinates. The gaze guides are
+  // scaled by `reach`.
   const headSpace = el<SVGGraphicsElement>('iris-dynamic-left');
-  const eyes = sides.map((side) => {
-    const bounds = `gaze-bounds-${side}`, rx = num(bounds, 'rx'), ry = num(bounds, 'ry');
-    const neutral = at(`gaze-neutral-${side}`, headSpace);
-    const [left, right, top, bottom] = [at(bounds, headSpace, -rx), at(bounds, headSpace, rx), at(bounds, headSpace, 0, -ry), at(bounds, headSpace, 0, ry)];
-    return {
-      side, gaze: el(`iris-gaze-${side}`), circle: el(`iris-circle-${side}`), lids: el(`eye-lids-${side}`), brow: el(`brow-${side}`),
-      limits: {
-        horizontal: (right[0] - left[0]) / 2 * reach.horizontal, up: (neutral[1] - top[1]) * reach.up,
-        down: (bottom[1] - neutral[1]) * reach.down,
-      },
-      neutral,
-    };
-  });
-  const between = [(eyes[0].neutral[0] + eyes[1].neutral[0]) / 2, (eyes[0].neutral[1] + eyes[1].neutral[1]) / 2];
+  const found = findEyes(el, headSpace), between = midpoint(found);
+  const eyes = Object.values(found).map((eye) => ({
+    ...eye,
+    limits: { horizontal: eye.limits.horizontal * reach.horizontal, up: eye.limits.up * reach.up, down: eye.limits.down * reach.down },
+  }));
   // The pointing arm's chain, each bone turning at its pivot marker: shoulder, elbow, wrist.
   const joint = (id: string, pivot: string) => {
     const bone = el<SVGGraphicsElement>(id);
@@ -274,12 +245,11 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
       const brow = neutral.brow + (glare.brow - neutral.brow) * squint;
       const mix = (a: number, b: number) => (a + (b - a) * squint).toFixed(2);
       for (const eye of eyes) {
-        const [dx, dy] = gazeOffset(gaze[0], gaze[1], eye.limits);
         const usual = neutral.eyes[eye.side], glaring = glare.eyes[eye.side];
         eye.circle.setAttribute('cx', mix(usual.center[0], glaring.center[0]));
         eye.circle.setAttribute('cy', mix(usual.center[1], glaring.center[1]));
         eye.circle.setAttribute('r', mix(usual.radius, glaring.radius));
-        eye.gaze.setAttribute('transform', `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+        eye.look(gazeOffset(gaze[0], gaze[1], eye.limits));
         eye.lids.setAttribute('stroke-width', (2 * lidDepth).toFixed(2));
         eye.brow.setAttribute('transform', `translate(0 ${brow.toFixed(2)})`);
       }

@@ -58,12 +58,19 @@ fn a_newer_catalog_adds_a_game_and_is_kept_across_restarts() {
     // Restarted while the server fails: the downloaded catalog stays.
     drop(host);
     server.serve("/catalog.json", 500, "oops", None);
-    let _host = world.host_updating(&server.url("/catalog.json"), &[]);
+    let host = world.host_updating(&server.url("/catalog.json"), &[]);
     assert_eq!(world.ok(&["catalog"])["revision"], "fixture-2");
     assert_eq!(world.game("steam-1006")["installed"], true);
     let info = wait_checked(&world);
     assert!(info["problem"].as_str().unwrap().contains("500"), "{info}");
     assert_eq!(info["revision"], "fixture-2");
+
+    // An isolated host ignores the download and runs its own catalog.
+    drop(host);
+    let _host = world.host_with(&[], &[]);
+    let info = world.ok(&["catalog"]);
+    assert_eq!(info["source"], "file", "{info}");
+    assert_ne!(info["revision"], "fixture-2");
 }
 
 #[test]

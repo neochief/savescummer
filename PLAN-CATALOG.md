@@ -794,7 +794,9 @@ resolver isn't consulted for it, and it never changes on its own.
   Advance `release` only with bundles compatible with installed versions;
   a release tag alone does not move this update channel.
 - A changed bundle revision triggers a rescan. `--no-catalog-update` disables
-  fetching for tests and isolated runs; a CLI command reports the active bundle
+  fetching, and the use of bundles fetched before, for tests, isolated runs
+  and the dev session (`cargo xtask run`), so they run the catalog they were
+  built with; a CLI command reports the active bundle
   revision and refreshes it on demand.
 - Catalog data only: a downloaded bundle can add or adjust games, but it never
   touches user overrides or checkpoints. A game whose paths changed gets a new

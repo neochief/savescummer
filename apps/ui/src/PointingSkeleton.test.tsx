@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { PointingSkeleton } from './PointingSkeleton';
 import source from '../public/character/no-game-selected.svg?raw';
+import { eyeLayers, eyeProblems } from './skeletonEyes';
 
 afterEach(cleanup);
 
@@ -11,11 +12,10 @@ test('the drawing has every layer the rig reads, in a form Affinity Designer kee
     'upper-arm-left', 'forearm-left', 'hand-left', 'pivot-shoulder', 'pivot-elbow', 'pivot-wrist',
     'controller-upper-arm', 'controller-forearm', 'controller-palm', 'gamepad', 'controller-fingers',
     'pivot-shoulder-controller', 'pivot-elbow-controller', 'pivot-wrist-controller',
-    ...['left', 'right'].flatMap((side) => [
-      'eye-socket', 'iris-static', 'iris-dynamic', 'iris-gaze', 'iris-circle', 'brow', 'gaze-bounds', 'gaze-neutral',
-    ].map((part) => `${part}-${side}`)),
+    ...eyeLayers,
   ];
   expect(parts.filter((id) => !svg.querySelector(`[id="${id}"]`))).toEqual([]);
+  expect(eyeProblems(svg.documentElement)).toEqual([]);
   // Each ID must be the layer's own name. Affinity mangles a name that isn't a valid ID (spaces, a leading number) and
   // keeps the original in serif:id, so the ID would change whenever someone renames or renumbers that layer.
   expect(parts.filter((id) => svg.querySelector(`[id="${id}"]`)?.hasAttribute('serif:id'))).toEqual([]);

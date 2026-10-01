@@ -82,7 +82,9 @@ fn start_host(package: &Path, demo: bool, minimized: bool, no_integrations: bool
     let data_dir = if demo { paths::demo_data() } else { paths::dev_data() };
     fs::create_dir_all(&data_dir)?;
 
-    let mut args: Vec<OsString> = vec!["--data-dir".into(), data_dir.clone().into()];
+    // The dev host keeps the catalog it was built with: a download from the
+    // release branch would hide catalog changes not released yet.
+    let mut args: Vec<OsString> = vec!["--data-dir".into(), data_dir.clone().into(), "--no-catalog-update".into()];
     if demo {
         args.push("--demo".into());
     }

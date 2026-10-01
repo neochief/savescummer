@@ -55,6 +55,8 @@ function freePort(): Plugin {
 export default defineConfig({
   plugins: [react(), freePort()],
   clearScreen: false,
+  // Bundle loads from local disk inside the desktop app, so chunk size doesn't cost download time.
+  build: { chunkSizeWarningLimit: 2000 },
   server: { strictPort: true, port: PORT, host: HOST },
   test: { environment: 'jsdom' },
 });

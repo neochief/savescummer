@@ -52,7 +52,7 @@ Checkpoints go in its `checkpoints` folder unless you move them.
 
 ## Development
 
-You need [rustup](https://rustup.rs) and Git. On Windows, also Visual Studio 2022+ (or its Build Tools) with "Desktop development with C++"; on macOS, the Xcode command-line tools. rustup installs the pinned Rust version on first use.
+You need [rustup](https://rustup.rs) and Git. On Windows, also Visual Studio 2022+ (or its Build Tools) with "Desktop development with C++"; on macOS, the Xcode command-line tools; on Linux, the packages in [Linux setup](#linux-setup). rustup installs the pinned Rust version on first use.
 
 ```bash
 git clone https://github.com/neochief/savescummer.git
@@ -64,7 +64,7 @@ cargo xtask check
 
 ### Run it
 
-The host runs in the Windows tray or macOS menu bar and opens the Tauri UI; the CLI is also included. Development uses its own data in `.runtime/dev`, or disposable `.runtime/dev-demo` for `run --demo`, never your real checkpoints. Install Node.js 22 and pnpm 12.4.2 to build the UI on either platform.
+The host runs in the Windows tray or macOS menu bar and opens the Tauri UI; the CLI is also included. Development uses its own data in `.runtime/dev`, or disposable `.runtime/dev-demo` for `run --demo`, never your real checkpoints. Install Node.js 22 and pnpm 12 to build the UI on every platform.
 
 The dev package runs like the installed app, with the UI and hotkeys (Ctrl+F5 / Ctrl+F9 on Windows; ⌥F5 / ⌥F9 on macOS). macOS packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
 
@@ -75,11 +75,7 @@ cargo xtask run
 
 The dev host keeps running after `run` returns; `cargo xtask host stop` stops it.
 
-On Linux, install the WebKitGTK and GTK development packages first (see [docs/building.md](docs/building.md)), and the AppImage tools once:
-
-```bash
-cargo xtask setup linux-tools
-```
+On Linux, follow [Linux setup](#linux-setup) first; it includes `setup linux-tools`.
 
 Without the UI, build and use the binaries directly. The CLI starts the host itself when it isn't running:
 
@@ -87,6 +83,50 @@ Without the UI, build and use the binaries directly. The CLI starts the host its
 cargo build
 ./target/debug/savescummer-cli --data-dir .runtime/dev status
 ```
+
+### Linux setup
+
+Everything a clean Ubuntu 22.04 or newer needs before `cargo xtask run`. Other distros need the same packages under their own names.
+
+The build tools and the WebKitGTK and GTK libraries Tauri builds against:
+
+```bash
+sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev
+```
+
+Rust through rustup, not apt or snap, so `rust-toolchain.toml` picks the version:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Node.js 22 through [nvm](https://github.com/nvm-sh/nvm), since Ubuntu's own Node is older:
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+```
+
+Open a new terminal so `cargo` and `nvm` are on `PATH`, or run `source ~/.cargo/env` and `source ~/.nvm/nvm.sh` in this one. Then install Node and let Corepack provide the pnpm version `apps/ui/package.json` pins:
+
+```bash
+nvm install 22
+corepack enable
+```
+
+Fetch that pnpm once, answering yes when Corepack asks to download it:
+
+```bash
+(cd apps/ui && pnpm --version)
+```
+
+From the repo, the pinned packaging tools, once:
+
+```bash
+cargo xtask setup linux-tools
+cargo xtask setup cargo-about
+```
+
+`cargo xtask run` now builds and starts the app. If a shell says `cargo` or `pnpm` isn't found, it started before the installers changed `~/.bashrc`: open a new terminal or `source` the files above.
 
 ### Drive it
 

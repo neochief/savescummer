@@ -117,7 +117,7 @@ The host has a few options for the build tooling, tests and the sign-in entry. T
 - `--data-dir <dir>` — use another data folder (development and tests).
 - `--autostart on|off` — see Launch on startup.
 - `--demo` — simulated games and operations, for UI development without touching real saves.
-- `--no-catalog-update` — never fetch a newer catalog (tests and isolated runs).
+- `--no-catalog-update` — never fetch a newer catalog, and ignore one fetched earlier: the host runs its built-in catalog (tests, isolated runs and the dev session).
 - `--no-integrations` — no hotkeys, tray, sounds or sign-in changes (automated tests).
 - `--version` — write the version to standard output and exit.
 

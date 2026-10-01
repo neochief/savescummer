@@ -77,7 +77,8 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
     let dist = source.join("dist");
     // Everything under apps/ui (the frontend, its lock file, the Tauri crate
     // and config), and every Rust file the UI binary was built from. pnpm's
-    // version is pinned in package.json, and checked whenever this runs.
+    // version is pinned in package.json, and its major version checked whenever
+    // this runs.
     let inputs = || {
         let mut key = cache::Key::new("ui")?;
         key.text(&format!("package={package}"));
@@ -93,12 +94,18 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
             .as_str()
             .and_then(|value| value.strip_prefix("pnpm@"))
             .context("apps/ui/package.json must specify a pnpm version")?;
-        let installed_pnpm = cmd::output(Command::new(&pnpm).arg("--version"))?;
+        let installed_pnpm = cmd::output(Command::new(&pnpm).current_dir(&source).arg("--version"))?;
+        // Only a different major version can change the lockfile format or how
+        // packages install; --frozen-lockfile pins the dependencies themselves.
+        let major = |version: &str| version.split('.').next().unwrap_or_default().to_owned();
         anyhow::ensure!(
-            installed_pnpm == required_pnpm,
+            major(&installed_pnpm) == major(required_pnpm),
             "the Tauri UI needs pnpm {required_pnpm}, but {} is {installed_pnpm}",
             paths::show(&pnpm)
         );
+        if installed_pnpm != required_pnpm {
+            eprintln!("warning: apps/ui/package.json pins pnpm {required_pnpm}; building with {installed_pnpm}");
+        }
         cmd::run(Command::new(&pnpm).current_dir(&source).args(["install", "--frozen-lockfile"]))?;
         if test {
             cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;

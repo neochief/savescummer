@@ -121,7 +121,23 @@ pub fn tauri_bundle(build: &mut Command, package: bool) -> anyhow::Result<()> {
         .env("XDG_CACHE_HOME", tauri_cache())
         // Its tools are AppImages; this runs them without FUSE (CI runners).
         .env("APPIMAGE_EXTRACT_AND_RUN", "1");
+    if let Some(home) = corepack_home() {
+        build.env("COREPACK_HOME", home);
+    }
     Ok(())
+}
+
+/// Corepack keeps its package managers under `XDG_CACHE_HOME` too, so without
+/// this, the redirect above hides the pnpm it already has and it asks to
+/// download it again. None when `COREPACK_HOME` is set, as it's inherited.
+fn corepack_home() -> Option<PathBuf> {
+    if std::env::var_os("COREPACK_HOME").is_some() {
+        return None;
+    }
+    let cache = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".cache")))?;
+    Some(cache.join("node").join("corepack"))
 }
 
 /// Stages the AppDir Tauri made as `<install>/AppDir`. Its AppImage isn't

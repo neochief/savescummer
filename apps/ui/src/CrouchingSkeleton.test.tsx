@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { CrouchingSkeleton } from './CrouchingSkeleton';
 import source from '../public/character/no-checkpoints.svg?raw';
+import { corresponds, eyeLayers, eyeProblems } from './skeletonEyes';
 
 afterEach(cleanup);
 
@@ -13,19 +14,17 @@ test('the drawing has every layer the rig reads, in a form Affinity Designer kee
     'arm-support-upper', 'arm-support-forearm', 'hand-support',
     ...['body', 'neck', 'hip-back', 'knee-back', 'ankle-back', 'hip-front', 'knee-front', 'ankle-front', 'shoulder-support',
       'elbow-support', 'wrist-support', 'elbow-controller'].map((joint) => `pivot-${joint}`),
-    ...['left', 'right'].flatMap((side) => [
-      'eye-socket', 'eye-contents', 'iris-static', 'iris-dynamic', 'iris-gaze', 'iris-circle', 'brow', 'gaze-bounds',
-      'gaze-neutral', 'guide-squint-opening', 'guide-squint-brow',
-    ].map((part) => `${part}-${side}`)),
+    ...eyeLayers, ...['left', 'right'].flatMap((side) => [`guide-squint-opening-${side}`, `guide-squint-brow-${side}`]),
   ];
   expect(parts.filter((id) => !svg.querySelector(`[id="${id}"]`))).toEqual([]);
+  expect(eyeProblems(svg.documentElement)).toEqual([]);
   // Each ID must be the layer's own name. Affinity mangles a name that isn't a valid ID (spaces, a leading number) and
   // keeps the original in serif:id, so the ID would change whenever someone renames or renumbers that layer.
   expect(parts.filter((id) => svg.querySelector(`[id="${id}"]`)?.hasAttribute('serif:id'))).toEqual([]);
   // Each squint guide morphs from the drawn shape number by number, so a redrawn one must keep the same path commands.
-  const numbers = (id: string) => svg.querySelector(`[id="${id}"]`)!.getAttribute('d')!.match(/-?\d*\.?\d+/g)!.length;
+  const d = (id: string) => svg.querySelector(`[id="${id}"]`)!.getAttribute('d')!;
   const pairs = ['left', 'right'].flatMap((side) => [[`eye-socket-${side}`, `guide-squint-opening-${side}`], [`brow-${side}`, `guide-squint-brow-${side}`]]);
-  expect(pairs.filter(([drawn, guide]) => numbers(drawn) !== numbers(guide))).toEqual([]);
+  expect(pairs.filter(([drawn, guide]) => !corresponds(d(drawn), d(guide)))).toEqual([]);
   // Affinity drops hidden layers, data attributes and <use> references on export.
   const lost = [...svg.querySelectorAll('*')].filter((node) => node.localName === 'use'
     || /display:\s*none/.test(node.getAttribute('style') ?? '') || [...node.attributes].some((a) => a.name.startsWith('data-')));

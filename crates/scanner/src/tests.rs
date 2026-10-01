@@ -100,6 +100,25 @@ fn steam_installs_across_libraries() {
     assert!(found.installs[1].install_dir.ends_with("Lib2/steamapps/common/Game Two"));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_library_reached_through_a_link_is_listed_once() {
+    // Linux Steam: `~/.steam/steam` links to `~/.local/share/Steam`, and
+    // `libraryfolders.vdf` lists the real folder.
+    let mut m = machine();
+    let real = m.env.folders.steam_root.clone().unwrap();
+    let link = m.root.join("steam-link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    m.env.folders.steam_root = Some(link.clone());
+    library_folders(&real, &[&real]);
+    app_manifest(&real, 1, "Game One");
+    write(&real.join("steamapps/common/Game One/one.exe"), "");
+
+    assert_eq!(m.env.steam_libraries(), vec![link]);
+    let found = discover(&bundle(vec![game("steam-1", Some(1), None, "Game One", "one.exe")]), &m.env);
+    assert_eq!(found.installs.len(), 1, "{:?}", found.installs);
+}
+
 #[test]
 fn an_unreadable_library_is_reported_not_uninstalled() {
     let m = machine();

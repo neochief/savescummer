@@ -199,7 +199,10 @@ fn load_catalog(opts: &Options, data_dir: &Path) -> Result<CatalogState, String>
         None => (Bundle::parse(EMBEDDED_CATALOG).map_err(|e| format!("the built-in catalog: {e}"))?, "embedded"),
     };
     // A verified downloaded bundle wins; any failure falls back silently.
-    let (bundle, source) = match catalog_update::load_downloaded(data_dir) {
+    // A host that doesn't update ignores earlier downloads too, so a dev or
+    // test build runs the catalog it was built with.
+    let downloaded = if opts.no_catalog_update { None } else { catalog_update::load_downloaded(data_dir) };
+    let (bundle, source) = match downloaded {
         Some(bundle) => (bundle, "downloaded"),
         None => (built_in, source),
     };
