@@ -612,12 +612,16 @@ Hotkey-triggered Save and Load play a start cue when the request is accepted, th
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Process and focus watching | Yes | Yes: `libproc`, the frontmost app from `NSWorkspace` | To investigate |
-| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 (Carbon hot keys, no permission needed) | To investigate |
-| Tray | Notification area | Menu bar (template icon) | To investigate |
-| Notifications | Tray balloons | `UNUserNotificationCenter`, asked the first time one is needed | To investigate |
-| Open-file check before a Load | No (a handle without delete sharing fails stage 2) | Yes (`libproc`) | Planned (`/proc`) |
+| Process and focus watching | Yes | Yes: `libproc`, the frontmost app from `NSWorkspace` | Yes: `/proc`, Wine and Proton games by their Windows program (MONITOR AND ACTIVE STACK); the foreground from the X11 window manager (`_NET_ACTIVE_WINDOW`, `_NET_WM_PID`) |
+| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 (Carbon hot keys, no permission needed) | Ctrl+F5 / Ctrl+F9 (X11 key grabs) |
+| Tray | Notification area | Menu bar (template icon) | None yet: opening the app again shows the window |
+| Notifications | Tray balloons | `UNUserNotificationCenter`, asked the first time one is needed | `notify-send` (libnotify); without it, none |
+| Open-file check before a Load | No (a handle without delete sharing fails stage 2) | Yes (`libproc`) | Yes (`/proc/<pid>/fd`) |
 | Privacy prompts for save locations | None | Games wait until the user allows access (PLAN-MACOS, PRIVACY PERMISSIONS) | None |
+| Sounds | `PlaySound` | `NSSound` | `pw-play`, else `paplay`, else `aplay`, fed the WAV on stdin |
+| Waking from sleep | — | `NSWorkspaceDidWakeNotification` | `CLOCK_BOOTTIME` running ahead of `CLOCK_MONOTONIC` (the time asleep), checked every 3 seconds |
+
+**Linux under Wayland.** Wayland lets no program grab keys globally or ask which window is active; both go through XWayland instead. So hotkeys fire, and focus is seen, only while an X11 window is in front. Games run as X11 clients under XWayland (every Wine and Proton game, and most native ones), so a game in front works; a native Wayland window in front (a browser, the file manager) gets no hotkeys and reads as no game in front. Without any X display there are no hotkeys at all, and the host logs why. The desktop portal for global shortcuts (`org.freedesktop.portal.GlobalShortcuts`) would lift this where the desktop supports it; not yet.
 
 
 ## ARTWORK

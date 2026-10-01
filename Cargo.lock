@@ -3055,6 +3055,7 @@ dependencies = [
  "block2",
  "dispatch2",
  "global-hotkey",
+ "hex",
  "libc",
  "notify",
  "objc2",

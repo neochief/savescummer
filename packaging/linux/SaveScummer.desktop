@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SaveScummer
+Comment=Checkpoints for your game saves
+Exec=SaveScummer
+Icon=savescummer
+Terminal=false
+Categories=Utility;

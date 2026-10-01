@@ -433,6 +433,8 @@ fn start_host(bridge: &Bridge) -> Result<(), String> {
     };
     let mut command =
         savescummer_platform::process::bundled_host_command(&exe).unwrap_or_else(|| ProcessCommand::new(&exe));
+    // Inside the AppImage, never hand the bundled GTK and WebKit to the host.
+    savescummer_platform::process::outer_env(&mut command);
     command.arg("--minimized");
     if bridge.explicit_data_dir {
         command.arg("--data-dir").arg(&bridge.data_dir);

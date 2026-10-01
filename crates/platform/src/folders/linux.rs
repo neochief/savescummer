@@ -25,7 +25,10 @@ fn xdg_or_home(var: &str, fallback: &str) -> PathBuf {
 /// Starts `opener` on the folder and reaps it in the background, so it never
 /// lingers as a zombie and the caller never waits for the file manager.
 fn spawn_opener(opener: &str, path: &Path) -> std::io::Result<()> {
-    let mut child = std::process::Command::new(opener).arg(path).spawn()?;
+    let mut command = std::process::Command::new(opener);
+    command.arg(path);
+    crate::process::outer_env(&mut command);
+    let mut child = command.spawn()?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });

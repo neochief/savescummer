@@ -2,7 +2,7 @@
 
 All build automation is `cargo xtask`: one Rust program that runs the same on every OS, locally and in CI. There are no PowerShell, bash or Python build scripts. The design and the reasons behind it are in [PLAN-BUILD.md](../PLAN-BUILD.md); this guide is the how-to.
 
-Windows builds and ships a complete installer with the Tauri UI. macOS builds and ships a complete app bundle in a disk image with the same UI. Linux packaging isn't yet implemented.
+Windows builds and ships a complete installer with the Tauri UI. macOS builds and ships a complete app bundle in a disk image with the same UI. Linux builds the same UI into an AppImage for x86_64 and aarch64; it isn't shipped in releases yet.
 
 
 ## Prerequisites
@@ -26,6 +26,19 @@ macOS (13+, Apple Silicon only):
 - Every Rust build targets the oldest supported macOS: `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET`, kept equal to `pins::MIN_MACOS` by a test.
 - The end-to-end tests that switch between windows take the desktop's focus, so they run only with `SAVESCUMMER_DESKTOP_TESTS=1` (CI sets it) and an unlocked screen; otherwise they say so and pass.
 
+Linux (x86_64 or aarch64):
+
+- **A C toolchain and the WebKitGTK and GTK development packages** Tauri builds against. On Ubuntu or Debian:
+
+  ```bash
+  sudo apt install build-essential libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev file
+  ```
+
+- **Node.js 22 and pnpm 12.4.2** on `PATH` for the Tauri UI, as on Windows and macOS.
+- `cargo xtask setup linux-tools` before packaging (`build --package`, `run`, `dist`); plain builds and tests don't need it.
+- Release AppImages are built on Ubuntu 22.04 (glibc 2.35, the minimum), which CI does. One built on a newer system runs only on systems as new as it.
+- On Wayland, global hotkeys and focus tracking see only X11 windows (games run through XWayland, so they're seen); see PLAN-HOST.md.
+
 The old Qt frontend setup is dormant because this tree has no Qt UI project. It is not needed for the current Windows or macOS build:
 
 - **CMake 3.21+** on `PATH` (Visual Studio, Xcode command-line tools or the distro provide it).
@@ -39,7 +52,7 @@ Pinned packaging tools are installed into `.runtime/` by their setup commands. W
 | `cargo xtask setup cargo-about` | cargo-about (`THIRD-PARTY-LICENSES.html`) | any package: `build --package`, `run`, `dist` |
 | `cargo xtask setup inno` | Inno Setup, portable, into `.runtime/tools/inno-setup/` | `dist` on Windows |
 | `cargo xtask setup qt` | the Qt kit into `.runtime/Qt/<version>/<kit>/` | a Qt UI build |
-| `cargo xtask setup linux-tools` | linuxdeploy and appimagetool | `dist` on Linux (not yet) |
+| `cargo xtask setup linux-tools` | Tauri's AppImage tools (linuxdeploy, AppRun, the AppImage plugin), appimagetool and the AppImage runtime | any Linux package: `build --package`, `run`, `dist` |
 
 Packaging tool versions and checksums are pinned in [`xtask/src/pins.rs`](../xtask/src/pins.rs). Node.js is selected by CI, and pnpm is pinned in `apps/ui/package.json`; frontend dependencies are locked in `apps/ui/pnpm-lock.yaml`. Setup commands are safe to re-run.
 

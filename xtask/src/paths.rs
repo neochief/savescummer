@@ -47,8 +47,6 @@ pub fn demo_data() -> PathBuf {
     runtime().join("dev-demo")
 }
 
-// Linux packaging doesn't use it yet.
-#[cfg_attr(target_os = "linux", allow(dead_code))]
 pub fn packaging() -> PathBuf {
     root().join("packaging")
 }

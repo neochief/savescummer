@@ -341,3 +341,14 @@ pub fn setup_inno() -> anyhow::Result<()> {
 pub fn setup_linux_tools() -> anyhow::Result<()> {
     bail!("`setup linux-tools` is only for Linux builds")
 }
+
+/// The Tauri build makes no bundle here: the package is assembled from the
+/// plain executable.
+pub fn tauri_bundle(build: &mut Command, _package: bool) -> anyhow::Result<()> {
+    build.arg("--no-bundle");
+    Ok(())
+}
+
+pub fn stage_tauri_bundle(_mode: crate::paths::Mode, _install: &Path) -> anyhow::Result<()> {
+    Ok(())
+}

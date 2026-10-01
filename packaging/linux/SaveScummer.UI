@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# The UI inside the AppImage: the Tauri binary (usr/bin/savescummer-ui) with
+# the GTK and WebKit bundled beside it, set up the way Tauri's own AppImage
+# does (linuxdeploy's GTK hook and the libraries in usr/lib).
+#
+# The environment it started with is kept in SAVESCUMMER_OUTER_ENV, so what
+# the UI starts (the host, a browser, a file manager) gets it back and never
+# loads the bundled libraries (savescummer_platform::process::outer_env).
+set -e
+here="$(dirname "$(readlink -f "$0")")"
+appdir="$(dirname "$(dirname "$here")")"
+if [ -z "${SAVESCUMMER_OUTER_ENV:-}" ]; then
+    SAVESCUMMER_OUTER_ENV="$(env -0 | od -An -v -tx1 | tr -d ' \n')"
+    export SAVESCUMMER_OUTER_ENV
+fi
+export APPDIR="$appdir"
+source "$appdir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
+export LD_LIBRARY_PATH="$appdir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# WebKit finds its helper processes relative to the working directory:
+# Tauri's bundler rewrites their path in the bundled library to ././/lib/….
+cd "$appdir/usr"
+exec "$here/savescummer-ui" "$@"

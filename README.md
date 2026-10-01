@@ -24,8 +24,9 @@ Depending on the game, restoring progress may require returning to the main menu
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
 | macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` |
 | Linux x86_64 (glibc 2.35+) | `SaveScummer-linux-x86_64-<version>.AppImage` (coming) |
+| Linux ARM64 (glibc 2.35+), experimental | `SaveScummer-linux-aarch64-<version>.AppImage` (coming) |
 
-Get the Windows installer or macOS disk image from [Releases](https://github.com/neochief/savescummer/releases). Linux packages will be published when its UI is ready. Windows is unsigned; macOS uses an ad hoc signature, so each OS may ask before first launch:
+Get the Windows installer or macOS disk image from [Releases](https://github.com/neochief/savescummer/releases). Linux AppImages will be published once they pass on CI. Windows is unsigned; macOS uses an ad hoc signature, so each OS may ask before first launch:
 
 - **Windows:** run the installer. SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It installs for your user only (no admin), into `%LOCALAPPDATA%\Programs\SaveScummer`, and offers to launch at sign-in.
   - **Upgrade:** run the new installer; it closes the running app safely and keeps your settings.
@@ -74,7 +75,13 @@ cargo xtask run
 
 The dev host keeps running after `run` returns; `cargo xtask host stop` stops it.
 
-On Linux, packaging isn't done yet, so build and use the binaries directly. The CLI starts the host itself when it isn't running:
+On Linux, install the WebKitGTK and GTK development packages first (see [docs/building.md](docs/building.md)), and the AppImage tools once:
+
+```bash
+cargo xtask setup linux-tools
+```
+
+Without the UI, build and use the binaries directly. The CLI starts the host itself when it isn't running:
 
 ```bash
 cargo build

@@ -322,10 +322,15 @@ fn web_licenses(out: &Path) -> anyhow::Result<()> {
             let name = entry["name"].as_str().context("web dependency has no name")?;
             let version = entry["versions"][0].as_str().context("web dependency has no version")?;
             let path = PathBuf::from(entry["paths"][0].as_str().context("web dependency has no install path")?);
+            // npm packages name it in any case (`license`, `LICENSE`): matched
+            // ignoring case, since Linux's file system doesn't.
+            let names: Vec<std::ffi::OsString> =
+                fs::read_dir(&path).map(|dir| dir.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
             let text = ["LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENCE.md", "COPYING"]
                 .iter()
-                .map(|file| path.join(file))
-                .find(|file| file.is_file())
+                .find_map(|wanted| names.iter().find(|name| name.to_string_lossy().eq_ignore_ascii_case(wanted)))
+                .map(|name| path.join(name))
+                .filter(|file| file.is_file())
                 .map(fs::read_to_string)
                 .transpose()?;
             anyhow::ensure!(

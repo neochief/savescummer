@@ -66,7 +66,8 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
         if options.test && !test_host.is_file() {
             cmd::run(cargo().args(["build", "-p", CARGO_HOST]).args(locked))?;
         }
-        Some(frontend::build(mode, &version, options.test, if options.test { &test_host } else { &host })?)
+        let package = options.package || options.release;
+        Some(frontend::build(mode, &version, options.test, package, if options.test { &test_host } else { &host })?)
     } else {
         println!("UI: {} doesn't exist yet; building the host and CLI only", paths::show(&frontend::source()));
         None

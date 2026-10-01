@@ -24,9 +24,8 @@ use crate::{cmd, pins, platform};
 
 /// A built UI, ready to be packaged.
 pub struct Ui {
-    /// Files staged for packaging (`bin/SaveScummer.UI`). Linux packaging
-    /// doesn't read it yet.
-    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    /// Files staged for packaging: `bin/SaveScummer.UI`, and on Linux the
+    /// `AppDir` of Tauri's AppImage bundling.
     pub install: PathBuf,
 }
 
@@ -61,7 +60,7 @@ pub fn configuration(mode: Mode) -> &'static str {
 }
 
 /// Build the Tauri UI and stage it under the fixed package name.
-pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Result<Ui> {
+pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path) -> anyhow::Result<Ui> {
     let source = source();
     let config: serde_json::Value = serde_json::from_slice(&fs::read(source.join("src-tauri/tauri.conf.json"))?)?;
     anyhow::ensure!(
@@ -91,7 +90,8 @@ pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Res
         cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;
     }
     let mut build = Command::new(&pnpm);
-    build.current_dir(&source).args(["tauri", "build", "--no-bundle"]);
+    build.current_dir(&source).args(["tauri", "build"]);
+    platform::tauri_bundle(&mut build, package)?;
     if mode == Mode::Dev {
         build.arg("--debug");
     }
@@ -106,5 +106,8 @@ pub fn build(mode: Mode, version: &str, test: bool, _host: &Path) -> anyhow::Res
     let staged = install.join("bin").join(crate::naming::exe(crate::naming::UI));
     fs::create_dir_all(staged.parent().expect("bin has a parent"))?;
     fs::copy(&binary, &staged).with_context(|| format!("staging {}", paths::show(&binary)))?;
+    if package {
+        platform::stage_tauri_bundle(mode, &install)?;
+    }
     Ok(Ui { install })
 }

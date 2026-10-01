@@ -22,6 +22,7 @@ global-hotkey.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 global-hotkey.workspace = true
+hex.workspace = true
 x11rb.workspace = true
 
 [target.'cfg(unix)'.dependencies]

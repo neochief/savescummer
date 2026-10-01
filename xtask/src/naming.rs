@@ -4,7 +4,8 @@
 /// One release file per supported platform.
 pub struct Platform {
     pub os: &'static str,
-    /// Each OS's own habit (`x64` on Windows, `arm64`/`x86_64` elsewhere); never unified.
+    /// Each OS's own habit (`x64` on Windows, `arm64` on macOS, the kernel's
+    /// `x86_64`/`aarch64` on Linux, as AppImages name them); never unified.
     pub arch: &'static str,
     /// Appended after the version, e.g. `setup`.
     pub suffix: Option<&'static str>,
@@ -16,9 +17,13 @@ pub struct Platform {
 
 pub const WINDOWS: Platform = Platform { os: "windows", arch: "x64", suffix: Some("setup"), ext: "exe", ships: true };
 pub const MACOS: Platform = Platform { os: "macos", arch: "arm64", suffix: None, ext: "dmg", ships: true };
-pub const LINUX: Platform = Platform { os: "linux", arch: "x86_64", suffix: None, ext: "AppImage", ships: false };
+// Linux ships once its CI jobs have built both in release.yml.
+pub const LINUX_X86_64: Platform =
+    Platform { os: "linux", arch: "x86_64", suffix: None, ext: "AppImage", ships: false };
+pub const LINUX_AARCH64: Platform =
+    Platform { os: "linux", arch: "aarch64", suffix: None, ext: "AppImage", ships: false };
 
-pub const ALL: [Platform; 3] = [WINDOWS, MACOS, LINUX];
+pub const ALL: [Platform; 4] = [WINDOWS, MACOS, LINUX_X86_64, LINUX_AARCH64];
 
 /// The fixed executable names, whatever the platform packages them in. The
 /// host is the app itself, so it carries the plain name.
@@ -77,6 +82,7 @@ mod tests {
     fn release_file_names() {
         assert_eq!(WINDOWS.release_file("1.2.3"), "SaveScummer-windows-x64-1.2.3-setup.exe");
         assert_eq!(MACOS.release_file("1.2.3"), "SaveScummer-macos-arm64-1.2.3.dmg");
-        assert_eq!(LINUX.release_file("1.2.3"), "SaveScummer-linux-x86_64-1.2.3.AppImage");
+        assert_eq!(LINUX_X86_64.release_file("1.2.3"), "SaveScummer-linux-x86_64-1.2.3.AppImage");
+        assert_eq!(LINUX_AARCH64.release_file("1.2.3"), "SaveScummer-linux-aarch64-1.2.3.AppImage");
     }
 }

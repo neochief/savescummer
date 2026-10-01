@@ -1,0 +1,17 @@
+#!/bin/sh
+# The AppImage's entry point (PLAN-BUILD.md Linux): one file is all three
+# programs.
+#
+#   <AppImage> ui …     the window (the host starts it this way)
+#   <AppImage> cli …    the command line
+#   <AppImage> …        the host, with these arguments
+#
+# The host and CLI need only the system's base libraries, and the host
+# starts games: both run with the environment exactly as given. Only the UI
+# gets the bundled GTK and WebKit (usr/bin/SaveScummer.UI).
+here="$(dirname "$(readlink -f "$0")")"
+case "$1" in
+    ui) shift; exec "$here/usr/bin/SaveScummer.UI" "$@" ;;
+    cli) shift; exec "$here/usr/bin/SaveScummer.CLI" "$@" ;;
+    *) exec "$here/usr/bin/SaveScummer" "$@" ;;
+esac

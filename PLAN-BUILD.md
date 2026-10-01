@@ -41,7 +41,7 @@ CI gets a job for each platform as it lands. The work is done when every platfor
 The app is three programs:
 
 - **Host** — Rust; the app itself and its entry point (SQLite, monitoring, operations, tray, hotkeys)
-- **UI** — Tauri/WebView2 on Windows and Tauri/WebKit on macOS, started by the host; Linux support remains to be completed
+- **UI** — Tauri/WebView2 on Windows, Tauri/WebKit on macOS and Tauri/WebKitGTK on Linux, started by the host
 - **CLI** — Rust command-line client
 
 The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.exe` and `SaveScummer.CLI.exe`. Other platforms use the same program names where their UI is implemented. Every launcher, shortcut and sign-in entry points at `SaveScummer`.
@@ -50,7 +50,8 @@ The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.
 | --- | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<ver>-setup.exe` | What Windows users expect; installs per-user, no admin |
 | macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<ver>.dmg` | The standard drag-to-Applications install |
-| Linux x86_64, glibc 2.35+ (planned) | `SaveScummer-linux-x86_64-<ver>.AppImage` | One file to run without root or installation |
+| Linux x86_64, glibc 2.35+ (built, not shipped yet) | `SaveScummer-linux-x86_64-<ver>.AppImage` | One file to run without root or installation |
+| Linux aarch64, glibc 2.35+ (built, not shipped yet; experimental) | `SaveScummer-linux-aarch64-<ver>.AppImage` | The same, for ARM Linux |
 
 These minimums are recorded here and in xtask platform constants. Future build flags, `Info.plist`, Linux build system, CI runners and test machines must follow them.
 
@@ -147,10 +148,10 @@ savescummer/
 |-- xtask/               the build program
 |-- docs/building.md     the how-to
 |-- packaging/
-|   |-- licenses/        Qt license texts for Qt platform packages
+|   |-- licenses/        Qt license texts (the retired Qt frontend)
 |   |-- windows/         savescummer.iss, README.txt
 |   |-- macos/           Info.plist.in, com.savescummer.SaveScummer.host.plist (login agent)
-|   `-- linux/           AppRun, SaveScummer.desktop
+|   `-- linux/           AppRun, SaveScummer.UI (the UI's wrapper), SaveScummer.desktop
 |-- assets/              icons, sounds, asset tooling
 |-- target/
 |-- build/
@@ -160,7 +161,7 @@ savescummer/
 |-- dist/
 `-- .runtime/
     |-- Qt/<ver>/<kit>/  Qt SDK for Qt platforms
-    |-- tools/           aqtinstall venv, Inno Setup, linuxdeploy, appimagetool
+    |-- tools/           aqtinstall venv, Inno Setup, cargo-about, Tauri's AppImage tools (tauri-cache/), appimagetool
     `-- dev/             dev app data (the dev host's --data-dir)
 ```
 
@@ -223,7 +224,7 @@ The packaging tools are installed by setup commands into `.runtime/`. Windows UI
 **Packaging tools:**
 
 - `setup inno` — the pinned Inno Setup 6 installer from jrsoftware's GitHub release, checked by SHA-256, installed silently in portable mode into `.runtime/tools/inno-setup/`, so it registers nothing on the machine. Not winget or Chocolatey: they aren't reliably on CI runners and don't pin versions.
-- `setup linux-tools` — planned Linux packaging tools. Select the deployment plugin when the Linux UI is implemented.
+- `setup linux-tools` — the AppImage tools for the build machine's architecture, each checked by SHA-256: the `linuxdeploy` build and `AppRun` Tauri's AppImage bundler runs (pinned by Tauri's commit), `linuxdeploy-plugin-appimage` (a tagged release, not `continuous`), `appimagetool` and the type2 AppImage runtime. Tauri's three go into `.runtime/tools/tauri-cache/tauri/`, which builds give Tauri as `XDG_CACHE_HOME`, so it finds them and downloads nothing; Tauri edits them in place once it runs them, so a tool present counts as installed.
 - `setup cargo-about` — pinned version, built with `cargo install --locked` into `.runtime/tools/cargo-about/`.
 
 All pins, and the supported-platform minimums, live in `xtask/src/pins.rs`; CI caches are keyed on that file.
@@ -381,23 +382,24 @@ The README gives both:
 
 ## Linux release target
 
-This section is an unimplemented packaging concept. Its Qt-specific details belong to the retired frontend design above and need to be revised when the Linux UI is chosen and validated.
+x86_64 and aarch64, any mainstream distro with the minimum glibc or newer (Ubuntu, Fedora, Arch, SteamOS, Raspberry Pi OS…). No `.deb` or `.rpm`: one AppImage per architecture runs on all of them, without installing or root. x86_64 is the main target (the Steam Deck). aarch64 is experimental: most games there are x86 games run through FEX or Box64, whose processes the monitor can't recognize yet (PLAN-HOST.md MONITOR AND ACTIVE STACK), and on Asahi Linux games may run in a micro-VM (muvm) the host can't see into.
 
-x86_64, any mainstream distro with the minimum glibc or newer (Ubuntu, Fedora, Arch, SteamOS…). No `.deb` or `.rpm`: one AppImage runs on all of them, without installing or root.
+Both build, and CI builds both (`ci.yml`), but neither ships yet (`naming.rs`, `ships: false`): Linux joins `release.yml` once its CI jobs pass on real runners.
 
 ### Build
 
-Built on the oldest supported Ubuntu, locally or on the matching `ubuntu-*` runner in CI. A binary only runs on a glibc at least as new as the one it was built against, so the oldest supported system has to be the build system.
+Built on the oldest supported Ubuntu, locally or on the matching `ubuntu-*` runner in CI (`ubuntu-22.04` and `ubuntu-22.04-arm`). A binary only runs on a glibc at least as new as the one it was built against, so the oldest supported system has to be the build system. A newer machine (like an Ubuntu 26.04 development VM) builds and tests fine, but its AppImage only runs on systems as new as it.
 
 ### App package and release file
 
-The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`, made by `linuxdeploy` with its Qt plugin. It contains:
+The UI's GTK and WebKit come from Tauri's own AppImage bundling (`tauri build --bundles appimage`), which solves what bundling WebKitGTK needs: it copies WebKit's helper processes (`WebKitWebProcess`, `WebKitNetworkProcess`, the injected bundle) into the AppDir and rewrites their path in the bundled library to one relative to the working directory, deploys GTK's modules with linuxdeploy's GTK plugin, and adds that plugin's environment hook. xtask builds it only when packaging, from the pinned tools (`setup linux-tools`), and keeps its AppDir; its own AppImage isn't used.
 
-- the three executables
-- Qt and every library not guaranteed on a base system (per the AppImage exclude list)
-- both the `xcb` and `wayland` Qt platform plugins, so it runs under X11 and Wayland
-- `packaging/linux/SaveScummer.desktop` and the icon
-- licenses, notices, manifest and checksums
+The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`: Tauri's AppDir with
+
+- the host and CLI beside the UI in `usr/bin/` (`SaveScummer`, `SaveScummer.CLI`); the Tauri UI stays `usr/bin/savescummer-ui`
+- `usr/bin/SaveScummer.UI`, from `packaging/linux/SaveScummer.UI`: the UI's wrapper, which runs linuxdeploy's GTK hook, puts `usr/lib` on the library path and starts the UI from `usr/` (where WebKit finds its helpers)
+- `AppRun` replaced by `packaging/linux/AppRun`, and Tauri's desktop entry and icons by `packaging/linux/SaveScummer.desktop` and `assets/icon.svg`
+- licenses, notices, manifest and checksums in `usr/share/savescummer/`
 
 `packaging/linux/AppRun` is the entry point and dispatches on its first argument, so one file serves as all three programs:
 
@@ -405,11 +407,13 @@ The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`, made by `linuxdepl
 - `cli …` runs `SaveScummer.CLI`
 - anything else runs the host, `SaveScummer`, with those arguments
 
-`appimagetool` turns the AppDir into `SaveScummer-linux-x86_64-<ver>.AppImage` using the static AppImage runtime, so users don't need `libfuse2`. Unsigned.
+**The bundled libraries reach only the UI.** The host and CLI need only the system's base libraries (libc, libm, libgcc_s), and the host starts games, so they run with the environment exactly as given. The UI's wrapper keeps the environment it started with (`SAVESCUMMER_OUTER_ENV`), and whatever the UI starts gets that back (`savescummer_platform::process::outer_env`): the host it restarts, the browser and the file manager. Why: a game, browser or file manager that inherits `LD_LIBRARY_PATH` pointing into the AppImage loads its GTK instead of the system's, and may crash.
+
+`appimagetool`, with the pinned type2 runtime (`--runtime-file`), turns the AppDir into `SaveScummer-linux-<arch>-<ver>.AppImage`, so users don't need `libfuse2`. Unsigned. `finish_package` checks with `file` that every program is built for the build machine's architecture.
 
 ### Integration
 
-- **Launch at login:** the host writes and removes `~/.config/autostart/SaveScummer.desktop` with `Exec="<AppImage path>" --minimized --data-dir "<data>"`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE).
+- **Launch at login:** the host writes and removes `~/.config/autostart/SaveScummer.desktop` with `Exec="<AppImage path>" --minimized`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE). Like macOS, the entry always starts the default data folder: `--autostart on` with another `--data-dir` is refused.
 - **App menu entry:** adding the app to the menu is left to the user's AppImage tool (Gear Lever, AppImageLauncher…), which reads the embedded `.desktop` file.
 
 ### Upgrade and removal
@@ -421,7 +425,7 @@ The README gives both:
 
 ### Done when
 
-1. `dist` on the oldest supported Ubuntu leaves exactly `SaveScummer-linux-x86_64-<ver>.AppImage` in `dist/`.
+1. `dist` on the oldest supported Ubuntu leaves exactly `SaveScummer-linux-<arch>-<ver>.AppImage` in `dist/`, for x86_64 and aarch64.
 2. After `chmod +x`, it runs on the oldest supported Ubuntu and current Fedora, both stock, without `libfuse2`, under both X11 and Wayland.
 3. `….AppImage --version` and `….AppImage cli --version` print the Cargo version.
 4. Enabling launch at login writes the XDG entry pointing at the AppImage and the host starts at login. Running a newer AppImage re-points the entry, and disabling removes it.
@@ -437,7 +441,8 @@ Two workflows in `.github/workflows/`. Setup actions install toolchains and cach
 - Runs on pushes to the `release` branch, and by hand (the Actions tab) for any branch. Other pushes, pull requests and tags don't start it. Why: work lands on `main` unchecked by CI to save time, and releasing is when every platform must pass. Merging `main` into `release` runs it; the tag is pushed only once it passes (RELEASING).
 - A concurrency group per ref cancels superseded runs.
 - A Windows job on `windows-latest`: checkout, Rust cache, Node.js 22, pnpm from `apps/ui/package.json`, packaging tool caches, `setup cargo-about`, `setup inno`, `check`, then `dist`. This compiles and tests the Tauri UI and produces the real installer on every CI run.
-- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Node.js 22, pnpm, tool cache, `setup cargo-about`, `check`, `dist`. The Linux job is still future work. Packaging in CI means an unaccepted license fails the run.
+- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Node.js 22, pnpm, tool cache, `setup cargo-about`, `check`, `dist`. Packaging in CI means an unaccepted license fails the run.
+- A Linux job for each architecture, on `ubuntu-22.04` and `ubuntu-22.04-arm` (the oldest supported Ubuntu): the system's WebKitGTK and GTK development packages, the same caches plus the AppImage tools, `setup cargo-about`, `setup linux-tools`, `check`, `dist`, and the AppImage uploaded. Until Linux ships it's `continue-on-error`: a Linux failure shows in the run without failing it, so it never holds up a Windows or macOS release.
 
 **release.yml** — builds the Windows installer and macOS disk image into a draft GitHub Release:
 
@@ -506,7 +511,7 @@ Whenever the build changes, this plan and `docs/building.md` change with it.
 
 - Code signing on any platform — it costs money and yearly upkeep; the workarounds above are documented instead.
 - Update checks or auto-update — the app never checks for its own updates; users install the next release. Its only network use is fetching catalog updates and Steam artwork.
-- Intel Mac, 32-bit or ARM Linux builds.
+- Intel Mac or 32-bit builds.
 - Distro packages, Flatpak, Microsoft Store, Mac App Store — the three release files cover everyone.
 - Explorer, Finder or file-manager integration on any platform — a game's saves can span several folders, so there's no single folder to right-click; the app never touches the file manager.
 - Auto-publishing releases — a human always publishes.
