@@ -11,13 +11,14 @@ const content: Record<Guidance['kind'], [string, string, string]> = {
   invalid_target: ['Fix', 'the save location', ''],
   target_unavailable: ['Save location unavailable', '', 'Reconnect the drive or restore access to the saves folder.'],
   game_running: ['Exit the game', 'to save or load checkpoints', 'Save copies progress after the game writes it on exit.\nLoad replaces it for the game to read on relaunch.'],
-  play_first: ['Play first', 'to save progress', 'Start the game, make some progress, then save and exit.'],
+  play_first: ['Play the game first', 'to save progress', 'Start the game, make some progress, then save and exit.'],
   no_game_data: ['No game data to save', '', 'You can still load a checkpoint.'],
   no_saves: ['No checkpoints yet', '', 'Go and play the game first.'],
 };
 
-export function GuidancePanel({ game, bridge, retrying, onRetry, onConfigure }: {
-  game: Game; bridge: Bridge; retrying: boolean; onRetry: () => void; onConfigure: (button: HTMLButtonElement) => void;
+export function GuidancePanel({ game, bridge, retrying, playPending, onRetry, onPlay, onConfigure }: {
+  game: Game; bridge: Bridge; retrying: boolean; playPending: boolean; onRetry: () => void;
+  onPlay: () => void; onConfigure: (button: HTMLButtonElement) => void;
 }) {
   const [asking, setAsking] = useState(false);
   const [browsing, setBrowsing] = useState(false);
@@ -56,7 +57,9 @@ export function GuidancePanel({ game, bridge, retrying, onRetry, onConfigure }: 
         {message && <p className="guidance-description">{message}</p>}
         {error && <p role="alert">{error}</p>}
       </div>}
-      {guidance.remedy && <div className="guidance-buttons">
+      {(guidance.remedy || guidance.kind === 'play_first') && <div className="guidance-buttons">
+        {guidance.kind === 'play_first' && <button disabled={playPending || game.can_play === false} onClick={onPlay}>
+          Play game</button>}
         {guidance.kind === 'no_save_location' && guidance.remedy === 'configure'
           ? <button disabled={!game.configure.available || browsing} onClick={browse}>{browsing ? 'Browsing' : 'Browse'}</button>
           : guidance.remedy === 'configure' && <button disabled={!game.configure.available} onClick={(event) => onConfigure(event.currentTarget)}>Configure</button>}

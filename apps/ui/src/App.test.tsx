@@ -109,6 +109,20 @@ test('cards show Play while stopped and expose Terminate only when the host perm
   expect(screen.getByRole('button', { name: 'Play Game A' })).toBeTruthy();
 });
 
+test('play-first guidance launches the game through the shared play action', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].guidance = { kind: 'play_first', save: true, load: true };
+  bridge.state.games[0].can_play = true;
+  render(<App bridge={bridge} />);
+
+  const panel = await screen.findByRole('status', { name: 'Play the game first to save progress' });
+  const play = within(panel).getByRole('button', { name: 'Play game' }) as HTMLButtonElement;
+  fireEvent.click(play);
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'play', game: 'a' }));
+  expect(play.disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Play Game A' }) as HTMLButtonElement).disabled).toBe(true);
+});
+
 test('Info reveals the full game instructions only when requested', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].info = 'Context: Keep this run.\n\nHow progress is saved: The save is overwritten.';

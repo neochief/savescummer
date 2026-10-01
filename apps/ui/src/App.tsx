@@ -658,7 +658,9 @@ export function App({ bridge }: { bridge: Bridge }) {
               onJump={() => selectedGame.latest && jumpToCheckpoint(selectedGame.latest.id)} />
             <GuidancePanel key={selectedGame.id} game={selectedGame} bridge={bridge}
               retrying={selectedGame.busy?.kind === 'retry' || (feedback?.game === selected && feedback?.action === 'retry' && feedback?.phase === 'busy')}
-              onRetry={() => runAction('retry')} onConfigure={(button) => openDialog('configure', button)} />
+              playPending={cardPending?.game === selectedGame.id}
+              onRetry={() => runAction('retry')} onPlay={() => runLifecycle(selectedGame, 'play')}
+              onConfigure={(button) => openDialog('configure', button)} />
           </div>
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
