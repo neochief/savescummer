@@ -259,7 +259,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
             rejection={rejections.load} onChange={(shortcut) => changeShortcut('load', shortcut)} onRecording={recordShortcut} />
           </div>
           <div className="dialog-group">
-          <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds on Save and Load</label>
+          <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds</label>
           <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
             onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>
           {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}

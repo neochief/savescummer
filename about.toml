@@ -10,6 +10,8 @@ accepted = [
     "MIT",
     "MPL-2.0",
     "Unicode-3.0",
+    # ksni, the Linux tray (public-domain dedication).
+    "Unlicense",
     "Zlib",
 ]
 ignore-dev-dependencies = true

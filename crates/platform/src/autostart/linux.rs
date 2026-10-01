@@ -1,5 +1,5 @@
 //! The Linux sign-in entry: an XDG autostart file,
-//! `~/.config/autostart/SaveScummer.desktop`, which every mainstream desktop
+//! `~/.config/autostart/com.savescummer.SaveScummer.desktop`, which every mainstream desktop
 //! runs at sign-in.
 //!
 //! Inside an AppImage the host runs from a mount that is gone after it
@@ -20,8 +20,8 @@
 
 use std::path::{Path, PathBuf};
 
-const FILE: &str = "SaveScummer.desktop";
-const TARGET_KEY: &str = "X-SaveScummer-Target";
+const FILE: &str = "com.savescummer.SaveScummer.desktop";
+pub(crate) const TARGET_KEY: &str = "X-SaveScummer-Target";
 
 pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), String> {
     if on && data_dir.is_some_and(|d| d != crate::data_dir()) {
@@ -85,7 +85,7 @@ fn target(host_exe: &Path) -> PathBuf {
 /// The AppImage file this host runs from: the runtime sets `$APPIMAGE` and
 /// `$APPDIR` (the mount), and the host must be inside that mount (a program
 /// the AppImage merely started isn't).
-fn appimage(host_exe: &Path) -> Option<PathBuf> {
+pub(crate) fn appimage(host_exe: &Path) -> Option<PathBuf> {
     let appdir = std::env::var_os("APPDIR")?;
     let appimage = PathBuf::from(std::env::var_os("APPIMAGE")?);
     (host_exe.starts_with(&appdir) && appimage.is_absolute()).then_some(appimage)
@@ -110,7 +110,7 @@ fn contents(target: &Path) -> String {
 /// One `Exec` argument: quoted, with `"`, `` ` ``, `$` and `\` escaped
 /// inside the quotes and `%` doubled (the Desktop Entry spec), then escaped
 /// again as a string value (its `\` is `\\`).
-fn exec_arg(arg: &str) -> String {
+pub(crate) fn exec_arg(arg: &str) -> String {
     let mut quoted = String::from("\"");
     for ch in arg.chars() {
         match ch {
@@ -127,7 +127,7 @@ fn exec_arg(arg: &str) -> String {
 }
 
 /// A Desktop Entry string value: `\`, and line breaks, escaped.
-fn escape_value(text: &str) -> String {
+pub(crate) fn escape_value(text: &str) -> String {
     text.replace('\\', "\\\\").replace('\n', "\\n").replace('\t', "\\t").replace('\r', "\\r")
 }
 
@@ -151,13 +151,13 @@ fn unescape_value(text: &str) -> String {
     out
 }
 
-struct Entry {
-    target: PathBuf,
+pub(crate) struct Entry {
+    pub(crate) target: PathBuf,
     enabled: bool,
 }
 
 /// Our entry at `path`; None when there's none or it isn't ours.
-fn read(path: &Path) -> Option<Entry> {
+pub(crate) fn read(path: &Path) -> Option<Entry> {
     let text = std::fs::read_to_string(path).ok()?;
     let mut in_main = false;
     let mut target = None;

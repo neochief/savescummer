@@ -1,17 +1,30 @@
-//! Linux: global hotkeys (Ctrl+F5, Ctrl+F9) and notifications. No tray
-//! icon yet (PLAN-BUILD.md Linux): opening the app again shows the window.
+//! Linux: the tray icon, global hotkeys (Ctrl+F5, Ctrl+F9) and
+//! notifications.
 //!
-//! Hotkeys are X11 key grabs through `global-hotkey`, on their own thread.
-//! In an X11 session they work everywhere. In a Wayland session they go
-//! through XWayland, so they fire while an X11 window is focused: nearly
-//! every game, including all Wine and Proton ones, but not native Wayland
-//! apps. Without any X display there are no hotkeys.
+//! The tray is a StatusNotifierItem ([`tray`]).
+//!
+//! Hotkeys come two ways. In a Wayland session they go through the desktop
+//! portal ([`portal`]) when the desktop has one (GNOME 48+, KDE Plasma 6):
+//! they fire whatever window is in front, and the desktop asks the user
+//! once to allow them. Otherwise they are X11 key grabs through
+//! `global-hotkey`, on their own thread: in an X11 session they work
+//! everywhere; in a Wayland session they go through XWayland, so they fire
+//! only while an X11 window is focused (nearly every game, including all
+//! Wine and Proton ones, but not native Wayland apps). While the desktop's
+//! dialog waits for the user, and if the user declines it, the X11 grabs
+//! stand in. Without the portal or any X display there are no hotkeys.
 //!
 //! Notifications go through `notify-send` (libnotify), which every
 //! mainstream desktop has; without it nothing shows.
 
+#[path = "linux/portal.rs"]
+mod portal;
+#[path = "linux/tray.rs"]
+mod tray;
+
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex, Once, Weak};
+use std::time::Duration;
 
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
@@ -22,25 +35,98 @@ type Handler = Arc<Mutex<Box<dyn Fn(Signal) + Send + 'static>>>;
 
 /// Who hears signals; None when integrations are off.
 static HANDLER: Mutex<Option<Handler>> = Mutex::new(None);
+/// The shortcuts the X11 grabs stand for.
 static ACTIVE_SHORTCUTS: Mutex<Option<Shortcuts>> = Mutex::new(None);
 
+/// How long starting waits for the portal: enough when the user already
+/// allowed the shortcuts, not for the user to answer the dialog.
+const PORTAL_START_WAIT: Duration = Duration::from_secs(2);
+
 pub struct Integration {
-    hotkeys: Mutex<Option<(GlobalHotKeyManager, Shortcuts)>>,
+    tray: Option<tray::Tray>,
+    hotkeys: Arc<Mutex<Hotkeys>>,
     hotkey_errors: Vec<String>,
+}
+
+#[derive(Default)]
+struct Hotkeys {
+    /// The portal, once it was asked to bind; `portal_bound` once it has
+    /// bound, and from then on it alone carries the hotkeys.
+    portal: Option<portal::Portal>,
+    portal_bound: bool,
+    /// X11 grabs, while the portal doesn't carry the hotkeys.
+    x11: Option<(GlobalHotKeyManager, Shortcuts)>,
 }
 
 pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts) -> Result<Integration, String> {
     *lock(&HANDLER) = Some(Arc::new(Mutex::new(on_signal)));
-    let (manager, hotkey_errors) = register_hotkeys(shortcuts);
     *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
-    Ok(Integration { hotkeys: Mutex::new(manager.map(|m| (m, shortcuts))), hotkey_errors })
+    let mut hotkey_errors = Vec::new();
+    let tray = tray::Tray::start().map_err(|e| hotkey_errors.push(e)).ok();
+    let hotkeys = Arc::new(Mutex::new(Hotkeys::default()));
+    let started = if portal::wanted() {
+        portal::start(shortcuts, |action| emit(Signal::Hotkey(action))).map_err(|e| hotkey_errors.push(e)).ok()
+    } else {
+        None
+    };
+    let mut x11 = true;
+    if let Some((portal, first)) = started {
+        let mut state = lock(&hotkeys);
+        match first.recv_timeout(PORTAL_START_WAIT) {
+            Ok(Ok(())) => {
+                state.portal = Some(portal);
+                state.portal_bound = true;
+                x11 = false;
+            }
+            Ok(Err(e)) => hotkey_errors.push(format!("{e}; using X11 key grabs")),
+            Err(_) => {
+                hotkey_errors.push("waiting for the desktop to allow the shortcuts; X11 key grabs until then".into());
+                state.portal = Some(portal);
+                wait_for_portal(Arc::downgrade(&hotkeys), first);
+            }
+        }
+    }
+    if x11 {
+        let (manager, errors) = register_hotkeys(shortcuts);
+        hotkey_errors.extend(errors);
+        lock(&hotkeys).x11 = manager.map(|m| (m, shortcuts));
+    }
+    Ok(Integration { tray, hotkeys, hotkey_errors })
+}
+
+/// Hands the hotkeys to the portal once the user allows them, or drops it
+/// if they don't.
+fn wait_for_portal(hotkeys: Weak<Mutex<Hotkeys>>, first: std::sync::mpsc::Receiver<Result<(), String>>) {
+    std::thread::spawn(move || {
+        let result = first.recv().unwrap_or_else(|_| Err("the shortcuts portal stopped".into()));
+        let Some(hotkeys) = hotkeys.upgrade() else { return };
+        let mut state = lock(&hotkeys);
+        match result {
+            Ok(()) => {
+                state.portal_bound = true;
+                // The manager's thread closes its X connection, which drops the grabs.
+                drop(state.x11.take());
+            }
+            Err(e) => {
+                state.portal = None;
+                eprintln!("hotkeys: {e}; keeping the X11 key grabs");
+            }
+        }
+    });
 }
 
 impl Integration {
     /// Shows a notification. Never blocks.
     pub fn notify(&self, title: &str, text: &str) {
         let child = Command::new("notify-send")
-            .args(["--app-name=SaveScummer", "--icon=savescummer", "--", title, text])
+            .args([
+                "--app-name=SaveScummer",
+                "--icon=savescummer",
+                "--hint=string:desktop-entry:com.savescummer.SaveScummer",
+                "--",
+                title,
+                text,
+            ])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -56,33 +142,23 @@ impl Integration {
         self.hotkey_errors.clone()
     }
 
+    /// Through the portal, a changed shortcut waits for the user to allow
+    /// it in the desktop's dialog.
     pub fn rebind(&self, shortcuts: Shortcuts) -> Result<(), String> {
-        let mut hotkeys = lock(&self.hotkeys);
-        let (manager, active) = hotkeys.as_mut().ok_or("hotkeys are unavailable")?;
-        let old = *active;
-        for shortcut in old.into_iter().flatten() {
-            let _ = manager.unregister(native_shortcut(shortcut));
+        let mut state = lock(&self.hotkeys);
+        if state.portal_bound {
+            return state.portal.as_ref().ok_or("hotkeys are unavailable")?.bind(shortcuts);
         }
-        let mut registered = Vec::new();
-        for shortcut in shortcuts.into_iter().flatten() {
-            let hotkey = native_shortcut(shortcut);
-            if let Err(error) = manager.register(hotkey) {
-                for hotkey in registered {
-                    let _ = manager.unregister(hotkey);
-                }
-                for shortcut in old.into_iter().flatten() {
-                    let _ = manager.register(native_shortcut(shortcut));
-                }
-                return Err(format!("{} is unavailable: {error}", shortcut.canonical()));
-            }
-            registered.push(hotkey);
+        let (manager, active) = state.x11.as_mut().ok_or("hotkeys are unavailable")?;
+        rebind_x11(manager, active, shortcuts)?;
+        // Still waiting for the user: the portal binds these next.
+        if let Some(portal) = &state.portal {
+            portal.bind_later(shortcuts);
         }
-        *active = shortcuts;
-        *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
         Ok(())
     }
 
-    /// Unregisters the hotkeys.
+    /// Removes the tray icon and unregisters the hotkeys.
     pub fn stop(self) {
         drop(self);
     }
@@ -92,9 +168,35 @@ impl Drop for Integration {
     fn drop(&mut self) {
         *lock(&HANDLER) = None;
         *lock(&ACTIVE_SHORTCUTS) = None;
-        // The manager's thread closes its X connection, which drops the grabs.
-        drop(lock(&self.hotkeys).take());
+        drop(self.tray.take());
+        // The portal's thread closes its session, and the manager's its X
+        // connection, which releases the shortcuts.
+        drop(std::mem::take(&mut *lock(&self.hotkeys)));
     }
+}
+
+fn rebind_x11(manager: &GlobalHotKeyManager, active: &mut Shortcuts, shortcuts: Shortcuts) -> Result<(), String> {
+    let old = *active;
+    for shortcut in old.into_iter().flatten() {
+        let _ = manager.unregister(native_shortcut(shortcut));
+    }
+    let mut registered = Vec::new();
+    for shortcut in shortcuts.into_iter().flatten() {
+        let hotkey = native_shortcut(shortcut);
+        if let Err(error) = manager.register(hotkey) {
+            for hotkey in registered {
+                let _ = manager.unregister(hotkey);
+            }
+            for shortcut in old.into_iter().flatten() {
+                let _ = manager.register(native_shortcut(shortcut));
+            }
+            return Err(format!("{} is unavailable: {error}", shortcut.canonical()));
+        }
+        registered.push(hotkey);
+    }
+    *active = shortcuts;
+    *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
+    Ok(())
 }
 
 /// Nothing needs the main thread on Linux.
@@ -102,7 +204,8 @@ pub fn run_main_loop(wait: impl FnOnce() + Send + 'static) {
     wait()
 }
 
-/// Calls the host's callback. A panic must not end the hotkey thread.
+/// Calls the host's callback. A panic must not end the hotkey, portal or
+/// tray thread.
 fn emit(signal: Signal) {
     let Some(handler) = lock(&HANDLER).clone() else { return };
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (lock(&handler))(signal)));

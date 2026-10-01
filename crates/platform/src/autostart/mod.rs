@@ -12,7 +12,7 @@ use std::path::Path;
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
 #[cfg_attr(target_os = "linux", path = "linux.rs")]
 #[cfg_attr(not(any(windows, target_os = "macos", target_os = "linux")), path = "unsupported.rs")]
-mod imp;
+pub(crate) mod imp;
 
 const DEV_BUILD_REFUSAL: &str = "development builds never create a sign-in entry";
 

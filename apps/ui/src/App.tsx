@@ -48,7 +48,7 @@ function Character({ name, sound = true }: { name: string; sound?: boolean }) {
   </div>;
 }
 
-// Windows runs undecorated (tauri.windows.conf.json), so the window bar draws its own caption buttons. There is no
+// Windows and Linux run undecorated (tauri.windows.conf.json, tauri.linux.conf.json), so the window bar draws its own caption buttons. There is no
 // Maximize: the window's width is fixed by matching minWidth and maxWidth, so it can't fill the screen.
 function WindowControls() {
   const run = (action: 'minimize' | 'close') => () => {

@@ -6,3 +6,4 @@ Exec=SaveScummer
 Icon=savescummer
 Terminal=false
 Categories=Utility;
+StartupWMClass=com.savescummer.SaveScummer

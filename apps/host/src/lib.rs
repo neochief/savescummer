@@ -258,6 +258,8 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     }
     if let Ok(exe) = std::env::current_exe() {
         savescummer_platform::autostart::keep_current(&exe);
+        // Before the shortcuts portal, which knows the host by the entry.
+        savescummer_platform::menu_entry::keep_installed(&exe);
     }
     let host = Host::new(opts.clone(), data_dir, env, endpoint.clone(), catalog, storage, inner);
     // Before anything reads a game's files.

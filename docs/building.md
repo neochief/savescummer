@@ -37,7 +37,7 @@ Linux (x86_64 or aarch64):
 - **Node.js 22 and pnpm 12.4.2** on `PATH` for the Tauri UI, as on Windows and macOS.
 - `cargo xtask setup linux-tools` before packaging (`build --package`, `run`, `dist`); plain builds and tests don't need it.
 - Release AppImages are built on Ubuntu 22.04 (glibc 2.35, the minimum), which CI does. One built on a newer system runs only on systems as new as it.
-- On Wayland, global hotkeys and focus tracking see only X11 windows (games run through XWayland, so they're seen); see PLAN-HOST.md.
+- On Wayland, focus tracking sees only X11 windows (games run through XWayland, so they're seen). Global hotkeys use the desktop's shortcuts portal where there is one (GNOME 48+, KDE Plasma 6), which asks once to allow them, and otherwise see only X11 windows too; see PLAN-HOST.md.
 
 The old Qt frontend setup is dormant because this tree has no Qt UI project. It is not needed for the current Windows or macOS build:
 

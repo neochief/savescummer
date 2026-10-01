@@ -21,7 +21,12 @@ dispatch2.workspace = true
 global-hotkey.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+ashpd.workspace = true
+async-io.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
 global-hotkey.workspace = true
+ksni.workspace = true
 hex.workspace = true
 x11rb.workspace = true
 

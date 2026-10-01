@@ -65,6 +65,13 @@ dispatch2 = "0.3"
 global-hotkey = "0.8"
 # Linux: X11 (and XWayland) queries.
 x11rb = "0.13"
+# Linux: the tray (StatusNotifierItem) and Wayland global shortcuts (the
+# desktop portal), both over D-Bus, run on async-io rather than tokio.
+ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts"] }
+async-io = "2"
+futures-channel = "0.3"
+futures-util = { version = "0.3", default-features = false }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",

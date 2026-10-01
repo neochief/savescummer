@@ -151,7 +151,7 @@ savescummer/
 |   |-- licenses/        Qt license texts (the retired Qt frontend)
 |   |-- windows/         savescummer.iss, README.txt
 |   |-- macos/           Info.plist.in, com.savescummer.SaveScummer.host.plist (login agent)
-|   `-- linux/           AppRun, SaveScummer.UI (the UI's wrapper), SaveScummer.desktop
+|   `-- linux/           AppRun, SaveScummer.UI (the UI's wrapper), com.savescummer.SaveScummer.desktop
 |-- assets/              icons, sounds, asset tooling
 |-- target/
 |-- build/
@@ -398,7 +398,7 @@ The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`: Tauri's AppDir wit
 
 - the host and CLI beside the UI in `usr/bin/` (`SaveScummer`, `SaveScummer.CLI`); the Tauri UI stays `usr/bin/savescummer-ui`
 - `usr/bin/SaveScummer.UI`, from `packaging/linux/SaveScummer.UI`: the UI's wrapper, which runs linuxdeploy's GTK hook, puts `usr/lib` on the library path and starts the UI from `usr/` (where WebKit finds its helpers)
-- `AppRun` replaced by `packaging/linux/AppRun`, and Tauri's desktop entry and icons by `packaging/linux/SaveScummer.desktop` and `assets/icon.svg`
+- `AppRun` replaced by `packaging/linux/AppRun`, and Tauri's desktop entry and icons by `packaging/linux/com.savescummer.SaveScummer.desktop` and `assets/icon.svg`. The entry is named for the app id, `com.savescummer.SaveScummer`, the same as the macOS bundle; the UI names its window class (GTK's program name, the Wayland app id) the same, and `StartupWMClass` repeats it, so docks group the window under the entry and show its icon
 - licenses, notices, manifest and checksums in `usr/share/savescummer/`
 
 `packaging/linux/AppRun` is the entry point and dispatches on its first argument, so one file serves as all three programs:
@@ -413,15 +413,15 @@ The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`: Tauri's AppDir wit
 
 ### Integration
 
-- **Launch at login:** the host writes and removes `~/.config/autostart/SaveScummer.desktop` with `Exec="<AppImage path>" --minimized`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE). Like macOS, the entry always starts the default data folder: `--autostart on` with another `--data-dir` is refused.
-- **App menu entry:** adding the app to the menu is left to the user's AppImage tool (Gear Lever, AppImageLauncher…), which reads the embedded `.desktop` file.
+- **Launch at login:** the host writes and removes `~/.config/autostart/com.savescummer.SaveScummer.desktop` with `Exec="<AppImage path>" --minimized`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE). Like macOS, the entry always starts the default data folder: `--autostart on` with another `--data-dir` is refused.
+- **App menu entry:** an AppImage installs nothing itself, so a release host started from one writes `~/.local/share/applications/com.savescummer.SaveScummer.desktop` (`Exec="<AppImage path>"`) and the icon (`~/.local/share/icons/hicolor/scalable/apps/savescummer.svg`) at every start, rewriting them only when they differ (a new version is a new file). It marks the entry `X-SaveScummer-Target` like the autostart entry and leaves an entry of the same name that isn't its own alone. Why the host and not only AppImage tools: besides the menu, the desktop names the app by this entry: the dock groups the window under it, notifications carry its name, and the shortcuts portal registers the host under its id (PLAN-HOST, Linux under Wayland). Without the entry the portal files the shortcuts under whatever app started the host. Development builds never write it.
 
 ### Upgrade and removal
 
 The README gives both:
 
 - **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
-- **Remove:** turn off launch at login, quit, delete the file. `~/.local/share/SaveScummer` is never touched.
+- **Remove:** turn off launch at login, quit, delete the file, and delete `~/.local/share/applications/com.savescummer.SaveScummer.desktop` and `~/.local/share/icons/hicolor/scalable/apps/savescummer.svg` to drop it from the app menu. `~/.local/share/SaveScummer` is never touched.
 
 ### Done when
 

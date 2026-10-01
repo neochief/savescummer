@@ -41,6 +41,9 @@ pub const QT_KIT_DIR: &str = "gcc_64";
 const TAURI_UI: &str = "savescummer-ui";
 /// The icon name in the desktop entry and the icon theme.
 const ICON: &str = "savescummer";
+/// The desktop entry, named for the app id (the host's own copy in
+/// `menu_entry.rs` and the shortcuts portal use the same id).
+const DESKTOP_ENTRY: &str = "com.savescummer.SaveScummer.desktop";
 
 pub fn package_name() -> String {
     "SaveScummer.AppDir".into()
@@ -147,14 +150,14 @@ fn copy_tree(from: &Path, to: &Path) -> anyhow::Result<()> {
 
 /// ```text
 /// AppRun                               packaging/linux/AppRun: host, `ui` or `cli`
-/// SaveScummer.desktop, savescummer.svg, .DirIcon
+/// com.savescummer.SaveScummer.desktop, savescummer.svg, .DirIcon
 /// apprun-hooks/                        linuxdeploy's GTK setup, for the UI
 /// usr/bin/SaveScummer                  host
 /// usr/bin/SaveScummer.CLI              CLI
 /// usr/bin/SaveScummer.UI               packaging/linux/SaveScummer.UI: the UI's wrapper
 /// usr/bin/savescummer-ui               the Tauri UI
 /// usr/lib/                             GTK, WebKit and their helpers
-/// usr/share/applications/SaveScummer.desktop, usr/share/icons/…
+/// usr/share/applications/com.savescummer.SaveScummer.desktop, usr/share/icons/…
 /// usr/share/savescummer/               licenses, manifest and checksums
 /// ```
 pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
@@ -164,8 +167,15 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
     copy_tree(&appdir, root)?;
 
     // Tauri's entry point and top-level files name its UI; ours start the host.
-    for name in ["AppRun", "AppRun.wrapped", ".DirIcon", "SaveScummer.desktop", "SaveScummer.png", "savescummer-ui.png"]
-    {
+    for name in [
+        "AppRun",
+        "AppRun.wrapped",
+        ".DirIcon",
+        "SaveScummer.desktop",
+        "SaveScummer.png",
+        "savescummer-ui.png",
+        "usr/share/applications/SaveScummer.desktop",
+    ] {
         let path = root.join(name);
         if path.symlink_metadata().is_ok() {
             fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))?;
@@ -182,9 +192,9 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
     anyhow::ensure!(program(root, TAURI_UI).is_file(), "the Tauri AppDir has no usr/bin/{TAURI_UI}");
     anyhow::ensure!(root.join("apprun-hooks").is_dir(), "the Tauri AppDir has no apprun-hooks/");
 
-    let desktop = linux.join("SaveScummer.desktop");
-    package::copy_file(&desktop, &root.join("SaveScummer.desktop"))?;
-    package::copy_file(&desktop, &root.join("usr/share/applications/SaveScummer.desktop"))?;
+    let desktop = linux.join(DESKTOP_ENTRY);
+    package::copy_file(&desktop, &root.join(DESKTOP_ENTRY))?;
+    package::copy_file(&desktop, &root.join("usr/share/applications").join(DESKTOP_ENTRY))?;
     let svg = paths::root().join("assets").join("icon.svg");
     package::copy_file(&svg, &root.join(format!("{ICON}.svg")))?;
     package::copy_file(&svg, &root.join(format!("usr/share/icons/hicolor/scalable/apps/{ICON}.svg")))?;
@@ -210,7 +220,7 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
         resources: root.join(resources),
         required: vec![
             PathBuf::from("AppRun"),
-            PathBuf::from("SaveScummer.desktop"),
+            PathBuf::from(DESKTOP_ENTRY),
             PathBuf::from(format!("{ICON}.svg")),
             PathBuf::from(".DirIcon"),
             PathBuf::from("usr/bin").join(HOST),

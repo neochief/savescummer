@@ -1,5 +1,6 @@
 //! OS adapters the host owns: data folders, opening folders, launch on
-//! startup, sounds, hotkeys and the tray, and watching store folders.
+//! startup, sounds, hotkeys and the tray, the Linux app menu entry, and
+//! watching store folders.
 //!
 //! Each adapter keeps one file per OS next to its shared code, with an
 //! `unsupported.rs` where an OS isn't done yet, so adding an OS means adding
@@ -9,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 pub mod autostart;
 pub mod integration;
+pub mod menu_entry;
 pub mod power;
 pub mod privacy;
 pub mod process;

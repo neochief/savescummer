@@ -474,6 +474,11 @@ fn bridge() -> Bridge {
 }
 
 pub fn run() {
+    // The window's Wayland app id (and X11 class) is GTK's program name, the
+    // binary's by default. Naming it for the desktop entry lets the dock find
+    // the entry, and so the icon, without relying on `StartupWMClass`.
+    #[cfg(target_os = "linux")]
+    glib::set_prgname(Some("com.savescummer.SaveScummer"));
     let bridge = bridge();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
