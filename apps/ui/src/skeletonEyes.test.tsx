@@ -3,7 +3,7 @@ import { cleanup, render } from '@testing-library/react';
 import { CrouchingSkeleton } from './CrouchingSkeleton';
 import { PointingSkeleton } from './PointingSkeleton';
 import { SleepySkeleton } from './SleepySkeleton';
-import { eyeProblems, gazeOffset, morph, prepareEyes, sides } from './skeletonEyes';
+import { easeGaze, eyeProblems, gazeOffset, morph, prepareEyes, sides } from './skeletonEyes';
 import crouching from '../public/character/no-checkpoints.svg?raw';
 import pointing from '../public/character/no-game-selected.svg?raw';
 import sleepy from '../public/character/no-games-found.svg?raw';
@@ -55,6 +55,13 @@ test('gaze is clamped to the unit disk before mapping into the asymmetric oval',
   expect((dx / 24) ** 2 + (dy / 82.32) ** 2).toBeCloseTo(1);
   expect(gazeOffset(0, -3, limits)[1]).toBeCloseTo(-12);
   expect(gazeOffset(0.5, 0, limits)).toEqual([12, 0]);
+});
+
+test('all three animations share the same clamped gaze easing', () => {
+  const gaze: [number, number] = [0, 0];
+  expect(easeGaze(gaze, [3, 4], Math.log(2), 1)).toEqual([0.6, 0.8]);
+  expect(gaze[0]).toBeCloseTo(0.3);
+  expect(gaze[1]).toBeCloseTo(0.4);
 });
 
 test('a guide morphs from its shape number by number', () => {

@@ -14,6 +14,7 @@ import { CrouchingSkeleton } from './CrouchingSkeleton';
 type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush' | 'retry';
 type Feedback = { game: string; action: Action; target?: string; phase: 'busy' | 'success' | 'error'; message?: string };
 type PendingUndo = { game: string; checkpoint: string; row: HistoryEntry; index: number; timer: ReturnType<typeof setTimeout> };
+type UndoNotice = { game: string; checkpoint: string; exit?: 'fade' | 'right' };
 const deleteKey = (game: string, checkpoint: string) => `${game}:${checkpoint}`;
 
 const icons: Record<string, string> = {
@@ -43,7 +44,7 @@ function Character({ name, sound = true }: { name: string; sound?: boolean }) {
   return <div className="empty-character" aria-hidden="true">
     {name === 'no-games-found' ? <SleepySkeleton className="character-art pokeable" sound={sound} />
       : name === 'no-game-selected' ? <PointingSkeleton className="character-art" />
-      : name === 'no-checkpoints' ? <CrouchingSkeleton className="character-art" />
+      : name === 'no-checkpoints' ? <CrouchingSkeleton className="character-art pokeable" sound={sound} />
       : <img className="character-art" src={`/character/${name}.svg`} alt="" />}
   </div>;
 }
@@ -89,6 +90,21 @@ function scrollMotion(): ScrollBehavior {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 }
 
+function matchesGameName(name: string, filter: string) {
+  const query = filter.trim().toLocaleLowerCase();
+  if (!query) return true;
+  const word = /[\p{L}\p{N}]/u;
+  const capital = /\p{Lu}/u;
+  const lowerOrNumber = /[\p{Ll}\p{N}]/u;
+  for (let index = 0; index < name.length; index++) {
+    if (!word.test(name[index])) continue;
+    const previous = name[index - 1];
+    if (previous && word.test(previous) && !(lowerOrNumber.test(previous) && capital.test(name[index]))) continue;
+    if (name.slice(index).toLocaleLowerCase().startsWith(query)) return true;
+  }
+  return false;
+}
+
 function useArtwork(bridge: Bridge, game: Game, kind: 'hero' | 'logo' | 'header') {
   const [url, setUrl] = useState<string>();
   const file = game.artwork?.[kind];
@@ -117,17 +133,37 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
 }) {
   const hero = useArtwork(bridge, game, game.artwork?.hero ? 'hero' : 'header');
   const logo = useArtwork(bridge, game, 'logo');
+  const [playAnimation, setPlayAnimation] = useState(false);
+  useEffect(() => {
+    if (!playAnimation) return;
+    const timer = setTimeout(() => setPlayAnimation(false), 900);
+    return () => clearTimeout(timer);
+  }, [playAnimation]);
   const runningFace = <span className="running-badge-face"><span className="running-icon" />RUNNING</span>;
   return (
     <div className={`game-card-wrap ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`} data-game={game.id}>
       <button className={`game-card ${selected ? 'selected' : ''} ${game.running ? 'running' : 'installed'}`}
-        onClick={onSelect} aria-current={selected ? 'true' : undefined}
+        onClick={(event) => { if (event.detail < 2) onSelect(); }}
+        onDoubleClick={() => {
+          if (game.running) {
+            // Undo the first click's selection toggle; a double-click on a running card is a lifecycle gesture.
+            onSelect();
+            if (!pending && game.expert_mode && game.can_close) onLifecycle('close_game');
+          } else if (!pending && game.can_play !== false) {
+            setPlayAnimation(true);
+            onLifecycle('play');
+          }
+        }}
+        aria-current={selected ? 'true' : undefined}
         aria-label={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ', Not running'}`}
         data-tooltip={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ' — Not running'}`}>
         {hero && <img className="game-art" src={hero} alt="" />}
         <span className="game-shade" />
         {logo ? <img className="game-logo" src={logo} alt="" /> : <span className="game-fallback">{game.name}</span>}
         {game.install_tag && <span className="install-tag">{game.install_tag}</span>}
+        {playAnimation && <span className="game-play-animation" aria-hidden="true">
+          <span className="game-play-animation-icon" />
+        </span>}
       </button>
       <div className="card-lifecycle-actions">
         {/* When the host allows closing, the badge itself turns into the close button on hover and focus. */}
@@ -163,7 +199,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [cardPending, setCardPending] = useState<{ game: string; running: boolean; token: number }>();
   const [cardError, setCardError] = useState<{ game: string; message: string }>();
   const cardToken = useRef(0);
-  const [scanFeedback, setScanFeedback] = useState<string>();
+  const [scanFeedback, setScanFeedback] = useState<{ label: string; phase: 'scanning' | 'success' | 'error' }>();
   const [labelsRevision, setLabelsRevision] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -181,7 +217,8 @@ export function App({ bridge }: { bridge: Bridge }) {
   historyRef.current = history;
   const previousActiveStack = useRef<string[]>([]);
   const pendingUndo = useRef<PendingUndo | undefined>(undefined);
-  const [undoDelete, setUndoDelete] = useState<{ game: string; checkpoint: string }>();
+  const [undoNotice, setUndoNotice] = useState<UndoNotice>();
+  const undoExitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // A game Add found already in the library; told once, until another game is selected.
   const [alreadyAdded, setAlreadyAdded] = useState<string>();
   useEffect(() => { setAlreadyAdded((current) => current === selected ? current : undefined); }, [selected]);
@@ -200,6 +237,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [gameFilter, setGameFilter] = useState('');
+  const filterInputRef = useRef<HTMLInputElement>(null);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const sidebarTrackRef = useRef<HTMLDivElement>(null);
   const [sidebarScroll, setSidebarScroll] = useState({ top: 0, viewport: 0, content: 0, track: 0 });
@@ -360,6 +400,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   }, [bridge, selected, next]);
 
   const selectGame = useCallback((id: string) => {
+    setGameFilter('');
+    setFilterOpen(false);
+    filterInputRef.current?.blur();
     // Clicking the selected card again clears the selection.
     if (id === selected) {
       setSelected(undefined);
@@ -424,15 +467,15 @@ export function App({ bridge }: { bridge: Bridge }) {
   }, [bridge, selectedGame, receiveHistory]);
 
   const scan = useCallback(async () => {
-    setScanFeedback('Scanning…');
+    clearTimeout(scanTimer.current);
+    setScanFeedback({ label: 'Scanning…', phase: 'scanning' });
     try {
       const result = await bridge.request<{ new_games: number }>({ type: 'scan' });
       const count = result.new_games;
-      setScanFeedback(count ? `${count} game${count === 1 ? '' : 's'} found` : 'No new games');
+      setScanFeedback({ label: count ? `${count} game${count === 1 ? '' : 's'} found` : 'No new games', phase: 'success' });
     } catch (error) {
-      setScanFeedback(String(error instanceof Error ? error.message : error));
+      setScanFeedback({ label: String(error instanceof Error ? error.message : error), phase: 'error' });
     }
-    clearTimeout(scanTimer.current);
     scanTimer.current = setTimeout(() => setScanFeedback(undefined), 2400);
   }, [bridge]);
 
@@ -451,6 +494,14 @@ export function App({ bridge }: { bridge: Bridge }) {
     }
   }, [bridge]);
 
+  const dismissUndoNotice = useCallback((game: string, checkpoint: string, exit: 'fade' | 'right') => {
+    clearTimeout(undoExitTimer.current);
+    setUndoNotice((notice) => notice?.game === game && notice.checkpoint === checkpoint
+      ? { ...notice, exit } : notice);
+    undoExitTimer.current = setTimeout(() => setUndoNotice((notice) =>
+      notice?.game === game && notice.checkpoint === checkpoint ? undefined : notice), 260);
+  }, []);
+
   const deleteCheckpoint = useCallback((checkpoint: string) => {
     if (!selectedGame) return;
     const game = selectedGame.id;
@@ -460,23 +511,24 @@ export function App({ bridge }: { bridge: Bridge }) {
       clearTimeout(pendingUndo.current.timer);
       void commitDelete(pendingUndo.current.game, pendingUndo.current.checkpoint);
     }
+    clearTimeout(undoExitTimer.current);
     setFeedback(undefined);
     setHiddenDeletes((hidden) => new Set(hidden).add(deleteKey(game, checkpoint)));
     const timer = setTimeout(() => {
       pendingUndo.current = undefined;
-      setUndoDelete(undefined);
+      dismissUndoNotice(game, checkpoint, 'fade');
       void commitDelete(game, checkpoint);
     }, 5000);
     pendingUndo.current = { game, checkpoint, row: historyRef.current[index], index, timer };
-    setUndoDelete({ game, checkpoint });
-  }, [selectedGame, commitDelete]);
+    setUndoNotice({ game, checkpoint });
+  }, [selectedGame, commitDelete, dismissUndoNotice]);
 
   const undoCheckpointDelete = useCallback(() => {
     const pending = pendingUndo.current;
     if (!pending) return;
     clearTimeout(pending.timer);
     pendingUndo.current = undefined;
-    setUndoDelete(undefined);
+    dismissUndoNotice(pending.game, pending.checkpoint, 'right');
     setHiddenDeletes((hidden) => { const next = new Set(hidden); next.delete(deleteKey(pending.game, pending.checkpoint)); return next; });
     if (historyGame.current !== pending.game) return;
     const row = pending.row;
@@ -499,9 +551,10 @@ export function App({ bridge }: { bridge: Bridge }) {
         viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
       }
     });
-  }, [hiddenDeletes]);
+  }, [hiddenDeletes, dismissUndoNotice]);
 
   useEffect(() => () => {
+    clearTimeout(undoExitTimer.current);
     if (pendingUndo.current) {
       clearTimeout(pendingUndo.current.timer);
       void commitDelete(pendingUndo.current.game, pendingUndo.current.checkpoint);
@@ -526,10 +579,17 @@ export function App({ bridge }: { bridge: Bridge }) {
   const stackIndex = (game: Game) => { const index = state?.active_stack.indexOf(game.id) ?? -1; return index < 0 ? Infinity : index; };
   const running = visibleGames.filter((game) => game.running).sort((a, b) => stackIndex(a) - stackIndex(b));
   const installed = [...running, ...visibleGames.filter((game) => !game.running)];
+  const filteredGames = installed.filter((game) => matchesGameName(game.name, gameFilter));
+  const resetFilter = () => {
+    setGameFilter('');
+    setFilterOpen(false);
+    filterInputRef.current?.blur();
+  };
+  useLayoutEffect(() => { if (filterOpen) filterInputRef.current?.focus(); }, [filterOpen]);
   // When the order changes, each card slides from where it was to its new place (FLIP), clipped by the list.
   const libraryPanelRef = useRef<HTMLDivElement>(null);
   const cardTops = useRef(new Map<string, number>());
-  const libraryOrder = installed.map((game) => game.id).join('\n');
+  const libraryOrder = filteredGames.map((game) => game.id).join('\n');
   const shownLibraryOrder = useRef(libraryOrder);
   useLayoutEffect(() => {
     const previous = cardTops.current;
@@ -570,7 +630,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     observer.observe(track);
     if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
     return () => { observer.disconnect(); window.removeEventListener('resize', measureSidebar); };
-  }, [measureSidebar, visibleGames.length, running.length]);
+  }, [measureSidebar, visibleGames.length, filteredGames.length]);
   // Wheel and trackpad scroll the game list one card per gesture: any movement steps to the next card
   // edge, and further events are ignored until the input pauses (so momentum does not skip cards).
   useEffect(() => {
@@ -641,9 +701,9 @@ export function App({ bridge }: { bridge: Bridge }) {
   const hostError = selectedGame?.last_result?.status === 'failed' ? selectedGame.last_result.error : undefined;
   const dialogTarget = (dialogGame && state?.games.find((game) => game.id === dialogGame)) || selectedGame;
   const addControl = <button key="add" onClick={(event) => openDialog('add', event.currentTarget)}><Icon name="add" />Add custom game</button>;
-  const scanning = scanFeedback === 'Scanning…';
-  const scanControl = <button key="scan" className={scanning ? 'scanning' : ''} onClick={scan} disabled={scanning}>
-    <Icon name="scan" />{scanFeedback || 'Scan for games'}
+  const scanning = scanFeedback?.phase === 'scanning';
+  const scanControl = <button key="scan" className={scanning ? 'scanning' : scanFeedback?.phase === 'success' ? 'scan-success' : ''} onClick={scan} disabled={scanning}>
+    <Icon name={scanFeedback?.phase === 'success' ? 'success' : 'scan'} />{scanFeedback?.label || 'Scan for games'}
   </button>;
 
   const noGames = !!state && visibleGames.length === 0;
@@ -656,14 +716,36 @@ export function App({ bridge }: { bridge: Bridge }) {
       <aside className="sidebar">
         {noGames && <Character name="no-games-found" sound={state?.settings?.play_sounds ?? true} />}
         <div className="sidebar-surface">
-          {installed.length > 0 && <h2 className="library-heading">INSTALLED</h2>}
+          {installed.length > 0 && <h2 className="library-heading">
+            {filterOpen ? <span className="library-filter" onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget) && !gameFilter) resetFilter();
+            }}>
+              <svg className="library-search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.75" cy="6.75" r="4.5" /><path d="m10.2 10.2 4 4" /></svg>
+              <input ref={filterInputRef} type="text" aria-label="Filter installed games"
+                value={gameFilter} onChange={(event) => setGameFilter(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') { event.stopPropagation(); resetFilter(); }
+                  if (event.key === 'Enter' && filteredGames[0]) {
+                    event.preventDefault();
+                    if (filteredGames[0].id === selected) resetFilter();
+                    else selectGame(filteredGames[0].id);
+                  }
+                }} />
+              <button type="button" aria-label="Clear game filter" onClick={resetFilter}><Icon name="xmark" /></button>
+            </span> : <button type="button" className="library-filter-toggle" aria-label="Filter installed games"
+              onClick={() => setFilterOpen(true)}>
+              <svg className="library-search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.75" cy="6.75" r="4.5" /><path d="m10.2 10.2 4 4" /></svg>
+              INSTALLED
+            </button>}
+          </h2>}
           <div className={`library-scroll ${installed.length ? 'has-games' : ''}`} style={fadeStyle(sidebarScroll.top, sidebarScrollable ? sidebarScroll.content - sidebarScroll.viewport - sidebarScroll.top : 0)}>
             <div className="sidebar-content" ref={sidebarScrollRef} onScroll={measureSidebar}>
               {installed.length > 0 && <div className="library-panel" ref={libraryPanelRef}>
-                {installed.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected}
+                {filteredGames.map((game) => <GameCard key={game.id} bridge={bridge} game={game} selected={game.id === selected}
                   pending={cardPending?.game === game.id} error={cardError?.game === game.id ? cardError.message : undefined}
                   onSelect={() => selectGame(game.id)} onLifecycle={(type) => runLifecycle(game, type)}
                   onConfigure={(opener) => openDialog('configure', opener, game.id)} />)}
+                {filteredGames.length === 0 && <p className="library-no-matches">No matching games</p>}
               </div>}
             </div>
             {installed.length > 0 && <div className="library-frame" aria-hidden="true" />}
@@ -702,15 +784,14 @@ export function App({ bridge }: { bridge: Bridge }) {
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
             <p className="action-error-block" role="alert">{failureMessage(hostError, 'Game unavailable')}</p>}
           {alreadyAdded === selectedGame.id && <p className="library-notice" role="status">{selectedGame.name} was already in your library.</p>}
-          {(selectedGame.info || undoDelete?.game === selectedGame.id) && <div className="game-info">
+          {selectedGame.info && <div className="game-info">
             <div className="game-info-controls">
-              {selectedGame.info && <button className="info-button" onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
+              <button className="info-button" onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
                 aria-expanded={Boolean(expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
                 <Icon name="info" />Info
-              </button>}
-              {undoDelete?.game === selectedGame.id && <button key={undoDelete.checkpoint} className="undo-button" onClick={undoCheckpointDelete}>Undo</button>}
+              </button>
             </div>
-            {selectedGame.info && expandedInfo[selectedGame.id] && <div id={`game-info-${selectedGame.id}`} className="game-info-content">
+            {expandedInfo[selectedGame.id] && <div id={`game-info-${selectedGame.id}`} className="game-info-content">
               <Markdown>{selectedGame.info}</Markdown>
             </div>}
           </div>}
@@ -718,7 +799,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             <div key={selectedGame.id} className={`history history-${historyDirection}${revealing ? ' revealing' : ''}`}
               ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
-              {historyLoaded && virtualItems.length === 0 && !historyError && <div className="empty-history"><Character name="no-checkpoints" /><p>Checkpoints will appear here when you Save them.</p></div>}
+              {historyLoaded && virtualItems.length === 0 && !historyError && <div className="empty-history"><Character name="no-checkpoints" sound={state?.settings?.play_sounds ?? true} /><p>Checkpoints will appear here when you Save them.</p></div>}
               <div className="history-virtual" style={{ height: historyTotal + (next ? 52 : 0) }}>
                 {dayLanes.filter((lane) => lane.end > firstVisible && lane.start < lastVisible).map(({ key, day, start, end }) => {
                   const top = itemTop[start];
@@ -748,6 +829,11 @@ export function App({ bridge }: { bridge: Bridge }) {
         </> : state && visibleGames.length ? <div className="empty-selection"><Character name="no-game-selected" /><p>{running.length ? 'Select a game to see its checkpoints.' : 'No known games are running.'}</p></div>
           : <div className="empty-library">{!state ? 'Waiting for the host…' : 'No games found.'}</div>}
       </main>
+      {undoNotice && <div key={`${undoNotice.game}:${undoNotice.checkpoint}`} className={`undo-panel${undoNotice.exit ? ` exiting-${undoNotice.exit}` : ''}`}
+        role="status" aria-label="Checkpoint removed">
+        <span>Checkpoint removed</span>
+        {!undoNotice.exit && <button className="undo-button" onClick={undoCheckpointDelete}>Undo</button>}
+      </div>}
       {dialog === 'about' && <AboutDialog bridge={bridge} opener={dialogOpener.current} close={() => setDialog(undefined)} />}
       {dialog && dialog !== 'about' && <AppDialog key={`${dialog}-${dialogTarget?.id || ''}`} kind={dialog} game={dialogTarget} state={state} bridge={bridge} opener={dialogOpener.current}
         close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id, existing) => { setDialog(undefined); setSelected(id); setAlreadyAdded(existing ? id : undefined); }}

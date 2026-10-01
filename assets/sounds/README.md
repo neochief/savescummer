@@ -45,10 +45,11 @@ is an authoring step, not a build or runtime requirement.
 
 ## Playback integration
 
-The Windows host embeds these exact WAVs through `crates/platform/src/sounds.rs`.
-Its dedicated worker plays Save/Load start and committed completion cues, failure
-knocks and rate-limited busy ticks independently of the UI. It inserts a 50 ms gap
-between sounds without delaying file operations or extending operation locks.
+The host embeds these exact WAVs through `crates/platform/src/sounds/mod.rs`.
+Its dedicated worker plays Save/Load start and committed completion cues for
+actions from the UI, CLI, or hotkeys, plus failure knocks and rate-limited busy
+ticks. It inserts a short gap between sounds without delaying file operations
+or extending operation locks.
 Retries of already accepted requests do not replay cues. Recovery resolution never
 plays a Save/Load completion sound. Playback errors do not fail file operations.
 
@@ -56,8 +57,7 @@ The app-wide Play sounds checkbox is enabled by default and persists through the
 host's settings. The CLI can also change it with `SaveScummer.CLI sounds on` or
 `SaveScummer.CLI sounds off`. Disabling it discards queued cues; an already playing
 short cue can finish. `SaveScummer --no-audio` silences an isolated host run
-without changing the saved preference. Native audio on other platforms is not
-implemented yet.
+without changing the saved preference.
 
 No separate audio files are needed beside the host executable. The preview
 directory and HTML are audition aids and are not embedded in the application.

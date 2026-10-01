@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1c1918" />
+    <meta name="description" content="Checkpoint games that don't offer saves, learn faster, and spend more time on the stories and choices you care about." />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <title>SaveScummer</title>
+    <style>
+      @font-face { font-family: "Chakra Petch"; src: url("./fonts/ChakraPetch-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+      @font-face { font-family: Inter; src: url("./fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #1c1918; color: #faf8ee; }
+      main { width: 100%; }
+      .hero { display: flex; flex-direction: column; align-items: center; width: min(100% - 2.5rem, 68rem); margin: 0 auto; padding: 8rem 0 5rem; text-align: center; }
+      .app-icon { display: block; width: clamp(6rem, 24vw, 9rem); height: auto; margin: 0 auto 1rem; }
+      h1 { margin: 0 0 1.25rem; color: #faf8ee; font: 700 clamp(2.5rem, 9vw, 5rem)/1.05 "Chakra Petch", sans-serif; letter-spacing: -.035em; -webkit-text-stroke: .035em #0d0707; paint-order: stroke fill; }
+      h1 strong { color: #ff1e29; }
+      p { margin: 0 auto; line-height: 1.6; }
+      .subtitle { max-width: 39rem; color: #faf8ee; font-size: clamp(1.25rem, 3vw, 1.625rem); }
+      .supporting { max-width: 36rem; margin-top: 1.25rem; color: #d7c9ba; font-size: clamp(1rem, 2.2vw, 1.125rem); }
+      .downloads { display: flex; justify-content: center; width: 100%; margin: 2.75rem auto 0; }
+      .download { display: flex; align-items: center; justify-content: center; gap: .85rem; border-radius: .8rem; text-decoration: none; }
+      .download img { display: block; width: 2.2rem; height: 2.2rem; flex: none; }
+      .download-name { display: block; font: 700 1.125rem/1.25 "Chakra Petch", sans-serif; }
+      .github { width: max-content; max-width: 100%; min-height: 4.5rem; padding: 0 1.5rem; gap: .5rem; background: #faf8ee; color: #0d0707; transition: background .15s ease, transform .15s ease; }
+      .github:hover { background: #fff; transform: translateY(-2px); }
+      .github:focus-visible { outline: 3px solid #ff1e29; outline-offset: 4px; }
+      .github img { width: 2rem; height: 2rem; }
+      .github .download-name { font-size: 1.5rem; white-space: nowrap; }
+      .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #3d342d; background: #2c2623; }
+      .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
+      .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.25rem, 5vw, 3rem)/1.15 "Chakra Petch", sans-serif; }
+      .supported-subtitle { max-width: 40rem; margin: 1rem auto 2.75rem; color: #d7c9ba; text-align: center; font-size: clamp(1rem, 2.2vw, 1.125rem); }
+      .game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; mask-image: linear-gradient(to bottom, #000 0%, #000 52%, #0003 100%); }
+      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border-radius: 10px; background: #3c302d; }
+      .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .game-art { object-fit: cover; }
+      .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
+      .game-logo { position: absolute; top: 10%; left: 12.5%; width: 75%; height: 80%; object-fit: contain; }
+      @media (max-width: 700px) {
+        .hero { padding: 5rem 0 4rem; }
+        .supported { padding-top: 4rem; }
+        .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+      }
+      @media (max-width: 450px) { .game-grid { grid-template-columns: 1fr; } }
+      @media (max-width: 380px) {
+        .github { padding: 0 .75rem; }
+        .github img { width: 1.75rem; height: 1.75rem; }
+        .github .download-name { font-size: 1.125rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="hero">
+        <img class="app-icon" src="./icon.svg" alt="" width="144" height="144" />
+        <h1><span>Save</span><strong>Scummer</strong></h1>
+        <p class="subtitle">Create checkpoints in games that don't offer them.</p>
+        <p class="supporting">Retry a tough moment, learn faster, and spend less time replaying what you already know, so you can get back to the stories, builds, and choices you care about.</p>
+        <section class="downloads" aria-label="Download options">
+          <a class="download github" href="https://github.com/neochief/savescummer/releases/latest">
+            <img src="./icons/github.svg" alt="" width="44" height="44" />
+            <span class="download-name" id="download-label">Download on GitHub</span>
+          </a>
+        </section>
+      </div>
+      <section class="supported" aria-labelledby="supported-title">
+        <div class="supported-inner">
+          <h2 id="supported-title">Supported games</h2>
+          <p class="supported-subtitle">Nearly 100 gems across roguelikes, strategy games, RPGs, and more.</p>
+          <div class="game-grid">
+          <div class="game-card" role="img" aria-label="Baldur's Gate 3"><img class="game-art" src="./games/1086940-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/1086940-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="The Binding of Isaac: Rebirth"><img class="game-art" src="./games/250900-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/250900-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Slay the Spire"><img class="game-art" src="./games/646570-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/646570-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Project Zomboid"><img class="game-art" src="./games/108600-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/108600-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Terraria"><img class="game-art" src="./games/105600-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/105600-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="XCOM 2"><img class="game-art" src="./games/268500-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/268500-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Dead Cells"><img class="game-art" src="./games/588650-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/588650-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Risk of Rain 2"><img class="game-art" src="./games/632360-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/632360-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="FTL: Faster Than Light"><img class="game-art" src="./games/212680-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/212680-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Stellaris"><img class="game-art" src="./games/281990-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/281990-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Hearts of Iron IV"><img class="game-art" src="./games/394360-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/394360-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Don't Starve"><img class="game-art" src="./games/219740-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/219740-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Enter the Gungeon"><img class="game-art" src="./games/311690-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/311690-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Noita"><img class="game-art" src="./games/881100-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/881100-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Kingdom Come: Deliverance"><img class="game-art" src="./games/379430-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/379430-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Crusader Kings II"><img class="game-art" src="./games/203770-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/203770-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Into the Breach"><img class="game-art" src="./games/590380-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/590380-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Total War: Warhammer II"><img class="game-art" src="./games/594570-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/594570-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Spelunky 2"><img class="game-art" src="./games/418530-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/418530-logo.png" alt="" /></div>
+          <div class="game-card" role="img" aria-label="Caves of Qud"><img class="game-art" src="./games/333640-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/333640-logo.png" alt="" /></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script>
+      const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
+      const mobile = navigator.userAgentData?.mobile || /android|iphone|ipad|ipod/i.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const label = mobile ? null
+        : /win/i.test(platform) ? "Windows"
+        : /mac/i.test(platform) ? "macOS"
+        : /linux/i.test(platform) ? "Linux"
+        : null;
+      if (label) document.getElementById("download-label").textContent = `Download for ${label}`;
+    </script>
+  </body>
+</html>

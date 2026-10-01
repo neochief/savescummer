@@ -110,6 +110,70 @@ test('cards show Play while stopped and expose Terminate only when the host perm
   expect(screen.getByRole('button', { name: 'Play Game A' })).toBeTruthy();
 });
 
+test('double-clicking a stopped card plays once without clearing its selection', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].can_play = true;
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: /Game B, Not running/ }));
+  const card = await screen.findByRole('button', { name: /Game A, Not running/ });
+  fireEvent.click(card, { detail: 1 });
+  fireEvent.click(card, { detail: 2 });
+  fireEvent.doubleClick(card);
+  const animation = card.querySelector('.game-play-animation');
+  expect(animation).toBeTruthy();
+  await waitFor(() => expect(bridge.requests.filter((request) => request.type === 'play')).toEqual([
+    { type: 'play', game: 'a' },
+  ]));
+  fireEvent.doubleClick(card);
+  expect(bridge.requests.filter((request) => request.type === 'play')).toHaveLength(1);
+  expect(card.getAttribute('aria-current')).toBe('true');
+  await waitFor(() => expect(card.querySelector('.game-play-animation')).toBeNull(), { timeout: 1500 });
+});
+
+test.each([
+  [false, false, 0],
+  [true, false, 0],
+  [true, true, 1],
+] as const)('double-clicking a running card with expert mode %s and close permission %s sends %i terminate requests',
+  async (expertMode, canClose, expectedCloses) => {
+    const bridge = new FakeBridge();
+    bridge.state.games[0] = { ...bridge.state.games[0], running: true, expert_mode: expertMode, can_close: canClose };
+    render(<App bridge={bridge} />);
+    await screen.findByText('First checkpoint');
+    const card = await screen.findByRole('button', { name: 'Game A' });
+    expect(card.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(card, { detail: 1 });
+    fireEvent.click(card, { detail: 2 });
+    fireEvent.doubleClick(card, { detail: 2 });
+    await waitFor(() => expect(bridge.requests.filter((request) => request.type === 'close_game')).toHaveLength(expectedCloses));
+    expect(bridge.requests.some((request) => request.type === 'play')).toBe(false);
+    expect(card.querySelector('.game-play-animation')).toBeNull();
+    expect(card.getAttribute('aria-current')).toBe('true');
+  });
+
+test('double-clicking an unselected running card leaves it unselected', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games = bridge.state.games.map((value) => ({ ...value, running: true }));
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  const card = screen.getByRole('button', { name: 'Game B' });
+  expect(card.getAttribute('aria-current')).toBeNull();
+  fireEvent.click(card, { detail: 1 });
+  fireEvent.click(card, { detail: 2 });
+  fireEvent.doubleClick(card, { detail: 2 });
+  expect(card.getAttribute('aria-current')).toBeNull();
+  expect(bridge.requests.some((request) => request.type === 'close_game')).toBe(false);
+});
+
+test('double-clicking a card with unavailable Play does nothing', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0].can_play = false;
+  render(<App bridge={bridge} />);
+  fireEvent.doubleClick(await screen.findByRole('button', { name: /Game A, Not running/ }));
+  expect(bridge.requests.some((request) => request.type === 'play')).toBe(false);
+});
+
 test('play-first guidance launches the game through the shared play action', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].guidance = { kind: 'play_first', save: true, load: true };
@@ -395,12 +459,14 @@ test('delete hides the row immediately and Undo restores it with the row animati
   fireEvent.click(screen.getAllByRole('button', { name: /Delete checkpoint from/ })[0]);
   expect(screen.queryByText('First checkpoint')).toBeNull();
   const undo = screen.getByRole('button', { name: 'Undo' });
-  const controls = undo.parentElement;
-  expect(controls?.firstElementChild).toBe(screen.getByRole('button', { name: 'Info' }));
-  expect(controls?.lastElementChild).toBe(undo);
+  const panel = screen.getByRole('status', { name: 'Checkpoint removed' });
+  expect(undo.parentElement).toBe(panel);
+  expect(panel.classList.contains('undo-panel')).toBe(true);
+  expect(screen.getByRole('button', { name: 'Info' }).closest('.game-info')).not.toContain(undo);
   expect(undo.classList.contains('undo-button')).toBe(true);
   expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
   fireEvent.click(undo);
+  expect(panel.classList.contains('exiting-right')).toBe(true);
   expect(screen.getByText('First checkpoint').closest('.history-row')?.classList.contains('arrived')).toBe(true);
   expect(screen.getByText('First checkpoint').closest('.history-row')?.classList.contains('flash')).toBe(true);
   expect([...document.querySelectorAll('.history-row')].map((element) => element.textContent).join('|'))
@@ -443,7 +509,10 @@ test('Undo expires after five seconds even when hovered', async () => {
     expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.getByRole('status', { name: 'Checkpoint removed' }).classList.contains('exiting-fade')).toBe(true);
     expect(bridge.requests).toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
+    act(() => vi.advanceTimersByTime(260));
+    expect(screen.queryByRole('status', { name: 'Checkpoint removed' })).toBeNull();
   } finally {
     vi.useRealTimers();
   }
@@ -880,6 +949,97 @@ test('running games surface to the top of the one list in active-stack order; st
   expect(container.querySelectorAll('.sidebar h2')).toHaveLength(1);
 });
 
+test('installed filter matches word and capital starts, resets on Escape and selection', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games = [game('a', 'SaveScummer'), game('b', 'Save Scummer'), game('c', 'savescummer'), game('d', 'Other Game')];
+  bridge.pages = { a: { rows: [row('cp-a', 'First checkpoint')] }, b: { rows: [] }, c: { rows: [] }, d: { rows: [] } };
+  const { container } = render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  const heading = container.querySelector('.library-heading');
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const input = screen.getByRole('textbox', { name: 'Filter installed games' }) as HTMLInputElement;
+  expect(document.activeElement).toBe(input);
+  expect(input.hasAttribute('placeholder')).toBe(false);
+  expect(container.querySelector('.library-heading')).toBe(heading);
+  fireEvent.change(input, { target: { value: 'scu' } });
+  expect(container.querySelectorAll('.library-panel .game-card')).toHaveLength(2);
+  expect(screen.getByRole('button', { name: /SaveScummer, Not running/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Save Scummer, Not running/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /savescummer, Not running/ })).toBeNull();
+  expect(screen.getByText('First checkpoint')).toBeTruthy();
+
+  fireEvent.change(input, { target: { value: 'missing' } });
+  expect(screen.getByText('No matching games')).toBeTruthy();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(screen.queryByRole('textbox', { name: 'Filter installed games' })).toBeNull();
+  expect(document.activeElement).not.toBe(input);
+  expect(container.querySelectorAll('.library-panel .game-card')).toHaveLength(4);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const reopened = screen.getByRole('textbox', { name: 'Filter installed games' }) as HTMLInputElement;
+  fireEvent.change(reopened, { target: { value: 'scu' } });
+  fireEvent.click(screen.getByRole('button', { name: /Save Scummer, Not running/ }));
+  expect(screen.queryByRole('textbox', { name: 'Filter installed games' })).toBeNull();
+  expect(document.activeElement).not.toBe(reopened);
+  expect(container.querySelectorAll('.library-panel .game-card')).toHaveLength(4);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const finalInput = screen.getByRole('textbox', { name: 'Filter installed games' }) as HTMLInputElement;
+  fireEvent.change(finalInput, { target: { value: 'other' } });
+  expect(screen.getByText('Other Game', { selector: '.game-fallback' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Save Scummer, Not running/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear game filter' }));
+  expect(screen.queryByRole('textbox', { name: 'Filter installed games' })).toBeNull();
+  expect(document.activeElement).not.toBe(finalInput);
+  expect(container.querySelectorAll('.library-panel .game-card')).toHaveLength(4);
+});
+
+test('empty filter closes only after focus leaves both the field and clear button', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const input = screen.getByRole('textbox', { name: 'Filter installed games' });
+  const clear = screen.getByRole('button', { name: 'Clear game filter' });
+  fireEvent.blur(input, { relatedTarget: clear });
+  expect(screen.getByRole('textbox', { name: 'Filter installed games' })).toBeTruthy();
+  fireEvent.blur(clear, { relatedTarget: null });
+  expect(screen.queryByRole('textbox', { name: 'Filter installed games' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const reopened = screen.getByRole('textbox', { name: 'Filter installed games' });
+  fireEvent.change(reopened, { target: { value: 'game' } });
+  fireEvent.blur(reopened, { relatedTarget: null });
+  expect(screen.getByRole('textbox', { name: 'Filter installed games' })).toBeTruthy();
+});
+
+test('Enter selects the first filtered game and resets the filter', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games = [game('a', 'Alpha'), game('b', 'Second Game'), game('c', 'Game Third')];
+  bridge.pages = { a: { rows: [row('cp-a', 'Alpha checkpoint')] }, b: { rows: [row('cp-b', 'Second checkpoint')] }, c: { rows: [] } };
+  const { container } = render(<App bridge={bridge} />);
+  await screen.findByText('Alpha checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const input = screen.getByRole('textbox', { name: 'Filter installed games' });
+  fireEvent.change(input, { target: { value: 'missing' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(screen.getByRole('textbox', { name: 'Filter installed games' })).toBe(input);
+  expect(screen.getByText('No matching games')).toBeTruthy();
+  expect(screen.getByText('Alpha checkpoint')).toBeTruthy();
+  fireEvent.change(input, { target: { value: 'game' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByText('Second checkpoint')).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Filter installed games' })).toBeNull();
+  expect(container.querySelectorAll('.library-panel .game-card')).toHaveLength(3);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter installed games' }));
+  const reopened = screen.getByRole('textbox', { name: 'Filter installed games' });
+  fireEvent.change(reopened, { target: { value: 'second' } });
+  fireEvent.keyDown(reopened, { key: 'Enter' });
+  expect(screen.getByText('Second checkpoint')).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Filter installed games' })).toBeNull();
+});
+
 test('the game list scrolls and its indicator follows scrolling', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].running = true;
@@ -908,7 +1068,7 @@ test('the game list scrolls and its indicator follows scrolling', async () => {
   expect(parseFloat(thumb.style.top)).toBeCloseTo((160 - 160 / 3) / 2);
 });
 
-test('Scan icon spins only while a manual scan is running', async () => {
+test('Scan icon spins while scanning and becomes a checkmark while results are shown', async () => {
   const bridge = new FakeBridge();
   let finish!: (result: { new_games: number }) => void;
   bridge.scanResult = new Promise((resolve) => { finish = resolve; });
@@ -919,8 +1079,16 @@ test('Scan icon spins only while a manual scan is running', async () => {
   fireEvent.click(button);
   expect(button.classList.contains('scanning')).toBe(true);
   expect(button.textContent).toBe('Scanning…');
+  expect(button.querySelector('img')?.getAttribute('src')).toBe('/icons/arrows-rotate.svg');
 
   finish({ new_games: 0 });
   await waitFor(() => expect(button.classList.contains('scanning')).toBe(false));
   expect(button.textContent).toBe('No new games');
+  expect(button.classList.contains('scan-success')).toBe(true);
+  expect(button.querySelector('img')?.getAttribute('src')).toBe('/icons/check.svg');
+
+  bridge.scanResult = Promise.resolve({ new_games: 2 });
+  fireEvent.click(button);
+  await waitFor(() => expect(button.textContent).toBe('2 games found'));
+  expect(button.querySelector('img')?.getAttribute('src')).toBe('/icons/check.svg');
 });

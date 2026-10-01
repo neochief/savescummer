@@ -1,7 +1,7 @@
 /*
  * The red eyes every empty-state skeleton shares. Each character stays its own component with its own motion; this
- * module only turns a drawing's eyes into a rig, finds them again for animation, and states what a drawing must
- * provide for that. `eyeProblems` checks a drawing against these requirements; each character's tests run it.
+ * module turns a drawing's eyes into a rig, finds them again for animation, and provides their shared pointer and
+ * gaze motion. `eyeProblems` checks a drawing against these requirements; each character's tests run it.
  *
  * What the drawing must have, for each side (`left` and `right`), as layers named exactly so in Affinity Designer
  * (the layer name becomes the ID; a name that isn't a valid ID gets mangled, so no spaces):
@@ -162,6 +162,26 @@ export function findEyes(find: (id: string) => Element, space: SVGGraphicsElemen
 /** The point between the two resting eyeballs, where gaze directions are measured from. */
 export const between = (eyes: Record<Side, Eye>): Point =>
   [(eyes.left.neutral[0] + eyes.right.neutral[0]) / 2, (eyes.left.neutral[1] + eyes.right.neutral[1]) / 2];
+
+/** Pointer position in the head's coordinates, expressed as a gaze direction within the unit disk. */
+export function pointerGaze(space: SVGGraphicsElement, origin: Point, reach: number, [x, y]: Point): Point | undefined {
+  const ctm = space.getScreenCTM();
+  if (!ctm) return;
+  const p = new DOMPoint(x, y).matrixTransform(ctm.inverse());
+  const u = (p.x - origin[0]) / reach, v = (p.y - origin[1]) / reach;
+  const length = Math.hypot(u, v);
+  return length > 1 ? [u / length, v / length] : [u, v];
+}
+
+/** Move a gaze toward a target at a frame-rate-independent speed; return the clamped target. */
+export function easeGaze(gaze: Point, target: Point, rate: number, dt: number): Point {
+  const length = Math.hypot(target[0], target[1]);
+  const [u, v]: Point = length > 1 ? [target[0] / length, target[1] / length] : target;
+  const k = 1 - Math.exp(-rate * dt);
+  gaze[0] += (u - gaze[0]) * k;
+  gaze[1] += (v - gaze[1]) * k;
+  return [u, v];
+}
 
 /** Clamps a gaze direction to the unit disk, then maps it into the eye's asymmetric oval (up is shallower than down). */
 export function gazeOffset(u: number, v: number, limits: { horizontal: number; up: number; down: number }) {

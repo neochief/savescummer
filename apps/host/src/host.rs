@@ -110,7 +110,7 @@ pub struct Inner {
     /// it on again.
     pub launch_needs_approval: bool,
     pub revision: u64,
-    /// Games whose hotkey operation should play sounds when it finishes.
+    /// Hotkey operations that may need a failure notification.
     pub hotkey_ops: HashSet<String>,
     /// Cached art by Steam app id.
     pub artwork: HashMap<u64, savescummer_ipc::Artwork>,

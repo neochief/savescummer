@@ -11,7 +11,7 @@ button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; }
 button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .icon { display: block; width: 13px; height: 13px; object-fit: contain; filter: brightness(0) saturate(100%) invert(88%) sepia(9%) saturate(273%) hue-rotate(341deg) brightness(93%); flex: none; }
-.app { position: relative; display: flex; height: 100%; min-width: 800px; padding-top: 40px; background: #1c1918; }
+.app { position: relative; display: flex; height: 100%; min-width: 800px; padding-top: 32px; background: #1c1918; }
 .app.is-busy { cursor: wait; }
 .sidebar { position: relative; width: 248px; flex: none; display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; overflow: hidden; }
 .app.no-games .sidebar { width: 100%; align-items: center; justify-content: center; gap: 16px; }
@@ -21,8 +21,8 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .app.no-games .library-controls button { justify-content: center; }
 .app.no-games .main { flex: 0 0 0; width: 0; padding: 0; overflow: hidden; visibility: hidden; }
 /* One bar for both platforms: macOS keeps its traffic lights on the left; Windows draws its own caption buttons. */
-.window-bar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; height: 40px; display: flex; align-items: center; }
-.window-controls { display: flex; align-self: stretch; margin-left: auto; }
+.window-bar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; height: 32px; display: flex; align-items: center; }
+.window-controls { display: flex; align-self: stretch; min-height: 40px; margin-left: auto; }
 .window-controls button { width: 46px; border: 0; padding: 0; display: grid; place-items: center; background: transparent; color: #e4d7c9; }
 .window-controls button:hover { background: #3a322e; }
 .window-controls button.close:hover { background: #c42b1c; color: #fff; }
@@ -41,7 +41,7 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .empty-character::before { content: ''; position: absolute; top: 0; left: -8px; width: 164px; height: 120px; border-radius: 82px 82px 0 0; background: #181414; }
 .empty-character .character-art { position: relative; display: block; width: 100%; height: 100%; }
 .empty-character .character-art svg { display: block; }
-/* The container ignores the pointer; only the drawn skeleton itself is clickable (it startles awake). */
+/* The container ignores the pointer; only the drawn skeleton itself is clickable. */
 .empty-character .pokeable svg * { pointer-events: visiblePainted; cursor: pointer; }
 /* Sits at the top so the pointing hand lands on the first game card. */
 .empty-selection { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 16px; pointer-events: none; color: #aea095; text-align: center; }
@@ -50,6 +50,20 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .wordmark strong { color: #ff1e29; }
 .sidebar h2, .day h2 { margin: 0; height: 40px; text-align: center; color: #d7c9ba; font-size: 12px; font-weight: 600; line-height: 40px; }
 .sidebar h2 { height: 32px; line-height: 32px; font-family: Chakra Petch, sans-serif; }
+.library-filter-toggle { width: 100%; height: 32px; padding: 0; border: 0; display: flex; align-items: center; justify-content: center; gap: 3px;
+  background: transparent; color: inherit; font: inherit; letter-spacing: inherit; }
+.library-filter-toggle:hover { color: #faf8ee; }
+.library-filter-toggle:focus-visible { outline-offset: -2px; border-radius: 5px; }
+.library-search-icon { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.library-filter { width: 100%; height: 32px; padding: 2px 10px; display: flex; align-items: center; gap: 5px; }
+.library-filter input { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; outline: none;
+  background: transparent; color: inherit; font: inherit; text-align: left; }
+.library-filter button { flex: none; width: 18px; height: 18px; padding: 0; border: 1px solid #d7c9ba; border-radius: 50%; display: grid; place-items: center;
+  background: transparent; opacity: .7; }
+.library-filter button:focus-visible { outline-offset: 2px; }
+.library-filter button .icon { width: 8px; height: 8px; }
+.library-filter button:hover { opacity: 1; }
+.library-no-matches { margin: 16px 0; color: #d7c9ba; font: 12px Chakra Petch, sans-serif; text-align: center; }
 .running-icon { width: 9px; height: 9px; background: currentColor; -webkit-mask: url(/icons/triangle.svg) center / contain no-repeat; mask: url(/icons/triangle.svg) center / contain no-repeat; animation: pulse 3s ease-in-out infinite; }
 .running-badge { flex: 1; height: 24px; padding: 0 6px; border: 2px solid #f51e2b; border-radius: 6px; display: grid;
   align-content: center;  /* WebKit doesn't stretch a <button>'s grid row, so the face would sit at the top */
@@ -63,7 +77,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) { border-color: #
 button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-face { opacity: 0; }
 button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-face.close { opacity: 1; }
 .sidebar-surface { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; background: #2c2623; }
-.library-heading { flex: none; }
+.library-heading { position: relative; z-index: 6; flex: none; }
 .library-scroll { position: relative; z-index: 5; flex: 1; min-height: 0; }
 /* Reaches 8px into the empty space under the heading and above the buttons; the list pads it back, so cards keep their place. */
 .library-scroll.has-games { margin: -8px 0; }
@@ -100,6 +114,10 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .game-logo { position: relative; display: block; width: 75%; height: 80%; margin: 10px auto; object-fit: contain; }
 .game-fallback { position: relative; display: grid; place-items: center; height: 100%; font: 700 22px Chakra Petch, sans-serif; padding: 8px; }
 .install-tag { position: absolute; right: 7px; bottom: 7px; color: #fff; font-size: 10px; background: rgba(13,7,7,.7); border-radius: 3px; padding: 2px 4px; }
+.game-play-animation { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(13,7,7,.55); pointer-events: none; animation: card-play-overlay .9s ease-out both; }
+.game-play-animation-icon { width: 52px; height: 52px; background: #fff; -webkit-mask: url(/icons/triangle.svg) center / contain no-repeat; mask: url(/icons/triangle.svg) center / contain no-repeat; animation: card-play-icon .9s ease-out both; }
+@keyframes card-play-overlay { 0% { opacity: 0; } 20%, 65% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes card-play-icon { 0% { opacity: 0; transform: scale(.55); } 25% { opacity: 1; transform: scale(1.08); } 55% { transform: scale(1); } 100% { opacity: 0; transform: scale(1.15); } }
 /* The cog's centre lines up with the sidebar menu icons below. */
 .card-actions { position: absolute; left: 4px; bottom: 4px; display: flex; gap: 4px; }
 .card-lifecycle-actions { position: absolute; right: 4px; top: 4px; display: flex; gap: 4px; }
@@ -177,6 +195,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .main-button.success { opacity: 1; }
 .main-button.busy .icon, .row-button:has(.icon[src*="arrows-rotate"]) .icon, .delete-status .icon[src*="arrows-rotate"], .library-controls .scanning .icon { animation: spin .8s linear infinite; }
 .main-button.success .main-face.icon-only .icon, .row-button .icon-only[src*="/check."] { animation: check-pop .32s cubic-bezier(.2, .9, .3, 1.4); }
+.library-controls .scan-success .icon { animation: check-pop .32s cubic-bezier(.2, .9, .3, 1.4); }
 .main-button.error { background: #6a2528; color: #faf8ee; }
 .library-controls button .icon { width: 15px; height: 15px; }
 .action-error-block { margin: 0 0 var(--section-gap); color: #ffb5b8; background: #482427; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
@@ -185,14 +204,22 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .game-info-controls { display: flex; justify-content: space-between; gap: 8px; }
 .game-info-controls > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 72px; height: 32px; padding: 5px 10px; border: 0; border-radius: 6px; background: #3a322e; color: #f3eee7; font: 600 13px Chakra Petch, sans-serif; text-transform: uppercase; }
 .game-info-controls > button:hover { background: #51423a; }
-.game-info-controls > .undo-button { margin-left: auto; background: #f3eee7; color: #442e2b; animation: undo-fade 5s linear forwards; }
-.game-info-controls > .undo-button:hover { background: #fff; opacity: 1 !important; }
 .game-info-content { max-height: 45vh; overflow-y: auto; margin-top: 8px; padding: 12px; border-radius: 8px; background: #2c2623; user-select: text; }
 .game-info-content p { margin: 0 0 8px; }
 .game-info-content p:last-child { margin-bottom: 0; }
 .game-info-content strong { font-family: Chakra Petch, sans-serif; font-weight: 700; }
 .game-info-content ol, .game-info-content ul { margin: 0 0 8px; padding-left: 22px; }
 .game-info-content li { margin: 0 0 3px; }
+.undo-panel { position: fixed; z-index: 5; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 24px;
+  padding: 10px 12px 10px 14px; border: 1px solid #3a322e; border-radius: 8px; background: #2c2623;
+  box-shadow: 0 4px 16px #0d070755; color: #cfc4b8; font-size: 13px;
+  animation: undo-enter .3s cubic-bezier(.2, .8, .2, 1) both, undo-timer-fade 5s linear forwards; }
+.undo-panel .undo-button { flex: none; min-width: 64px; height: 30px; padding: 5px 10px; border: 0; border-radius: 5px;
+  background: #f3eee7; color: #442e2b;
+  font: 600 13px Chakra Petch, sans-serif; text-transform: uppercase; }
+.undo-panel .undo-button:hover { background: #fff; }
+.undo-panel.exiting-fade { pointer-events: none; }
+.undo-panel.exiting-right { pointer-events: none; animation: undo-exit-right .26s ease-in both, undo-timer-fade 5s linear forwards; }
 .history-frame { position: relative; flex: 1; min-height: 0; margin: 0 -16px 0 -24px; }  /* spans from the sidebar panel to the window edge so the top shadow runs full width */
 .history-frame::before { content: ''; position: absolute; z-index: 2; top: 0; right: 0; left: 0; height: 56px; background: linear-gradient(to bottom, #0d070766, transparent); opacity: var(--fade-top, 0); pointer-events: none; }
 .history { height: 100%; overflow-y: auto; padding: 0 16px 16px 24px; scrollbar-color: #5b4c42 transparent; }
@@ -389,7 +416,9 @@ input[type="checkbox"]:checked:disabled { background-color: #3d342d; }
 @keyframes dialog-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 50% { opacity: .35; box-shadow: 0 0 2px #f51e2b; } }
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes undo-fade { to { opacity: 0; } }
+@keyframes undo-enter { from { transform: translateX(calc(100% + 20px)); } }
+@keyframes undo-timer-fade { to { opacity: 0; } }
+@keyframes undo-exit-right { to { transform: translateX(calc(100% + 20px)); } }
 @keyframes check-pop { from { transform: scale(.6); opacity: .4; } }
 @keyframes row-flash { 0% { background: #582428; box-shadow: 0 0 0 2px #f51e2b; } 100% { background: transparent; box-shadow: none; } }
 @keyframes row-arrive {
@@ -408,6 +437,8 @@ input[type="checkbox"]:checked:disabled { background-color: #3d342d; }
   .history-row.arrived { animation: row-arrive .55s cubic-bezier(.2, .8, .2, 1) both, row-flash 1.8s ease-out; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) { .undo-panel { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .game-play-animation, .game-play-animation-icon { animation: none !important; } }
 
 .sr-only {
   position: absolute;

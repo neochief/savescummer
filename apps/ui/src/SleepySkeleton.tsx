@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, type HTMLAttributes } from 'react';
 import source from '../public/character/no-games-found.svg?raw';
-import { between as midpoint, findEyes, gazeOffset, morph, prepareEyes, sides, type Point, type Side } from './skeletonEyes';
+import { between as midpoint, easeGaze, findEyes, gazeOffset, morph, pointerGaze, prepareEyes, sides, type Point,
+  type Side } from './skeletonEyes';
 
 /*
  * The empty-library skeleton: bored, sleepy, and mildly responsive to the person using the page.
@@ -187,7 +188,7 @@ function blendOutlines(from: string, to: Point[], t: number) {
  * A short bony rattle, synthesised so no audio asset is needed. Each clack is a burst of band-passed noise (the tick)
  * over a quickly falling triangle tone (the hollow knock); pitch and timing vary a little so no two pokes sound alike.
  */
-function rattle(audio: BaseAudioContext) {
+export function playSkeletonRattle(audio: BaseAudioContext) {
   const { volume, clacks, spacing } = skeletonSound;
   const noise = audio.createBuffer(1, Math.round(audio.sampleRate * 0.05), audio.sampleRate);
   const samples = noise.getChannelData(0);
@@ -341,7 +342,7 @@ export function SleepySkeleton({ sound = true, ...props }: HTMLAttributes<HTMLDi
     const classicPose: Values = { ...pose('bored'), classic: 1 };
     let from = classicPose, current = classicPose;
     let pointer: [number, number] | undefined;
-    const gaze = [0, 0];
+    const gaze: Point = [0, 0];
 
     const enter = (next: typeof mode, phase?: string) => {
       mode = next; index = Math.max(0, phases.findIndex((step) => step.name === phase)); elapsed = 0; from = current;
@@ -350,13 +351,8 @@ export function SleepySkeleton({ sound = true, ...props }: HTMLAttributes<HTMLDi
       ? { name: 'away', pose: 'bored', duration: skeletonTiming.pointerExit, sag: 0, follow: 0, drum: 0, track: false, ease: inOut }
       : phases[index];
 
-    const pointerDirection = () => {
-      if (!pointer) return [0, 0];
-      const ctm = head.getScreenCTM();
-      if (!ctm) return [0, 0];
-      const p = new DOMPoint(pointer[0], pointer[1]).matrixTransform(ctm.inverse());
-      return [(p.x - between[0]) / motion.gazeReach, (p.y - between[1]) / motion.gazeReach];
-    };
+    const pointerDirection = (): Point => pointer
+      ? pointerGaze(head, between, motion.gazeReach, pointer) ?? [0, 0] : [0, 0];
 
     const draw = () => {
       const drumming = motion.drumming;
@@ -426,12 +422,8 @@ export function SleepySkeleton({ sound = true, ...props }: HTMLAttributes<HTMLDi
       };
       const { tempo, sleepyTempo } = motion.drumming;
       drumClock += dt * lerp(sleepyTempo, tempo, current.drum);
-      const target = mode === 'away' ? motion.awayGaze : step.track ? pointerDirection() : [0, 0];
-      const length = Math.hypot(target[0], target[1]);
-      const [u, v] = length > 1 ? [target[0] / length, target[1] / length] : target;
-      const k = 1 - Math.exp(-(step.gazeRate ?? motion.gazeRate) * dt);
-      gaze[0] += (u - gaze[0]) * k;
-      gaze[1] += (v - gaze[1]) * k;
+      const target: Point = mode === 'away' ? motion.awayGaze : step.track ? pointerDirection() : [0, 0];
+      const [u, v] = easeGaze(gaze, target, step.gazeRate ?? motion.gazeRate, dt);
       draw();
       // Once the pointer-exit pose has settled nothing moves, so stop until the pointer comes back.
       const settled = mode === 'away' && elapsed >= step.duration && Math.hypot(u - gaze[0], v - gaze[1]) < 0.001;
@@ -462,7 +454,7 @@ export function SleepySkeleton({ sound = true, ...props }: HTMLAttributes<HTMLDi
       if (soundOn.current && typeof AudioContext === 'function') {
         audio ??= new AudioContext();
         if (audio.state === 'suspended') audio.resume().catch(() => undefined);
-        rattle(audio);
+        playSkeletonRattle(audio);
       }
       if (reduced.matches) return;
       onMove(event as PointerEvent);

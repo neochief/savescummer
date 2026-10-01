@@ -14,8 +14,8 @@ use savescummer_platform::integration::{self, Signal};
 use crate::host::{Host, hotkey_target, new_id};
 use crate::ops;
 
-/// Runs what a hotkey press runs: Save or Load on the hotkeys' target, with
-/// sounds. With no target it does nothing.
+/// Runs what a hotkey press runs: Save or Load on the hotkeys' target.
+/// With no target it does nothing.
 /// `request_id` makes a protocol request safe to repeat; a real key press
 /// passes a fresh one.
 pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Result<Operation, Failure> {

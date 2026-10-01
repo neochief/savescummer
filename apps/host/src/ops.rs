@@ -170,11 +170,14 @@ pub fn submit(
     if let Some(existing) = by_request(host, request_id) {
         return Ok(existing);
     }
+    let kind = request.kind();
     let result = submit_new(host, request_id, game, request, hotkey);
+    if let Err(f) = &result
+        && let Some(sound) = rejection_cue(kind, f)
+    {
+        cue(host, sound);
+    }
     if hotkey {
-        if let Some(sound) = hotkey_submission_cue(&result) {
-            cue(host, sound);
-        }
         if let Err(f) = &result {
             match f.kind {
                 ErrorKind::GameRunning => notify_exit_first(host, f.game.as_deref().unwrap_or(game)),
@@ -186,32 +189,39 @@ pub fn submit(
     result
 }
 
-fn hotkey_submission_cue(result: &Result<Operation, Failure>) -> Option<Cue> {
-    match result {
-        Ok(op) if op.kind == "save" => Some(Cue::SaveStart),
-        Ok(op) if op.kind == "load" => Some(Cue::LoadStart),
-        Ok(_) => None,
-        Err(f) if f.kind == ErrorKind::Busy => Some(Cue::Busy),
-        Err(_) => Some(Cue::Failed),
+fn start_cue(kind: &str) -> Option<Cue> {
+    match kind {
+        "save" => Some(Cue::SaveStart),
+        "load" => Some(Cue::LoadStart),
+        _ => None,
+    }
+}
+
+fn rejection_cue(kind: &str, failure: &Failure) -> Option<Cue> {
+    match (start_cue(kind), failure.kind) {
+        (Some(_), ErrorKind::Busy) => Some(Cue::Busy),
+        (Some(_), _) => Some(Cue::Failed),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 #[test]
-fn hotkey_sound_follows_the_requested_action() {
-    let save = op("save-op", None, Some("game"), "save", OpStatus::Accepted);
-    assert_eq!(hotkey_submission_cue(&Ok(save)), Some(Cue::SaveStart));
-    assert_eq!(hotkey_completion_cue(OpStatus::Succeeded, "save"), Some(Cue::SaveDone));
-    let load = op("load-op", None, Some("game"), "load", OpStatus::Accepted);
-    assert_eq!(hotkey_submission_cue(&Ok(load)), Some(Cue::LoadStart));
-    assert_eq!(hotkey_completion_cue(OpStatus::Succeeded, "load"), Some(Cue::LoadDone));
-    assert_eq!(hotkey_completion_cue(OpStatus::Failed, "load"), Some(Cue::Failed));
+fn sound_follows_the_requested_action() {
+    assert_eq!(start_cue("save"), Some(Cue::SaveStart));
+    assert_eq!(completion_cue(OpStatus::Succeeded, "save"), Some(Cue::SaveDone));
+    assert_eq!(start_cue("load"), Some(Cue::LoadStart));
+    assert_eq!(completion_cue(OpStatus::Succeeded, "load"), Some(Cue::LoadDone));
+    assert_eq!(completion_cue(OpStatus::Failed, "load"), Some(Cue::Failed));
     for reason in [ErrorKind::GameRunning, ErrorKind::NoGameData, ErrorKind::NoSaves, ErrorKind::Blocked] {
         let refusal = Failure::new(reason, "locked");
-        assert_eq!(hotkey_submission_cue(&Err(refusal)), Some(Cue::Failed), "{reason:?}");
+        assert_eq!(rejection_cue("save", &refusal), Some(Cue::Failed), "{reason:?}");
     }
     let busy = Failure::new(ErrorKind::Busy, "busy");
-    assert_eq!(hotkey_submission_cue(&Err(busy)), Some(Cue::Busy));
+    assert_eq!(rejection_cue("load", &busy), Some(Cue::Busy));
+    assert_eq!(start_cue("revert"), None);
+    assert_eq!(completion_cue(OpStatus::Succeeded, "revert"), None);
+    assert_eq!(rejection_cue("delete", &busy), None);
 }
 
 fn by_request(host: &Host, request_id: &str) -> Option<Operation> {
@@ -322,6 +332,9 @@ fn submit_new(
     if matches!(request, Request::Save { .. } | Request::Load { .. } | Request::Revert { .. }) {
         watch_for_stall(host.clone(), op_id.clone(), game_id.clone(), done.clone(), progress.clone());
     }
+    if let Some(sound) = start_cue(kind) {
+        cue(host, sound);
+    }
     let worker_host = host.clone();
     let worker_game = game_id.clone();
     let worker_op = op_id.clone();
@@ -374,19 +387,22 @@ fn report_stalled(host: &Arc<Host>, op_id: &str, game_id: &str) {
         Failure::new(ErrorKind::Stalled, "file work stopped responding; macOS may be waiting on a permission prompt")
             .game(game_id);
     crate::trace(&format!("{op_id} for {game_id} stalled; the game stays locked until it ends"));
-    let hotkey = {
+    let (hotkey, kind) = {
         let mut inner = host.lock();
         let Some(operation) = inner.ops.get_mut(op_id).filter(|o| !o.status.is_final()) else { return };
+        let kind = operation.kind.clone();
         operation.status = OpStatus::Failed;
         operation.error = Some(failure.clone());
         let operation = operation.clone();
         inner.last_results.insert(game_id.to_string(), operation);
         let hotkey = inner.hotkey_ops.remove(op_id);
         host.publish(&mut inner);
-        hotkey
+        (hotkey, kind)
     };
+    if let Some(sound) = completion_cue(OpStatus::Failed, &kind) {
+        cue(host, sound);
+    }
     if hotkey {
-        cue(host, Cue::Failed);
         notify_failure(host, &failure);
     }
 }
@@ -1047,7 +1063,7 @@ fn run_flush(host: &Arc<Host>, op_id: &str, game_id: &str) -> Result<OpResult, F
 }
 
 /// Ends an operation: records its outcome, releases the game, publishes,
-/// and gives a hotkey's completion cue.
+/// and gives Save/Load their completion cue.
 pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpResult, Failure>) {
     let _ = crate::library::refresh_game(host, game_id);
     let at = now();
@@ -1069,10 +1085,11 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
     // Always record the outcome: Save, Load and Revert also mark success in
     // their own transaction, but Delete and Flush rely on this write.
     let _ = db::finish_operation(host.db().conn(), op_id, db_status, &value, &at);
-    let (hotkey, kind, hidden) = {
+    let (hotkey, kind, hidden, already_final) = {
         let mut inner = host.lock();
         let mut operation =
             inner.ops.get(op_id).cloned().unwrap_or_else(|| op(op_id, None, Some(game_id), "unknown", status));
+        let already_final = operation.status.is_final();
         operation.status = status;
         operation.error = error.clone();
         operation.result = result;
@@ -1095,9 +1112,9 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
         host.refresh_cache(&mut inner, game_id);
         host.publish(&mut inner);
         let hidden = !inner.ui.visible;
-        (inner.hotkey_ops.remove(op_id), operation.kind.clone(), hidden)
+        (inner.hotkey_ops.remove(op_id), operation.kind.clone(), hidden, already_final)
     };
-    if hotkey && let Some(sound) = hotkey_completion_cue(status, &kind) {
+    if !already_final && let Some(sound) = completion_cue(status, &kind) {
         cue(host, sound);
     }
     if let Some(e) = &error
@@ -1111,12 +1128,12 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
     }
 }
 
-fn hotkey_completion_cue(status: OpStatus, kind: &str) -> Option<Cue> {
+fn completion_cue(status: OpStatus, kind: &str) -> Option<Cue> {
     match (status, kind) {
         (OpStatus::Succeeded, "save") => Some(Cue::SaveDone),
         (OpStatus::Succeeded, "load") => Some(Cue::LoadDone),
-        (OpStatus::Succeeded, _) => None,
-        _ => Some(Cue::Failed),
+        (_, "save" | "load") => Some(Cue::Failed),
+        _ => None,
     }
 }
 

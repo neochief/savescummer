@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type HTMLAttributes } from 'react';
 import source from '../public/character/no-game-selected.svg?raw';
-import { between as midpoint, findEyes, gazeOffset, prepareEyes, sides } from './skeletonEyes';
+import { between as midpoint, easeGaze, findEyes, gazeOffset, pointerGaze, prepareEyes, sides, type Point } from './skeletonEyes';
 
 /*
  * The "no game selected" skeleton: it points toward the game list, gamepad in the other hand, and eyes the person using
@@ -182,8 +182,8 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
     const { eyes, headSpace, between, arm, offer } = parts;
     const motion = pointingSkeletonMotion;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-    const gaze = [...motion.restingGaze];
-    let target = [...motion.restingGaze];
+    const gaze: Point = [...motion.restingGaze];
+    let target: Point = [...motion.restingGaze];
     let frame = 0, last = 0;
     let looked = false; // the eyes had somewhere new to look since the last jab
     let jab = -1, jabbed = -Infinity; // seconds into the current jab (-1: none), and when the last one started
@@ -255,12 +255,7 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
       }
     };
     const aim = (x: number, y: number) => {
-      const ctm = headSpace.getScreenCTM();
-      if (!ctm) return;
-      const p = new DOMPoint(x, y).matrixTransform(ctm.inverse());
-      const u = (p.x - between[0]) / motion.gazeReach, v = (p.y - between[1]) / motion.gazeReach;
-      const length = Math.hypot(u, v);
-      target = length > 1 ? [u / length, v / length] : [u, v];
+      target = pointerGaze(headSpace, between, motion.gazeReach, [x, y]) ?? target;
     };
     // Eases toward the target and stops once the eyes have arrived, so an idle pointer costs nothing.
     const tick = (now: number) => {
@@ -270,9 +265,7 @@ export function PointingSkeleton(props: HTMLAttributes<HTMLDivElement>) {
       const armAt = jab - motion.offer.lead;
       const dart = jab >= 0 && darting(armAt);
       const aimAt = dart ? motion.restingGaze : target;
-      const k = 1 - Math.exp(-(dart ? motion.jab.dartRate : motion.gazeRate) * dt);
-      gaze[0] += (aimAt[0] - gaze[0]) * k;
-      gaze[1] += (aimAt[1] - gaze[1]) * k;
+      easeGaze(gaze, aimAt, dart ? motion.jab.dartRate : motion.gazeRate, dt);
       squint = jab >= 0 ? jabSquint(armAt) : 0;
       draw();
       // Once the eyes are nearly where they're headed, jab toward the game list (unless the last jab was too recent).
