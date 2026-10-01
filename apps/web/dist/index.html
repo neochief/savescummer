@@ -30,16 +30,25 @@
       .github:focus-visible { outline: 3px solid #ff1e29; outline-offset: 4px; }
       .github img { width: 2rem; height: 2rem; }
       .github .download-name { font-size: 1.5rem; white-space: nowrap; }
-      .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #3d342d; background: #2c2623; }
+      .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #302824; background: #12100f; }
       .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
       .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.25rem, 5vw, 3rem)/1.15 "Chakra Petch", sans-serif; }
       .supported-subtitle { max-width: 40rem; margin: 1rem auto 2.75rem; color: #d7c9ba; text-align: center; font-size: clamp(1rem, 2.2vw, 1.125rem); }
       .game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; mask-image: linear-gradient(to bottom, #000 0%, #000 52%, #0003 100%); }
-      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border-radius: 10px; background: #3c302d; }
+      .game-grid.expanded { mask-image: none; }
+      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border-radius: 10px; background: #3c302d; cursor: help; }
+      .game-card:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
       .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
       .game-art { object-fit: cover; }
       .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
       .game-logo { position: absolute; top: 10%; left: 12.5%; width: 75%; height: 80%; object-fit: contain; }
+      .game-fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: .75rem; text-align: center; font: 700 clamp(1rem, 2vw, 1.4rem)/1.1 "Chakra Petch", sans-serif; }
+      .show-more { display: block; margin: 1.5rem auto 0; padding: .8rem 1.4rem; border: 1px solid #6a5650; border-radius: .65rem; background: #2a2420; color: #faf8ee; font: 700 1rem "Chakra Petch", sans-serif; cursor: pointer; }
+      .show-more[hidden] { display: none; }
+      .show-more:hover { background: #3c302d; }
+      .show-more:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
+      .game-tooltip { position: fixed; z-index: 10; width: min(22rem, calc(100vw - 1.5rem)); padding: 1rem 1.125rem; border: 1px solid #6a5650; border-radius: .75rem; background: #332822; color: #faf8ee; box-shadow: 0 16px 40px #000a; font-size: .9rem; line-height: 1.45; pointer-events: none; }
+      .game-tooltip[hidden] { display: none; }
       @media (max-width: 700px) {
         .hero { padding: 5rem 0 4rem; }
         .supported { padding-top: 4rem; }
@@ -70,32 +79,14 @@
       <section class="supported" aria-labelledby="supported-title">
         <div class="supported-inner">
           <h2 id="supported-title">Supported games</h2>
-          <p class="supported-subtitle">Nearly 100 gems across roguelikes, strategy games, RPGs, and more.</p>
-          <div class="game-grid">
-          <div class="game-card" role="img" aria-label="Baldur's Gate 3"><img class="game-art" src="./games/1086940-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/1086940-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="The Binding of Isaac: Rebirth"><img class="game-art" src="./games/250900-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/250900-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Slay the Spire"><img class="game-art" src="./games/646570-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/646570-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Project Zomboid"><img class="game-art" src="./games/108600-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/108600-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Terraria"><img class="game-art" src="./games/105600-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/105600-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="XCOM 2"><img class="game-art" src="./games/268500-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/268500-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Dead Cells"><img class="game-art" src="./games/588650-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/588650-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Risk of Rain 2"><img class="game-art" src="./games/632360-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/632360-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="FTL: Faster Than Light"><img class="game-art" src="./games/212680-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/212680-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Stellaris"><img class="game-art" src="./games/281990-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/281990-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Hearts of Iron IV"><img class="game-art" src="./games/394360-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/394360-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Don't Starve"><img class="game-art" src="./games/219740-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/219740-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Enter the Gungeon"><img class="game-art" src="./games/311690-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/311690-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Noita"><img class="game-art" src="./games/881100-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/881100-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Kingdom Come: Deliverance"><img class="game-art" src="./games/379430-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/379430-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Crusader Kings II"><img class="game-art" src="./games/203770-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/203770-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Into the Breach"><img class="game-art" src="./games/590380-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/590380-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Total War: Warhammer II"><img class="game-art" src="./games/594570-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/594570-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Spelunky 2"><img class="game-art" src="./games/418530-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/418530-logo.png" alt="" /></div>
-          <div class="game-card" role="img" aria-label="Caves of Qud"><img class="game-art" src="./games/333640-hero.jpg" alt="" /><span class="game-shade"></span><img class="game-logo" src="./games/333640-logo.png" alt="" /></div>
-          </div>
+          <p class="supported-subtitle">We chose games where progress is costly to lose: permadeath ends rare builds, Ironman overwrites long campaigns, and autosaves lock in story choices. Each card explains where a checkpoint helps, including cases where a live run cannot yet be restored from save files.</p>
+          <div class="game-grid" id="game-grid"></div>
+          <button class="show-more" id="show-more" type="button">Show all games</button>
         </div>
       </section>
     </main>
+    <div class="game-tooltip" id="game-tooltip" role="tooltip" hidden></div>
+    <script src="./games-data.js"></script>
     <script>
       const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
       const mobile = navigator.userAgentData?.mobile || /android|iphone|ipad|ipod/i.test(navigator.userAgent)
@@ -106,6 +97,79 @@
         : /linux/i.test(platform) ? "Linux"
         : null;
       if (label) document.getElementById("download-label").textContent = `Download for ${label}`;
+
+      const games = window.savescummerGames || [];
+      const grid = document.getElementById("game-grid");
+      const showMore = document.getElementById("show-more");
+      const tooltip = document.getElementById("game-tooltip");
+      let activeCard = null;
+
+      function hideTooltip(card) {
+        if (card && card !== activeCard) return;
+        tooltip.hidden = true;
+        activeCard = null;
+      }
+
+      function showTooltip(card, value) {
+        activeCard = card;
+        tooltip.textContent = value;
+        tooltip.hidden = false;
+        const cardRect = card.getBoundingClientRect();
+        const tipRect = tooltip.getBoundingClientRect();
+        let top = cardRect.top - tipRect.height - 10;
+        if (top < 12) top = cardRect.bottom + 10;
+        tooltip.style.top = `${Math.min(top, window.innerHeight - tipRect.height - 12)}px`;
+        tooltip.style.left = `${Math.max(12, Math.min(cardRect.left + cardRect.width / 2 - tipRect.width / 2, window.innerWidth - tipRect.width - 12))}px`;
+      }
+
+      function addImage(card, className, path) {
+        const img = document.createElement("img");
+        img.className = className;
+        img.src = `./${path}`;
+        img.alt = "";
+        img.loading = "lazy";
+        img.decoding = "async";
+        card.append(img);
+      }
+
+      function renderCards(items) {
+        const fragment = document.createDocumentFragment();
+        for (const game of items) {
+          const card = document.createElement("div");
+          card.className = "game-card";
+          card.setAttribute("role", "img");
+          card.setAttribute("aria-label", `${game.name}. ${game.value}`);
+          card.tabIndex = 0;
+          if (game.hero) addImage(card, "game-art", game.hero);
+          const shade = document.createElement("span");
+          shade.className = "game-shade";
+          card.append(shade);
+          if (game.logo) addImage(card, "game-logo", game.logo);
+          else {
+            const fallback = document.createElement("span");
+            fallback.className = "game-fallback";
+            fallback.textContent = game.name;
+            card.append(fallback);
+          }
+          card.addEventListener("pointerenter", () => showTooltip(card, game.value));
+          card.addEventListener("pointerleave", () => hideTooltip(card));
+          card.addEventListener("focus", () => showTooltip(card, game.value));
+          card.addEventListener("blur", () => hideTooltip(card));
+          fragment.append(card);
+        }
+        grid.append(fragment);
+      }
+
+      renderCards(games.slice(0, 20));
+      showMore.hidden = games.length <= 20;
+      showMore.textContent = `Show all ${games.length} games`;
+      showMore.addEventListener("click", () => {
+        renderCards(games.slice(20));
+        grid.classList.add("expanded");
+        showMore.hidden = true;
+      });
+      window.addEventListener("scroll", () => hideTooltip(), { passive: true });
+      window.addEventListener("resize", () => hideTooltip());
     </script>
   </body>
 </html>
