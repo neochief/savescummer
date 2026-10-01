@@ -58,6 +58,7 @@ class FakeBridge implements Bridge {
       if (this.addRefusal) throw new HostError(this.addRefusal, 'Host rejected the request');
       return { game: 'custom-1' } as T;
     }
+    if (request.type === 'picker_start') return { path: request.path.replace('~', '/home/me'), exists: !request.path.includes('missing') } as T;
     if (request.type === 'open_checkpoints') return { path: `/store/${request.game}`, opened: !request.resolve_only } as T;
     if (request.type === 'save_set') return this.saveSet as T;
     if (request.type === 'flush_preview') return { saved: 1, recovery: 0, temporary: 0, size: 4096, items: [] } as T;
@@ -470,6 +471,27 @@ test('Add custom game submits entered paths through the host bridge', async () =
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'add_game', name: 'Example', executable: '/games/example', save_location: '/games/example/saves' }));
 });
 
+test('Add custom game names the game after a typed program once it is left, if that program exists', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add custom game' }));
+  const executable = screen.getByLabelText('Game executable');
+  const name = screen.getByLabelText('Name') as HTMLInputElement;
+  fireEvent.change(executable, { target: { value: '/games/missing/Gone.exe' } });
+  fireEvent.blur(executable);
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'picker_start', path: '/games/missing/Gone.exe' }));
+  expect(name.value).toBe('');
+  fireEvent.change(executable, { target: { value: '/games/NEO Scavenger/NEOScavenger' } });
+  fireEvent.blur(executable);
+  await waitFor(() => expect(name.value).toBe('NEOScavenger'));
+  // A name the user typed stays.
+  fireEvent.change(name, { target: { value: 'Mine' } });
+  fireEvent.change(executable, { target: { value: '/games/Other/Other.exe' } });
+  fireEvent.blur(executable);
+  expect(bridge.requests.filter((request) => request.type === 'picker_start')).toHaveLength(2);
+  expect(name.value).toBe('Mine');
+});
+
 test('Add custom game explains a Windows path on another platform once the field is left, and does not submit it', async () => {
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
@@ -598,6 +620,23 @@ test('Configure offers Reset only where a path differs from the default', async 
   await waitFor(() => expect(resets()).toHaveLength(1));
   fireEvent.click(resets()[0]);
   expect(resets()).toHaveLength(0);
+});
+
+test('Change starts the picker where the field points', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.games[0] = { ...bridge.state.games[0], executable: '~/Games/A/a' };
+  dialogOpen.mockResolvedValue(null);
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Game A' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Configure Game A' });
+  await waitFor(() => expect((within(dialog).getByLabelText('Where the game keeps its save files') as HTMLInputElement).value).toBe('/old/saves'));
+  const [executable, location] = within(dialog).getAllByRole('button', { name: 'Change' });
+  fireEvent.click(executable);
+  await waitFor(() => expect(dialogOpen).toHaveBeenCalledWith(expect.objectContaining({ title: 'Choose game executable', defaultPath: '/home/me/Games/A/a' })));
+  fireEvent.click(location);
+  await waitFor(() => expect(dialogOpen).toHaveBeenCalledWith(expect.objectContaining({ title: 'Choose save folder', defaultPath: '/old/saves' })));
+  expect(bridge.requests).toContainEqual({ type: 'picker_start', path: '~/Games/A/a' });
 });
 
 test('Configure lists the catalog save paths when no location is set', async () => {

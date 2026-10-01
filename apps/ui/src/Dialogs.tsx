@@ -130,12 +130,20 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
     location: !catalogTargets && typed.location !== (saveSet?.location || '') ? platformProblem('location', typed.location, searchName) : undefined,
   };
   const shown = (field: PathField) => (checked[field] ? problems[field] : undefined) ?? (field === 'location' ? tooBroad : undefined);
+  // A new game is named after its program, unless the user already named it.
+  const nameAfter = (path: string) => setName((current) => current.trim() ? current : path.split(/[/\\]/).pop()!.replace(/\.[^.]+$/, ''));
   // Leaving a field shows the path as it will be used.
   const leave = (field: PathField) => {
     setFocused(undefined);
     setChecked((value) => ({ ...value, [field]: true }));
     if (field === 'executable' && typed.executable !== executable) setExecutable(typed.executable);
     if (field === 'location' && typed.location !== location) setLocation(typed.location);
+    // A typed or pasted program names the game like a picked one, once the host confirms it exists.
+    if (field === 'executable' && kind === 'add' && !name.trim() && typed.executable && !problems.executable) {
+      const path = typed.executable;
+      bridge.request<{ path: string | null; exists?: boolean }>({ type: 'picker_start', path })
+        .then((result) => { if (result.exists) nameAfter(path); }, () => undefined);
+    }
   };
 
   useEffect(() => {
@@ -154,15 +162,19 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
 
   async function browse(which: 'executable' | 'location') {
     try {
+      // The picker starts where the field points, as far as that exists.
+      const current = which === 'executable' ? typed.executable : catalogTargets ? targetPath(catalogTargets[0]) : typed.location;
+      const start = current ? await bridge.request<{ path: string | null }>({ type: 'picker_start', path: current })
+        .then((result) => result.path ?? undefined, () => undefined) : undefined;
       const picked = await open({ title: which === 'executable' ? 'Choose game executable' : 'Choose save folder',
-        directory: which === 'location', multiple: false, fileAccessMode: 'scoped' });
+        directory: which === 'location', multiple: false, fileAccessMode: 'scoped', ...(start && { defaultPath: start }) });
       if (typeof picked !== 'string') return;
       setChecked((value) => ({ ...value, [which]: true }));
       if (which === 'location') setLocation(picked);
       else {
         setExecutable(picked);
         setResetExecutable(false);
-        if (kind === 'add' && !name.trim()) setName(picked.split(/[/\\]/).pop()!.replace(/\.[^.]+$/, ''));
+        if (kind === 'add') nameAfter(picked);
       }
     } catch (failure) { setError(message(failure)); }
   }
@@ -276,7 +288,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open game executable" title="Show in folder"
                 disabled={resetExecutable || executable !== (game.executable || '')}
                 onClick={() => bridge.request({ type: 'open_executable', game: game.id }).catch((failure) => setError(message(failure)))}><EyeIcon /></button>}</span>
-            <button type="button" onClick={() => browse('executable')}>Change</button>
+            <button type="button" onClick={() => browse('executable')}>{kind === 'add' ? 'Choose' : 'Change'}</button>
           </div>
           {shown('executable') ? <p className="dialog-problem" role="alert">{shown('executable')}</p> : <>
           {kind === 'add' && <p className="dialog-hint">Example: {executableExample}</p>}
@@ -295,7 +307,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
                   <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder" disabled={active < 0}
                     onClick={() => openSaves(active)}><EyeIcon /></button></span>;
               })}</span>
-              <button type="button" onClick={() => browse('location')}>Change</button>
+              <button type="button" onClick={() => browse('location')}>{kind === 'add' ? 'Choose' : 'Change'}</button>
             </div>
           </> : <>
             <div className="dialog-field"><label htmlFor="save-location">Where the game keeps its save files</label><span className="dialog-input"><input id="save-location" value={location}
@@ -303,7 +315,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               onChange={(event) => { setLocation(event.target.value); setChecked((value) => ({ ...value, location: false })); setTooBroad(undefined); }} required={kind === 'add' || game?.kind === 'custom'} />
                 {kind === 'configure' && game && <button type="button" className="dialog-icon-button" aria-label="Open save location" title="Show in folder"
                   disabled={!saveSet?.location || location !== saveSet.location || !saveSet.active.length} onClick={() => openSaves(0)}><EyeIcon /></button>}</span>
-              <button type="button" onClick={() => browse('location')}>Change</button>
+              <button type="button" onClick={() => browse('location')}>{kind === 'add' ? 'Choose' : 'Change'}</button>
             </div>
             {shown('location') ? <p className="dialog-problem" role="alert">{shown('location')} Ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />.</p>
             : <p className="dialog-below">
@@ -311,9 +323,9 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
                 : kind === 'configure' && game?.kind !== 'custom' && location.trim() !== ''
                   ? <button type="button" className="dialog-reset" onClick={() => setLocation('')}>Reset</button>
                   : <span className="dialog-hint">When not sure, ask <SearchLinks game={searchName} bridge={bridge} onError={setError} />{' '}
-                    “What is the save game location of {searchName} on {platformName}”<br />
-                    <strong>Warning:</strong> Online answers can be wrong, hallucinated, or contain someone else's username or Steam ID.
-                    Don't use them as is: find that folder on your computer first, then use its real path.</span>}
+                    “What is the save game location of {searchName} on {platformName}”
+                    <span className="dialog-warning"><strong>Warning:</strong> Online answers can be wrong, hallucinated, or contain someone else's username or Steam ID.
+                    Don't use them as is: find that folder on your computer first, then use its real path.</span></span>}
             </p>}
           </>}
           {saveSet?.catalog_problem && <p className="dialog-hint">{saveSet.catalog_problem}</p>}

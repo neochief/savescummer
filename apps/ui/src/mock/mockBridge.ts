@@ -139,6 +139,7 @@ export function createMockBridge(): Bridge {
           for (const g of state.games) if (g.latest?.id === request.checkpoint) { g.latest.label = request.label; g.labels_version++; publish(); }
           return {} as T;
         }
+        case 'picker_start': return { path: request.path || null, exists: Boolean(request.path) } as T;
         case 'open_checkpoints': return { path: `${state.settings?.checkpoint_store}/${request.game}`, opened: !request.resolve_only } as T;
         case 'scan': return { new_games: 0 } as T;
         case 'add_game': {

@@ -381,6 +381,22 @@ pub fn open(host: &Arc<Host>, target: &OpenTarget, resolve_only: bool) -> Result
     Ok(Opened { path: host.portable().contract(&existing), opened })
 }
 
+/// Where a file picker starts for `text`, as a real path; none for a path
+/// that isn't a full one.
+/// The second value says whether that is the typed entry itself, so a
+/// dialog can tell a real path from one that only points near something.
+pub fn picker_start(host: &Host, text: &str) -> (Option<PathBuf>, bool) {
+    let path = host.portable().expand(text.trim());
+    if !path.is_absolute() {
+        return (None, false);
+    }
+    if savescummer_snapshots::presence(&path) == Presence::Present {
+        return (Some(path), true);
+    }
+    let root = savescummer_catalog::split_location(&path).map_or(path, |target| target.root);
+    (Some(nearest_existing(&root)), false)
+}
+
 fn nearest_existing(path: &std::path::Path) -> PathBuf {
     for ancestor in path.ancestors() {
         if savescummer_snapshots::presence(ancestor) == Presence::Present && ancestor.is_dir() {

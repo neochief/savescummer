@@ -168,6 +168,13 @@ pub enum Command {
         #[serde(default)]
         resolve_only: bool,
     },
+    /// Where a file picker starts for a path the user typed or the host
+    /// stored: the entry itself when it exists, else the nearest existing
+    /// folder above it (for a pattern, above the wildcard). `exists` in the
+    /// answer says it's the entry itself. Opens nothing.
+    PickerStart {
+        path: String,
+    },
     CatalogRefresh,
     /// Show the UI: bring the connected one to the front, or start one.
     /// What a second launch of the app and the tray's Main window send.
@@ -213,6 +220,7 @@ impl Command {
             Command::Settings { .. } => "settings",
             Command::UiReport { .. } => "ui_report",
             Command::Open { .. } => "open",
+            Command::PickerStart { .. } => "picker_start",
             Command::CatalogRefresh => "catalog_refresh",
             Command::ShowUi => "show_ui",
             Command::Hotkey { .. } => "hotkey",

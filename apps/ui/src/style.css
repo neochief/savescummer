@@ -361,6 +361,8 @@ input[type="checkbox"]:checked:disabled { background-color: #3d342d; }
 .dialog-hint { margin: -7px 0 16px; color: #afa095; font-size: 12px; }
 .dialog-hint a { color: #faf8ee; }
 .dialog-hint a:hover { color: #fff; }
+.dialog-warning { display: block; margin-top: 8px; }
+.dialog-warning strong { color: #faf8ee; font: 700 12px Chakra Petch, sans-serif; }
 .dialog-problem { margin: -7px 0 14px; padding: 8px 10px; border-radius: 6px; background: #482427; color: #ffd9da; font-size: 12px; line-height: 1.5; }
 .dialog-problem a { color: #fff; }
 .dialog-error { color: #ff7a80; margin: 12px 0 0; font-size: 12px; }

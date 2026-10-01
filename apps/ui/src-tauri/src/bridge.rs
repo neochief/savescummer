@@ -118,6 +118,9 @@ enum UiRequest {
         game: String,
         target: usize,
     },
+    PickerStart {
+        path: String,
+    },
 }
 
 impl UiRequest {
@@ -182,6 +185,7 @@ impl UiRequest {
             Self::OpenSaves { game, target } => {
                 Command::Open { target: OpenTarget::TargetRoot { game, target }, resolve_only: false }
             }
+            Self::PickerStart { path } => Command::PickerStart { path },
         }
     }
 }

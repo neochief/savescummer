@@ -144,7 +144,8 @@ export type UiRequest =
   | { type: 'flush'; game: string }
   | { type: 'open_checkpoints'; game: string; resolve_only?: boolean }
   | { type: 'open_executable'; game: string }
-  | { type: 'open_saves'; game: string; target: number };
+  | { type: 'open_saves'; game: string; target: number }
+  | { type: 'picker_start'; path: string };
 
 export interface HostResponse<T> {
   v: number;

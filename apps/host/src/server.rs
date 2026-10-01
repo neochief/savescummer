@@ -364,6 +364,10 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             json(serde_json::json!({ "scan": scan }))
         }
         Command::Open { target, resolve_only } => json(queries::open(host, &target, resolve_only)?),
+        Command::PickerStart { path } => {
+            let (start, exists) = queries::picker_start(host, &path);
+            json(serde_json::json!({ "path": start, "exists": exists }))
+        }
         Command::CatalogRefresh => queries::catalog_refresh(host),
         Command::ShowUi => json(serde_json::json!({ "ui": crate::feedback::show_ui(host).as_str() })),
         Command::Hotkey { action } => {
