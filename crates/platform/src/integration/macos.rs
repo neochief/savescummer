@@ -17,7 +17,7 @@ use objc2::runtime::{AnyObject, Bool, NSObject, ProtocolObject};
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSBitmapImageRep,
-    NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem,
+    NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenu, NSMenuDelegate, NSMenuItem, NSStatusBar, NSStatusItem,
     NSVariableStatusItemLength,
 };
 use objc2_foundation::{NSData, NSError, NSObjectProtocol, NSPoint, NSSize, NSString, NSUUID};
@@ -26,7 +26,9 @@ use objc2_user_notifications::{
     UNNotificationRequest, UNNotificationResponse, UNUserNotificationCenter, UNUserNotificationCenterDelegate,
 };
 
-use super::{HotkeyAction, Key, Shortcut, Shortcuts, Signal};
+use super::{
+    HotkeyAction, Key, MenuSource, Shortcut, Shortcuts, Signal, TrayDialog, TrayGameAction, TrayIcon, icon_png,
+};
 
 /// The menu-bar template, 22 × 22 points at 1x and 2x.
 const ICON_1X: &[u8] = include_bytes!("../../../../assets/macos/SaveScummerTemplate.png");
@@ -37,6 +39,8 @@ type Handler = Arc<Mutex<Box<dyn Fn(Signal) + Send + 'static>>>;
 
 /// Who hears signals; None when integrations are off.
 static HANDLER: Mutex<Option<Handler>> = Mutex::new(None);
+static MENU_SOURCE: Mutex<Option<MenuSource>> = Mutex::new(None);
+static MENU_GAME: Mutex<Option<String>> = Mutex::new(None);
 static ACTIVE_SHORTCUTS: Mutex<Option<Shortcuts>> = Mutex::new(None);
 /// AppKit asked to quit (logout, or Quit from the Dock) and waits for the
 /// answer, which is given once the host has shut down.
@@ -109,12 +113,17 @@ fn wake_event() -> Option<Retained<NSEvent>> {
 
 /// Adds the menu-bar item and registers the hotkeys. Must be called on the
 /// main thread, before [`run_main_loop`].
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts) -> Result<Integration, String> {
+pub fn start(
+    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    menu_source: MenuSource,
+    shortcuts: Shortcuts,
+) -> Result<Integration, String> {
     let Some(mtm) = MainThreadMarker::new() else {
         return Err("the menu bar and hotkeys must start on the main thread".into());
     };
     application(mtm);
     *lock(&HANDLER) = Some(Arc::new(Mutex::new(on_signal)));
+    *lock(&MENU_SOURCE) = Some(menu_source);
     let bar = status_item(mtm);
     let (hotkeys, hotkey_errors) = register_hotkeys(shortcuts);
     *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
@@ -174,6 +183,8 @@ impl Integration {
 impl Drop for Integration {
     fn drop(&mut self) {
         *lock(&HANDLER) = None;
+        *lock(&MENU_SOURCE) = None;
+        *lock(&MENU_GAME) = None;
         *lock(&ACTIVE_SHORTCUTS) = None;
         run_on_main(|mtm| {
             if let Some(state) = MAIN.with(|main| main.borrow_mut().take()) {
@@ -209,6 +220,13 @@ define_class!(
 
     unsafe impl NSObjectProtocol for Delegate {}
 
+    unsafe impl NSMenuDelegate for Delegate {
+        #[unsafe(method(menuNeedsUpdate:))]
+        fn menu_needs_update(&self, menu: &NSMenu) {
+            rebuild_menu(menu);
+        }
+    }
+
     unsafe impl NSApplicationDelegate for Delegate {
         /// Opening the app again while it runs (Finder, Spotlight, the Dock).
         #[unsafe(method(applicationShouldHandleReopen:hasVisibleWindows:))]
@@ -230,6 +248,30 @@ define_class!(
     }
 
     impl Delegate {
+        #[unsafe(method(play:))]
+        fn play(&self, _sender: Option<&AnyObject>) { emit_game(TrayGameAction::Play); }
+
+        #[unsafe(method(stopGame:))]
+        fn stop_game(&self, _sender: Option<&AnyObject>) { emit_game(TrayGameAction::Stop); }
+
+        #[unsafe(method(save:))]
+        fn save(&self, _sender: Option<&AnyObject>) { emit_game(TrayGameAction::Save); }
+
+        #[unsafe(method(load:))]
+        fn load(&self, _sender: Option<&AnyObject>) { emit_game(TrayGameAction::Load); }
+
+        #[unsafe(method(addGame:))]
+        fn add_game(&self, _sender: Option<&AnyObject>) { emit(Signal::OpenDialog(TrayDialog::Add)); }
+
+        #[unsafe(method(scan:))]
+        fn scan(&self, _sender: Option<&AnyObject>) { emit(Signal::Scan); }
+
+        #[unsafe(method(settings:))]
+        fn settings(&self, _sender: Option<&AnyObject>) { emit(Signal::OpenDialog(TrayDialog::Settings)); }
+
+        #[unsafe(method(about:))]
+        fn about(&self, _sender: Option<&AnyObject>) { emit(Signal::OpenDialog(TrayDialog::About)); }
+
         #[unsafe(method(openMainWindow:))]
         fn open_main_window(&self, _sender: Option<&AnyObject>) {
             emit(Signal::OpenMainWindow);
@@ -290,21 +332,62 @@ fn template_icon() -> Retained<NSImage> {
 fn menu(mtm: MainThreadMarker) -> Retained<NSMenu> {
     let delegate = delegate(mtm);
     let menu = NSMenu::new(mtm);
-    for (title, action) in [("Main window", sel!(openMainWindow:)), ("Exit", sel!(exit:))] {
-        // SAFETY: the delegate lives for the process and has both actions.
+    menu.setAutoenablesItems(false);
+    menu.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+    rebuild_menu(&menu);
+    menu
+}
+
+fn emit_game(action: TrayGameAction) {
+    if let Some(game) = lock(&MENU_GAME).clone() {
+        emit(Signal::TrayGame { game, action });
+    }
+}
+
+fn rebuild_menu(menu: &NSMenu) {
+    let mtm = MainThreadMarker::new().expect("menu on main thread");
+    let delegate = delegate(mtm);
+    let snapshot = lock(&MENU_SOURCE).as_ref().map(|source| source()).unwrap_or_default();
+    *lock(&MENU_GAME) = snapshot.game;
+    menu.removeAllItems();
+    let add = |title: &str, action, enabled: bool, icon: Option<TrayIcon>| {
+        // SAFETY: each selector is implemented by the process-lifetime delegate.
         let item = unsafe {
             let item = NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(mtm),
                 &NSString::from_str(title),
-                Some(action),
+                action,
                 &NSString::new(),
             );
             item.setTarget(Some(&delegate));
+            item.setEnabled(enabled);
+            if let Some(icon) = icon
+                && let Some(image) = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(icon_png(icon)))
+            {
+                image.setSize(NSSize::new(16.0, 16.0));
+                image.setTemplate(true);
+                item.setImage(Some(&image));
+            }
             item
         };
         menu.addItem(&item);
+    };
+    add(snapshot.name.as_deref().unwrap_or("No active game"), None, false, None);
+    if snapshot.running {
+        add("Stop", Some(sel!(stopGame:)), snapshot.stop, Some(TrayIcon::Stop));
+    } else {
+        add("Play", Some(sel!(play:)), snapshot.play, Some(TrayIcon::Play));
     }
-    menu
+    add("Save checkpoint", Some(sel!(save:)), snapshot.save, Some(TrayIcon::Save));
+    add("Load latest checkpoint", Some(sel!(load:)), snapshot.load, Some(TrayIcon::Load));
+    menu.addItem(&NSMenuItem::separatorItem(mtm));
+    add("Main window", Some(sel!(openMainWindow:)), true, Some(TrayIcon::Main));
+    add("Add custom game…", Some(sel!(addGame:)), true, Some(TrayIcon::Add));
+    add("Scan for games", Some(sel!(scan:)), true, Some(TrayIcon::Scan));
+    add("Settings…", Some(sel!(settings:)), true, Some(TrayIcon::Settings));
+    add("About SaveScummer", Some(sel!(about:)), true, Some(TrayIcon::About));
+    menu.addItem(&NSMenuItem::separatorItem(mtm));
+    add("Exit", Some(sel!(exit:)), true, Some(TrayIcon::Exit));
 }
 
 // --- Hotkeys: Carbon `RegisterEventHotKey` through `global-hotkey`. It needs

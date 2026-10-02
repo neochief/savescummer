@@ -6,6 +6,9 @@ use std::sync::mpsc;
 use std::thread::JoinHandle;
 
 use windows_sys::Win32::Foundation::{GetLastError, HWND, LPARAM, LRESULT, POINT, WPARAM};
+use windows_sys::Win32::Graphics::Gdi::{
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateDIBSection, DIB_RGB_COLORS, DeleteObject, HBITMAP,
+};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
@@ -18,13 +21,16 @@ use windows_sys::Win32::UI::Shell::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconFromResourceEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
     DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW, HICON,
-    IDI_APPLICATION, LR_DEFAULTCOLOR, LoadIconW, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
-    RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetMenuDefaultItem, SetWindowLongPtrW, TPM_NONOTIFY,
-    TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY,
-    WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_NULL, WNDCLASSW, WS_OVERLAPPED,
+    IDI_APPLICATION, LR_DEFAULTCOLOR, LoadIconW, MENUITEMINFOW, MF_GRAYED, MF_SEPARATOR, MF_STRING, MIIM_BITMAP, MSG,
+    PostMessageW, PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow,
+    SetMenuDefaultItem, SetMenuItemInfoW, SetWindowLongPtrW, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+    TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
+    WM_HOTKEY, WM_LBUTTONDBLCLK, WM_NULL, WNDCLASSW, WS_OVERLAPPED,
 };
 
-use super::{HotkeyAction, Key, Shortcut, Shortcuts, Signal};
+use super::{
+    HotkeyAction, Key, MenuSource, Shortcut, Shortcuts, Signal, TrayDialog, TrayGameAction, TrayIcon, icon_png,
+};
 use crate::win::{copy_wide, wide};
 
 /// Tray callback message (see `uCallbackMessage`).
@@ -35,6 +41,14 @@ const WM_REBIND: u32 = WM_APP + 3;
 const TRAY_ID: u32 = 1;
 const MENU_MAIN: usize = 1;
 const MENU_EXIT: usize = 2;
+const MENU_PLAY: usize = 3;
+const MENU_SAVE: usize = 4;
+const MENU_LOAD: usize = 5;
+const MENU_ADD: usize = 6;
+const MENU_SCAN: usize = 7;
+const MENU_SETTINGS: usize = 8;
+const MENU_ABOUT: usize = 9;
+const MENU_STOP: usize = 10;
 const TOOLTIP: &str = "SaveScummer";
 const ICO: &[u8] = include_bytes!("../../../../assets/icon.ico");
 
@@ -55,6 +69,7 @@ struct Rebind {
 /// the popup menu's modal loop re-enters the window procedure.
 struct UiState {
     on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    menu_source: MenuSource,
     /// The tray icon, reloaded when the display scale changes.
     icon: Cell<AppIcon>,
     taskbar_created: u32,
@@ -85,11 +100,15 @@ pub struct Integration {
     hotkey_errors: Vec<String>,
 }
 
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts) -> Result<Integration, String> {
+pub fn start(
+    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    menu_source: MenuSource,
+    shortcuts: Shortcuts,
+) -> Result<Integration, String> {
     let (tx, rx) = mpsc::sync_channel(1);
     let thread = std::thread::Builder::new()
         .name("savescummer-integration".into())
-        .spawn(move || ui_thread(on_signal, shortcuts, tx))
+        .spawn(move || ui_thread(on_signal, menu_source, shortcuts, tx))
         .map_err(|e| format!("could not start the integration thread: {e}"))?;
     match rx.recv() {
         Ok(Ok((hwnd, hotkey_errors))) => Ok(Integration { hwnd, thread: Some(thread), hotkey_errors }),
@@ -157,7 +176,12 @@ impl Drop for Integration {
 
 type Ready = Result<(isize, Vec<String>), String>;
 
-fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts, ready: mpsc::SyncSender<Ready>) {
+fn ui_thread(
+    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    menu_source: MenuSource,
+    shortcuts: Shortcuts,
+    ready: mpsc::SyncSender<Ready>,
+) {
     let class = wide("SaveScummerIntegration");
     let taskbar = wide("TaskbarCreated");
     // SAFETY: plain Win32 calls with NUL-terminated strings that outlive
@@ -198,6 +222,7 @@ fn ui_thread(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcu
 
         let state = Box::into_raw(Box::new(UiState {
             on_signal,
+            menu_source,
             icon: Cell::new(load_app_icon(small_icon_size(hwnd))),
             taskbar_created: RegisterWindowMessageW(taskbar.as_ptr()),
             shortcuts: Cell::new(shortcuts),
@@ -391,8 +416,8 @@ fn show_balloon(hwnd: HWND, balloon: &Balloon) {
 }
 
 fn show_menu(hwnd: HWND, state: &UiState) {
-    let main = wide("Main window");
-    let exit = wide("Exit");
+    let snapshot = (state.menu_source)();
+    let game = snapshot.game.clone();
     // SAFETY: the menu is created, used and destroyed here; strings
     // outlive the calls.
     let chosen = unsafe {
@@ -400,8 +425,37 @@ fn show_menu(hwnd: HWND, state: &UiState) {
         if menu.is_null() {
             return;
         }
-        AppendMenuW(menu, MF_STRING, MENU_MAIN, main.as_ptr());
-        AppendMenuW(menu, MF_STRING, MENU_EXIT, exit.as_ptr());
+        let mut bitmaps: Vec<HBITMAP> = Vec::new();
+        let mut append = |id: usize, label: &str, enabled: bool, icon: Option<TrayIcon>| {
+            let label = wide(label);
+            AppendMenuW(menu, MF_STRING | if enabled { 0 } else { MF_GRAYED }, id, label.as_ptr());
+            if let Some(bitmap) = icon.and_then(|icon| menu_bitmap(icon, small_icon_size(hwnd))) {
+                let info = MENUITEMINFOW {
+                    cbSize: size_of::<MENUITEMINFOW>() as u32,
+                    fMask: MIIM_BITMAP,
+                    hbmpItem: bitmap,
+                    ..Default::default()
+                };
+                SetMenuItemInfoW(menu, id as u32, 0, &info);
+                bitmaps.push(bitmap);
+            }
+        };
+        append(0, snapshot.name.as_deref().unwrap_or("No active game"), false, None);
+        if snapshot.running {
+            append(MENU_STOP, "Stop", snapshot.stop, Some(TrayIcon::Stop));
+        } else {
+            append(MENU_PLAY, "Play", snapshot.play, Some(TrayIcon::Play));
+        }
+        append(MENU_SAVE, "Save checkpoint", snapshot.save, Some(TrayIcon::Save));
+        append(MENU_LOAD, "Load latest checkpoint", snapshot.load, Some(TrayIcon::Load));
+        AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
+        append(MENU_MAIN, "Main window", true, Some(TrayIcon::Main));
+        append(MENU_ADD, "Add custom game…", true, Some(TrayIcon::Add));
+        append(MENU_SCAN, "Scan for games", true, Some(TrayIcon::Scan));
+        append(MENU_SETTINGS, "Settings…", true, Some(TrayIcon::Settings));
+        append(MENU_ABOUT, "About SaveScummer", true, Some(TrayIcon::About));
+        AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
+        append(MENU_EXIT, "Exit", true, Some(TrayIcon::Exit));
         SetMenuDefaultItem(menu, MENU_MAIN as u32, 0);
         let mut pt = POINT { x: 0, y: 0 };
         GetCursorPos(&mut pt);
@@ -413,13 +467,62 @@ fn show_menu(hwnd: HWND, state: &UiState) {
             TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, std::ptr::null());
         PostMessageW(hwnd, WM_NULL, 0, 0);
         DestroyMenu(menu);
+        for bitmap in bitmaps {
+            DeleteObject(bitmap);
+        }
         chosen as usize
     };
     match chosen {
+        MENU_PLAY | MENU_STOP | MENU_SAVE | MENU_LOAD => {
+            if let Some(game) = game {
+                let action = match chosen {
+                    MENU_PLAY => TrayGameAction::Play,
+                    MENU_STOP => TrayGameAction::Stop,
+                    MENU_SAVE => TrayGameAction::Save,
+                    _ => TrayGameAction::Load,
+                };
+                emit(state, Signal::TrayGame { game, action });
+            }
+        }
         MENU_MAIN => emit(state, Signal::OpenMainWindow),
+        MENU_ADD => emit(state, Signal::OpenDialog(TrayDialog::Add)),
+        MENU_SCAN => emit(state, Signal::Scan),
+        MENU_SETTINGS => emit(state, Signal::OpenDialog(TrayDialog::Settings)),
+        MENU_ABOUT => emit(state, Signal::OpenDialog(TrayDialog::About)),
         MENU_EXIT => emit(state, Signal::Exit),
         _ => {}
     }
+}
+
+/// A top-down, premultiplied BGRA bitmap for a native menu item.
+fn menu_bitmap(icon: TrayIcon, size: i32) -> Option<HBITMAP> {
+    let png = image::load_from_memory(icon_png(icon)).ok()?.to_rgba8();
+    let pixels = image::imageops::resize(&png, size as u32, size as u32, image::imageops::FilterType::Lanczos3);
+    let mut info: BITMAPINFO = unsafe { std::mem::zeroed() };
+    info.bmiHeader = BITMAPINFOHEADER {
+        biSize: size_of::<BITMAPINFOHEADER>() as u32,
+        biWidth: size,
+        biHeight: -size,
+        biPlanes: 1,
+        biBitCount: 32,
+        biCompression: BI_RGB,
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut();
+    let bitmap =
+        unsafe { CreateDIBSection(std::ptr::null_mut(), &info, DIB_RGB_COLORS, &mut bits, std::ptr::null_mut(), 0) };
+    if bitmap.is_null() || bits.is_null() {
+        return None;
+    }
+    let dest = unsafe { std::slice::from_raw_parts_mut(bits as *mut u8, (size * size * 4) as usize) };
+    for (source, dest) in pixels.pixels().zip(dest.chunks_exact_mut(4)) {
+        let alpha = source[3] as u16;
+        dest[0] = (source[2] as u16 * alpha / 255) as u8;
+        dest[1] = (source[1] as u16 * alpha / 255) as u8;
+        dest[2] = (source[0] as u16 * alpha / 255) as u8;
+        dest[3] = source[3];
+    }
+    Some(bitmap)
 }
 
 /// The small-icon size at the window's DPI (the tray's monitor: the

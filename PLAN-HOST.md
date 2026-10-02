@@ -55,10 +55,7 @@ Showing the UI always means one window: if a UI is connected, the host tells it 
 
 The host starts, in order: open the database, observe running processes for persisted games, resolve eligible interrupted operations, scan, continue monitoring, then accept operations. Recovery that could touch live saves waits if process observation is unavailable or the exit rule applies (PLAN-LOCKDOWN). It shows the UI as soon as it serves the protocol, so the window can appear during the first scan and show it in progress.
 
-Closing the window ends the UI; the host stays in the tray. Clicking the tray icon shows the UI. The tray menu has two items:
-
-- Main window
-- Exit
+Closing the window ends the UI; the host stays in the tray. A primary click on the Windows or Linux tray icon shows the UI; the macOS menu-bar icon opens its menu. The tray menu shows the active game's name (or "No active game"), then Play or Stop, Save checkpoint, and Load latest checkpoint. Play appears when the game is closed. Stop appears when it runs and is enabled only if expert mode allows closing it. Save and Load use the same availability and operation rules as the main window. Below a separator are Main window, Add custom game, Scan for games, Settings, and About SaveScummer. Exit stays at the bottom. Action icons use raster copies of the UI's SVG shapes. Add, Settings, and About open their dialogs in the main window, starting the UI if needed.
 
 The tray icon and menu stay sharp on high-resolution and scaled displays, including when the scale changes while the host runs. Why: by default, Windows draws a program's tray icon and menu at 100% scale and then stretches them, so they look blurry at any other scale.
 

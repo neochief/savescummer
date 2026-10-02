@@ -6,6 +6,7 @@ import type { FlushPreview, Game, HostState, SaveSet, SaveTarget } from './types
 import { version } from '../package.json';
 import { shortcutError } from './shortcuts/shortcuts';
 import { ShortcutInput } from './shortcuts/ShortcutInput';
+import { playInterfaceSound } from './interfaceSounds';
 
 export type DialogKind = 'settings' | 'add' | 'configure' | 'flush' | 'about';
 
@@ -218,6 +219,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
       if (kind === 'add') {
         if (!name.trim() || !typed.executable || !typed.location) throw new Error('Fill in the name, executable, and save location.');
         const result = await bridge.request<{ game: string; existing?: boolean }>({ type: 'add_game', name: name.trim(), executable: typed.executable, save_location: typed.location });
+        playInterfaceSound('success', state?.settings?.play_sounds ?? true);
         onAdded(result.game, Boolean(result.existing));
       } else if (kind === 'configure' && game) {
         const custom = game.kind === 'custom';
@@ -228,14 +230,17 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           reset_executable: resetExecutable, reset_save_location: !custom && !typed.location && Boolean(saveSet?.location),
           expert_mode: expertMode !== (game.expert_mode ?? false) ? expertMode : undefined,
         });
+        playInterfaceSound('success', state?.settings?.play_sounds ?? true);
         close();
       } else if (kind === 'settings') {
         await bridge.request({ type: 'settings', play_sounds: sounds,
           launch_on_startup: state?.settings?.launch_on_startup_available && startup !== state.settings.launch_on_startup ? startup : undefined,
           save_shortcut: saveShortcut, load_shortcut: loadShortcut, flush_old_checkpoints: flushOld });
+        playInterfaceSound('success', sounds);
         close();
       } else if (kind === 'flush' && game) {
         const accepted = await bridge.request<{ id: string }>({ type: 'flush', game: game.id });
+        playInterfaceSound('success', state?.settings?.play_sounds ?? true);
         close();
         onFlushed(accepted.id);
       }

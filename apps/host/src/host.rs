@@ -14,7 +14,7 @@ use savescummer_core::stack::ActiveStack;
 use savescummer_core::{ErrorKind, Failure, Filter, Presence};
 use savescummer_ipc::{
     AccessInfo, CheckpointBrief, EventBody, GameKind, GameSummary, Operation, Phase, ScanInfo, SettingsInfo, State,
-    StoreInfo,
+    StoreInfo, TrayDialogRequest,
 };
 use savescummer_platform::integration::{Shortcut, Shortcuts, shortcut_text};
 use savescummer_scanner::Environment;
@@ -94,6 +94,7 @@ pub struct Inner {
     pub ops: HashMap<String, Operation>,
     pub scan: ScanInfo,
     pub ui: UiReport,
+    pub tray_dialog: Option<TrayDialogRequest>,
     /// Open connections that identified themselves as the UI.
     pub ui_connections: usize,
     /// When the host last started a UI that hasn't connected yet.
@@ -248,6 +249,7 @@ impl Host {
             scan: inner.scan.clone(),
             active_stack: inner.stack.entries().to_vec(),
             hotkey_target: hotkey_target(inner).map(|(g, _)| g),
+            tray_dialog: inner.tray_dialog.clone(),
             catalog_revision: catalog.bundle.source.revision.clone(),
             games,
             deletes: inner.deletes.values().map(|delete| delete.op.clone()).collect(),
@@ -531,6 +533,7 @@ fn placeholder_state(instance: &str) -> State {
         scan: ScanInfo { running: None, running_full: None, last_user: None, scans: 0, full_scans: 0 },
         active_stack: Vec::new(),
         hotkey_target: None,
+        tray_dialog: None,
         catalog_revision: String::new(),
         games: Vec::new(),
         deletes: Vec::new(),
@@ -559,6 +562,7 @@ impl Inner {
             ops: HashMap::new(),
             scan: ScanInfo { running: None, running_full: None, last_user: None, scans: 0, full_scans: 0 },
             ui: UiReport::default(),
+            tray_dialog: None,
             ui_connections: 0,
             ui_started: None,
             last_focus_scan: None,

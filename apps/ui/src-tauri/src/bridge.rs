@@ -30,6 +30,9 @@ struct Bridge {
 #[serde(tag = "type", rename_all = "snake_case")]
 enum UiRequest {
     State,
+    AckTrayDialog {
+        id: String,
+    },
     History {
         game: String,
         cursor: Option<String>,
@@ -127,6 +130,7 @@ impl UiRequest {
     fn command(self) -> Command {
         match self {
             Self::State => Command::State,
+            Self::AckTrayDialog { id } => Command::AckTrayDialog { id },
             Self::History { game, cursor, limit } => {
                 Command::History { game, cursor, limit: limit.map(|n| n.min(200)) }
             }

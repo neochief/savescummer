@@ -74,6 +74,7 @@ export interface HostState {
   phase: 'starting' | 'ready' | 'shutting_down';
   games: Game[];
   active_stack: string[];
+  tray_dialog?: { id: string; kind: 'add' | 'settings' | 'about' };
   store?: { path: string; available: boolean };
   deletes: Operation[];
   settings?: { play_sounds: boolean; launch_on_startup: boolean; launch_on_startup_available: boolean; launch_on_startup_needs_approval?: boolean;
@@ -123,6 +124,7 @@ export interface HistoryPage {
 
 export type UiRequest =
   | { type: 'state' }
+  | { type: 'ack_tray_dialog'; id: string }
   | { type: 'history'; game: string; cursor?: string; limit?: number }
   | { type: 'save'; game: string }
   | { type: 'retry'; game: string }

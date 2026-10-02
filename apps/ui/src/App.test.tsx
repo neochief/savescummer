@@ -13,6 +13,7 @@ afterEach(() => { cleanup(); dialogOpen.mockReset(); });
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
 });
 
 const game = (id: string, name: string): Game => ({
@@ -87,16 +88,34 @@ test('selecting another game reads that game’s real history page', async () =>
   expect(bridge.requests).toContainEqual({ type: 'history', game: 'b', limit: 100 });
 });
 
+test('routine navigation is quiet while opening a dialog plays one tick', async () => {
+  const bridge = new FakeBridge();
+  render(<App bridge={bridge} />);
+  await screen.findByText('First checkpoint');
+  const audio = vi.mocked(HTMLMediaElement.prototype.play);
+  const before = audio.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: /Game B, Not running/ }));
+  await screen.findByText('Second checkpoint');
+  expect(audio).toHaveBeenCalledTimes(before);
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/button.wav');
+  expect(audio).toHaveBeenCalledTimes(before + 1);
+});
+
 test('cards show Play while stopped and expose Terminate only when the host permits it', async () => {
   const bridge = new FakeBridge();
   bridge.state.games[0].can_play = true;
   render(<App bridge={bridge} />);
+  const audio = vi.mocked(HTMLMediaElement.prototype.play);
   const play = await screen.findByRole('button', { name: 'Play Game A' });
+  const beforePlay = audio.mock.calls.length;
   fireEvent.click(play);
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'play', game: 'a' }));
+  expect(audio).toHaveBeenCalledTimes(beforePlay);
 
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 2,
     games: [{ ...bridge.state.games[0], running: true, can_close: false }, bridge.state.games[1]] }));
+  expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/game-run.wav');
   expect(screen.queryByRole('button', { name: 'Play Game A' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Terminate Game A' })).toBeNull();
 
@@ -104,9 +123,11 @@ test('cards show Play while stopped and expose Terminate only when the host perm
     games: [{ ...bridge.state.games[0], running: true, can_close: true }, bridge.state.games[1]] }));
   fireEvent.click(screen.getByRole('button', { name: 'Terminate Game A' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'close_game', game: 'a' }));
+  expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/game-run.wav');
 
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 4,
     games: [bridge.state.games[0], bridge.state.games[1]] }));
+  expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/game-stop.wav');
   expect(screen.getByRole('button', { name: 'Play Game A' })).toBeTruthy();
 });
 
@@ -194,16 +215,22 @@ test('Info reveals the full game instructions only when requested', async () => 
   bridge.state.games[0].info = 'Context: Keep this run.\n\nHow progress is saved: The save is overwritten.';
   render(<App bridge={bridge} />);
   const button = await screen.findByRole('button', { name: 'Info' });
+  const audio = vi.mocked(HTMLMediaElement.prototype.play);
+  const before = audio.mock.calls.length;
   expect(button.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByText(/How progress is saved/)).toBeNull();
 
   fireEvent.click(button);
+  expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/drawer-open.wav');
+  expect(audio).toHaveBeenCalledTimes(before + 1);
   expect(button.getAttribute('aria-expanded')).toBe('true');
   expect(screen.getByText(/How progress is saved: The save is overwritten/)).toBeTruthy();
 
   fireEvent.click(button);
+  expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/drawer-close.wav');
+  expect(audio).toHaveBeenCalledTimes(before + 2);
   expect(button.getAttribute('aria-expanded')).toBe('false');
-  expect(screen.queryByText(/How progress is saved/)).toBeNull();
+  await waitFor(() => expect(screen.queryByText(/How progress is saved/)).toBeNull());
 });
 
 test('a game starting or closing does not replace the selected view', async () => {
@@ -387,8 +414,8 @@ test('a Load-only empty state leaves Save usable', async () => {
   const panel = await screen.findByRole('status', { name: "You've got progress worth keeping" });
   expect(panel.classList.contains('covers-load')).toBe(true);
   expect(panel.textContent).toContain('Hit Save to make your first checkpoint.');
-  expect(document.querySelector('.action-slot:first-child .shortcut-tab')).toBeTruthy();
-  expect(document.querySelector('.action-slot:nth-child(2) .shortcut-tab')).toBeNull();
+  expect(document.querySelector('.action-slot.save .shortcut-tab')).toBeTruthy();
+  expect(document.querySelector('.action-slot.load .shortcut-tab')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'save Game A' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'save', game: 'a' }));
 });
@@ -399,8 +426,8 @@ test('guidance hides only the shortcut for its covered action', async () => {
   render(<App bridge={bridge} />);
   const panel = await screen.findByRole('status', { name: 'Nothing to back up yet' });
   expect(panel.textContent).toContain('Your checkpoints are still here. Hit Load to bring one back.');
-  const save = document.querySelector('.action-slot:first-child')!;
-  const load = document.querySelector('.action-slot:nth-child(2)')!;
+  const save = document.querySelector('.action-slot.save')!;
+  const load = document.querySelector('.action-slot.load')!;
   expect(save.hasAttribute('inert')).toBe(true);
   expect((save.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
   expect(save.querySelector('.shortcut-tab')).toBeNull();
@@ -462,10 +489,11 @@ test('delete hides the row immediately and Undo restores it with the row animati
   const panel = screen.getByRole('status', { name: 'Checkpoint removed' });
   expect(undo.parentElement).toBe(panel);
   expect(panel.classList.contains('undo-panel')).toBe(true);
-  expect(screen.getByRole('button', { name: 'Info' }).closest('.game-info')).not.toContain(undo);
+  expect(screen.getByRole('button', { name: 'Info' }).closest('.game-launcher')).not.toContain(undo);
   expect(undo.classList.contains('undo-button')).toBe(true);
   expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
   fireEvent.click(undo);
+  expect((vi.mocked(HTMLMediaElement.prototype.play).mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/undo.wav');
   expect(panel.classList.contains('exiting-right')).toBe(true);
   expect(screen.getByText('First checkpoint').closest('.history-row')?.classList.contains('arrived')).toBe(true);
   expect(screen.getByText('First checkpoint').closest('.history-row')?.classList.contains('flash')).toBe(true);
@@ -768,6 +796,20 @@ test('the sidebar logo opens About, whose Website button opens the site', async 
   expect(bridge.openWebsite).toHaveBeenCalledOnce();
   fireEvent.click(within(about).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('a tray dialog request opens About when the UI connects and only once per request', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.tray_dialog = { id: 'tray-1', kind: 'about' };
+  render(<App bridge={bridge} />);
+  const about = await screen.findByRole('dialog', { name: 'About' });
+  expect(bridge.requests).toContainEqual({ type: 'ack_tray_dialog', id: 'tray-1' });
+  fireEvent.click(within(about).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  act(() => bridge.stateListener?.({ ...bridge.state, revision: 2 }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  act(() => bridge.stateListener?.({ ...bridge.state, revision: 3, tray_dialog: { id: 'tray-2', kind: 'settings' } }));
+  expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeTruthy();
 });
 
 const saveButton = () => screen.getByRole('button', { name: /^Save shortcut/ });

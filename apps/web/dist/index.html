@@ -10,7 +10,7 @@
     <style>
       @font-face { font-family: "Chakra Petch"; src: url("./fonts/ChakraPetch-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
       @font-face { font-family: Inter; src: url("./fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --popup-bg: #332822; }
       * { box-sizing: border-box; }
       body { margin: 0; background: #1c1918; color: #faf8ee; }
       main { width: 100%; }
@@ -32,29 +32,50 @@
       .github .download-name { font-size: 1.5rem; white-space: nowrap; }
       .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #302824; background: #12100f; }
       .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
-      .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.25rem, 5vw, 3rem)/1.15 "Chakra Petch", sans-serif; }
-      .supported-subtitle { max-width: 40rem; margin: 1rem auto 2.75rem; color: #d7c9ba; text-align: center; font-size: clamp(1rem, 2.2vw, 1.125rem); }
+      .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.5rem, 5vw, 3.5rem)/1.1 "Chakra Petch", sans-serif; }
+      .supported-copy { margin: 1.25rem auto 2.75rem; text-align: center; }
       .game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; mask-image: linear-gradient(to bottom, #000 0%, #000 52%, #0003 100%); }
       .game-grid.expanded { mask-image: none; }
-      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border-radius: 10px; background: #3c302d; cursor: help; }
+      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border: 2px solid transparent; border-radius: 10px; background: #3c302d; background-clip: padding-box; cursor: pointer; }
+      .game-card:hover, .game-card:focus-visible { border-color: var(--popup-bg); }
       .game-card:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
       .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
-      .game-art { object-fit: cover; }
+      .game-art { object-fit: cover; cursor: pointer; }
       .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
-      .game-logo { position: absolute; top: 10%; left: 12.5%; width: 75%; height: 80%; object-fit: contain; }
+      .game-logo { position: absolute; top: 10%; left: 12.5%; width: 75%; height: 80%; object-fit: contain; cursor: pointer; }
       .game-fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: .75rem; text-align: center; font: 700 clamp(1rem, 2vw, 1.4rem)/1.1 "Chakra Petch", sans-serif; }
       .show-more { display: block; margin: 1.5rem auto 0; padding: .8rem 1.4rem; border: 1px solid #6a5650; border-radius: .65rem; background: #2a2420; color: #faf8ee; font: 700 1rem "Chakra Petch", sans-serif; cursor: pointer; }
       .show-more[hidden] { display: none; }
       .show-more:hover { background: #3c302d; }
       .show-more:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
-      .game-tooltip { position: fixed; z-index: 10; width: min(22rem, calc(100vw - 1.5rem)); padding: 1rem 1.125rem; border: 1px solid #6a5650; border-radius: .75rem; background: #332822; color: #faf8ee; box-shadow: 0 16px 40px #000a; font-size: .9rem; line-height: 1.45; pointer-events: none; }
+      .game-tooltip { position: fixed; z-index: 10; width: min(29rem, calc(100vw - 1.5rem)); color: #faf8ee; pointer-events: none; }
+      .game-tooltip.flip { display: flex; flex-direction: column-reverse; }
       .game-tooltip[hidden] { display: none; }
+      .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 1.25rem solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; transform-origin: center top; animation: art-grow .28s ease-out both; }
+      .game-tooltip.flip .game-tooltip-art { transform-origin: center bottom; }
+      .game-tooltip-copy { position: relative; z-index: 1; margin-top: -.25rem; padding: 1.125rem 1.25rem; border-radius: 10px; background: var(--popup-bg); transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
+      .game-tooltip.flip .game-tooltip-copy { margin-top: 0; margin-bottom: -.25rem; transform-origin: center bottom; animation-name: popup-unfold-up; }
+      .game-tooltip-title { margin: 0 0 .75rem; color: #faf8ee; text-align: center; font: 700 1.4rem/1.15 "Chakra Petch", sans-serif; }
+      .game-tooltip-context { margin: 0; color: #faf8ee; font-size: .925rem; line-height: 1.5; }
+      .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: #241c19; color: #d7c9ba; }
+      .game-tooltip-value p { margin: 0; font-size: .875rem; line-height: 1.5; }
+      .game-tooltip-icon { display: block; width: 2.5rem; height: 2.5rem; margin-top: .05rem; flex: none; background: currentColor; mask: center / contain no-repeat; transform: translateY(2px); }
+      @keyframes art-grow { from { transform: scale(1); } to { transform: scale(1.035); } }
+      @keyframes popup-unfold { from { opacity: 0; transform: translateY(-.75rem) scale(.95); } to { opacity: 1; transform: none; } }
+      @keyframes popup-unfold-up { from { opacity: 0; transform: translateY(.75rem) scale(.95); } to { opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) {
+        .game-tooltip-art, .game-tooltip-copy { animation: none; }
+      }
       @media (max-width: 700px) {
         .hero { padding: 5rem 0 4rem; }
         .supported { padding-top: 4rem; }
         .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
       }
-      @media (max-width: 450px) { .game-grid { grid-template-columns: 1fr; } }
+      @media (max-width: 450px) {
+        .game-grid { grid-template-columns: 1fr; }
+        .game-tooltip-title { font-size: 1.2rem; }
+        .game-tooltip-context, .game-tooltip-value p { font-size: .8125rem; }
+      }
       @media (max-width: 380px) {
         .github { padding: 0 .75rem; }
         .github img { width: 1.75rem; height: 1.75rem; }
@@ -79,13 +100,26 @@
       <section class="supported" aria-labelledby="supported-title">
         <div class="supported-inner">
           <h2 id="supported-title">Supported games</h2>
-          <p class="supported-subtitle">We chose games where progress is costly to lose: permadeath ends rare builds, Ironman overwrites long campaigns, and autosaves lock in story choices. Each card explains where a checkpoint helps, including cases where a live run cannot yet be restored from save files.</p>
+          <div class="supported-copy">
+            <p class="subtitle">I chose games where progress is costly to lose.</p>
+            <p class="supporting">Permadeath ends fun builds, Ironman overwrites exciting campaigns, and autosaves lock in boring story choices.<br />There are too many games to suffer through the slog!</p>
+          </div>
           <div class="game-grid" id="game-grid"></div>
           <button class="show-more" id="show-more" type="button">Show all games</button>
         </div>
       </section>
     </main>
-    <div class="game-tooltip" id="game-tooltip" role="tooltip" hidden></div>
+    <div class="game-tooltip" id="game-tooltip" role="tooltip" hidden>
+      <div class="game-tooltip-art" id="game-tooltip-art" aria-hidden="true"></div>
+      <div class="game-tooltip-copy">
+        <h3 class="game-tooltip-title" id="game-tooltip-title"></h3>
+        <p class="game-tooltip-context" id="game-tooltip-context"></p>
+        <div class="game-tooltip-value">
+          <span class="game-tooltip-icon" id="game-tooltip-icon" aria-hidden="true"></span>
+          <p id="game-tooltip-value"></p>
+        </div>
+      </div>
+    </div>
     <script src="./games-data.js"></script>
     <script>
       const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
@@ -102,6 +136,11 @@
       const grid = document.getElementById("game-grid");
       const showMore = document.getElementById("show-more");
       const tooltip = document.getElementById("game-tooltip");
+      const tooltipArt = document.getElementById("game-tooltip-art");
+      const tooltipTitle = document.getElementById("game-tooltip-title");
+      const tooltipContext = document.getElementById("game-tooltip-context");
+      const tooltipValue = document.getElementById("game-tooltip-value");
+      const tooltipIcon = document.getElementById("game-tooltip-icon");
       let activeCard = null;
 
       function hideTooltip(card) {
@@ -110,26 +149,54 @@
         activeCard = null;
       }
 
-      function showTooltip(card, value) {
+      function showTooltip(card, game) {
         activeCard = card;
-        tooltip.textContent = value;
-        tooltip.hidden = false;
         const cardRect = card.getBoundingClientRect();
-        const tipRect = tooltip.getBoundingClientRect();
-        let top = cardRect.top - tipRect.height - 10;
-        if (top < 12) top = cardRect.bottom + 10;
-        tooltip.style.top = `${Math.min(top, window.innerHeight - tipRect.height - 12)}px`;
-        tooltip.style.left = `${Math.max(12, Math.min(cardRect.left + cardRect.width / 2 - tipRect.width / 2, window.innerWidth - tipRect.width - 12))}px`;
+        tooltipArt.style.width = `${cardRect.width}px`;
+        tooltipArt.style.height = `${cardRect.height}px`;
+        fillArtwork(tooltipArt, game, "eager");
+        tooltipTitle.textContent = game.name;
+        tooltipContext.textContent = game.context;
+        tooltipValue.textContent = game.value;
+        tooltipIcon.style.maskImage = `url("./icons/value/${game.icon}.svg")`;
+        tooltipIcon.style.webkitMaskImage = tooltipIcon.style.maskImage;
+        tooltip.classList.remove("flip");
+        tooltip.hidden = false;
+        const imageFrame = parseFloat(getComputedStyle(tooltipArt).borderLeftWidth) || 0;
+        const tipWidth = tooltip.offsetWidth;
+        const tipHeight = tooltip.offsetHeight;
+        const flip = cardRect.top + tipHeight > window.innerHeight - 12;
+        tooltip.classList.toggle("flip", flip);
+        const top = flip ? cardRect.bottom + imageFrame - tipHeight : cardRect.top - imageFrame;
+        const left = Math.max(12, Math.min(cardRect.left + cardRect.width / 2 - tipWidth / 2, window.innerWidth - tipWidth - 12));
+        tooltip.style.top = `${Math.max(12, Math.min(top, window.innerHeight - tipHeight - 12))}px`;
+        tooltip.style.left = `${left}px`;
+        tooltipArt.style.marginLeft = `${cardRect.left - left - imageFrame}px`;
       }
 
-      function addImage(card, className, path) {
+      function addImage(card, className, path, loading = "lazy") {
         const img = document.createElement("img");
         img.className = className;
         img.src = `./${path}`;
         img.alt = "";
-        img.loading = "lazy";
+        img.loading = loading;
         img.decoding = "async";
         card.append(img);
+      }
+
+      function fillArtwork(container, game, loading = "lazy") {
+        container.replaceChildren();
+        if (game.hero) addImage(container, "game-art", game.hero, loading);
+        const shade = document.createElement("span");
+        shade.className = "game-shade";
+        container.append(shade);
+        if (game.logo) addImage(container, "game-logo", game.logo, loading);
+        else {
+          const fallback = document.createElement("span");
+          fallback.className = "game-fallback";
+          fallback.textContent = game.name;
+          container.append(fallback);
+        }
       }
 
       function renderCards(items) {
@@ -138,22 +205,12 @@
           const card = document.createElement("div");
           card.className = "game-card";
           card.setAttribute("role", "img");
-          card.setAttribute("aria-label", `${game.name}. ${game.value}`);
+          card.setAttribute("aria-label", `${game.name}. ${game.context} ${game.value}`);
           card.tabIndex = 0;
-          if (game.hero) addImage(card, "game-art", game.hero);
-          const shade = document.createElement("span");
-          shade.className = "game-shade";
-          card.append(shade);
-          if (game.logo) addImage(card, "game-logo", game.logo);
-          else {
-            const fallback = document.createElement("span");
-            fallback.className = "game-fallback";
-            fallback.textContent = game.name;
-            card.append(fallback);
-          }
-          card.addEventListener("pointerenter", () => showTooltip(card, game.value));
+          fillArtwork(card, game);
+          card.addEventListener("pointerenter", () => showTooltip(card, game));
           card.addEventListener("pointerleave", () => hideTooltip(card));
-          card.addEventListener("focus", () => showTooltip(card, game.value));
+          card.addEventListener("focus", () => showTooltip(card, game));
           card.addEventListener("blur", () => hideTooltip(card));
           fragment.append(card);
         }

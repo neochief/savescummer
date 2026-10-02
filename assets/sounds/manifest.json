@@ -6,144 +6,69 @@
     "bits_per_sample": 16,
     "channels": 1
   },
-  "source": "Original procedural synthesis; no recordings, third-party samples or generative-audio services.",
-  "generator": "scripts/generate-sounds.mjs",
+  "source": "Original procedural synthesis; no recordings or third-party samples.",
+  "generator": "apps/ui/scripts/generate-interface-sounds.mjs",
+  "style": "wood",
   "cues": [
     {
       "id": "save-start",
       "file": "save-start.wav",
-      "event": "Save started",
-      "description": "Two soft ascending notes, E5 to A5.",
-      "duration_ms": 100,
-      "peak_dbfs": -18,
-      "rms_dbfs": -27.54,
-      "bytes": 9644,
-      "sha256": "379b94eb18b9b2cfdae7b891a3915d3f59d9a2fd61a03cfd773dc5682d654e8b"
+      "description": "Rising two-note pickup.",
+      "duration_ms": 150,
+      "peak_dbfs": -20,
+      "rms_dbfs": -31.9,
+      "bytes": 14444,
+      "sha256": "279246105b51431945a12cb9c4db528bafc575343d19e68ab10707ac1da925b4"
     },
     {
       "id": "save-complete",
       "file": "save-complete.wav",
-      "event": "Save completed",
-      "description": "A brighter ascending resolution, B5 to E6.",
-      "duration_ms": 200,
-      "peak_dbfs": -14,
-      "rms_dbfs": -24.88,
-      "bytes": 19244,
-      "sha256": "d6b38ac16f18f189b7a12679b08a41c2c50da1eb1c5bb23a36445007462e9054"
+      "description": "Higher landing that completes Save.",
+      "duration_ms": 160,
+      "peak_dbfs": -17,
+      "rms_dbfs": -29.1,
+      "bytes": 15404,
+      "sha256": "2d47d670f232c2cbf2dc6f10b5db68f92a56f459bcc65bc6a83542d0bc6916ba"
     },
     {
       "id": "load-start",
       "file": "load-start.wav",
-      "event": "Load started",
-      "description": "Two soft descending notes, A5 to E5.",
-      "duration_ms": 100,
-      "peak_dbfs": -18,
-      "rms_dbfs": -27.52,
-      "bytes": 9644,
-      "sha256": "48f0d32f230117e60d10d707ce95f705d92e0c4f388b5d1915532385c3e3ac74"
+      "description": "Falling two-note pickup.",
+      "duration_ms": 150,
+      "peak_dbfs": -20,
+      "rms_dbfs": -32,
+      "bytes": 14444,
+      "sha256": "04dc3d8c15b9335b8418113a3ad24d3e3531eaf76551035d0981fed0cbda8de8"
     },
     {
       "id": "load-complete",
       "file": "load-complete.wav",
-      "event": "Load completed",
-      "description": "A rounded descending resolution, D5 to A4.",
-      "duration_ms": 200,
-      "peak_dbfs": -14,
-      "rms_dbfs": -24.53,
-      "bytes": 19244,
-      "sha256": "d36710b9676de7ce0deaa7d7cad811bd05f36760bf02ca42d8146e896235d7e3"
+      "description": "Lower landing that completes Load.",
+      "duration_ms": 160,
+      "peak_dbfs": -17,
+      "rms_dbfs": -29,
+      "bytes": 15404,
+      "sha256": "772f27d0c2a3822eeae7d30689d1f8798b6544a9849199cf21d86a1936111901"
     },
     {
       "id": "operation-failed",
       "file": "operation-failed.wav",
-      "event": "Operation failed",
-      "description": "Two low, muted knocks; the second is slightly lower.",
-      "duration_ms": 170,
-      "peak_dbfs": -16,
-      "rms_dbfs": -30.39,
-      "bytes": 16364,
-      "sha256": "9b7793dbc459313c595c449d9d13fc679998c20e540099656ce3453e03643fc7"
+      "description": "Textured descending response.",
+      "duration_ms": 222,
+      "peak_dbfs": -18,
+      "rms_dbfs": -31.8,
+      "bytes": 21356,
+      "sha256": "16ee3108b549340a21d69d52eb2cde188b38182a5f1d4d77e8924508d67ee3ad"
     },
     {
       "id": "busy",
       "file": "busy.wav",
-      "event": "Busy",
-      "description": "One quiet, dry tick.",
-      "duration_ms": 28,
-      "peak_dbfs": -26,
-      "rms_dbfs": -44.34,
-      "bytes": 2732,
-      "sha256": "5c2cd78e52eef7ed084a647d8555a15b53d2f3f5f9a0a08d5e65d127e97534df"
-    }
-  ],
-  "previews": [
-    {
-      "file": "preview/all-cues.wav",
-      "duration_ms": 7100,
-      "timeline": [
-        {
-          "cue": "save-start",
-          "at_ms": 400
-        },
-        {
-          "cue": "save-complete",
-          "at_ms": 1600
-        },
-        {
-          "cue": "load-start",
-          "at_ms": 2800
-        },
-        {
-          "cue": "load-complete",
-          "at_ms": 4000
-        },
-        {
-          "cue": "operation-failed",
-          "at_ms": 5200
-        },
-        {
-          "cue": "busy",
-          "at_ms": 6400
-        }
-      ]
-    },
-    {
-      "file": "preview/fast-operations.wav",
-      "duration_ms": 5200,
-      "timeline": [
-        {
-          "cue": "save-start",
-          "at_ms": 400
-        },
-        {
-          "cue": "save-complete",
-          "at_ms": 550
-        },
-        {
-          "cue": "load-start",
-          "at_ms": 1700
-        },
-        {
-          "cue": "load-complete",
-          "at_ms": 1850
-        },
-        {
-          "cue": "save-start",
-          "at_ms": 3000
-        },
-        {
-          "cue": "operation-failed",
-          "at_ms": 3150
-        },
-        {
-          "cue": "load-start",
-          "at_ms": 4300
-        },
-        {
-          "cue": "operation-failed",
-          "at_ms": 4450
-        }
-      ]
+      "description": "Quiet dry tick.",
+      "duration_ms": 44,
+      "peak_dbfs": -29,
+      "rms_dbfs": -43,
+      "bytes": 4268,
+      "sha256": "791fcb2ff3fe2fea88c5b55d674cd79793d9dd286e09bab4476f8a43e8516ede"
     }
   ]
 }

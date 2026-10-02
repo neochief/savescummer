@@ -3,8 +3,8 @@
 //!
 //! - Ctrl+F5 → Save, Ctrl+F9 → Load; ⌥F5 and ⌥F9 on macOS, which reserves
 //!   ⌃F5. Each OS file holds its own table. Holding a key triggers once.
-//! - Tray: a click opens the main window; its menu has "Main window" and
-//!   "Exit".
+//! - Tray: a click opens the main window; its menu shows the active game and
+//!   the main window's common actions.
 //! - [`Integration::notify`] shows an OS notification.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,11 +13,73 @@ pub enum HotkeyAction {
     Load,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Signal {
     Hotkey(HotkeyAction),
+    TrayGame { game: String, action: TrayGameAction },
+    OpenDialog(TrayDialog),
+    Scan,
     OpenMainWindow,
     Exit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrayGameAction {
+    Play,
+    Stop,
+    Save,
+    Load,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrayDialog {
+    Add,
+    Settings,
+    About,
+}
+
+/// A fresh snapshot for a menu as it opens. The game id is kept with the
+/// action so a focus change while the menu is open cannot retarget a click.
+#[derive(Debug, Clone, Default)]
+pub struct TrayMenu {
+    pub game: Option<String>,
+    pub name: Option<String>,
+    pub play: bool,
+    pub running: bool,
+    pub stop: bool,
+    pub save: bool,
+    pub load: bool,
+}
+
+pub type MenuSource = Box<dyn Fn() -> TrayMenu + Send + Sync + 'static>;
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrayIcon {
+    Play,
+    Stop,
+    Save,
+    Load,
+    Main,
+    Add,
+    Scan,
+    Settings,
+    About,
+    Exit,
+}
+
+pub fn icon_png(icon: TrayIcon) -> &'static [u8] {
+    match icon {
+        TrayIcon::Play => include_bytes!("../../../../assets/tray/circle-play.png"),
+        TrayIcon::Stop => include_bytes!("../../../../assets/tray/circle-stop.png"),
+        TrayIcon::Save => include_bytes!("../../../../assets/tray/flag.png"),
+        TrayIcon::Load => include_bytes!("../../../../assets/tray/rotate-left.png"),
+        TrayIcon::Main => include_bytes!("../../../../assets/tray/square.png"),
+        TrayIcon::Add => include_bytes!("../../../../assets/tray/plus.png"),
+        TrayIcon::Scan => include_bytes!("../../../../assets/tray/arrows-rotate.png"),
+        TrayIcon::Settings => include_bytes!("../../../../assets/tray/gear.png"),
+        TrayIcon::About => include_bytes!("../../../../assets/tray/circle-info.png"),
+        TrayIcon::Exit => include_bytes!("../../../../assets/tray/xmark.png"),
+    }
 }
 
 #[cfg_attr(windows, path = "windows.rs")]
@@ -59,7 +121,7 @@ mod tests {
     #[test]
     #[ignore = "needs a desktop session; run by hand"]
     fn starts_notifies_and_stops() {
-        let integration = start(Box::new(|_| {}), Shortcut::defaults()).expect("started");
+        let integration = start(Box::new(|_| {}), Box::new(TrayMenu::default), Shortcut::defaults()).expect("started");
         eprintln!("hotkey errors: {:?}", integration.hotkey_errors());
         integration.notify("SaveScummer test", "Integration test notification");
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -67,7 +129,7 @@ mod tests {
 
         // Dropping without stop() must clean up too, and a second start in
         // the same process must work (class already registered).
-        let again = start(Box::new(|_| {}), Shortcut::defaults()).expect("started again");
+        let again = start(Box::new(|_| {}), Box::new(TrayMenu::default), Shortcut::defaults()).expect("started again");
         drop(again);
     }
 }

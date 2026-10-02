@@ -6,6 +6,7 @@ import type { HistoryEntry, HistoryPage, HostState, Operation, SaveTarget, UiReq
 import snapshot from './demo-snapshot.json';
 import { applyPolicy, type Facts } from './policy';
 import { scenarios } from './scenarios';
+import { playInterfaceSound, type InterfaceCue } from '../interfaceSounds';
 
 const files = import.meta.glob<string>('./art/*/*', { eager: true, import: 'default', query: '?url' });
 const art = (game: string, kind: string) =>
@@ -25,6 +26,8 @@ export function createMockBridge(): Bridge {
   const facts: Record<string, Facts> = {};
   const lock = (g: HostState['games'][number]) => applyPolicy(g, facts[g.id], state.phase);
   const ops = new Map<string, Operation>();
+  const sounded = new Set<string>();
+  const sound = (cue: InterfaceCue) => playInterfaceSound(cue, state.settings?.play_sounds ?? true);
   const operation = (game: string, kind: keyof NonNullable<typeof scenario.fail>): Operation => {
     const id = `op-${++seq}`;
     const error = scenario.fail?.[kind];
@@ -68,7 +71,10 @@ export function createMockBridge(): Bridge {
       if (scenario.offline) return new Promise(() => undefined);
       await new Promise((r) => setTimeout(r, 120));
       const refusal = scenario.refuse?.[request.type];
-      if (refusal) throw new HostError(refusal, 'Host rejected the request');
+      if (refusal) {
+        if (request.type === 'save' || request.type === 'load') sound(refusal.kind === 'busy' ? 'busy' : 'operation-failed');
+        throw new HostError(refusal, 'Host rejected the request');
+      }
       switch (request.type) {
         case 'state': return structuredClone(state) as T;
         case 'play': case 'close_game': {
@@ -92,6 +98,7 @@ export function createMockBridge(): Bridge {
         case 'save': case 'load': case 'revert': case 'retry': {
           const g = find(request.game);
           const op = operation(g.id, request.type);
+          if (request.type === 'save' || request.type === 'load') sound(`${request.type}-start`);
           if (ops.get(op.id)!.error) return op as T;
           if (request.type === 'retry') { facts[g.id].blocked = facts[g.id].recovery = g.blocked = undefined; lock(g); }
           if (request.type === 'save') {
@@ -132,7 +139,14 @@ export function createMockBridge(): Bridge {
         case 'outcome': {
           const pending = deletes.get(request.operation);
           if (pending) return await pending.done as T;
-          return (ops.get(request.operation) ?? { id: request.operation, kind: 'save', status: 'succeeded' } satisfies Operation) as T;
+          const result = ops.get(request.operation) ?? { id: request.operation, kind: 'save', status: 'succeeded' } satisfies Operation;
+          if (!sounded.has(result.id) && (result.kind === 'save' || result.kind === 'load')) {
+            sounded.add(result.id);
+            // The paired pickup lasts 150 ms; leave a short gap before its landing.
+            await new Promise((resolve) => setTimeout(resolve, 60));
+            sound(result.status === 'succeeded' ? `${result.kind}-complete` : 'operation-failed');
+          }
+          return result as T;
         }
         case 'set_label': {
           for (const rows of Object.values(history)) for (const row of rows) if (row.checkpoint === request.checkpoint) row.label = request.label;

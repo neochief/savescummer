@@ -3357,6 +3357,7 @@ dependencies = [
  "futures-util",
  "global-hotkey",
  "hex",
+ "image",
  "ksni",
  "libc",
  "notify",

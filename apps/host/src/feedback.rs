@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use savescummer_core::{ErrorKind, Failure};
-use savescummer_ipc::{EventBody, HotkeyAction, Operation};
-use savescummer_platform::integration::{self, Signal};
+use savescummer_ipc::{EventBody, HotkeyAction, Operation, TrayDialogRequest};
+use savescummer_platform::integration::{self, Signal, TrayDialog, TrayGameAction, TrayMenu};
 
 use crate::host::{Host, hotkey_target, new_id};
 use crate::ops;
@@ -36,6 +36,7 @@ pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Resul
 /// Starts hotkeys and the tray.
 pub fn start(host: &Arc<Host>) {
     let weak = Arc::downgrade(host);
+    let menu_host = Arc::downgrade(host);
     let shortcuts = host.lock().shortcuts;
     let result = integration::start(
         Box::new(move |signal| {
@@ -51,12 +52,51 @@ pub fn start(host: &Arc<Host>) {
                         let _ = hotkey(&host, &new_id("hotkey"), action);
                     });
                 }
+                Signal::TrayGame { game, action } => {
+                    std::thread::spawn(move || {
+                        let result = match action {
+                            TrayGameAction::Play => crate::lifecycle::play(&host, &game).map(|_| ()),
+                            TrayGameAction::Stop => crate::lifecycle::close(&host, &game).map(|_| ()),
+                            TrayGameAction::Save => {
+                                ops::submit(&host, &new_id("tray"), &game, ops::Request::Save { label: None }, false)
+                                    .map(|_| ())
+                            }
+                            TrayGameAction::Load => ops::submit(
+                                &host,
+                                &new_id("tray"),
+                                &game,
+                                ops::Request::Load { checkpoint: None },
+                                false,
+                            )
+                            .map(|_| ()),
+                        };
+                        if let Err(error) = result {
+                            crate::trace(&format!("tray action failed: {error}"));
+                        }
+                    });
+                }
+                Signal::OpenDialog(dialog) => {
+                    let kind = match dialog {
+                        TrayDialog::Add => "add",
+                        TrayDialog::Settings => "settings",
+                        TrayDialog::About => "about",
+                    };
+                    let mut inner = host.lock();
+                    inner.tray_dialog = Some(TrayDialogRequest { id: new_id("tray-dialog"), kind: kind.into() });
+                    host.publish(&mut inner);
+                    drop(inner);
+                    show_ui(&host);
+                }
+                Signal::Scan => {
+                    host.scans.request(false, true, "tray menu");
+                }
                 Signal::OpenMainWindow => {
                     show_ui(&host);
                 }
                 Signal::Exit => host.request_shutdown(),
             }
         }),
+        Box::new(move || menu_host.upgrade().map_or_else(TrayMenu::default, |host| tray_menu(&host))),
         shortcuts,
     );
     match result {
@@ -67,6 +107,21 @@ pub fn start(host: &Arc<Host>) {
             *host.integration.lock().unwrap_or_else(|e| e.into_inner()) = Some(integration);
         }
         Err(e) => crate::trace(&format!("tray and hotkeys unavailable: {e}")),
+    }
+}
+
+fn tray_menu(host: &Arc<Host>) -> TrayMenu {
+    let id = host.lock().stack.active().map(str::to_string);
+    let state = host.current_state();
+    let Some(game) = id.as_deref().and_then(|id| state.game(id)) else { return TrayMenu::default() };
+    TrayMenu {
+        game: id,
+        name: Some(game.name.clone()),
+        play: game.can_play && !game.running && game.busy.is_none(),
+        running: game.running,
+        stop: game.expert_mode && game.can_close && game.busy.is_none(),
+        save: game.save.available,
+        load: game.load.available,
     }
 }
 

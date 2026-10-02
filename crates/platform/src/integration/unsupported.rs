@@ -1,13 +1,17 @@
 //! No tray, hotkeys or notifications on this OS yet (PLAN-MACOS.md).
 
-use super::{Shortcuts, Signal};
+use super::{MenuSource, Shortcuts, Signal};
 
 pub struct Integration {
     _private: (),
 }
 
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, _shortcuts: Shortcuts) -> Result<Integration, String> {
-    let _ = on_signal;
+pub fn start(
+    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    menu_source: MenuSource,
+    _shortcuts: Shortcuts,
+) -> Result<Integration, String> {
+    let _ = (on_signal, menu_source);
     Err("not supported on this platform yet".into())
 }
 

@@ -2,535 +2,713 @@
 window.savescummerGames = [
   {
     "name": "Baldur's Gate 3",
+    "context": "Completing Honour Mode awards Foehammer, but a party wipe can end eligibility after dozens of hours. Honour Mode keeps a single campaign save, so there is no normal earlier save to return to after a disaster.",
     "value": "Checkpoint before a dangerous boss, high-stakes dialogue, or other run-ending situation. Restore after a wipe instead of restarting the entire Foehammer attempt.",
+    "icon": "dice-d20",
     "hero": "games/1086940-hero.jpg",
     "logo": "games/1086940-logo.png"
   },
   {
     "name": "The Binding of Isaac: Rebirth",
+    "context": "A rare item synergy or completion-mark run can be hard to reproduce once a late death ends it. An active run has continuation data for Continue, but the game does not keep a reusable history of earlier run states.",
     "value": "Checkpoint before a late boss, sacrifice sequence, or route decision. Restore the exact build after failure instead of rerolling until the same synergy appears again.",
+    "icon": "skull",
     "hero": "games/250900-hero.jpg",
     "logo": "games/250900-logo.png"
   },
   {
     "name": "Slay the Spire",
+    "context": "A late deck can contain a rare card/relic engine that may take many runs to see again. The game autosaves the current run and Save & Quit resumes it, but earlier deck/path states are normally overwritten.",
     "value": "Checkpoint before an Act boss, Elite path, event, shop, or build-defining reward. Restore to retry or compare the decision without rerolling the entire deck.",
+    "icon": "trophy",
     "hero": "games/646570-hero.jpg",
     "logo": "games/646570-logo.png"
   },
   {
     "name": "Project Zomboid",
+    "context": "A mature survivor and Knox Country world can contain months of skills, bases, vehicles, crops, generators, and carefully moved loot. The survivor and persistent world are saved together continuously rather than through manual slots, so a useful rollback must restore the matching save state.",
     "value": "Checkpoint before Louisville runs, clearing dense buildings, moving loaded vehicles, or continuing after a suspicious bite. Restore both character and world after a fatal mistake.",
+    "icon": "biohazard",
     "hero": "games/108600-hero.jpg",
     "logo": "games/108600-logo.png"
   },
   {
     "name": "Terraria",
+    "context": "Terraria is a sandbox adventure where your character and world develop separately. It normally saves progress, but Hardcore character death is permanent. That makes it relevant for players attempting the Extra Life achievement, and a useful checkpoint needs both the character and world saves.",
     "value": "Checkpoint before the Extra Life attempt or another high-risk Hardcore milestone. If the character is lost or the attempt goes wrong, restore instead of rebuilding the geared Hardcore character.",
+    "icon": "heart",
     "hero": "games/105600-hero.jpg",
     "logo": "games/105600-logo.png"
   },
   {
     "name": "XCOM 2",
+    "context": "The Valhalla achievement requires finishing on Commander+ in Ironman, so a late squad wipe can waste a long achievement attempt. Ironman maintains one campaign save and commits tactical casualties and mission results as it advances.",
     "value": "Checkpoint before a Chosen/Alien Ruler fight, retaliation, facility assault, or critical tactical turn. Restore after a wipe or veteran loss instead of restarting the Valhalla run.",
+    "icon": "crosshairs",
     "hero": "games/268500-hero.jpg",
     "logo": "games/268500-logo.png"
   },
   {
     "name": "Dead Cells",
+    "context": "A promising run may have rare weapon affixes, mutations, scroll scaling, flask charges, and a route you do not want to reroll. The active run is persisted for Continue, but the game does not keep earlier pre-biome or pre-boss states for rollback.",
     "value": "Checkpoint before a boss, risky biome, or major build decision. Restore the exact loadout after death instead of waiting for another run to produce the same synergy.",
+    "icon": "skull-crossbones",
     "hero": "games/588650-hero.jpg",
     "logo": "games/588650-logo.png"
   },
   {
     "name": "Risk of Rain 2",
+    "context": "A looping run can accumulate hours of survivor-specific items and lunar choices before Mithrix or a Void route. The game does not natively serialize an active run for Save & Quit.",
     "value": "A file-only SaveScummer cannot freeze that live run. Protecting a long pre-Mithrix or pre-Void build would require runtime capture rather than save-file backups.",
+    "icon": "meteor",
     "hero": "games/632360-hero.jpg",
     "logo": "games/632360-logo.png"
   },
   {
     "name": "FTL: Faster Than Light",
+    "context": "FTL is a spaceship strategy game where a run builds up crew, weapons, and systems over several sectors. Its save lets you continue an active run, but that save is overwritten as you advance and disappears when the run ends. It offers no normal way back to an earlier version of your ship.",
     "value": "Checkpoint before a dangerous beacon, sector exit, or Flagship phase. Retry the same ship and strategy after a catastrophic fight instead of rebuilding the run.",
+    "icon": "shuttle-space",
     "hero": "games/212680-hero.jpg",
     "logo": "games/212680-logo.png"
   },
   {
     "name": "Stellaris",
+    "context": "Most Stellaris achievements no longer need Ironman, but Victorious specifically requires winning in Ironman Mode. Ironman keeps one evolving autosave rather than a library of manual rollback saves.",
     "value": "Checkpoint before a major war, federation/subject change, crisis decision, or other empire-defining commitment. The clearest payoff is protecting a long Victorious attempt from one disastrous branch.",
+    "icon": "satellite",
     "hero": "games/281990-hero.jpg",
     "logo": "games/281990-logo.png"
   },
   {
     "name": "Hearts of Iron IV",
+    "context": "HOI4 achievement runs require Ironman, and one failed offensive or diplomatic commitment can destroy years of buildup. Ironman relies on autosaves and exit saves rather than manual branching.",
     "value": "Checkpoint before a major offensive, declaration, focus/decision lock-in, or peace conference. Restore after a catastrophic encirclement or bad outcome instead of restarting the achievement campaign.",
+    "icon": "flag",
     "hero": "games/394360-hero.jpg",
     "logo": "games/394360-logo.png"
   },
   {
     "name": "Don't Starve",
+    "context": "A single world can contain seasons of base building, resource networks, explored map, boss loot, and winter preparation, all lost if the survivor dies without resurrection. The current world is saved automatically; a terminal death ends that run rather than leaving a normal rollback slot.",
     "value": "Checkpoint before a boss, winter expedition, cave trip, or other stretch where resurrection is uncertain. Restore the same base and world instead of generating and rebuilding a new one.",
+    "icon": "fire",
     "hero": "games/219740-hero.jpg",
     "logo": "games/219740-logo.png"
   },
   {
     "name": "Enter the Gungeon",
+    "context": "A deep run can have a rare gun/passive synergy, Master Rounds, keys, health, and secret-route progress that is hard to reproduce. The Save Button serializes the run only at floor exits and resumes on the next floor.",
     "value": "Checkpoint at a floor exit before a late floor, secret route, or boss sequence. Restore the same build after death instead of rerolling the run.",
+    "icon": "bomb",
     "hero": "games/311690-hero.jpg",
     "logo": "games/311690-logo.png"
   },
   {
     "name": "Noita",
+    "context": "Noita is a roguelike where a long run can accumulate custom wands, rare spells, perks, and changes to the world. Save & Quit lets you continue that run, but it does not give you earlier states to return to. A checkpoint must capture the complete world and run save.",
     "value": "Checkpoint before testing a volatile wand, entering a dangerous biome or boss, or starting a parallel-world expedition. Restore after polymorph, self-damage, or another sudden run-ending mistake.",
+    "icon": "hat-wizard",
     "hero": "games/881100-hero.jpg",
     "logo": "games/881100-logo.png"
   },
   {
     "name": "Kingdom Come: Deliverance",
+    "context": "Manual saves normally cost Saviour Schnapps, making frequent pre-risk saving deliberately inconvenient. SaveScummer can preserve the same game state externally without consuming another Schnapps.",
     "value": "Checkpoint before stealing, lockpicking, a difficult fight, or a risky dialogue. Retry freely without burning through Schnapps or falling back to an older autosave.",
+    "icon": "chess-knight",
     "hero": "games/379430-hero.jpg",
     "logo": "games/379430-logo.png"
   },
   {
     "name": "Crusader Kings II",
+    "context": "Crusader Kings II is a strategy game about guiding a dynasty through succession, politics, and war. It has normal saves, but achievement-compatible Ironman campaigns continually overwrite one save. A bad succession or war can therefore undo decades of progress with no manual rollback point.",
     "value": "Checkpoint before a succession, faction revolt, risky war, imprisonment, or inheritance play. Restore the dynasty after a disastrous outcome without abandoning the achievement run.",
+    "icon": "chess-rook",
     "hero": "games/203770-hero.jpg",
     "logo": "games/203770-logo.png"
   },
   {
     "name": "Into the Breach",
+    "context": "A campaign can hinge on preserving pilots, Grid health, objectives, and a perfect island while each battle only gives limited correction. You normally get one Reset Turn per battle, not an unlimited history of earlier turns or pre-mission states.",
     "value": "Checkpoint before a difficult island mission or critical turn. Restore after spending Reset Turn and still losing a pilot, objective, or Grid instead of accepting the damaged timeline.",
+    "icon": "robot",
     "hero": "games/590380-hero.jpg",
     "logo": "games/590380-logo.png"
   },
   {
     "name": "Total War: Warhammer II",
+    "context": "A Legendary campaign can invest dozens of turns into legendary lords, elite armies, settlements, and campaign objectives before one battle or End Turn cascade destroys them. Legendary restricts manual saving and maintains the campaign through automatic saves.",
     "value": "Checkpoint before a risky siege, confederation, war declaration, or dangerous End Turn. Restore before losing a key lord/army and the turns invested in building it.",
+    "icon": "dragon",
     "hero": "games/594570-hero.jpg",
     "logo": "games/594570-logo.png"
   },
   {
     "name": "Spelunky 2",
+    "context": "The obvious value would be protecting a deep run with rare equipment, quest-chain progress, and access to late-game routes. The PC game does not normally serialize an active run for Save & Quit; quitting abandons it.",
     "value": "A file-only SaveScummer cannot reliably preserve the live run, so the useful pre-Olmec or late-route checkpoint requires runtime capture or a mod-created run save.",
+    "icon": "mountain",
     "hero": "games/418530-hero.jpg",
     "logo": "games/418530-logo.png"
   },
   {
     "name": "Caves of Qud",
+    "context": "Classic mode can turn one character into a rare mix of mutations/cybernetics, artifacts, reputation, companions, and deep-world progress. Classic autosaves and supports Save & Quit, but it does not provide unrestricted rollback slots.",
     "value": "Checkpoint before a dangerous historic site, deep cave, hostile settlement, or irreversible build experiment. Restore after a death or bad mutation/cybernetic choice without rerolling the character.",
+    "icon": "flask",
     "hero": "games/333640-hero.jpg",
     "logo": "games/333640-logo.png"
   },
   {
     "name": "ADOM: Ancient Domains of Mystery",
+    "context": "Traditional-mode characters accumulate artifacts, intrinsics, skills, corruption management, and quest progress that disappear with permadeath. Traditional mode uses a suspend-style save; Story mode already offers normal save/load and is not the main use case.",
     "value": "Checkpoint before a major dungeon branch, vault, boss, or corruption-heavy push. Restore the exact late-game character instead of recreating rare artifacts and trained skills.",
+    "icon": "dungeon",
     "hero": "games/333300-hero.jpg",
     "logo": "games/333300-logo.png"
   },
   {
     "name": "Barony",
+    "context": "A late dungeon run can carry rare spellbooks, equipment, levels, food, and a strong party composition that disappears on a wipe. Save & Quit preserves the active run, but permadeath rules do not give you reusable pre-death checkpoints.",
     "value": "Checkpoint at a floor boundary before a boss or dangerous stretch. A wipe can then be retried with the same party and loot instead of restarting the dungeon.",
+    "icon": "chess-knight",
     "hero": "games/371970-hero.jpg",
     "logo": "games/371970-logo.png"
   },
   {
     "name": "Battle Brothers",
+    "context": "Battle Brothers has Ironman-specific achievements, while a single bad battle can kill veteran brothers and destroy famed gear built over a long campaign. Ironman keeps one automatically updated campaign state with no normal pre-battle rollback.",
     "value": "Checkpoint before a legendary location, crisis battle, or dangerous contract. Restore after a company-wrecking casualty instead of restarting an Ironman achievement run.",
+    "icon": "shield-halved",
     "hero": "games/365360-hero.jpg",
     "logo": "games/365360-logo.png"
   },
   {
     "name": "BattleTech",
+    "context": "The I Am Iron Man! achievement requires completing a campaign with Iron Man enabled, where rare Mechs, weapons, pilots, and company finances are all at risk. Iron Man uses a single campaign save and disables the normal pre/post-mission save history.",
     "value": "Checkpoint before a high-skull contract or Priority Mission. Restore after losing a veteran pilot, rare chassis/weapon, or enough money to cripple the achievement run.",
+    "icon": "gear",
     "hero": "games/637090-hero.jpg",
     "logo": "games/637090-logo.png"
   },
   {
     "name": "Caveblazers",
+    "context": "The useful case would be protecting a strong perk/equipment build before a late cave or boss. The released game does not normally save and resume an active run.",
     "value": "A file-only SaveScummer cannot currently deliver that rollback reliably. Keep this candidate only if hands-on testing finds recoverable live-run state.",
+    "icon": "mountain",
     "hero": "games/452060-hero.jpg",
     "logo": "games/452060-logo.png"
   },
   {
     "name": "Cogmind",
+    "context": "A deep run can have a highly specific robot assembled from rare propulsion, weapons, utilities, storage, and route choices. Normal play saves an unfinished run for continuation; built-in rollback aids depend on mode, so the value is highest where those aids are absent.",
     "value": "Checkpoint before a high-security map, risky route, or major rebuild. Restore the exact machine after a disastrous engagement instead of reconstructing its parts and route.",
+    "icon": "gears",
     "hero": "games/722730-hero.jpg",
     "logo": "games/722730-logo.png"
   },
   {
     "name": "Crypt of the NecroDancer",
+    "context": "Long Deathless, Story, or All-Characters sessions can represent substantial progress that one rhythm mistake can erase. Current versions can save and resume these sessions, giving SaveScummer a real serialized run state to version.",
     "value": "Checkpoint before a difficult zone or boss sequence. Restore a long multi-character session after failure instead of repeating all earlier characters or zones.",
+    "icon": "music",
     "hero": "games/247080-hero.jpg",
     "logo": "games/247080-logo.png"
   },
   {
     "name": "Darkwood",
+    "context": "Nightmare makes death final, while even normal play relies on autosaves rather than free manual rollback. The current autosave is overwritten as the game advances; Nightmare death ends the playthrough.",
     "value": "Checkpoint before a dangerous night defense, Silent Forest/Old Woods expedition, or irreversible story choice. Restore after a fatal night or bad outcome instead of replaying the region.",
+    "icon": "tree",
     "hero": "games/274520-hero.jpg",
     "logo": "games/274520-logo.png"
   },
   {
     "name": "Dome Keeper",
+    "context": "A run can hinge on a particular gadget, upgrade path, mined resource haul, and defense setup. The active run is persisted for resume; checkpoints are safest around known exit/autosave boundaries.",
     "value": "Checkpoint before an expensive upgrade choice or a wave that will test the build. Restore to compare upgrade paths or retry the defense without replaying the whole mine.",
+    "icon": "shield-halved",
     "hero": "games/1637320-hero.jpg",
     "logo": "games/1637320-logo.png"
   },
   {
     "name": "Dungeon Crawl Stone Soup",
+    "context": "A late character may have a rare combination of god, mutations, skills, equipment, and rune progress, all erased by one death. Local characters are saved for continuation, but the normal roguelike flow has no reusable manual rollback points.",
     "value": "Checkpoint before a rune branch, vault, Abyss trip, or other high-risk push. Restore the same character after a tactical mistake instead of starting from a new seed.",
+    "icon": "dungeon",
     "hero": null,
     "logo": null
   },
   {
     "name": "Europa Universalis IV",
+    "context": "EU4 achievements require Ironman, so an achievement run can represent centuries of setup that one war, succession, peace deal, or bad click can ruin. Ironman keeps one evolving campaign save and disables normal manual branching.",
     "value": "Checkpoint before a major war, PU/succession play, peace deal, or achievement-critical decision. Restore the campaign without abandoning the Ironman achievement attempt.",
+    "icon": "coins",
     "hero": "games/236850-hero.jpg",
     "logo": "games/236850-logo.png"
   },
   {
     "name": "Europa Universalis V",
+    "context": "EU5 achievements require Ironman, so long achievement setups are exposed to the same one-save commitment as the rest of the campaign. Ironman keeps one evolving save with no normal manual rollback.",
     "value": "Checkpoint before a major war, peace settlement, succession, or achievement-critical decision. Restore after a campaign-breaking outcome instead of rebuilding the run from 1337.",
+    "icon": "landmark",
     "hero": "games/3450310-hero.jpg",
     "logo": null
   },
   {
     "name": "Gears Tactics",
+    "context": "The I am Ironman achievement requires completing the campaign with Ironman enabled. Ironman removes normal manual rollback and commits campaign progress through autosaves.",
     "value": "Checkpoint before a difficult mission or fail-critical hero deployment. Restore after a disastrous turn or mission loss instead of replaying the campaign for the achievement.",
+    "icon": "gear",
     "hero": "games/1184050-hero.jpg",
     "logo": "games/1184050-logo.png"
   },
   {
     "name": "Grim Dawn",
+    "context": "Grim Dawn has multiple Hardcore-only achievements, including high-level and Ultimate-difficulty goals that can take a long time to reach. Hardcore character progress is stored locally and death permanently ends the character.",
     "value": "Checkpoint before a nemesis, roguelike dungeon, celestial boss, or deep Shattered Realm push. Restore the same achievement-run character after a death instead of rebuilding its level, devotion map, and gear.",
+    "icon": "ghost",
     "hero": "games/219990-hero.jpg",
     "logo": "games/219990-logo.png"
   },
   {
     "name": "Heaven's Vault",
+    "context": "Translations, artifact decisions, destinations, and conversations can close routes or reshape Aliya's interpretation of the mystery. The game keeps one autosaved narrative state rather than manual branch saves.",
     "value": "Checkpoint before committing to a translation, destination, artifact handoff, or major conversation. Restore to test another interpretation or route without replaying the expedition.",
+    "icon": "scroll",
     "hero": "games/774201-hero.jpg",
     "logo": "games/774201-logo.png"
   },
   {
     "name": "HighFleet",
+    "context": "A bad battle or route gamble can destroy irreplaceable ships, fuel, ammunition, and strategic position far from the last Fleet HQ checkpoint. The game provides campaign restore points at Fleet HQs rather than fine-grained manual rollback everywhere.",
     "value": "Checkpoint before a strike-group battle, risky refit, fuel-critical route, or nuclear escalation. Restore without replaying the long stretch since the previous Fleet HQ.",
+    "icon": "ship",
     "hero": "games/1434950-hero.jpg",
     "logo": "games/1434950-logo.png"
   },
   {
     "name": "Imperator: Rome",
+    "context": "Imperator achievement runs use Ironman, where a civil war, succession crisis, or disastrous war can erase decades of state-building. Ironman continually overwrites a single campaign state.",
     "value": "Checkpoint before a major war, civil-war threshold, succession, or high-impact political decision. Restore the realm after a cascade instead of restarting the achievement run.",
+    "icon": "landmark",
     "hero": "games/859580-hero.jpg",
     "logo": "games/859580-logo.png"
   },
   {
     "name": "Invisible, Inc.",
+    "context": "High-difficulty campaigns give only a limited number of Rewinds, so one alarm cascade or captured veteran can consume a scarce recovery resource. The campaign autosaves, while Rewind is the built-in limited rollback mechanism.",
     "value": "Checkpoint before a high-security facility or after spending the last Rewind. Restore after a failed infiltration instead of losing a veteran agent or abandoning the campaign.",
+    "icon": "mask",
     "hero": "games/243970-hero.jpg",
     "logo": "games/243970-logo.png"
   },
   {
     "name": "Jagged Alliance 3",
+    "context": "The Ironman achievement requires the harshest campaign settings, including Dead is Dead and To The Bitter End. Those settings heavily restrict rollback and can autosave around tactical actions, so the exact captured state matters.",
     "value": "Checkpoint before storming a fortified sector, boss encounter, or fight where a favorite merc can die. Restore after a disastrous engagement instead of restarting the full Ironman challenge.",
+    "icon": "person-rifle",
     "hero": "games/1084160-hero.jpg",
     "logo": "games/1084160-logo.png"
   },
   {
     "name": "Jupiter Hell",
+    "context": "A late run can have a very specific weapon, perk, armor, and resource setup that is difficult to reproduce after death. Save & Exit preserves the current run for continuation, not as a history of rollback points.",
     "value": "Checkpoint before a difficult branch, boss, or build-defining gamble. If the fight kills the run, restore the same arsenal and perk setup rather than replaying the early moons.",
+    "icon": "rocket",
     "hero": "games/811320-hero.jpg",
     "logo": "games/811320-logo.png"
   },
   {
     "name": "Monster Train",
+    "context": "A late deck may depend on a very specific clan, unit-upgrade, artifact, removal, and spell package. The campaign is saved on the world map; combat is not normally serialized turn-by-turn and usually restarts as a whole.",
     "value": "Checkpoint before a merchant, banner, artifact choice, or difficult ring. Restore to compare build decisions or retry from the pre-combat state, not individual combat turns.",
+    "icon": "train",
     "hero": "games/1102190-hero.jpg",
     "logo": "games/1102190-logo.png"
   },
   {
     "name": "My Summer Car",
+    "context": "Permadeath has its own achievements, including And it is gone! for dying with permadeath enabled, while the same save may contain hours of Satsuma work and money progression. Permadeath can remove the main save on death, so the checkpoint must be taken before the fatal attempt.",
     "value": "Checkpoint before intentionally earning the death achievement, a rally, or another risky drive. Restore afterward and keep the same car/build instead of sacrificing the whole permadeath save.",
+    "icon": "car",
     "hero": "games/516750-hero.jpg",
     "logo": "games/516750-logo.png"
   },
   {
     "name": "NEO Scavenger",
+    "context": "A viable survivor may depend on hard-won clothing, tools, medicine, shelter knowledge, and map progress, while one wound, infection, or bad encounter can end the run. The game keeps a single current survivor state rather than manual rollback slots.",
     "value": "Checkpoint before combat, risky scavenging, travel while injured, or an uncertain encounter. Restore a known-good survivor instead of rebuilding the entire survival setup.",
+    "icon": "compass",
     "hero": "games/248860-hero.jpg",
     "logo": "games/248860-logo.png"
   },
   {
     "name": "NetHack",
+    "context": "A strong character can represent hours of equipment, intrinsics, identification knowledge, and dungeon progress, all lost on one death. Saving is suspend-and-resume: loading consumes the save instead of leaving a reusable rollback point.",
     "value": "Checkpoint before a dangerous branch, vault, wish experiment, or ascension push. A restore lets you retry the same character instead of rebuilding the run from scratch.",
+    "icon": "skull",
     "hero": null,
     "logo": null
   },
   {
     "name": "Nuclear Throne",
+    "context": "The desired use case is protecting a late mutant build with specific mutations, crown, weapons, and loop progress. The game does not normally save an active run for later continuation; local saves mainly cover persistent progression.",
     "value": "A file-only SaveScummer cannot restore the live run. Preserving a pre-Throne or loop checkpoint would require runtime capture rather than ordinary save-file versioning.",
+    "icon": "radiation",
     "hero": "games/242680-hero.jpg",
     "logo": "games/242680-logo.png"
   },
   {
     "name": "One Step from Eden",
+    "context": "A late run can have a rare spell/artifact synergy and route that is difficult to rebuild after one failed fight. The game can save an active run while out of battle, giving SaveScummer a documented between-battle state.",
     "value": "Checkpoint before a boss, route choice, or ending-critical encounter. Restore the same deck and route after failure instead of rebuilding the combo from scratch.",
+    "icon": "wand-magic-sparkles",
     "hero": "games/960690-hero.jpg",
     "logo": "games/960690-logo.png"
   },
   {
     "name": "OTXO",
+    "context": "A good mansion run can have a preferred gun set, drink upgrades, money, and room progress that took several floors to assemble. Save & Exit preserves the active run for continuation.",
     "value": "Checkpoint before a difficult mansion section or boss. Restore the same loadout after a failed room sequence instead of rebuilding it from the start.",
+    "icon": "gun",
     "hero": "games/1608640-hero.jpg",
     "logo": "games/1608640-logo.png"
   },
   {
     "name": "Outward",
+    "context": "Defeat can trigger capture, relocation, lost time, lost items, or quest consequences instead of a simple reload. The game autosaves continuously; current versions expose a limited history of older autosaves rather than unrestricted manual slots.",
     "value": "Checkpoint before a dangerous dungeon, timed quest, or expedition with valuable gear. Restore a clean pre-defeat state when the built-in rollback history is too coarse or already overwritten.",
+    "icon": "person-hiking",
     "hero": "games/794260-hero.jpg",
     "logo": "games/794260-logo.png"
   },
   {
     "name": "Pathologic 2",
+    "context": "Death permanently makes the playthrough harder, and those penalties survive ordinary reloads. The death penalty is stored beyond the ordinary save being loaded, so SaveScummer must restore that broader state too.",
     "value": "Checkpoint before a dangerous fight, infected district, or desperate supply run. Restore after death to undo the persistent penalty that the game's own reload cannot remove.",
+    "icon": "biohazard",
     "hero": "games/505230-hero.jpg",
     "logo": "games/505230-logo.png"
   },
   {
     "name": "Pentiment",
+    "context": "Major investigation and dialogue choices are mutually exclusive and can change later acts. Choices are committed through autosaves rather than user-managed save slots.",
     "value": "Checkpoint immediately before an accusation, investigation commitment, or major dialogue branch. Take one outcome, then restore and follow the other branch without replaying the act.",
+    "icon": "book-open",
     "hero": "games/1205520-hero.jpg",
     "logo": "games/1205520-logo.png"
   },
   {
     "name": "Revita",
+    "context": "A strong climb can depend on a delicate relic synergy and health-for-upgrade trades before the next tower section or secret-boss route. Save & Quit is available at terminals after bosses rather than at arbitrary rooms.",
     "value": "Checkpoint at the post-boss terminal. Restore the same relic/health build after the next section fails instead of rebuilding it from the first station.",
+    "icon": "heart-pulse",
     "hero": "games/1175460-hero.jpg",
     "logo": "games/1175460-logo.png"
   },
   {
     "name": "Risk of Rain",
+    "context": "The desired value is protecting a late survivor with a rare item stack before a teleporter, boss, or loop. The original game does not save active run progress for later continuation.",
     "value": "A file-only SaveScummer cannot preserve the live run; the attractive late-run rollback needs runtime capture.",
+    "icon": "meteor",
     "hero": "games/248820-hero.jpg",
     "logo": "games/248820-logo.png"
   },
   {
     "name": "Risk of Rain Returns",
+    "context": "The desired value is protecting a powerful item build before a late teleporter, Providence route, or difficult stage. The game does not provide normal Save & Quit for an active run.",
     "value": "A file-only SaveScummer cannot restore that live build, so the main use case remains unsupported without runtime capture.",
+    "icon": "meteor",
     "hero": "games/1337520-hero.jpg",
     "logo": "games/1337520-logo.png"
   },
   {
     "name": "Road 96",
+    "context": "A single road trip can change recurring-character relationships, resources, border outcomes, and the wider campaign state. Campaign progress is autosaved rather than exposed as manual branch slots.",
     "value": "Checkpoint before a pivotal encounter, border crossing, or expensive route choice. Restore to see another outcome without replaying several procedural legs to reach a similar point.",
+    "icon": "road",
     "hero": "games/1466640-hero.jpg",
     "logo": "games/1466640-logo.png"
   },
   {
     "name": "Roboquest",
+    "context": "A late run can have a high-roll weapon/perk setup that is expensive to recreate before a difficult biome or boss. Single-player Save & Quit is available at the end of each level, creating a clean inter-level checkpoint.",
     "value": "Checkpoint at the end of a level before a difficult late biome or boss. Restore the same build after failure instead of rerolling weapons and perks from the start.",
+    "icon": "robot",
     "hero": "games/692890-hero.jpg",
     "logo": "games/692890-logo.png"
   },
   {
     "name": "ScourgeBringer",
+    "context": "A strong run can have a valuable combination of blessings, items, health, and upgrades before a difficult boss or region. Save & Exit provides a clean run-save boundary; arbitrary live combat state should not be assumed to be on disk.",
     "value": "Checkpoint at Save & Exit before a boss or new area. Restore the same build after failure instead of rerolling another run.",
+    "icon": "bolt",
     "hero": "games/1037020-hero.jpg",
     "logo": "games/1037020-logo.png"
   },
   {
     "name": "Shiren the Wanderer: The Tower of Fortune and the Dice of Fate",
+    "context": "A failed dungeon expedition can cost upgraded weapons, shields, bracelets, consumables, money, and the current dungeon position. Suspend preserves an expedition for continuation, not as a set of earlier dungeon checkpoints.",
     "value": "Checkpoint before pushing deeper with valuable upgraded gear. If a floor, trap chain, or boss kills the run, restore the same loadout instead of rebuilding it.",
+    "icon": "map",
     "hero": "games/1178790-hero.jpg",
     "logo": "games/1178790-logo.png"
   },
   {
     "name": "Signs of the Sojourner",
+    "context": "One conversation can change the deck you carry into every later relationship, sometimes locking you out of future dialogue paths. The game uses a single local save rather than manual branch slots.",
     "value": "Checkpoint before an important conversation or route stop. Restore if the resulting card changes or relationship outcome damages the deck/path you were aiming for.",
+    "icon": "compass",
     "hero": "games/1058690-hero.jpg",
     "logo": "games/1058690-logo.png"
   },
   {
     "name": "Six Ages 2: Lights Going Out",
+    "context": "A bad ritual, expedition, battle, or crisis response can consume scarce food/magic and weaken a clan already fighting long-term collapse. The campaign autosaves through its scenes and long-running clan simulation.",
     "value": "Checkpoint before spending scarce resources on a god, expedition, or crisis response. Restore after a disastrous result instead of replaying years of survival decisions.",
+    "icon": "scroll",
     "hero": "games/2278010-hero.jpg",
     "logo": "games/2278010-logo.png"
   },
   {
     "name": "Six Ages: Ride Like the Wind",
+    "context": "Heroquests, marriages, feuds, raids, and ritual choices can alter clan relationships and resources for years. The game autosaves whenever the clan state changes rather than exposing manual branch slots.",
     "value": "Checkpoint before a heroquest, marriage, raid, or major diplomatic decision. Restore to test another outcome without replaying the intervening seasons.",
+    "icon": "horse",
     "hero": "games/881420-hero.jpg",
     "logo": "games/881420-logo.png"
   },
   {
     "name": "Slasher's Keep",
+    "context": "A developed character can carry strong weapons, traits, stats, and inventory into floors where one failed push can undo hours of progress. The save pedestal / Save & Exit state is mainly for continuation and must be captured before the loss is committed.",
     "value": "Checkpoint after saving and before a dangerous floor or boss. Restore the same character after a fatal setback instead of rebuilding the loadout.",
+    "icon": "dungeon",
     "hero": "games/598060-hero.jpg",
     "logo": "games/598060-logo.png"
   },
   {
     "name": "Star of Providence",
+    "context": "A strong run can have rare weapons, upgrades, health, and floor progress that are tedious to reproduce. Continue resumes from a floor-start state rather than the exact room where you quit.",
     "value": "Checkpoint at the start of a late floor before a boss or difficult section. Restore the same build after death instead of starting from the first area.",
+    "icon": "star",
     "hero": "games/603960-hero.jpg",
     "logo": "games/603960-logo.png"
   },
   {
     "name": "Star Trek: Infinite",
+    "context": "Achievements require Ironman, so a long faction run can be lost to a bad war, mission-chain choice, or diplomatic commitment. Ironman disables manual saving and uses automatic saves; current versions can use local Ironman saves without requiring cloud saves.",
     "value": "Checkpoint before a major war, faction mission choice, or diplomatic break. Restore after a run-derailing outcome without abandoning the achievement attempt.",
+    "icon": "shuttle-space",
     "hero": "games/1622900-hero.jpg",
     "logo": "games/1622900-logo.png"
   },
   {
     "name": "State of Decay 2",
+    "context": "A community can contain rare survivors, maxed skills, leader progress, vehicles, weapons, and a developed base, while survivor death is permanent. The game autosaves the community continuously rather than offering manual rollback slots.",
     "value": "Checkpoint before attacking a Plague Heart, entering a lethal zone, or taking a favorite survivor into a dangerous fight. Restore after a permanent death instead of rebuilding that survivor and their gear.",
+    "icon": "biohazard",
     "hero": "games/495420-hero.jpg",
     "logo": "games/495420-logo.png"
   },
   {
     "name": "Streets of Rogue",
+    "context": "A good run can carry a strong character build, followers, items, money, and mission progress into the later districts. The game autosaves between levels; resume is coarser than an arbitrary mid-floor quicksave.",
     "value": "Checkpoint before a difficult district or risky mission. Restore the previous floor state after a bad outcome instead of rebuilding the whole city run.",
+    "icon": "mask",
     "hero": "games/512900-hero.jpg",
     "logo": "games/512900-logo.png"
   },
   {
     "name": "Sunless Sea",
+    "context": "In Unforgiving mode, losing a veteran captain means moving on through the legacy system rather than simply reloading that same life. The game autosaves on docking; manual saving switches the run out of Unforgiving mode.",
     "value": "Checkpoint before a dangerous voyage, zee-monster, or story port. Restore the same captain, ship, officers, and cargo after death instead of accepting succession or abandoning Unforgiving.",
+    "icon": "anchor",
     "hero": "games/304650-hero.jpg",
     "logo": "games/304650-logo.png"
   },
   {
     "name": "Sunless Skies",
+    "context": "Legacy Mode turns a dead captain into a successor, so a long-developed captain and locomotive are intentionally not restored intact. The lineage is autosaved around ports/platforms rather than through free manual rollback.",
     "value": "Checkpoint before a dangerous reach, terror/fuel crisis, or story expedition. Restore the veteran captain instead of advancing to the successor state.",
+    "icon": "cloud",
     "hero": "games/596970-hero.jpg",
     "logo": "games/596970-logo.png"
   },
   {
     "name": "Suzerain",
+    "context": "Constitution, economy, alliances, cabinet choices, and endings branch from decisions that may only show their consequences hours later. The campaign autosaves committed decisions instead of providing normal manual branch saves.",
     "value": "Checkpoint before a constitutional vote, budget decision, privatization/nationalization choice, alliance, or cabinet crisis. Restore to pursue another outcome without replaying the presidency from the start.",
+    "icon": "landmark",
     "hero": "games/1207650-hero.jpg",
     "logo": "games/1207650-logo.png"
   },
   {
     "name": "Synthetik: Legion Rising",
+    "context": "The desired value is protecting a high-roll weapon/module build before a late stage or boss. The game does not support saving and resuming an active run.",
     "value": "A file-only SaveScummer cannot restore the live run, so the useful late-run checkpoint would require runtime capture rather than ordinary save-file versioning.",
+    "icon": "robot",
     "hero": "games/528230-hero.jpg",
     "logo": "games/528230-logo.png"
   },
   {
     "name": "Tales of Maj'Eyal",
+    "context": "A high-level character can carry a specialized talent build, artifacts, inscriptions, escorts, and quest progress that are expensive to reproduce. Permadeath depends on mode; the character is persisted for continuation, but normal play does not provide arbitrary rollback slots.",
     "value": "Checkpoint before a vault, major boss, or late-game dungeon. Restore the exact build after a fatal mistake rather than losing the character permanently.",
+    "icon": "hat-wizard",
     "hero": "games/259680-hero.jpg",
     "logo": "games/259680-logo.png"
   },
   {
     "name": "Teleglitch: Die More Edition",
+    "context": "A late run can be resource-starved but valuable, with a specific weapon, ammo, armor, and crafting setup. The game uses single-use exit saves at level boundaries; Steam builds need restore testing because cloud/API behavior can interfere with copied saves.",
     "value": "Checkpoint before loading into a dangerous later level. If the run dies, restore the same inventory and resource state instead of restarting, provided the platform-specific restore works.",
+    "icon": "gun",
     "hero": "games/234390-hero.jpg",
     "logo": "games/234390-logo.png"
   },
   {
     "name": "The Banner Saga",
+    "context": "Deaths, caravan decisions, supplies, and major story choices can carry forward into later games in the trilogy. The game autosaves at checkpoints rather than offering unrestricted branch saves.",
     "value": "Checkpoint before a battle with possible hero loss or a major caravan/story decision. Restore to preserve a different import state for later games without replaying the whole journey.",
+    "icon": "flag",
     "hero": "games/237990-hero.jpg",
     "logo": "games/237990-logo.png"
   },
   {
     "name": "The Council",
+    "context": "Dialogue choices spend limited effort, exploit immunities/vulnerabilities, and can lock in investigation or story outcomes. The game relies on autosaves/checkpoints rather than unrestricted manual saves.",
     "value": "Checkpoint before a major confrontation, expensive skill use, or investigation conclusion. Restore to try another dialogue path without replaying the episode.",
+    "icon": "mask",
     "hero": "games/287630-hero.jpg",
     "logo": "games/287630-logo.png"
   },
   {
     "name": "The Life and Suffering of Sir Brante",
+    "context": "Major life choices are mutually exclusive and can change family, career, romance, politics, and the ending several chapters later. The life is autosaved as choices are committed; there is no normal library of decision-point saves.",
     "value": "Checkpoint before an estate, family, romance, trial, or revolutionary branch. Take one outcome, then restore for another instead of replaying whole chapters.",
+    "icon": "book-open",
     "hero": "games/1272160-hero.jpg",
     "logo": "games/1272160-logo.png"
   },
   {
     "name": "The Long Dark",
+    "context": "A Survival run can represent hundreds of in-game days, stocked bases, crafted clothing, mapped routes, and maxed skills. Survival autosaves, and death normally ends the run; Cheat Death exists but has limited uses and penalties.",
     "value": "Checkpoint before a bear/moose encounter, thin ice, timberwolf territory, or a long blizzard-prone trek. Restore without spending a Cheat Death use or accepting its penalties.",
+    "icon": "snowflake",
     "hero": "games/305620-hero.jpg",
     "logo": "games/305620-logo.png"
   },
   {
     "name": "This War of Mine",
+    "context": "A shelter can depend on a small group of survivors, scarce food/medicine, relationships, and upgrades, while one bad scavenging night can permanently kill a key character. The game advances through automatic day/night saves rather than unrestricted manual slots.",
     "value": "Checkpoint before a dangerous scavenging trip, theft, combat, or critical winter decision. Restore after a death or catastrophic resource loss instead of replaying several days of shelter management.",
+    "icon": "heart",
     "hero": "games/282070-hero.jpg",
     "logo": "games/282070-logo.png"
   },
   {
     "name": "Torchlight II",
+    "context": "Several achievements are tied to Hardcore characters, where one death can erase a high-level build and its gear. Hardcore character progress is stored in local save data and death permanently ends that character.",
     "value": "Checkpoint before an act boss, Phase Beast challenge, or dangerous Mapworks run. Restore a dead achievement-run character instead of leveling and gearing another one from scratch.",
+    "icon": "fire",
     "hero": "games/200710-hero.jpg",
     "logo": "games/200710-logo.png"
   },
   {
     "name": "Total War: Attila",
+    "context": "ATTILA campaigns can collapse quickly when one lost army or settlement triggers food, public-order, invasion, and migration problems. Legendary relies on an evolving autosave history rather than free manual rollback.",
     "value": "Checkpoint before a Hun battle, exposed-settlement defense, migration, or dangerous End Turn. Restore before the collapse instead of trying to recover from several cascading losses.",
+    "icon": "chess-rook",
     "hero": "games/325610-hero.jpg",
     "logo": "games/325610-logo.png"
   },
   {
     "name": "Total War: Rome II",
+    "context": "A Legendary campaign can lose veteran armies, provinces, and political stability to one bad war or civil conflict. Legendary restricts loading to the current/latest autosave rather than normal manual saves.",
     "value": "Checkpoint before a decisive siege, civil-war risk, or major declaration. Restore the pre-war campaign instead of rebuilding armies and provinces over many turns.",
+    "icon": "landmark",
     "hero": "games/214950-hero.jpg",
     "logo": "games/214950-logo.png"
   },
   {
     "name": "Total War: Shogun 2",
+    "context": "Legendary turns every bad siege, agent loss, or Realm Divide misstep into a committed campaign result after many turns of buildup. Legendary only exposes the latest automatic campaign state instead of normal manual saves.",
     "value": "Checkpoint before Realm Divide, a decisive siege, or a risky war declaration. Restore after a campaign-breaking loss instead of replaying dozens of turns.",
+    "icon": "torii-gate",
     "hero": "games/34330-hero.jpg",
     "logo": "games/34330-logo.png"
   },
   {
     "name": "Total War: Three Kingdoms",
+    "context": "A Legendary campaign ties military progress to named characters, relationships, court positions, coalitions, and territory, so one death or diplomatic break can have long consequences. Legendary relies on automatic campaign saves instead of unrestricted manual rollback.",
     "value": "Checkpoint before a decisive battle, duel-heavy fight, coalition/vassal decision, or risky End Turn. Restore before losing a key character or diplomatic structure.",
+    "icon": "dragon",
     "hero": "games/779340-hero.jpg",
     "logo": "games/779340-logo.png"
   },
   {
     "name": "Vampyr",
+    "context": "Embracing a named citizen grants major XP but permanently removes that person and can damage an entire district. The campaign uses one autosave-driven state rather than manual save slots.",
     "value": "Checkpoint before embracing a citizen, resolving a Pillar decision, or making a district-changing quest choice. Restore to compare the power gain against keeping the NPC alive without replaying the chapter.",
+    "icon": "skull-crossbones",
     "hero": "games/427290-hero.jpg",
     "logo": "games/427290-logo.png"
   },
   {
     "name": "Void War",
+    "context": "A promising run can hinge on a specific starship build (weapons, modules, reactor power, crew, wargear and artifacts) that is expensive to recreate after one lost fight. The active run is autosaved and persistent progression is stored separately; permadeath still ends a run rather than leaving reusable rollback points.",
     "value": "Checkpoint before a dangerous encounter, boss, or boarding action. Restore the same ship, crew and build after a fatal fight instead of starting a new galaxy.",
+    "icon": "rocket",
     "hero": "games/2853590-hero.jpg",
     "logo": "games/2853590-logo.png"
   },
   {
     "name": "Voidigo",
+    "context": "A late run can carry a strong weapon, upgrades, boss rewards, and health state that disappears on death. The run can be saved in the Anti-Void between levels; that inter-level transition is the reliable checkpoint boundary.",
     "value": "Checkpoint between stages before the next biome or boss. Restore the same build after death instead of rerolling its weapons and upgrades.",
+    "icon": "gem",
     "hero": "games/1304680-hero.jpg",
     "logo": "games/1304680-logo.png"
   },
   {
     "name": "Warhammer 40,000: Chaos Gate - Daemonhunters",
+    "context": "The Grand Master achievement requires winning in Grand Master mode, where losses and strategic mistakes are committed. Grand Master uses a single campaign save instead of freely reloadable manual slots.",
     "value": "Checkpoint before a difficult Bloom mission, boss, or deployment with veteran Knights. Restore after a roster-wrecking loss or strategic spiral instead of restarting the Grand Master run.",
+    "icon": "skull-crossbones",
     "hero": "games/1611910-hero.jpg",
     "logo": "games/1611910-logo.png"
   },
   {
     "name": "Wildermyth",
+    "context": "The Let Me Get My Chisel achievement requires completing a Carved in Stone campaign, where hero deaths and story outcomes are committed. Carved in Stone keeps one save and removes the normal Load option.",
     "value": "Checkpoint before a chapter climax, risky transformation, or battle involving a key legacy hero. Restore after a permanent loss instead of replaying the whole Carved in Stone campaign.",
+    "icon": "book-open",
     "hero": "games/763890-hero.jpg",
     "logo": "games/763890-logo.png"
   },
   {
     "name": "Wizard of Legend",
+    "context": "The desired value is protecting a rare arcana/relic build before a Council Member or Sura attempt. The game does not normally save an active run for later continuation.",
     "value": "A file-only SaveScummer cannot preserve that live build, so the core use case is unsupported without runtime capture or a mod-created run save.",
+    "icon": "wand-magic-sparkles",
     "hero": "games/445980-hero.jpg",
     "logo": "games/445980-logo.png"
   },
   {
     "name": "XCOM: Enemy Unknown",
+    "context": "The No Looking Back achievement requires beating the game in Ironman on Classic or Impossible. Ironman disables manual and multiple saves, committing tactical casualties and campaign state to one history.",
     "value": "Checkpoint before a terror mission, base assault, or difficult UFO operation. Restore after a squad wipe or veteran loss instead of restarting the No Looking Back run.",
+    "icon": "crosshairs",
     "hero": "games/200510-hero.jpg",
     "logo": "games/200510-logo.png"
   },
   {
     "name": "Yes, Your Grace",
+    "context": "A choice made many days earlier can decide alliances, family outcomes, resources, or the war, but the game only keeps a short rolling history. Only the most recent eight day-end saves are retained.",
     "value": "Checkpoint a pivotal day before a major alliance, family decision, or resource commitment. Return to it later even after the built-in eight-day history has rolled past.",
+    "icon": "crown",
     "hero": "games/1115690-hero.jpg",
     "logo": "games/1115690-logo.png"
   }

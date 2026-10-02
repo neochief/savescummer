@@ -21,6 +21,8 @@ On Windows, `cargo xtask dist` builds and tests the host, CLI and Tauri UI, asse
 
 `pnpm dev` in a plain browser swaps the Tauri bridge for `src/mock/mockBridge.ts`, which serves a snapshot of the demo host. Add `?scenario=<name>` to preview a named state (empty library, running game, interrupted operation, missing access, failed save, …), or open `/scenarios.html` for the list; the JetBrains **Run UI scenarios** configuration opens it. Scenarios in `src/mock/scenarios.ts` state host facts, and `src/mock/policy.ts` mirrors `apps/host/src/policy.rs` to derive what the host would publish; keep the two in step.
 
+The app uses one Wood sound set for interface, game run/stop, Undo, Save, Load, failure, busy, and Info drawer cues. Run `node scripts/generate-interface-sounds.mjs` from `apps/ui` to regenerate all 16 WAVs in `public/sounds` and the six host WAVs in `assets/sounds`. The browser preview plays the host cues when its simulated Save or Load runs; the desktop app plays them through the real host. The generator uses oscillators and seeded noise; it takes no application sound or sample as input. The Play sounds setting silences interface cues. Button ticks are limited to opening dialogs and starting a scan; routine navigation stays quiet. Run/stop play only after the host confirms the state change; Undo plays when the pending deletion is reversed.
+
 ## Checks
 
 Run `pnpm test` and `pnpm build` in `apps/ui`, then `cargo test -p savescummer-ui` and `cargo test -p savescummer-host` from the root. The UI tests use a fake bridge for deterministic state, operation, delete, and dialog flows. The demo host exercises the actual host launch and local socket boundary.

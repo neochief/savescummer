@@ -12,6 +12,7 @@ use ksni::menu::StandardItem;
 use ksni::{Icon, MenuItem, ToolTip};
 
 use super::{Signal, emit};
+use crate::integration::{MenuSource, TrayDialog, TrayGameAction, TrayIcon, icon_png};
 
 const ICO: &[u8] = include_bytes!("../../../../../assets/icon.ico");
 
@@ -20,8 +21,8 @@ pub struct Tray(Handle<Item>);
 impl Tray {
     /// Shows the icon. The desktop's tray (the StatusNotifierWatcher) may
     /// come up after the host at sign-in; the icon appears once it does.
-    pub fn start() -> Result<Tray, String> {
-        Item { icons: ico_icons(ICO) }
+    pub fn start(menu_source: MenuSource) -> Result<Tray, String> {
+        Item { icons: ico_icons(ICO), menu_source }
             .assume_sni_available(true)
             .spawn()
             .map(Tray)
@@ -37,6 +38,7 @@ impl Drop for Tray {
 
 pub struct Item {
     icons: Vec<Icon>,
+    menu_source: MenuSource,
 }
 
 impl ksni::Tray for Item {
@@ -60,16 +62,82 @@ impl ksni::Tray for Item {
         emit(Signal::OpenMainWindow);
     }
 
+    fn menu_about_to_show(&mut self) {
+        // ksni refreshes the menu after this callback, so game availability
+        // reflects the latest host state each time the user opens it.
+    }
+
     fn menu(&self) -> Vec<MenuItem<Self>> {
+        let snapshot = (self.menu_source)();
+        let game_action = |label: &str, action: TrayGameAction, icon: TrayIcon, enabled: bool| {
+            let game = snapshot.game.clone();
+            StandardItem {
+                label: label.into(),
+                enabled,
+                icon_data: icon_png(icon).to_vec(),
+                activate: Box::new(move |_: &mut Self| {
+                    if let Some(game) = &game {
+                        emit(Signal::TrayGame { game: game.clone(), action });
+                    }
+                }),
+                ..Default::default()
+            }
+            .into()
+        };
         vec![
             StandardItem {
+                label: snapshot.name.unwrap_or_else(|| "No active game".into()),
+                enabled: false,
+                ..Default::default()
+            }
+            .into(),
+            if snapshot.running {
+                game_action("Stop", TrayGameAction::Stop, TrayIcon::Stop, snapshot.stop)
+            } else {
+                game_action("Play", TrayGameAction::Play, TrayIcon::Play, snapshot.play)
+            },
+            game_action("Save checkpoint", TrayGameAction::Save, TrayIcon::Save, snapshot.save),
+            game_action("Load latest checkpoint", TrayGameAction::Load, TrayIcon::Load, snapshot.load),
+            MenuItem::Separator,
+            StandardItem {
                 label: "Main window".into(),
+                icon_data: icon_png(TrayIcon::Main).to_vec(),
                 activate: Box::new(|_: &mut Self| emit(Signal::OpenMainWindow)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
+                label: "Add custom game…".into(),
+                icon_data: icon_png(TrayIcon::Add).to_vec(),
+                activate: Box::new(|_: &mut Self| emit(Signal::OpenDialog(TrayDialog::Add))),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Scan for games".into(),
+                icon_data: icon_png(TrayIcon::Scan).to_vec(),
+                activate: Box::new(|_: &mut Self| emit(Signal::Scan)),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Settings…".into(),
+                icon_data: icon_png(TrayIcon::Settings).to_vec(),
+                activate: Box::new(|_: &mut Self| emit(Signal::OpenDialog(TrayDialog::Settings))),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "About SaveScummer".into(),
+                icon_data: icon_png(TrayIcon::About).to_vec(),
+                activate: Box::new(|_: &mut Self| emit(Signal::OpenDialog(TrayDialog::About))),
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
+            StandardItem {
                 label: "Exit".into(),
+                icon_data: icon_png(TrayIcon::Exit).to_vec(),
                 activate: Box::new(|_: &mut Self| emit(Signal::Exit)),
                 ..Default::default()
             }

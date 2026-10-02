@@ -162,6 +162,10 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         capturing_shortcut: Option<bool>,
     },
+    /// Clears a tray dialog only after the UI has displayed it.
+    AckTrayDialog {
+        id: String,
+    },
     Open {
         target: OpenTarget,
         /// Only resolve the folder and return it; open nothing.
@@ -219,6 +223,7 @@ impl Command {
             Command::Scan { .. } => "scan",
             Command::Settings { .. } => "settings",
             Command::UiReport { .. } => "ui_report",
+            Command::AckTrayDialog { .. } => "ack_tray_dialog",
             Command::Open { .. } => "open",
             Command::PickerStart { .. } => "picker_start",
             Command::CatalogRefresh => "catalog_refresh",
@@ -599,10 +604,19 @@ pub struct State {
     pub active_stack: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotkey_target: Option<String>,
+    /// A tray request to open a dialog, retained for a UI that is starting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tray_dialog: Option<TrayDialogRequest>,
     pub catalog_revision: String,
     pub games: Vec<GameSummary>,
     /// Deletes waiting or running.
     pub deletes: Vec<Operation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrayDialogRequest {
+    pub id: String,
+    pub kind: String,
 }
 
 impl State {

@@ -29,7 +29,7 @@ use std::time::Duration;
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 
-use super::{HotkeyAction, Key, Shortcut, Shortcuts, Signal};
+use super::{HotkeyAction, Key, MenuSource, Shortcut, Shortcuts, Signal};
 
 type Handler = Arc<Mutex<Box<dyn Fn(Signal) + Send + 'static>>>;
 
@@ -58,11 +58,15 @@ struct Hotkeys {
     x11: Option<(GlobalHotKeyManager, Shortcuts)>,
 }
 
-pub fn start(on_signal: Box<dyn Fn(Signal) + Send + 'static>, shortcuts: Shortcuts) -> Result<Integration, String> {
+pub fn start(
+    on_signal: Box<dyn Fn(Signal) + Send + 'static>,
+    menu_source: MenuSource,
+    shortcuts: Shortcuts,
+) -> Result<Integration, String> {
     *lock(&HANDLER) = Some(Arc::new(Mutex::new(on_signal)));
     *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
     let mut hotkey_errors = Vec::new();
-    let tray = tray::Tray::start().map_err(|e| hotkey_errors.push(e)).ok();
+    let tray = tray::Tray::start(menu_source).map_err(|e| hotkey_errors.push(e)).ok();
     let hotkeys = Arc::new(Mutex::new(Hotkeys::default()));
     let started = if portal::wanted() {
         portal::start(shortcuts, |action| emit(Signal::Hotkey(action))).map_err(|e| hotkey_errors.push(e)).ok()

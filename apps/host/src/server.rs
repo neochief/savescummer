@@ -363,6 +363,14 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             }
             json(serde_json::json!({ "scan": scan }))
         }
+        Command::AckTrayDialog { id } => {
+            let mut inner = host.lock();
+            if inner.tray_dialog.as_ref().is_some_and(|dialog| dialog.id == id) {
+                inner.tray_dialog = None;
+                host.publish(&mut inner);
+            }
+            json(serde_json::json!({}))
+        }
         Command::Open { target, resolve_only } => json(queries::open(host, &target, resolve_only)?),
         Command::PickerStart { path } => {
             let (start, exists) = queries::picker_start(host, &path);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import Markdown from 'react-markdown';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Bridge } from './bridge';
@@ -10,6 +11,9 @@ import { GuidancePanel } from './GuidancePanel';
 import { SleepySkeleton } from './SleepySkeleton';
 import { PointingSkeleton } from './PointingSkeleton';
 import { CrouchingSkeleton } from './CrouchingSkeleton';
+import { AnimateFlag } from './AnimateFlag';
+import { AnimateCircleReturn } from './AnimateCircleReturn';
+import { interfaceClickSound, playInterfaceSound, prepareDrawerSounds } from './interfaceSounds';
 
 type Action = 'save' | 'load' | 'revert' | 'delete' | 'flush' | 'retry';
 type Feedback = { game: string; action: Action; target?: string; phase: 'busy' | 'success' | 'error'; message?: string };
@@ -85,6 +89,14 @@ function itemAt(tops: number[], y: number) {
   while (low < high) { const mid = (low + high + 1) >> 1; if (tops[mid] <= y) low = mid; else high = mid - 1; }
   return low;
 }
+
+// The Info drawer slides out from under the buttons and back with plain easing; on open, the page lying in it lags
+// behind, then overshoots once and settles (easeOutBack).
+const POCKET_OPEN = { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' };
+const POCKET_CLOSE = { duration: 175, easing: 'cubic-bezier(.4, 0, .2, 1)' };
+const PAGE_SETTLE = { duration: 420, easing: 'cubic-bezier(.3, 2, .5, 1)', lag: 96 };
+// The page also arrives turned a little and straightens in one smooth motion while the drawer stays square.
+const PAGE_SPIN = { duration: 420, easing: 'cubic-bezier(.2, .8, .2, 1)', from: 3 };
 
 function scrollMotion(): ScrollBehavior {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
@@ -199,6 +211,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [cardPending, setCardPending] = useState<{ game: string; running: boolean; token: number }>();
   const [cardError, setCardError] = useState<{ game: string; message: string }>();
   const cardToken = useRef(0);
+  const confirmedCardToken = useRef(0);
   const [scanFeedback, setScanFeedback] = useState<{ label: string; phase: 'scanning' | 'success' | 'error' }>();
   const [labelsRevision, setLabelsRevision] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -231,10 +244,63 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [dialog, setDialog] = useState<DialogKind>();
   const [dialogGame, setDialogGame] = useState<string>();
   const dialogOpener = useRef<HTMLElement | null>(null);
+  const openedTrayDialog = useRef<string | undefined>(undefined);
   // Flush can be opened from Configure; it stacks on top and returns focus to its button there.
   const [flushOpener, setFlushOpener] = useState<HTMLElement>();
   const [historyDirection, setHistoryDirection] = useState<'up' | 'down'>('down');
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
+  useEffect(() => prepareDrawerSounds(), []);
+  // The game whose Info panel is sliding back under the buttons; it stays mounted until the slide ends.
+  const [infoClosing, setInfoClosing] = useState<string>();
+  const infoMotion = useRef<'open' | 'close'>(undefined);
+  const infoAnimations = useRef<Animation[]>([]);
+  const pocketRef = useRef<HTMLDivElement>(null);
+  const historyFrameRef = useRef<HTMLDivElement>(null);
+  const toggleInfo = (game: string) => {
+    const open = !expandedInfo[game];
+    playInterfaceSound(open ? 'drawer-open' : 'drawer-close', state?.settings?.play_sounds ?? true);
+    infoMotion.current = open ? 'open' : 'close';
+    setExpandedInfo((value) => ({ ...value, [game]: open }));
+    setInfoClosing(open ? undefined : game);
+  };
+  // The layout changes once; only translations animate, so the history is not re-laid out every frame. The sheet slides
+  // within the pocket, which clips it at the buttons' edge, and the history rides along as if pushed. While it moves, a
+  // negative bottom margin keeps the history as tall as before, so its bottom edge never comes into view.
+  useLayoutEffect(() => {
+    const motion = infoMotion.current;
+    infoMotion.current = undefined;
+    if (!motion) return;
+    const frame = historyFrameRef.current;
+    for (const animation of infoAnimations.current) animation.cancel();
+    infoAnimations.current = [];
+    if (frame) frame.style.marginBottom = '';
+    const pocket = pocketRef.current;
+    const sheet = pocket?.firstElementChild as HTMLElement | null;
+    const settle = () => {
+      if (motion === 'close') flushSync(() => setInfoClosing(undefined));
+      for (const animation of infoAnimations.current) animation.cancel();
+      infoAnimations.current = [];
+      if (frame) frame.style.marginBottom = '';
+    };
+    if (!pocket || !sheet || !frame || typeof sheet.animate !== 'function' || scrollMotion() === 'auto') return settle();
+    // The history moves by the pocket's height plus any margin it takes up.
+    const pocketStyle = getComputedStyle(pocket);
+    const push = pocket.offsetHeight + parseFloat(pocketStyle.marginTop) + parseFloat(pocketStyle.marginBottom);
+    // Fractions of the travel: -1 is tucked away, 0 is in place.
+    const [from, to] = motion === 'open' ? [-1, 0] : [0, -1];
+    const timing = { ...(motion === 'open' ? POCKET_OPEN : POCKET_CLOSE), fill: 'forwards' } as const;
+    frame.style.marginBottom = `-${push}px`;
+    infoAnimations.current = [
+      sheet.animate({ translate: [`0 ${from * 100}%`, `0 ${to * 100}%`] }, timing),
+      frame.animate({ translate: [`0 ${from * push}px`, `0 ${to * push}px`] }, timing)];
+    const page = sheet.firstElementChild as HTMLElement | null;
+    if (motion === 'open' && page) {
+      infoAnimations.current.push(page.animate({ translate: [`0 -${PAGE_SETTLE.lag}px`, '0 0'] }, { ...PAGE_SETTLE, fill: 'forwards' }),
+        page.animate({ rotate: [`${PAGE_SPIN.from}deg`, '0deg'] }, { ...PAGE_SPIN, fill: 'forwards' }));
+    }
+    // A re-toggle cancels these, and the new motion settles instead.
+    Promise.all(infoAnimations.current.map((animation) => animation.finished)).then(settle, () => undefined);
+  });
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -243,6 +309,23 @@ export function App({ bridge }: { bridge: Bridge }) {
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const sidebarTrackRef = useRef<HTMLDivElement>(null);
   const [sidebarScroll, setSidebarScroll] = useState({ top: 0, viewport: 0, content: 0, track: 0 });
+  const knownGames = useRef<Set<string> | undefined>(undefined);
+
+  useEffect(() => {
+    const click = (event: MouseEvent) => interfaceClickSound(event, state?.settings?.play_sounds ?? true);
+    document.addEventListener('click', click, true);
+    return () => document.removeEventListener('click', click, true);
+  }, [state?.settings?.play_sounds]);
+
+  useEffect(() => {
+    if (!state) return;
+    const installed = new Set(state.games.filter((game) => game.installed).map((game) => game.id));
+    if (knownGames.current) {
+      const added = [...installed].filter((id) => !knownGames.current!.has(id));
+      if (added.length) playInterfaceSound(added.length > 1 ? 'detected-batch' : 'detected', state.settings?.play_sounds ?? true);
+    }
+    knownGames.current = installed;
+  }, [state]);
 
   const runLifecycle = async (game: Game, type: 'play' | 'close_game') => {
     const token = ++cardToken.current;
@@ -262,15 +345,30 @@ export function App({ bridge }: { bridge: Bridge }) {
   useEffect(() => {
     if (!cardPending) return;
     if (state?.games.find((game) => game.id === cardPending.game)?.running === cardPending.running) {
+      if (confirmedCardToken.current !== cardPending.token) {
+        confirmedCardToken.current = cardPending.token;
+        playInterfaceSound(cardPending.running ? 'game-run' : 'game-stop', state?.settings?.play_sounds ?? true);
+      }
       setCardPending(undefined);
     }
   }, [cardPending, state]);
 
   const openDialog = (kind: DialogKind, opener: HTMLElement | null, game?: string) => {
+    playInterfaceSound('button', state?.settings?.play_sounds ?? true);
     dialogOpener.current = opener;
     setDialogGame(game);
     setDialog(kind);
   };
+
+  useEffect(() => {
+    const request = state?.tray_dialog;
+    if (!request || request.id === openedTrayDialog.current) return;
+    openedTrayDialog.current = request.id;
+    openDialog(request.kind, null);
+    bridge.request({ type: 'ack_tray_dialog', id: request.id }).catch(() => {
+      if (openedTrayDialog.current === request.id) openedTrayDialog.current = undefined;
+    });
+  }, [state?.tray_dialog]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -467,6 +565,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   }, [bridge, selectedGame, receiveHistory]);
 
   const scan = useCallback(async () => {
+    playInterfaceSound('button', state?.settings?.play_sounds ?? true);
     clearTimeout(scanTimer.current);
     setScanFeedback({ label: 'Scanning…', phase: 'scanning' });
     try {
@@ -477,7 +576,7 @@ export function App({ bridge }: { bridge: Bridge }) {
       setScanFeedback({ label: String(error instanceof Error ? error.message : error), phase: 'error' });
     }
     scanTimer.current = setTimeout(() => setScanFeedback(undefined), 2400);
-  }, [bridge]);
+  }, [bridge, state?.settings?.play_sounds]);
 
   const commitDelete = useCallback(async (game: string, checkpoint: string) => {
     const key = deleteKey(game, checkpoint);
@@ -526,6 +625,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   const undoCheckpointDelete = useCallback(() => {
     const pending = pendingUndo.current;
     if (!pending) return;
+    playInterfaceSound('undo', state?.settings?.play_sounds ?? true);
     clearTimeout(pending.timer);
     pendingUndo.current = undefined;
     dismissUndoNotice(pending.game, pending.checkpoint, 'right');
@@ -551,7 +651,7 @@ export function App({ bridge }: { bridge: Bridge }) {
         viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
       }
     });
-  }, [hiddenDeletes, dismissUndoNotice]);
+  }, [hiddenDeletes, dismissUndoNotice, state?.settings?.play_sounds]);
 
   useEffect(() => () => {
     clearTimeout(undoExitTimer.current);
@@ -769,6 +869,22 @@ export function App({ bridge }: { bridge: Bridge }) {
         {state?.store?.available === false && <p className="store-notice" role="alert">The checkpoint store is unavailable. Reconnect its drive to continue.</p>}
         {selectedGame ? <>
           <div className={`action-band ${selectedGame.guidance?.save ? 'covers-save' : ''} ${selectedGame.guidance?.load ? 'covers-load' : ''}`} aria-label="Checkpoint actions">
+            <div className="game-launcher">
+              {selectedGame.running ? <button className="launch-button stop" disabled={!(selectedGame.expert_mode && selectedGame.can_close) || cardPending?.game === selectedGame.id}
+                onClick={() => runLifecycle(selectedGame, 'close_game')} aria-label={`Close ${selectedGame.name}`}
+                title={selectedGame.expert_mode && selectedGame.can_close ? 'Close game' : 'Game is running'}>
+                <span className="launch-icon" />
+              </button>
+              : <button className="launch-button" disabled={cardPending?.game === selectedGame.id || selectedGame.can_play === false}
+                onClick={() => runLifecycle(selectedGame, 'play')} aria-label={`Run ${selectedGame.name}`}
+                title={selectedGame.can_play === false ? 'No executable configured' : 'Run game'}>
+                <span className="launch-icon" />
+              </button>}
+              <button className="info-button" disabled={!selectedGame.info} onClick={() => toggleInfo(selectedGame.id)}
+                aria-expanded={Boolean(selectedGame.info && expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
+                <Icon name="info" />Info
+              </button>
+            </div>
             <ActionButton action="save" game={selectedGame} feedback={feedback} busy={working} now={now}
               shortcut={state?.settings?.save_shortcut} onClick={() => runAction('save')} />
             <ActionButton action="load" game={selectedGame} feedback={feedback} busy={working} now={now}
@@ -780,22 +896,18 @@ export function App({ bridge }: { bridge: Bridge }) {
               onRetry={() => runAction('retry')} onPlay={() => runLifecycle(selectedGame, 'play')}
               onConfigure={(button) => openDialog('configure', button)} />
           </div>
+          {/* Info slides out from under the buttons, as if from a pocket behind them. */}
+          {selectedGame.info && (expandedInfo[selectedGame.id] || infoClosing === selectedGame.id) &&
+            <div className="game-info-pocket" ref={pocketRef}>
+              <div className="game-info-sheet">
+                <div id={`game-info-${selectedGame.id}`} className="game-info-content"><Markdown>{selectedGame.info}</Markdown></div>
+              </div>
+            </div>}
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
             <p className="action-error-block" role="alert">{failureMessage(hostError, 'Game unavailable')}</p>}
           {alreadyAdded === selectedGame.id && <p className="library-notice" role="status">{selectedGame.name} was already in your library.</p>}
-          {selectedGame.info && <div className="game-info">
-            <div className="game-info-controls">
-              <button className="info-button" onClick={() => setExpandedInfo((value) => ({ ...value, [selectedGame.id]: !value[selectedGame.id] }))}
-                aria-expanded={Boolean(expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
-                <Icon name="info" />Info
-              </button>
-            </div>
-            {expandedInfo[selectedGame.id] && <div id={`game-info-${selectedGame.id}`} className="game-info-content">
-              <Markdown>{selectedGame.info}</Markdown>
-            </div>}
-          </div>}
-          <div className="history-frame" style={fadeStyle(scrollTop, 0)}>
+          <div className="history-frame" ref={historyFrameRef} style={fadeStyle(scrollTop, 0)}>
             <div key={selectedGame.id} className={`history history-${historyDirection}${revealing ? ' revealing' : ''}`}
               ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
@@ -836,8 +948,17 @@ export function App({ bridge }: { bridge: Bridge }) {
       </div>}
       {dialog === 'about' && <AboutDialog bridge={bridge} opener={dialogOpener.current} close={() => setDialog(undefined)} />}
       {dialog && dialog !== 'about' && <AppDialog key={`${dialog}-${dialogTarget?.id || ''}`} kind={dialog} game={dialogTarget} state={state} bridge={bridge} opener={dialogOpener.current}
-        close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id, existing) => { setDialog(undefined); setSelected(id); setAlreadyAdded(existing ? id : undefined); }}
-        onFlushed={(operation) => dialogTarget && finishFlush(dialogTarget.id, operation)} onFlush={setFlushOpener} />}
+        close={() => { setFlushOpener(undefined); setDialog(undefined); }} onAdded={(id, existing) => {
+          // Adding a game already has the dialog success cue; its state update is not a discovery.
+          knownGames.current?.add(id);
+          setDialog(undefined);
+          setSelected(id);
+          setAlreadyAdded(existing ? id : undefined);
+        }}
+        onFlushed={(operation) => dialogTarget && finishFlush(dialogTarget.id, operation)} onFlush={(opener) => {
+          playInterfaceSound('button', state?.settings?.play_sounds ?? true);
+          setFlushOpener(opener);
+        }} />}
       {dialog && flushOpener && dialogTarget && <AppDialog key={`flush-over-${dialogTarget.id}`} kind="flush" game={dialogTarget} state={state} bridge={bridge}
         opener={flushOpener} close={() => setFlushOpener(undefined)} onAdded={() => undefined}
         onFlushed={(operation) => finishFlush(dialogTarget.id, operation)} />}
@@ -873,8 +994,10 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   action: 'save' | 'load'; game: Game; feedback?: Feedback; busy: boolean; now: number; shortcut?: string;
   onClick: () => void; onJump?: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   const available = game[action].available;
   const covered = Boolean(game.guidance?.[action]);
+  const disabled = !available || busy || covered;
   const current: Feedback | undefined = feedback?.game === game.id && feedback.action === action && !feedback.target ? feedback
     : game.busy?.kind === action ? { game: game.id, action, phase: 'busy' } : undefined;
   const label = current?.phase === 'error' ? 'FAILED' : action.toUpperCase();
@@ -882,9 +1005,11 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
   // An empty shortcut was removed in Settings: no tab then.
   const tab = shortcut ?? `${mac ? 'Alt' : 'Ctrl'}+${action === 'save' ? 'F5' : 'F9'}`;
   // Keep the clickable checkpoint card separate from the Load button so the labels stay aligned.
-  return <div className="action-slot" inert={covered}>
+  return <div className={`action-slot ${action}`} inert={covered}>
     {available && !covered && tab && <span className="shortcut-tab">{displayShortcut(tab)}</span>}
-    <button className={`main-button ${action} ${current?.phase || ''}`} disabled={!available || busy || covered}
+    <button className={`main-button ${action} ${current?.phase || ''}`} disabled={disabled}
+      onPointerEnter={(event) => setHovered(event.pointerType !== 'touch')}
+      onPointerLeave={() => setHovered(false)} onPointerCancel={() => setHovered(false)}
       onClick={onClick} title={title || undefined} aria-label={`${action} ${game.name}`}>
       {/* The hidden widest labels keep the button from resizing as SAVE turns into SAVING… or FAILED,
           while the visible icon and text stay centered together at a fixed gap. */}
@@ -892,7 +1017,9 @@ function ActionButton({ action, game, feedback, busy, now, shortcut, onClick, on
         {/* Busy shows only a spinning icon, then a checkmark that pops in once done. */}
         {current?.phase === 'busy' || current?.phase === 'success'
           ? <span className="main-face icon-only" key={current.phase}><Icon name={current.phase} /></span>
-          : <span className="main-face"><Icon name={action} />{label}</span>}
+          : <span className="main-face">{action === 'save'
+            ? <AnimateFlag active={hovered && !disabled} />
+            : <AnimateCircleReturn active={hovered && !disabled} />}{label}</span>}
       </span>
     </button>
     {action === 'load' && <span className="load-card">{game.latest
