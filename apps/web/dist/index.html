@@ -22,7 +22,7 @@
       .subtitle { max-width: 39rem; color: #faf8ee; font-size: clamp(1.25rem, 3vw, 1.625rem); }
       .hero .subtitle { max-width: 48rem; text-wrap: balance; }
       .supporting { max-width: 36rem; margin-top: 1.25rem; color: #d7c9ba; font-size: clamp(1rem, 2.2vw, 1.125rem); }
-      .downloads { display: flex; justify-content: center; width: 100%; margin: 2.75rem auto 0; }
+      .downloads { position: relative; z-index: 2; grid-column: 1 / -1; grid-row: 1; display: flex; justify-content: center; width: 100%; }
       .download { display: flex; align-items: center; justify-content: center; gap: .85rem; border-radius: .8rem; text-decoration: none; }
       .download img { display: block; width: 2.2rem; height: 2.2rem; flex: none; }
       .download-name { display: block; font: 700 1.125rem/1.25 "Chakra Petch", sans-serif; }
@@ -31,9 +31,15 @@
       .github:focus-visible { outline: 3px solid #ff1e29; outline-offset: 4px; }
       .github img { width: 2rem; height: 2rem; }
       .github .download-name { font-size: 1.5rem; white-space: nowrap; }
-      .benefits { width: 100%; max-width: 36rem; margin-top: 3.5rem; text-align: left; }
-      .benefits .supporting:first-child { margin-top: 0; }
-      .benefits strong { color: #faf8ee; }
+      .benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3.5rem 2.5rem; width: calc(100% - 2rem); margin-top: 2.75rem; }
+      .benefit-card { padding: 1rem 1rem 1.5rem; border: 1px solid var(--card-accent); border-radius: 1rem; background: linear-gradient(160deg, var(--card-tint), #201b19 75%); box-shadow: inset 0 1px 0 #ffffff12, 0 5px 0 var(--card-edge), 0 7px 0 #0d0b0a, 0 18px 30px #0006; transform: rotate(var(--card-tilt)); }
+      .benefit-skill { grid-column: 1; grid-row: 2; --card-tilt: -2deg; --card-accent: #c7a76b; --card-edge: #73603e; --card-tint: #413626; }
+      .benefit-time { grid-column: 2; grid-row: 2; --card-tilt: 1deg; --card-accent: #90ad98; --card-edge: #4d6c57; --card-tint: #293d33; }
+      .benefit-calm { grid-column: 3; grid-row: 2; --card-tilt: 2deg; --card-accent: #c39193; --card-edge: #764e55; --card-tint: #442c34; }
+      .benefit-art { display: grid; place-items: center; height: 7rem; }
+      .benefit-art img { width: 5rem; height: 5rem; object-fit: contain; filter: drop-shadow(0 4px 3px #0006); }
+      .benefit-card h2 { margin: 1rem .25rem .75rem; color: #faf8ee; font: 700 1.35rem/1.2 "Chakra Petch", sans-serif; text-wrap: balance; }
+      .benefit-card p { margin: 0 .4rem; color: #ded2c5; font-size: .9375rem; line-height: 1.6; }
       .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #302824; background: #12100f; }
       .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
       .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.5rem, 5vw, 3.5rem)/1.1 "Chakra Petch", sans-serif; }
@@ -78,19 +84,20 @@
       .show-more[hidden] { display: none; }
       .show-more:hover { background: #3c302d; }
       .show-more:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
-      .game-tooltip { position: fixed; z-index: 10; isolation: isolate; width: min(29rem, calc(100vw - 1.5rem)); color: #faf8ee; pointer-events: none; }
+      .game-tooltip { --popup-body-offset: 10px; --popup-text: #faf8ee; --popup-value-text: #d7c9ba; --popup-value-shade: #241c19; position: fixed; z-index: 10; isolation: isolate; width: min(29rem, calc(100vw - 1.5rem)); color: var(--popup-text); pointer-events: none; }
+      .game-tooltip.pinned { --popup-bg: var(--selected-popup-surface); --popup-text: #1c1918; --popup-value-text: #2d241e; --popup-value-shade: #a48e7f; }
       .game-tooltip.flip { display: flex; flex-direction: column-reverse; }
       .game-tooltip[hidden] { display: none; }
       .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 4px solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; }
-      .game-tooltip.pinned .game-tooltip-art { border-color: var(--selected-popup-surface); }
-      .game-tooltip-copy { position: relative; z-index: 1; margin-top: -.25rem; padding: 1.125rem 1.25rem; border-radius: 10px; background: var(--popup-bg); box-shadow: 0 16px 36px #0009; transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
-      .game-tooltip.flip .game-tooltip-copy { margin-top: 0; margin-bottom: -.25rem; transform-origin: center bottom; animation-name: popup-unfold-up; }
+      /* Extra overlap hides the card corners; matching padding keeps the artwork anchor and text spacing fixed. */
+      .game-tooltip-copy { position: relative; z-index: 1; margin-top: calc(-.25rem - var(--popup-body-offset)); padding: calc(1.125rem + var(--popup-body-offset)) 1.25rem 1.125rem; border-radius: 10px; background: var(--popup-bg); box-shadow: 0 16px 36px #0009; transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
+      .game-tooltip.flip .game-tooltip-copy { margin-top: 0; margin-bottom: calc(-.25rem - var(--popup-body-offset)); padding-top: 1.125rem; padding-bottom: calc(1.125rem + var(--popup-body-offset)); transform-origin: center bottom; animation-name: popup-unfold-up; }
       .game-tooltip.closing .game-tooltip-copy { animation: popup-fold .28s cubic-bezier(.4,0,.8,.3) both; }
       .game-tooltip.flip.closing .game-tooltip-copy { animation-name: popup-fold-up; }
       .game-tooltip.settled .game-tooltip-copy { animation: none; }
-      .game-tooltip-title { margin: 0 0 .75rem; color: #faf8ee; text-align: center; font: 700 1.4rem/1.15 "Chakra Petch", sans-serif; }
-      .game-tooltip-context { margin: 0; color: #faf8ee; font-size: .925rem; line-height: 1.5; }
-      .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: linear-gradient(to bottom, #241c19, transparent); color: #d7c9ba; }
+      .game-tooltip-title { margin: 0 0 .75rem; color: var(--popup-text); text-align: center; font: 700 1.4rem/1.15 "Chakra Petch", sans-serif; }
+      .game-tooltip-context { margin: 0; color: var(--popup-text); font-size: .925rem; line-height: 1.5; }
+      .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: linear-gradient(to bottom, var(--popup-value-shade), transparent); color: var(--popup-value-text); }
       .game-tooltip-value p { margin: 0; font-size: .875rem; line-height: 1.5; }
       .game-tooltip-icon { display: block; width: 2.5rem; height: 2.5rem; margin-top: .05rem; flex: none; background: center / contain no-repeat; transform: translateY(2px); }
       @keyframes popup-unfold { from { opacity: 0; transform: translateY(-.75rem) scale(.95); } to { opacity: 1; transform: none; } }
@@ -100,20 +107,27 @@
       @media (prefers-reduced-motion: reduce) {
         .game-tooltip .game-tooltip-copy { animation: none !important; }
       }
+      @media (max-width: 950px) {
+        .benefits { grid-template-columns: minmax(0, 22rem); grid-template-rows: auto; justify-content: center; gap: 2.25rem; width: calc(100% - 1.5rem); margin-top: 2.75rem; }
+        .downloads { grid-column: 1; grid-row: auto; margin-bottom: .75rem; }
+        .benefit-card { grid-column: 1; grid-row: auto; margin-top: 0; --card-tilt: -2deg; }
+        .benefit-time { --card-tilt: 2deg; }
+        .benefit-calm { --card-tilt: -1deg; }
+      }
       @media (max-width: 700px) {
         .hero { padding: 5rem 0 4rem; }
         .supported { padding-top: 4rem; }
         .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
       }
       @media (max-width: 450px) {
+        .github { padding: 0 .75rem; }
+        .github .download-name { font-size: 1.125rem; }
         .game-grid { grid-template-columns: 1fr; }
         .game-tooltip-title { font-size: 1.2rem; }
         .game-tooltip-context, .game-tooltip-value p { font-size: .8125rem; }
       }
       @media (max-width: 380px) {
-        .github { padding: 0 .75rem; }
         .github img { width: 1.75rem; height: 1.75rem; }
-        .github .download-name { font-size: 1.125rem; }
       }
     </style>
   </head>
@@ -124,16 +138,28 @@
         <h1><span>Save</span><strong>Scummer</strong></h1>
         <p class="subtitle">Save and restore progress in games that don’t let you go back.</p>
         <p class="supporting">Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments. Try an unfamiliar build, make a bold decision, fail, learn, and keep going.</p>
-        <section class="downloads" aria-label="Download options">
-          <a class="download github" href="https://github.com/neochief/savescummer/releases/latest">
-            <img src="./icons/github.svg" alt="" width="44" height="44" />
-            <span class="download-name" id="download-label">Download on GitHub</span>
-          </a>
-        </section>
         <div class="benefits">
-          <p class="supporting"><strong>Build gaming skill without wasting time.</strong> Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
-          <p class="supporting"><strong>Enjoy challenging games while having a life.</strong> Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
-          <p class="supporting"><strong>Play with less pressure.</strong> If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
+          <section class="downloads" aria-label="Download options">
+            <a class="download github" href="https://github.com/neochief/savescummer/releases/latest">
+              <img src="./icons/github.svg" alt="" width="44" height="44" />
+              <span class="download-name" id="download-label">Download on GitHub</span>
+            </a>
+          </section>
+          <article class="benefit-card benefit-skill">
+            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/swords.svg" alt="" width="80" height="80" /></div>
+            <h2>Build gaming skill without wasting time</h2>
+            <p>Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
+          </article>
+          <article class="benefit-card benefit-time">
+            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/hourglass-half.svg" alt="" width="80" height="80" /></div>
+            <h2>Enjoy challenging games while having a life</h2>
+            <p>Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
+          </article>
+          <article class="benefit-card benefit-calm">
+            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/heart-circle-check.svg" alt="" width="80" height="80" /></div>
+            <h2>Play with less pressure</h2>
+            <p>If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
+          </article>
         </div>
       </div>
       <section class="supported" aria-labelledby="supported-title">
