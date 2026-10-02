@@ -12,6 +12,14 @@ const files = import.meta.glob<string>('./art/*/*', { eager: true, import: 'defa
 const art = (game: string, kind: string) =>
   Object.entries(files).find(([path]) => path.startsWith(`./art/${game}/${kind}.`))?.[1];
 
+// The host's rule: a session's markers show only while it holds a visible row. Rows are newest
+// first, so a session's rows sit right after its Game closed and right before its Game started.
+const isMarker = (row?: HistoryEntry) => row?.kind === 'game_started' || row?.kind === 'game_closed';
+const dropEmptySessions = (rows: HistoryEntry[]) => rows.filter((row, i) =>
+  row.kind === 'game_closed' ? rows[i + 1] && !isMarker(rows[i + 1])
+    : row.kind === 'game_started' ? rows[i - 1] && !isMarker(rows[i - 1])
+      : true);
+
 export function createMockBridge(): Bridge {
   const name = new URLSearchParams(location.search).get('scenario') ?? 'library';
   const scenario = scenarios[name] ?? scenarios.library;
@@ -43,7 +51,7 @@ export function createMockBridge(): Bridge {
     const done = new Promise<Operation>((resolve) => { finish = resolve; });
     const error = scenario.fail?.delete;
     setTimeout(() => {
-      if (!error) history[game] = history[game].filter((row) => row.checkpoint !== checkpoint);
+      if (!error) history[game] = dropEmptySessions(history[game].filter((row) => row.checkpoint !== checkpoint));
       find(game).history_version++;
       dropDelete(id);
       publish();

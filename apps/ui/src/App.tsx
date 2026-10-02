@@ -187,9 +187,9 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
         aria-current={selected ? 'true' : undefined}
         aria-label={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ', Not running'}`}
         data-tooltip={`${game.name}${game.install_tag ? ` — ${game.install_tag}` : ''}${game.running ? '' : ' — Not running'}`}>
-        {hero && <img className="game-art" src={hero} alt="" />}
+        {hero && <img className="game-art" src={hero} alt="" draggable={false} />}
         <span className="game-shade" />
-        {logo ? <img className="game-logo" src={logo} alt="" /> : <span className="game-fallback">{game.name}</span>}
+        {logo ? <img className="game-logo" src={logo} alt="" draggable={false} /> : <span className="game-fallback">{game.name}</span>}
         {game.install_tag && <span className="install-tag">{game.install_tag}</span>}
         {playAnimation && <span className="game-play-animation" aria-hidden="true">
           <span className="game-play-animation-icon" />

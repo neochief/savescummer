@@ -4,7 +4,7 @@
 
 SaveScummer helps you save and restore progress in games where that isn't possible by design. It helps you learn difficult games faster and spend less time replaying what you already know. Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments, experiment, fail, learn, and keep going.
 
-If your time is limited, it helps you reach interesting stories, builds, and decisions without losing hours of progress before you got gud.
+If your time is limited, it helps you reach interesting stories, builds, and decisions without losing hours of progress before you _got gud_.
 
 If you or your child is an anxious player, it lets you keep playing, experimenting, learning, and having fun without being punished for every mistake.
 

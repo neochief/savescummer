@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-US">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#1c1918" />
-    <meta name="description" content="Checkpoint games that don't offer saves, learn faster, and spend more time on the stories and choices you care about." />
+    <meta name="description" content="Save and restore progress in games that don't let you go back. Build gaming skill without wasting time, enjoy challenging games while having a life, and play with less pressure." />
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <title>SaveScummer</title>
     <style>
       @font-face { font-family: "Chakra Petch"; src: url("./fonts/ChakraPetch-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
       @font-face { font-family: Inter; src: url("./fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --popup-bg: #332822; }
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --popup-bg: #332822; --selected-popup-surface: #bfaea1; }
       * { box-sizing: border-box; }
       body { margin: 0; background: #1c1918; color: #faf8ee; }
       main { width: 100%; }
@@ -31,6 +31,9 @@
       .github:focus-visible { outline: 3px solid #ff1e29; outline-offset: 4px; }
       .github img { width: 2rem; height: 2rem; }
       .github .download-name { font-size: 1.5rem; white-space: nowrap; }
+      .benefits { width: 100%; max-width: 36rem; margin-top: 3.5rem; text-align: left; }
+      .benefits .supporting:first-child { margin-top: 0; }
+      .benefits strong { color: #faf8ee; }
       .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #302824; background: #12100f; }
       .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
       .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.5rem, 5vw, 3.5rem)/1.1 "Chakra Petch", sans-serif; }
@@ -46,12 +49,15 @@
       .game-group-separator { margin: 0 .45rem; color: #6a5650; font: 700 1.2rem/1 "Chakra Petch", sans-serif; }
       .game-group-tagline { color: #bfaea1; }
       .game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+      .game-groups { width: calc(100% + 12px); margin-inline: -6px; padding-inline: 6px; }
       .game-groups:not(.expanded) { max-height: 38rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent); mask-image: linear-gradient(to bottom, #000 75%, transparent); }
       .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border: 4px solid transparent; border-radius: 10px; background: #3c302d; background-clip: padding-box; cursor: pointer; }
       .game-card:hover, .game-card:focus-within, .game-card.open { border-color: var(--popup-bg); }
+      .game-card.pinned { border-color: var(--selected-popup-surface); }
       .game-card:has(.game-card-trigger:focus-visible) { outline: 2px solid #faf8ee; outline-offset: 3px; }
-      .game-card-trigger { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+      .game-card-trigger { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; user-select: none; }
       .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .game-art, .game-shade, .game-logo, .game-fallback { pointer-events: none; }
       .game-art { object-fit: cover; cursor: pointer; }
       .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
       .game-logo { position: absolute; top: 10%; left: 12.5%; width: 75%; height: 80%; object-fit: contain; cursor: pointer; }
@@ -72,33 +78,27 @@
       .show-more[hidden] { display: none; }
       .show-more:hover { background: #3c302d; }
       .show-more:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
-      .game-tooltip { position: fixed; z-index: 10; width: min(29rem, calc(100vw - 1.5rem)); color: #faf8ee; pointer-events: none; view-transition-name: game-popup; }
+      .game-tooltip { position: fixed; z-index: 10; isolation: isolate; width: min(29rem, calc(100vw - 1.5rem)); color: #faf8ee; pointer-events: none; }
       .game-tooltip.flip { display: flex; flex-direction: column-reverse; }
       .game-tooltip[hidden] { display: none; }
-      .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 4px solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; transform-origin: center top; animation: art-grow .28s ease-out both; }
-      .game-tooltip.flip .game-tooltip-art { transform-origin: center bottom; }
-      .game-tooltip-copy { position: relative; z-index: 1; margin-top: -.25rem; padding: 1.125rem 1.25rem; border-radius: 10px; background: var(--popup-bg); transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
+      .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 4px solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; }
+      .game-tooltip.pinned .game-tooltip-art { border-color: var(--selected-popup-surface); }
+      .game-tooltip-copy { position: relative; z-index: 1; margin-top: -.25rem; padding: 1.125rem 1.25rem; border-radius: 10px; background: var(--popup-bg); box-shadow: 0 16px 36px #0009; transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
       .game-tooltip.flip .game-tooltip-copy { margin-top: 0; margin-bottom: -.25rem; transform-origin: center bottom; animation-name: popup-unfold-up; }
-      .game-tooltip.closing .game-tooltip-art { animation: art-shrink .28s ease-in both; }
       .game-tooltip.closing .game-tooltip-copy { animation: popup-fold .28s cubic-bezier(.4,0,.8,.3) both; }
       .game-tooltip.flip.closing .game-tooltip-copy { animation-name: popup-fold-up; }
-      .game-tooltip.switching .game-tooltip-art, .game-tooltip.switching .game-tooltip-copy { animation: none; }
+      .game-tooltip.settled .game-tooltip-copy { animation: none; }
       .game-tooltip-title { margin: 0 0 .75rem; color: #faf8ee; text-align: center; font: 700 1.4rem/1.15 "Chakra Petch", sans-serif; }
       .game-tooltip-context { margin: 0; color: #faf8ee; font-size: .925rem; line-height: 1.5; }
       .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: linear-gradient(to bottom, #241c19, transparent); color: #d7c9ba; }
       .game-tooltip-value p { margin: 0; font-size: .875rem; line-height: 1.5; }
       .game-tooltip-icon { display: block; width: 2.5rem; height: 2.5rem; margin-top: .05rem; flex: none; background: center / contain no-repeat; transform: translateY(2px); }
-      @keyframes art-grow { from { transform: scale(1); } to { transform: scale(1.035); } }
-      @keyframes art-shrink { from { transform: scale(1.035); } to { transform: scale(1); } }
       @keyframes popup-unfold { from { opacity: 0; transform: translateY(-.75rem) scale(.95); } to { opacity: 1; transform: none; } }
       @keyframes popup-unfold-up { from { opacity: 0; transform: translateY(.75rem) scale(.95); } to { opacity: 1; transform: none; } }
       @keyframes popup-fold { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-.75rem) scale(.95); } }
       @keyframes popup-fold-up { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(.75rem) scale(.95); } }
-      ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
-      ::view-transition-group(game-popup), ::view-transition-old(game-popup), ::view-transition-new(game-popup) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2,.7,.2,1); }
       @media (prefers-reduced-motion: reduce) {
-        .game-tooltip .game-tooltip-art, .game-tooltip .game-tooltip-copy { animation: none !important; }
-        ::view-transition-group(game-popup), ::view-transition-old(game-popup), ::view-transition-new(game-popup) { animation-duration: 0s; }
+        .game-tooltip .game-tooltip-copy { animation: none !important; }
       }
       @media (max-width: 700px) {
         .hero { padding: 5rem 0 4rem; }
@@ -122,14 +122,19 @@
       <div class="hero">
         <img class="app-icon" src="./icon.svg" alt="" width="144" height="144" />
         <h1><span>Save</span><strong>Scummer</strong></h1>
-        <p class="subtitle">Save your progress in games without a save feature.</p>
-        <p class="supporting">Retry a tough moment, learn faster, and spend less time replaying what you already know, so you can get back to the stories, builds, and choices you care about.</p>
+        <p class="subtitle">Save and restore progress in games that don’t let you go back.</p>
+        <p class="supporting">Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments. Try an unfamiliar build, make a bold decision, fail, learn, and keep going.</p>
         <section class="downloads" aria-label="Download options">
           <a class="download github" href="https://github.com/neochief/savescummer/releases/latest">
             <img src="./icons/github.svg" alt="" width="44" height="44" />
             <span class="download-name" id="download-label">Download on GitHub</span>
           </a>
         </section>
+        <div class="benefits">
+          <p class="supporting"><strong>Build gaming skill without wasting time.</strong> Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
+          <p class="supporting"><strong>Enjoy challenging games while having a life.</strong> Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
+          <p class="supporting"><strong>Play with less pressure.</strong> If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
+        </div>
       </div>
       <section class="supported" aria-labelledby="supported-title">
         <div class="supported-inner">
@@ -181,7 +186,12 @@
       let hoveredCard = null;
       let ignoredHoverCard = null;
       let closeTimer = null;
-      let switchGeneration = 0;
+      let moveAnimation = null;
+
+      function stopMove() {
+        if (moveAnimation) moveAnimation.cancel();
+        moveAnimation = null;
+      }
 
       function finishClose() {
         if (activeCard) return;
@@ -204,6 +214,7 @@
       function hideTooltip() {
         if (!activeCard) return;
         deactivateCard();
+        tooltip.classList.remove("settled");
         tooltip.classList.add("closing");
         if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) finishClose();
         else closeTimer = window.setTimeout(finishClose, 320);
@@ -239,24 +250,39 @@
 
       function pinTooltip(card, game) {
         const wasPinned = pinnedCard !== null;
+        if (pinnedCard) pinnedCard.classList.remove("pinned");
         pinnedCard = card;
+        card.classList.add("pinned");
+        tooltip.classList.add("pinned");
         ignoredHoverCard = null;
         if (activeCard === card) return;
-        const generation = ++switchGeneration;
-        if (wasPinned && activeCard && document.startViewTransition && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-          const transition = document.startViewTransition(() => {
-            if (generation !== switchGeneration) return;
-            tooltip.classList.add("switching");
-            showTooltip(card, game);
-          });
-          const endSwitch = () => {
-            if (generation === switchGeneration) tooltip.classList.remove("switching");
-          };
-          transition.finished.then(endSwitch, endSwitch);
-        } else {
-          tooltip.classList.remove("switching");
-          showTooltip(card, game);
-        }
+        const switchingCards = wasPinned && activeCard;
+        const shouldMove = switchingCards && tooltip.animate && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        const from = shouldMove ? tooltipArt.getBoundingClientRect() : null;
+        stopMove();
+        tooltip.classList.toggle("settled", !!switchingCards);
+        showTooltip(card, game);
+        if (!shouldMove) return;
+        const to = tooltipArt.getBoundingClientRect();
+        const animation = tooltip.animate([
+          { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` },
+          { transform: "translate(0, 0)" },
+        ], { duration: 160, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" });
+        moveAnimation = animation;
+        const finishMove = () => {
+          if (moveAnimation === animation) stopMove();
+        };
+        animation.finished.then(finishMove, finishMove);
+      }
+
+      function unpinTooltip() {
+        if (!pinnedCard) return;
+        stopMove();
+        ignoredHoverCard = hoveredCard === pinnedCard ? pinnedCard : null;
+        pinnedCard.classList.remove("pinned");
+        pinnedCard = null;
+        tooltip.classList.remove("pinned");
+        hideTooltip();
       }
 
       function positionTooltip() {
@@ -282,6 +308,7 @@
         img.className = className;
         img.src = `./${path}`;
         img.alt = "";
+        img.draggable = false;
         img.loading = loading;
         img.decoding = "async";
         card.append(img);
@@ -340,13 +367,8 @@
           link.setAttribute("aria-hidden", "true");
           card.append(trigger, link);
           trigger.addEventListener("click", () => {
-            if (pinnedCard === card) {
-              ++switchGeneration;
-              pinnedCard = null;
-              ignoredHoverCard = hoveredCard === card ? card : null;
-              tooltip.classList.remove("switching");
-              hideTooltip();
-            } else pinTooltip(card, game);
+            if (pinnedCard === card) unpinTooltip();
+            else pinTooltip(card, game);
           });
           card.addEventListener("pointerenter", () => {
             hoveredCard = card;
@@ -398,6 +420,9 @@
       showMore.addEventListener("click", () => {
         gameGroups.classList.add("expanded");
         showMore.hidden = true;
+      });
+      document.addEventListener("click", (event) => {
+        if (pinnedCard && !pinnedCard.contains(event.target)) unpinTooltip();
       });
       window.addEventListener("scroll", positionTooltip, { passive: true });
       window.addEventListener("resize", positionTooltip);

@@ -110,6 +110,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 /* On the wrap, so the frame sits above the Play overlay; as tall as the card, so it skips any error below. */
 .game-card-wrap.selected::after { content: ''; position: absolute; top: 0; right: 0; left: 0; height: 96px; border: 2px solid #f51e2b; border-radius: 10px; pointer-events: none; }
 .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+.game-art, .game-shade, .game-logo, .game-fallback, .install-tag { pointer-events: none; }
 .game-art { object-fit: cover; }
 .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
 .game-logo { position: relative; display: block; width: 75%; height: 80%; margin: 10px auto; object-fit: contain; }
