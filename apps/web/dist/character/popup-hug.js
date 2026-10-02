@@ -15,11 +15,29 @@ export function createPopupHug(tooltip, panel, onReady) {
     // The artwork's bone outlines are 9 source units wide.
     panel.style.setProperty('--mascot-stroke', `${9 * s}px`);
     const callout = panel.querySelector('.game-tooltip-callout');
+    const rotation = new DOMMatrix(getComputedStyle(callout).transform);
+    const center = new DOMPoint(callout.offsetWidth / 2, callout.offsetHeight / 2);
+    // Aim just below the skull's teeth, expressed in the tilted bubble's coordinates.
+    const mouth = new DOMPoint(
+      (310 - 379) * s - callout.offsetLeft - center.x,
+      panel.offsetHeight + (520 - 734) * s - callout.offsetTop - center.y,
+    ).matrixTransform(rotation.inverse());
+    // Stop short of the face so the pointer never merges into the bones.
+    const gap = 14 / Math.hypot(mouth.x, mouth.y);
+    const tip = { x: mouth.x * (1 - gap) + center.x - callout.clientLeft, y: mouth.y * (1 - gap) + center.y - callout.clientTop };
+    const width = callout.clientWidth;
+    const path = tip.x > width
+      ? `M${width - 12},14Q${width + 8},28 ${tip.x},${tip.y}Q${width + 15},66 ${width - 12},76`
+      : `M16,12Q4,-18 ${tip.x},${tip.y}Q42,-14 88,12`;
+    callout.querySelector('path').setAttribute('d', path);
+    const corners = [[0, 0], [callout.offsetWidth, 0], [0, callout.offsetHeight], [callout.offsetWidth, callout.offsetHeight]]
+      .map(([x, y]) => new DOMPoint(x - center.x, y - center.y).matrixTransform(rotation))
+      .map(point => ({ x: point.x + center.x + callout.offsetLeft, y: point.y + center.y + callout.offsetTop }));
     return {
-      left: Math.max(250 * s, -callout.offsetLeft),
-      right: Math.max(28 * s, callout.offsetLeft + callout.offsetWidth - panel.offsetWidth),
-      top: Math.max(50 * s, 490 * s - panel.offsetHeight, 28 - callout.offsetTop),
-      bottom: Math.max(58 * s, callout.offsetTop + callout.offsetHeight - panel.offsetHeight),
+      left: Math.max(250 * s, -Math.min(...corners.map(point => point.x))),
+      right: Math.max(28 * s, Math.max(...corners.map(point => point.x)) - panel.offsetWidth),
+      top: Math.max(50 * s, 490 * s - panel.offsetHeight, -Math.min(...corners.map(point => point.y))),
+      bottom: Math.max(58 * s, Math.max(...corners.map(point => point.y)) - panel.offsetHeight),
     };
   }
 
