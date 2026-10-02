@@ -1,5 +1,12 @@
 # Third-party notices
 
+[Shantell Sans](https://github.com/arrowtype/shantell-sans), by Shantell Martin,
+Arrow Type / Stephen Nixon, and contributors, is used for the character's speech
+callouts. The Latin Bold web font is served locally from `dist/fonts/`.
+Copyright 2022 The Shantell Sans Project Authors. Licensed under the
+SIL Open Font License 1.1; the complete license is included in
+`dist/fonts/ShantellSans-OFL.txt`.
+
 The GitHub, Steam, Microsoft, App Store, and game detail icons in `dist/icons/` are from
 [Font Awesome Free 6.7.2](https://github.com/FortAwesome/Font-Awesome).
 SVG icons are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

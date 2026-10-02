@@ -12,7 +12,15 @@ export function createPopupHug(tooltip, panel, onReady) {
 
   function bounds() {
     const s = scale();
-    return { left: 250 * s, right: 28 * s, top: Math.max(50 * s, 490 * s - panel.offsetHeight), bottom: 58 * s };
+    // The artwork's bone outlines are 9 source units wide.
+    panel.style.setProperty('--mascot-stroke', `${9 * s}px`);
+    const callout = panel.querySelector('.game-tooltip-callout');
+    return {
+      left: Math.max(250 * s, -callout.offsetLeft),
+      right: Math.max(28 * s, callout.offsetLeft + callout.offsetWidth - panel.offsetWidth),
+      top: Math.max(50 * s, 490 * s - panel.offsetHeight, 28 - callout.offsetTop),
+      bottom: Math.max(58 * s, callout.offsetTop + callout.offsetHeight - panel.offsetHeight),
+    };
   }
 
   function update() {
