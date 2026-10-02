@@ -366,7 +366,7 @@ The host, CLI, UI and bundle must agree on the minimum macOS.
 
 The README gives both:
 
-- **Upgrade:** quit (menu-bar icon → Exit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
+- **Upgrade:** quit (menu-bar icon → Quit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
 - **Remove:** turn off launch at login, quit, drag to Trash. `~/Library/Application Support/SaveScummer` is never touched.
 
 ### Done when

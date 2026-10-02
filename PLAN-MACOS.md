@@ -99,7 +99,7 @@ Done when:
 
 - **A main-thread run loop.** Everything here needs Cocoa's main thread and run loop. Tokio already runs on its own worker threads; the host's main thread only waits for shutdown through `run_main_loop` (WHERE THE CODE GOES). On macOS that wait moves to a thread and the main thread runs `NSApplication` (activation policy *accessory*) until shutdown.
 - **Reopen:** the app delegate's reopen handler (and `applicationShouldHandleReopen`) goes to the host's "show the UI" path, the same one the tray and a second launch use.
-- **Logout and `launchctl bootout`.** Both end the host with SIGTERM, and AppKit's own quit path at logout ends the process too. The host handles neither today, so PLAN-HOST's safe Exit is skipped and a Load in progress is cut off. Route SIGTERM and `applicationShouldTerminate` to the same shutdown the menu's Exit uses, and answer AppKit only once shutdown has reached its safe point.
+- **Logout and `launchctl bootout`.** Both end the host with SIGTERM, and AppKit's own quit path at logout ends the process too. The host handles neither today, so PLAN-HOST's safe Quit is skipped and a Load in progress is cut off. Route SIGTERM and `applicationShouldTerminate` to the same shutdown the menu's Quit uses, and answer AppKit only once shutdown has reached its safe point.
 - **One file per OS, no shared tray crate.** Each OS has its own integration file behind the shared interface in `mod.rs`. A crate is used only where it replaces native code we'd otherwise write: macOS uses `global-hotkey` for its hotkeys. `tray-icon`, `muda` and `global-hotkey` were once meant to serve both OSes from one codebase, but they would share almost nothing:
   - The macOS menu-bar item has to be `objc2` AppKit code, because `tray-icon` takes one bitmap and the template needs both 1x and 2x representations.
   - Windows notifications are tray balloons sent through the app's own icon, which `tray-icon` doesn't expose. Moving the Windows tray would mean writing toast notifications.
@@ -120,7 +120,7 @@ Done when:
 1. ⌥F5 in fullscreen FTL makes a checkpoint and plays the start and completion cues; ⌥F9 restores it.
 2. Holding the key makes one operation.
 3. A key taken by another app shows up in the host log and in `hotkey_errors`, and the other key still works.
-4. The menu-bar icon is sharp on Retina and non-Retina displays, follows light and dark menu bars, and Exit shuts the host down safely. Adjust the template's optical spacing here if it looks off next to system icons (its README says it hasn't been tried in a live menu bar).
+4. The menu-bar icon is sharp on Retina and non-Retina displays, follows light and dark menu bars, and Quit shuts the host down safely. Adjust the template's optical spacing here if it looks off next to system icons (its README says it hasn't been tried in a live menu bar).
 5. A failed Load with the window hidden shows a notification.
 6. Logging out while a Load runs lets the Load finish; the host's run ends cleanly in `host-runs`.
 

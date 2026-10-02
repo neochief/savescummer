@@ -55,11 +55,11 @@ Showing the UI always means one window: if a UI is connected, the host tells it 
 
 The host starts, in order: open the database, observe running processes for persisted games, resolve eligible interrupted operations, scan, continue monitoring, then accept operations. Recovery that could touch live saves waits if process observation is unavailable or the exit rule applies (PLAN-LOCKDOWN). It shows the UI as soon as it serves the protocol, so the window can appear during the first scan and show it in progress.
 
-Closing the window ends the UI; the host stays in the tray. A primary click on the Windows or Linux tray icon shows the UI; the macOS menu-bar icon opens its menu. The tray menu shows the active game's name (or "No active game"), then Play or Stop, Save checkpoint, and Load latest checkpoint. Play appears when the game is closed. Stop appears when it runs and is enabled only if expert mode allows closing it. Save and Load use the same availability and operation rules as the main window. Below a separator are Main window, Add custom game, Scan for games, Settings, and About SaveScummer. Exit stays at the bottom. Action icons use raster copies of the UI's SVG shapes. Add, Settings, and About open their dialogs in the main window, starting the UI if needed.
+Closing the window ends the UI; the host stays in the tray. A primary click on the Windows or Linux tray icon shows the UI; the macOS menu-bar icon opens its menu. The tray menu shows the active game's name (or "No active game"), then Play or Stop, Save checkpoint, and Load latest checkpoint. Play appears when the game is closed. Stop appears when it runs and is enabled only if expert mode allows closing it. Save and Load use the same availability and operation rules as the main window. Below a separator are Main window, Add custom game, Scan for games, Settings, and About SaveScummer…. Quit stays at the bottom without an icon. Action icons use raster copies of the UI's SVG shapes; Play uses a plain triangle and Main window uses a window outline. Add, Settings, and About open their dialogs in the main window, starting the UI if needed.
 
 The tray icon and menu stay sharp on high-resolution and scaled displays, including when the scale changes while the host runs. Why: by default, Windows draws a program's tray icon and menu at 100% scale and then stretches them, so they look blurry at any other scale.
 
-Exit stops the host safely:
+Quit stops the host safely:
 
 1. Stop accepting new operations.
 2. Let any running operation (and any rollback it needs) reach a safe point.
@@ -693,7 +693,7 @@ Commands:
 - Retry a blocked game as a tracked, durably accepted operation under the per-game reservation, subject to the recovery and exit checks (an ordinary failure has no retry command: the client sends the original command again with a new request ID)
 - Refresh the catalog now
 - Ask macOS for access to where a waiting game lives (the UI's *Allow access*; answered once the user has, granted or denied; PLAN-MACOS, PRIVACY PERMISSIONS)
-- Shut down (the same safe Exit as the tray menu)
+- Shut down (the same safe Quit as the tray menu)
 
 Queries:
 

@@ -8,6 +8,14 @@ The icons retain Font Awesome's attribution comments.
 Brand marks belong to their respective owners. Their presence here does not
 imply endorsement or availability in those stores.
 
-Game artwork in `dist/games/` comes from Steam's public image CDN and
-belongs to the respective game publishers. Its use here identifies games in the
-SaveScummer catalog; it does not imply endorsement.
+Most game artwork in `dist/games/` comes from Steam's public image CDN and
+belongs to the respective game publishers. The Europa Universalis V logo is
+from the same source.
+
+The Dungeon Crawl Stone Soup title artwork is from a [Crawl WebTiles server](https://crawl.project357.org/).
+The NetHack wordmark is from the [official website](https://nethack.org/);
+the gameplay background is [Chomzee's screenshot](https://commons.wikimedia.org/wiki/File:Nethack-dragons.png)
+on Wikimedia Commons, under the [NetHack General Public License](https://nethack.org/common/license.html).
+
+These images identify games in the SaveScummer catalog; their presence does
+not imply endorsement.

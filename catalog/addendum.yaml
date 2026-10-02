@@ -6,6 +6,78 @@
 # close request. Games without it only offer Close when their per-game
 # "wait for exit" safety setting is turned off.
 
+# Supergiant's Hades FAQs identify Profile*.sav and their .sav.bak* siblings
+# as progress files. The Hades manifest takes the whole folder, including
+# Profile*.sjson settings; Hades II takes .sav but misses recovery backups.
+"Hades":
+  override:
+    executables:
+      windows: ["x86/Hades.exe", "x64/Hades.exe", "x64Vk/Hades.exe"]
+      macos: ["Game.macOS.app/Contents/MacOS/Game.macOS", "Hades.app"]
+    save:
+      - when: { os: windows }
+        path: "{DOCUMENTS}/Saved Games/Hades/Profile*.sav*"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/Supergiant Games/Hades/Profile*.sav*"
+"Hades II":
+  override:
+    executables:
+      windows: ["Ship/Hades2.exe", "Release/Hades2.exe"]
+      macos: ["Hades II.app"]
+    save:
+      - when: { os: windows }
+        path: "{HOME}/Saved Games/Hades II/Profile*.sav*"
+      - when: { os: macos }
+        path: "{HOME}/Library/Application Support/Supergiant Games/Hades II/Profile*.sav*"
+
+# Slay the Spire 2 has profile1, profile2, and profile3. The manifest's Linux
+# target only covers profile1; target every profile for the current Steam user.
+"Slay the Spire 2":
+  override:
+    save:
+      - when: { os: windows, store: steam }
+        path: "{APPDATA}/SlayTheSpire2/steam/{STEAM_ID64}/profile*"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Application Support/SlayTheSpire2/steam/{STEAM_ID64}/profile*"
+      - when: { os: linux, store: steam }
+        path: "{XDG_DATA_HOME}/SlayTheSpire2/steam/{STEAM_ID64}/profile*"
+
+# Rogue Legacy 2's manifest only supplies Windows saves and takes the whole
+# game folder there. Steam's cloud rules scope saves to Saves/Steam/<SteamID64>
+# on all three native platforms, leaving settings and other accounts alone.
+"Rogue Legacy 2":
+  override:
+    save:
+      - when: { os: windows, store: steam }
+        path: "{HOME}/AppData/LocalLow/Cellar Door Games/Rogue Legacy 2/Saves/Steam/{STEAM_ID64}"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Application Support/Cellar Door Games/Rogue Legacy 2/Saves/Steam/{STEAM_ID64}"
+      - when: { os: linux, store: steam }
+        path: "{XDG_CONFIG_HOME}/unity3d/Cellar Door Games/Rogue Legacy 2/Saves/Steam/{STEAM_ID64}"
+
+# Monster Train 2's manifest includes development/staging copies and the
+# preferences file. The game's developer identifies preferences.json as
+# settings. Keep the production progress, backup, run history, and run saves.
+"Monster Train 2":
+  override:
+    save:
+      - when: { os: windows, store: steam }
+        path: "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/metagameSave.json"
+      - when: { os: windows, store: steam }
+        path: "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/metagameSave.json.backup"
+      - when: { os: windows, store: steam }
+        path: "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/run-history/*.json"
+      - when: { os: windows, store: steam }
+        path: "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/saves/*.json"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/metagameSave.json"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/metagameSave.json.backup"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/run-history/*.json"
+      - when: { os: macos, store: steam }
+        path: "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/saves/*.json"
+
 # Risk of Rain Returns: the manifest's `*_localsave.json` matches every Steam
 # account's save on the machine (the `*` is the SteamID64, verified 2026-09-24:
 # `76561198004523847_localsave.json` next to config folder `user_44258119`),

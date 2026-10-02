@@ -90,13 +90,31 @@ function itemAt(tops: number[], y: number) {
   return low;
 }
 
-// The Info drawer slides out from under the buttons and back with plain easing; on open, the page lying in it lags
+// The Info drawer slides out from under its line and back with plain easing; on open, the letter lying in it lags
 // behind, then overshoots once and settles (easeOutBack).
 const POCKET_OPEN = { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' };
 const POCKET_CLOSE = { duration: 175, easing: 'cubic-bezier(.4, 0, .2, 1)' };
 const PAGE_SETTLE = { duration: 420, easing: 'cubic-bezier(.3, 2, .5, 1)', lag: 96 };
 // The page also arrives turned a little and straightens in one smooth motion while the drawer stays square.
 const PAGE_SPIN = { duration: 420, easing: 'cubic-bezier(.2, .8, .2, 1)', from: 3 };
+
+/** How far the Info drawer pushes the history down: its height and margins (the top one negative, taking back the
+ * clearance the history keeps under the Info line). */
+function pocketPush(pocket: HTMLElement) {
+  const style = getComputedStyle(pocket);
+  return pocket.offsetHeight + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+}
+
+/** Smoothly scrolls to the top, resolving once there (or after a short wait, should the scroll be interrupted). */
+function scrollToTop(scroller: HTMLElement) {
+  return new Promise<void>((resolve) => {
+    const done = () => { scroller.removeEventListener('scroll', check); clearTimeout(timer); resolve(); };
+    const check = () => { if (scroller.scrollTop <= 0) done(); };
+    const timer = setTimeout(done, 600);
+    scroller.addEventListener('scroll', check);
+    scroller.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
 
 function scrollMotion(): ScrollBehavior {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
@@ -177,24 +195,26 @@ function GameCard({ bridge, game, selected, pending, error, onSelect, onConfigur
           <span className="game-play-animation-icon" />
         </span>}
       </button>
-      <div className="card-lifecycle-actions">
-        {/* When the host allows closing, the badge itself turns into the close button on hover and focus. */}
-        {game.running && game.can_close ? <button className="running-badge" disabled={pending} onClick={() => onLifecycle('close_game')}
+      {/* Only the selected card has controls: Play covers it, with a cutout for the cog. */}
+      {selected && !game.running && !playAnimation && <button className="card-play" disabled={pending || game.can_play === false}
+        onClick={() => { setPlayAnimation(true); onLifecycle('play'); }}
+        aria-label={`Play ${game.name}`} title={game.can_play === false ? 'No executable configured' : 'Play game'}>
+        <span className="card-play-icon" />
+      </button>}
+      {game.running && <div className="card-lifecycle-actions">
+        {/* When the host allows closing, the selected card's badge turns into the close button on hover and focus. */}
+        {selected && game.can_close ? <button className="running-badge" disabled={pending} onClick={() => onLifecycle('close_game')}
           aria-label={`Terminate ${game.name}`} title="Terminate game">
           {runningFace}<span className="running-badge-face close"><span className="card-action-icon stop" />CLOSE</span>
         </button>
-        : game.running ? <span className="running-badge">{runningFace}</span>
-        : <button className="card-action" disabled={pending || game.can_play === false} onClick={() => onLifecycle('play')}
-          aria-label={`Play ${game.name}`} title={game.can_play === false ? 'No executable configured' : 'Play game'}>
-          <span className="card-action-icon play" />
-        </button>}
-      </div>
-      <div className="card-actions">
+        : <span className="running-badge">{runningFace}</span>}
+      </div>}
+      {selected && <div className="card-actions">
         <button className="card-action" onClick={(event) => onConfigure(event.currentTarget)}
           aria-label={`Configure ${game.name}`} title="Configure">
           <span className="card-action-icon gear" />
         </button>
-      </div>
+      </div>}
       {error && <p className="card-lifecycle-error" role="alert">{error}</p>}
     </div>
   );
@@ -250,59 +270,80 @@ export function App({ bridge }: { bridge: Bridge }) {
   const [historyDirection, setHistoryDirection] = useState<'up' | 'down'>('down');
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   useEffect(() => prepareDrawerSounds(), []);
-  // The game whose Info panel is sliding back under the buttons; it stays mounted until the slide ends.
+  // The game whose Info drawer is sliding back under its line; it stays mounted until the slide ends.
   const [infoClosing, setInfoClosing] = useState<string>();
-  const infoMotion = useRef<'open' | 'close'>(undefined);
+  // What the next commit does with the drawer: slide it open or shut, or (closed while scrolled) restore this scroll top.
+  const infoMotion = useRef<'open' | 'close' | number>(undefined);
   const infoAnimations = useRef<Animation[]>([]);
   const pocketRef = useRef<HTMLDivElement>(null);
-  const historyFrameRef = useRef<HTMLDivElement>(null);
-  const toggleInfo = (game: string) => {
+  const toggleInfo = async (game: string) => {
     const open = !expandedInfo[game];
+    const scroller = scrollRef.current;
+    const animated = scrollMotion() === 'smooth' && typeof document.body.animate === 'function';
+    // The drawer opens at the top of the history, so scroll back up to it first.
+    if (open && scroller && scroller.scrollTop > 0) {
+      if (animated) await scrollToTop(scroller);
+      else scroller.scrollTop = 0;
+    }
     playInterfaceSound(open ? 'drawer-open' : 'drawer-close', state?.settings?.play_sounds ?? true);
-    infoMotion.current = open ? 'open' : 'close';
+    const pocket = pocketRef.current;
+    // Closed while scrolled into or past it, the drawer just goes, and whatever was in view stays put.
+    if (!open && scroller && pocket && scroller.scrollTop > 0) {
+      infoMotion.current = scroller.scrollTop - pocketPush(pocket);
+      setExpandedInfo((value) => ({ ...value, [game]: false }));
+      setInfoClosing(undefined);
+      return;
+    }
+    infoMotion.current = animated ? (open ? 'open' : 'close') : undefined;
     setExpandedInfo((value) => ({ ...value, [game]: open }));
-    setInfoClosing(open ? undefined : game);
+    setInfoClosing(open || !animated ? undefined : game);
   };
-  // The layout changes once; only translations animate, so the history is not re-laid out every frame. The sheet slides
-  // within the pocket, which clips it at the buttons' edge, and the history rides along as if pushed. While it moves, a
-  // negative bottom margin keeps the history as tall as before, so its bottom edge never comes into view.
+  // The drawer is the first thing in the history's scroll area, so the area's size never changes; only translations
+  // animate. The sheet slides out from under the Info line (the area's clipped top edge), everything below rides
+  // along, and the letter lying in it drops in after.
   useLayoutEffect(() => {
     const motion = infoMotion.current;
     infoMotion.current = undefined;
-    if (!motion) return;
-    const frame = historyFrameRef.current;
+    if (motion === undefined) return;
+    const scroller = scrollRef.current;
+    if (typeof motion === 'number') {
+      if (scroller) scroller.scrollTop = Math.max(0, motion);
+      return;
+    }
     for (const animation of infoAnimations.current) animation.cancel();
-    infoAnimations.current = [];
-    if (frame) frame.style.marginBottom = '';
     const pocket = pocketRef.current;
     const sheet = pocket?.firstElementChild as HTMLElement | null;
-    const settle = () => {
-      if (motion === 'close') flushSync(() => setInfoClosing(undefined));
-      for (const animation of infoAnimations.current) animation.cancel();
-      infoAnimations.current = [];
-      if (frame) frame.style.marginBottom = '';
-    };
-    if (!pocket || !sheet || !frame || typeof sheet.animate !== 'function' || scrollMotion() === 'auto') return settle();
-    // The history moves by the pocket's height plus any margin it takes up.
-    const pocketStyle = getComputedStyle(pocket);
-    const push = pocket.offsetHeight + parseFloat(pocketStyle.marginTop) + parseFloat(pocketStyle.marginBottom);
+    if (!scroller || !pocket || !sheet) return;
+    const push = pocketPush(pocket);
     // Fractions of the travel: -1 is tucked away, 0 is in place.
     const [from, to] = motion === 'open' ? [-1, 0] : [0, -1];
     const timing = { ...(motion === 'open' ? POCKET_OPEN : POCKET_CLOSE), fill: 'forwards' } as const;
-    frame.style.marginBottom = `-${push}px`;
+    // The line's shadow falls only on the drawer, so it fades in and out with it.
+    const shade = pocket.querySelector<HTMLElement>('.info-shade');
     infoAnimations.current = [
       sheet.animate({ translate: [`0 ${from * 100}%`, `0 ${to * 100}%`] }, timing),
-      frame.animate({ translate: [`0 ${from * push}px`, `0 ${to * push}px`] }, timing)];
-    const page = sheet.firstElementChild as HTMLElement | null;
+      ...(shade ? [shade.animate({ opacity: [from + 1, to + 1] }, timing)] : []),
+      ...[...scroller.children].filter((element) => element !== pocket)
+        .map((element) => element.animate({ translate: [`0 ${from * push}px`, `0 ${to * push}px`] }, timing))];
+    const page = sheet.querySelector<HTMLElement>('.info-letter');
     if (motion === 'open' && page) {
       infoAnimations.current.push(page.animate({ translate: [`0 -${PAGE_SETTLE.lag}px`, '0 0'] }, { ...PAGE_SETTLE, fill: 'forwards' }),
         page.animate({ rotate: [`${PAGE_SPIN.from}deg`, '0deg'] }, { ...PAGE_SPIN, fill: 'forwards' }));
     }
+    const animations = infoAnimations.current;
     // A re-toggle cancels these, and the new motion settles instead.
-    Promise.all(infoAnimations.current.map((animation) => animation.finished)).then(settle, () => undefined);
+    Promise.all(animations.map((animation) => animation.finished)).then(() => {
+      if (motion === 'close') flushSync(() => setInfoClosing(undefined));
+      for (const animation of animations) animation.cancel();
+    }, () => undefined);
   });
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const virtualRef = useRef<HTMLDivElement>(null);
+  // How far the virtual list sits below the top of the history's scroll area (the Info drawer, any error above it).
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const measureHistoryOffset = useCallback(() => setHistoryOffset(virtualRef.current?.offsetTop ?? 0), []);
+  useLayoutEffect(measureHistoryOffset);
   const [filterOpen, setFilterOpen] = useState(false);
   const [gameFilter, setGameFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement>(null);
@@ -401,8 +442,10 @@ export function App({ bridge }: { bridge: Bridge }) {
     ...rows.map((row) => ({ key: row.id, day, row })),
   ]), [history, hiddenDeletes, selected]);
   const { tops: itemTop, total: historyTotal } = useMemo(() => itemTops(virtualItems.map((item) => item.row)), [virtualItems]);
-  const firstVisible = Math.max(0, itemAt(itemTop, scrollTop) - 5);
-  const lastVisible = Math.min(virtualItems.length, itemAt(itemTop, scrollTop + viewportHeight) + 6);
+  // The list starts below the Info drawer; while the drawer is in view, the window starts at the list's top.
+  const listTop = Math.max(0, scrollTop - historyOffset);
+  const firstVisible = Math.max(0, itemAt(itemTop, listTop) - 5);
+  const lastVisible = Math.min(virtualItems.length, itemAt(itemTop, listTop + viewportHeight) + 6);
   // Each day gets a lane spanning its rows, so its header can stick until the next day's lane pushes it out.
   const dayLanes = useMemo(() => {
     const lanes: Array<{ key: string; day: string; start: number; end: number }> = [];
@@ -413,10 +456,24 @@ export function App({ bridge }: { bridge: Bridge }) {
     return lanes;
   }, [virtualItems]);
 
+  const infoOpen = Boolean(selectedGame?.info && expandedInfo[selectedGame.id]);
+  const infoShown = infoOpen || Boolean(selectedGame?.info && infoClosing === selectedGame.id);
+  // The letter reflows as the window resizes, moving the list below it.
+  useEffect(() => {
+    const pocket = pocketRef.current;
+    if (!pocket || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measureHistoryOffset);
+    observer.observe(pocket);
+    return () => observer.disconnect();
+  }, [infoShown, measureHistoryOffset]);
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
-    const measure = () => setViewportHeight(element.clientHeight || 600);
+    const measure = () => {
+      setViewportHeight(element.clientHeight || 600);
+      // The scrollbar comes out of the right padding, so rows and the Info drawer line up with the buttons whatever its width.
+      element.style.setProperty('--scrollbar', `${element.offsetWidth - element.clientWidth}px`);
+    };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
@@ -529,7 +586,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     if (!target) return;
     setFlash(target.id);
     const items = groupHistory(rows).flatMap(({ rows: entries }) => [undefined, ...entries]);
-    const top = itemTops(items).tops[items.indexOf(target)];
+    const top = itemTops(items).tops[items.indexOf(target)] + (virtualRef.current?.offsetTop ?? 0);
     const viewport = scrollRef.current;
     if (viewport && (top < viewport.scrollTop || top + itemHeight(target) > viewport.scrollTop + viewport.clientHeight)) {
       viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
@@ -644,8 +701,8 @@ export function App({ bridge }: { bridge: Bridge }) {
     const visible = restored.filter((item) => !item.checkpoint ||
       item.checkpoint === pending.checkpoint || !hiddenDeletes.has(deleteKey(pending.game, item.checkpoint)));
     const items = groupHistory(visible).flatMap(({ rows }) => [undefined, ...rows]);
-    const top = itemTops(items).tops[items.indexOf(row)];
     window.requestAnimationFrame?.(() => {
+      const top = itemTops(items).tops[items.indexOf(row)] + (virtualRef.current?.offsetTop ?? 0);
       const viewport = scrollRef.current;
       if (viewport && (top < viewport.scrollTop || top + itemHeight(row) > viewport.scrollTop + viewport.clientHeight)) {
         viewport.scrollTo({ top: Math.max(0, top - viewport.clientHeight / 2), behavior: scrollMotion() });
@@ -869,22 +926,6 @@ export function App({ bridge }: { bridge: Bridge }) {
         {state?.store?.available === false && <p className="store-notice" role="alert">The checkpoint store is unavailable. Reconnect its drive to continue.</p>}
         {selectedGame ? <>
           <div className={`action-band ${selectedGame.guidance?.save ? 'covers-save' : ''} ${selectedGame.guidance?.load ? 'covers-load' : ''}`} aria-label="Checkpoint actions">
-            <div className="game-launcher">
-              {selectedGame.running ? <button className="launch-button stop" disabled={!(selectedGame.expert_mode && selectedGame.can_close) || cardPending?.game === selectedGame.id}
-                onClick={() => runLifecycle(selectedGame, 'close_game')} aria-label={`Close ${selectedGame.name}`}
-                title={selectedGame.expert_mode && selectedGame.can_close ? 'Close game' : 'Game is running'}>
-                <span className="launch-icon" />
-              </button>
-              : <button className="launch-button" disabled={cardPending?.game === selectedGame.id || selectedGame.can_play === false}
-                onClick={() => runLifecycle(selectedGame, 'play')} aria-label={`Run ${selectedGame.name}`}
-                title={selectedGame.can_play === false ? 'No executable configured' : 'Run game'}>
-                <span className="launch-icon" />
-              </button>}
-              <button className="info-button" disabled={!selectedGame.info} onClick={() => toggleInfo(selectedGame.id)}
-                aria-expanded={Boolean(selectedGame.info && expandedInfo[selectedGame.id])} aria-controls={`game-info-${selectedGame.id}`}>
-                <Icon name="info" />Info
-              </button>
-            </div>
             <ActionButton action="save" game={selectedGame} feedback={feedback} busy={working} now={now}
               shortcut={state?.settings?.save_shortcut} onClick={() => runAction('save')} />
             <ActionButton action="load" game={selectedGame} feedback={feedback} busy={working} now={now}
@@ -896,23 +937,33 @@ export function App({ bridge }: { bridge: Bridge }) {
               onRetry={() => runAction('retry')} onPlay={() => runLifecycle(selectedGame, 'play')}
               onConfigure={(button) => openDialog('configure', button)} />
           </div>
-          {/* Info slides out from under the buttons, as if from a pocket behind them. */}
-          {selectedGame.info && (expandedInfo[selectedGame.id] || infoClosing === selectedGame.id) &&
-            <div className="game-info-pocket" ref={pocketRef}>
-              <div className="game-info-sheet">
-                <div id={`game-info-${selectedGame.id}`} className="game-info-content"><Markdown>{selectedGame.info}</Markdown></div>
-              </div>
-            </div>}
           {feedback?.game === selected && feedback?.phase === 'error' && <p className="action-error-block" role="alert">{feedback.message}</p>}
           {!(feedback?.game === selected && feedback?.phase === 'error') && hostError &&
             <p className="action-error-block" role="alert">{failureMessage(hostError, 'Game unavailable')}</p>}
           {alreadyAdded === selectedGame.id && <p className="library-notice" role="status">{selectedGame.name} was already in your library.</p>}
-          <div className="history-frame" ref={historyFrameRef} style={fadeStyle(scrollTop, 0)}>
+          {/* The Info line is the top edge of the history's scroll area: opened, the drawer slides out from under it and
+              pushes the history down, and scrolls with it. */}
+          <div className={`info-stack ${selectedGame.info ? 'has-line' : ''}`}>
+            {/* The line is the drawer's front, with its handle hanging from it; the handle stays put, so it toggles in place. */}
+            {selectedGame.info && <div className={`info-line ${infoOpen ? 'open' : ''}`}>
+              <button className="info-handle" onClick={() => toggleInfo(selectedGame.id)} aria-expanded={infoOpen} aria-controls={`game-info-${selectedGame.id}`}>
+                {infoOpen ? <><Icon name="xmark" />Close</> : <><Icon name="info" />Info</>}
+              </button>
+            </div>}
+          <div className="history-frame" style={fadeStyle(scrollTop, 0)}>
             <div key={selectedGame.id} className={`history history-${historyDirection}${revealing ? ' revealing' : ''}`}
               ref={scrollRef} aria-label={`${selectedGame.name} history`} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+              {infoShown && <div className="info-pocket" ref={pocketRef}>
+                <div className="info-sheet">
+                  <div className="info-sheet-body">
+                    <div id={`game-info-${selectedGame.id}`} className="info-letter"><Markdown>{selectedGame.info}</Markdown></div>
+                  </div>
+                </div>
+                <div className="info-shade" />
+              </div>}
               {historyError && <p className="history-error" role="alert">{historyError}</p>}
               {historyLoaded && virtualItems.length === 0 && !historyError && <div className="empty-history"><Character name="no-checkpoints" sound={state?.settings?.play_sounds ?? true} /><p>Checkpoints will appear here when you Save them.</p></div>}
-              <div className="history-virtual" style={{ height: historyTotal + (next ? 52 : 0) }}>
+              <div className="history-virtual" ref={virtualRef} style={{ height: historyTotal + (next ? 52 : 0) }}>
                 {dayLanes.filter((lane) => lane.end > firstVisible && lane.start < lastVisible).map(({ key, day, start, end }) => {
                   const top = itemTop[start];
                   const reveal = { '--reveal-index': Math.min(Math.max(start - firstVisible, 0), 12) } as React.CSSProperties;
@@ -937,6 +988,7 @@ export function App({ bridge }: { bridge: Bridge }) {
                 {next && <button className="load-more" style={{ top: historyTotal }} onClick={loadMore}>Show older history</button>}
               </div>
             </div>
+          </div>
           </div>
         </> : state && visibleGames.length ? <div className="empty-selection"><Character name="no-game-selected" /><p>{running.length ? 'Select a game to see its checkpoints.' : 'No known games are running.'}</p></div>
           : <div className="empty-library">{!state ? 'Waiting for the host…' : 'No games found.'}</div>}

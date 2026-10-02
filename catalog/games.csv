@@ -39,6 +39,21 @@
 **How progress is saved:** The active run is persisted for Continue, but the game does not keep earlier pre-biome or pre-boss states for rollback.
 
 **SaveScummer value:** Checkpoint before a boss, risky biome, or major build decision. Restore the exact loadout after death instead of waiting for another run to produce the same synergy.","Keep","","","","",""
+"Hades","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A strong escape attempt can have rare boons, a specific weapon aspect, keepsake, and resources that are hard to recreate after a death.
+
+**How progress is saved:** The game writes the current escape between encounters; entering a chamber after combat gives a reliable checkpoint. It does not save the middle of a fight.
+
+**SaveScummer value:** Checkpoint at a chamber entrance before a boss, risky encounter, or boon choice. Restore the same build after a failed attempt instead of rerolling the run.","Keep","","","","-",""
+"Hades II","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A strong journey through the Underworld or Surface can have rare boons, a weapon aspect, keepsake, and resources that are hard to recreate after a death.
+
+**How progress is saved:** Like Hades, the game saves when Melinoë enters a new location, not in the middle of combat. Sync & Quit preserves that state for continuation.
+
+**SaveScummer value:** Checkpoint at a location entrance before a guardian, risky encounter, or boon choice. Restore the same build after a failed attempt instead of repeating the opening regions.","Keep","","","","-",""
+"Rogue Legacy 2","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A promising heir may have a valuable class, traits, relics, and castle progress before a hard biome or boss.
+
+**How progress is saved:** The game automatically persists the current heir, family, and castle state for continuation, but does not offer a reusable earlier state for a lost heir.
+
+**SaveScummer value:** Checkpoint after the game has saved and before a dangerous push. Restore the earlier heir and resources after death instead of accepting the next generation.","Keep","","","","",""
 "Spelunky 2","yes","Permadeath roguelike/roguelite runs","no","**Context:** The obvious value would be protecting a deep run with rare equipment, quest-chain progress, and access to late-game routes.
 
 **How progress is saved:** The PC game does not normally serialize an active run for Save & Quit; quitting abandons it.
@@ -134,11 +149,26 @@
 **How progress is saved:** The game autosaves the current run and Save & Quit resumes it, but earlier deck/path states are normally overwritten.
 
 **SaveScummer value:** Checkpoint before an Act boss, Elite path, event, shop, or build-defining reward. Restore to retry or compare the decision without rerolling the entire deck.","Keep","","","","",""
+"Balatro","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A high-ante run can hinge on rare Jokers, vouchers, upgraded hands, and a shop sequence that is difficult to rebuild.
+
+**How progress is saved:** The game keeps the active run on disk for Continue and updates it during play and when leaving for the menu. A checkpoint captures the last written state.
+
+**SaveScummer value:** Checkpoint before a boss blind, shop reroll, or irreversible Joker sale. Restore the same deck and economy after a failed choice instead of starting a new run.","Keep","","","","-",""
+"Slay the Spire 2","yes","Permadeath roguelike/roguelite runs","yes","**Context:** Like Slay the Spire, a late deck can contain a rare card and relic engine that may take many climbs to see again.
+
+**How progress is saved:** Each profile keeps a current run for Continue, but earlier deck and path states are overwritten as the climb advances.
+
+**SaveScummer value:** Checkpoint before an Act boss, elite path, event, shop, or build-defining reward. Restore to retry or compare the decision without rebuilding the deck.","Keep","","","","",""
 "Monster Train","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A late deck may depend on a very specific clan, unit-upgrade, artifact, removal, and spell package.
 
 **How progress is saved:** The campaign is saved on the world map; combat is not normally serialized turn-by-turn and usually restarts as a whole.
 
 **SaveScummer value:** Checkpoint before a merchant, banner, artifact choice, or difficult ring. Restore to compare build decisions or retry from the pre-combat state, not individual combat turns.","Keep","","","-","-",""
+"Monster Train 2","yes","Permadeath roguelike/roguelite runs","no","**Context:** Like Monster Train, a late deck can depend on a very specific clan pair, champion, unit upgrades, spells, and equipment.
+
+**How progress is saved:** The current run and metagame progress are stored on disk for continuation. A checkpoint captures the last state the game wrote, rather than a turn-by-turn combat history.
+
+**SaveScummer value:** Checkpoint before a merchant, route choice, card upgrade, or difficult ring. Restore the same train after a loss or unwanted build decision instead of rebuilding it from the first ring.","Keep","","","","-",""
 "One Step from Eden","yes","Permadeath roguelike/roguelite runs","yes","**Context:** A late run can have a rare spell/artifact synergy and route that is difficult to rebuild after one failed fight.
 
 **How progress is saved:** The game can save an active run while out of battle, giving SaveScummer a documented between-battle state.
@@ -149,6 +179,11 @@
 **How progress is saved:** The run can be saved in the Anti-Void between levels; that inter-level transition is the reliable checkpoint boundary.
 
 **SaveScummer value:** Checkpoint between stages before the next biome or boss. Restore the same build after death instead of rerolling its weapons and upgrades.","Keep","","","-","-",""
+"Brotato","yes","Permadeath roguelike/roguelite runs","no","**Context:** A late wave can depend on a rare mix of weapons, items, stats, and shop rolls that is hard to repeat.
+
+**How progress is saved:** The game writes the active run between waves, making the shop a natural place to checkpoint. It does not save a wave in progress.
+
+**SaveScummer value:** Checkpoint in the shop before a risky purchase or a difficult wave. Restore the same character and loadout after defeat rather than rebuilding from wave one.","Keep","","","","",""
 "OTXO","yes","Permadeath roguelike/roguelite runs","no","**Context:** A good mansion run can have a preferred gun set, drink upgrades, money, and room progress that took several floors to assemble.
 
 **How progress is saved:** Save & Exit preserves the active run for continuation.

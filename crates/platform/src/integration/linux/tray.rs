@@ -3,7 +3,8 @@
 //! most bars show it; stock GNOME without the extension doesn't, and there
 //! opening the app again still shows the window.
 //!
-//! A click opens the main window; the menu has "Main window" and "Exit".
+//! A click opens the main window; the menu shows the active game and common
+//! actions, with Quit at the bottom.
 //! The icon is the app icon's images from the embedded .ico, so it needs no
 //! icon theme (an AppImage installs none).
 
@@ -128,7 +129,7 @@ impl ksni::Tray for Item {
             }
             .into(),
             StandardItem {
-                label: "About SaveScummer".into(),
+                label: "About SaveScummer…".into(),
                 icon_data: icon_png(TrayIcon::About).to_vec(),
                 activate: Box::new(|_: &mut Self| emit(Signal::OpenDialog(TrayDialog::About))),
                 ..Default::default()
@@ -136,8 +137,7 @@ impl ksni::Tray for Item {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Exit".into(),
-                icon_data: icon_png(TrayIcon::Exit).to_vec(),
+                label: "Quit".into(),
                 activate: Box::new(|_: &mut Self| emit(Signal::Exit)),
                 ..Default::default()
             }

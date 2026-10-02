@@ -64,21 +64,19 @@ pub enum TrayIcon {
     Scan,
     Settings,
     About,
-    Exit,
 }
 
 pub fn icon_png(icon: TrayIcon) -> &'static [u8] {
     match icon {
-        TrayIcon::Play => include_bytes!("../../../../assets/tray/circle-play.png"),
+        TrayIcon::Play => include_bytes!("../../../../assets/tray/triangle.png"),
         TrayIcon::Stop => include_bytes!("../../../../assets/tray/circle-stop.png"),
         TrayIcon::Save => include_bytes!("../../../../assets/tray/flag.png"),
         TrayIcon::Load => include_bytes!("../../../../assets/tray/rotate-left.png"),
-        TrayIcon::Main => include_bytes!("../../../../assets/tray/square.png"),
+        TrayIcon::Main => include_bytes!("../../../../assets/tray/window.png"),
         TrayIcon::Add => include_bytes!("../../../../assets/tray/plus.png"),
         TrayIcon::Scan => include_bytes!("../../../../assets/tray/arrows-rotate.png"),
         TrayIcon::Settings => include_bytes!("../../../../assets/tray/gear.png"),
         TrayIcon::About => include_bytes!("../../../../assets/tray/circle-info.png"),
-        TrayIcon::Exit => include_bytes!("../../../../assets/tray/xmark.png"),
     }
 }
 

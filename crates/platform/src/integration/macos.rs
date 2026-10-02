@@ -385,9 +385,9 @@ fn rebuild_menu(menu: &NSMenu) {
     add("Add custom game…", Some(sel!(addGame:)), true, Some(TrayIcon::Add));
     add("Scan for games", Some(sel!(scan:)), true, Some(TrayIcon::Scan));
     add("Settings…", Some(sel!(settings:)), true, Some(TrayIcon::Settings));
-    add("About SaveScummer", Some(sel!(about:)), true, Some(TrayIcon::About));
+    add("About SaveScummer…", Some(sel!(about:)), true, Some(TrayIcon::About));
     menu.addItem(&NSMenuItem::separatorItem(mtm));
-    add("Exit", Some(sel!(exit:)), true, Some(TrayIcon::Exit));
+    add("Quit", Some(sel!(exit:)), true, None);
 }
 
 // --- Hotkeys: Carbon `RegisterEventHotKey` through `global-hotkey`. It needs

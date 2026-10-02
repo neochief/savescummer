@@ -2,7 +2,7 @@
 @font-face { font-family: Chakra Petch; src: url('/fonts/ChakraPetch-SemiBold.woff2') format('woff2'); font-weight: 600; font-display: swap; }
 @font-face { font-family: Chakra Petch; src: url('/fonts/ChakraPetch-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
 @font-face { font-family: Inter; src: url('/fonts/Inter-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
-:root { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #faf8ee; background: #1c1918; font-synthesis: none; --section-gap: 16px; }
+:root { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #faf8ee; background: #1c1918; font-synthesis: none; --icon-gap: 3px; }  /* between a small heading icon and its label */
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
 body { overflow: hidden; user-select: none; cursor: default; }  /* nothing is selectable, so no text I-beam */
@@ -50,10 +50,10 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .wordmark strong { color: #ff1e29; }
 .sidebar h2, .day h2 { margin: 0; height: 40px; text-align: center; color: #d7c9ba; font-size: 12px; font-weight: 600; line-height: 40px; }
 .sidebar h2 { height: 32px; line-height: 32px; font-family: Chakra Petch, sans-serif; }
-.library-filter-toggle { width: 100%; height: 32px; padding: 0; border: 0; display: flex; align-items: center; justify-content: center; gap: 3px;
+.library-filter-toggle { width: 100%; height: 32px; padding: 0; border: 0; display: flex; align-items: center; justify-content: center; gap: var(--icon-gap);
   background: transparent; color: inherit; font: inherit; letter-spacing: inherit; }
 .library-filter-toggle:hover { color: #faf8ee; }
-.library-filter-toggle:focus-visible { outline-offset: -2px; border-radius: 5px; }
+.library-filter-toggle:focus-visible { outline-offset: -2px; border-radius: 12px 12px 5px 5px; }  /* top corners follow .sidebar-surface's clip */
 .library-search-icon { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .library-filter { width: 100%; height: 32px; padding: 2px 10px; display: flex; align-items: center; gap: 5px; }
 .library-filter input { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; outline: none;
@@ -65,7 +65,7 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .library-filter button:hover { opacity: 1; }
 .library-no-matches { margin: 16px 0; color: #d7c9ba; font: 12px Chakra Petch, sans-serif; text-align: center; }
 .running-icon { width: 9px; height: 9px; background: currentColor; -webkit-mask: url(/icons/triangle.svg) center / contain no-repeat; mask: url(/icons/triangle.svg) center / contain no-repeat; animation: pulse 3s ease-in-out infinite; }
-.running-badge { flex: 1; height: 24px; padding: 0 6px; border: 2px solid #f51e2b; border-radius: 6px; display: grid;
+.running-badge { height: 24px; padding: 0 6px; border: 2px solid #f51e2b; border-radius: 6px; display: grid;
   align-content: center;  /* WebKit doesn't stretch a <button>'s grid row, so the face would sit at the top */
   background: #f51e2b; color: #000; font: 700 11px Chakra Petch, sans-serif; letter-spacing: .04em; pointer-events: none; }
 /* Both faces share one cell, so the badge keeps its width when RUNNING swaps to CLOSE. */
@@ -98,16 +98,17 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .sidebar-scrollbar-thumb::before { content: ''; position: absolute; top: 0; right: 4px; bottom: 0; width: 3px; border-radius: 3px; background: #8f817680; transition: width .12s ease, background .12s ease; }
 .sidebar-scrollbar:hover .sidebar-scrollbar-thumb::before, .sidebar-scrollbar-thumb.dragging::before { width: 5px; background: #8f8176b3; }
 .library-panel { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; border-radius: 12px; background: #2c2623; }
-.history::-webkit-scrollbar, .game-info-sheet::-webkit-scrollbar { width: 8px; }
-.history::-webkit-scrollbar-track, .game-info-sheet::-webkit-scrollbar-track { background: transparent; }
-.history::-webkit-scrollbar-thumb, .game-info-sheet::-webkit-scrollbar-thumb { background: #5b4c42; border-radius: 8px; }
+.history::-webkit-scrollbar { width: 8px; }
+.history::-webkit-scrollbar-track { background: transparent; }
+.history::-webkit-scrollbar-thumb { background: #5b4c42; border-radius: 8px; }
 .game-card { position: relative; display: block; width: 100%; height: 96px; overflow: hidden; border: 0; border-radius: 10px; padding: 0; background: #3c302d; color: white; text-align: center; margin: 0; }
 .game-card-wrap { position: relative; transform-origin: 50% 0; transition: transform .15s ease, filter .15s ease; }  /* scale from the top so the visible top stays put */
 .game-card-wrap:not(.selected):not(:hover):not(:focus-within) { transform: scale(.95); }
 .game-card-wrap.installed:not(.selected):not(:hover):not(:focus-within) { filter: grayscale(1) sepia(.55) brightness(.62); }
 /* A shadow ring instead of the default outline: WebKit doesn't grow an offset outline's radius, so its corners wouldn't follow the card's. */
 .game-card:focus-visible { outline: none; box-shadow: 0 0 0 2px #2c2623, 0 0 0 4px #faf8ee; }
-.game-card.selected::after { content: ''; position: absolute; inset: 0; border: 2px solid #f51e2b; border-radius: inherit; pointer-events: none; }
+/* On the wrap, so the frame sits above the Play overlay; as tall as the card, so it skips any error below. */
+.game-card-wrap.selected::after { content: ''; position: absolute; top: 0; right: 0; left: 0; height: 96px; border: 2px solid #f51e2b; border-radius: 10px; pointer-events: none; }
 .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
 .game-art { object-fit: cover; }
 .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
@@ -120,13 +121,11 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 @keyframes card-play-icon { 0% { opacity: 0; transform: scale(.55); } 25% { opacity: 1; transform: scale(1.08); } 55% { transform: scale(1); } 100% { opacity: 0; transform: scale(1.15); } }
 /* The cog's centre lines up with the sidebar menu icons below. */
 .card-actions { position: absolute; left: 4px; bottom: 4px; display: flex; gap: 4px; }
-.card-lifecycle-actions { position: absolute; right: 4px; top: 4px; display: flex; gap: 4px; }
-.running .card-lifecycle-actions { left: 4px; }  /* the badge spans the card's width */
-.card-lifecycle-actions:has(> span.running-badge) { pointer-events: none; }  /* a plain badge lets clicks through to the card */
+.card-lifecycle-actions { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }  /* the running badge sits in the card's centre; around it, clicks reach the card */
 .card-lifecycle-error { margin: 4px 2px 0; color: #ff9292; font-size: 11px; line-height: 1.3; }
-/* A resting non-running card shows only its art; the controls fade in when it is selected, hovered or focused. Opacity keeps them tabbable. */
-.card-actions, .card-lifecycle-actions, .install-tag { transition: opacity .15s ease; }
-.game-card-wrap.installed:not(.selected):not(:hover):not(:focus-within) :is(.card-actions, .card-lifecycle-actions, .install-tag) { opacity: 0; pointer-events: none; }
+/* Only the selected card has controls (see GameCard); a running card keeps its badge as status. */
+.install-tag { transition: opacity .15s ease; }
+.game-card-wrap.installed:not(.selected):not(:hover) .install-tag { opacity: 0; }
 .card-action { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; display: grid; place-items: center; background: rgba(13,7,7,.7); color: #f3eee7; transition: background .12s ease, color .12s ease; }
 .card-action:not(:disabled):hover, .card-action:focus-visible { background: #fff; color: #f51e2b; }
 .card-action:disabled { opacity: .5; }
@@ -134,36 +133,55 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .card-action-icon.gear { --icon: url(/icons/gear.svg); }
 .card-action-icon.play { --icon: url(/icons/triangle.svg); }
 .card-action-icon.stop { --icon: url(/icons/xmark.svg); }
+/* Play covers the selected card, with a cutout around the cog in the bottom-left corner (rounded where it meets the
+   card's body). */
+.card-play { --cutout: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='42' height='42'%3E%3Crect width='42' height='42' rx='10'/%3E%3C/svg%3E");
+  position: absolute; inset: 0; padding: 0; border: 0; border-radius: 10px; display: grid; place-items: center; background: rgba(13,7,7,.5); color: #fff; transition: background .12s ease, color .12s ease;
+  -webkit-mask: linear-gradient(#000 0 0), var(--cutout) left -10px bottom -10px / 42px 42px no-repeat; -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0), var(--cutout) left -10px bottom -10px / 42px 42px no-repeat; mask-composite: exclude; }
+.card-play:not(:disabled):hover { background: rgba(13,7,7,.65); color: #f51e2b; }
+.card-play:focus-visible { outline: none; box-shadow: inset 0 0 0 2px #faf8ee; }
+.card-play:disabled { color: #fff6; }
+.card-play-icon { width: 32px; height: 32px; background: currentColor; -webkit-mask: url(/icons/triangle.svg) center / contain no-repeat; mask: url(/icons/triangle.svg) center / contain no-repeat; }
 .library-controls { flex: none; padding: 16px 12px 12px; background: #2c2623; }  /* top 8px sits under the list's overlap */
 .library-controls button { width: 100%; height: 40px; border: 0; border-radius: 8px; padding: 8px; display: flex; align-items: center; gap: 8px; background: transparent; color: #faf8ee; text-align: left; font: 600 15px Chakra Petch, sans-serif; }
 .library-controls button:not(:disabled):hover { background: #3a322e; }
 .library-controls button:disabled { opacity: .55; }
-.main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 16px; }
+/* The main area stacks the buttons, any notices, then the Info line over the history, a section gap (24px) apart; finer
+   spacing, like the Info drawer's, is built from the 12px stack gap. --handle-height is the Info handle's, which hangs
+   below the line. */
+.main { --stack-gap: 12px; --section-gap: calc(var(--stack-gap) * 2); --handle-height: 28px; --drawer-pad: calc(var(--stack-gap) * 5); flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 16px; }
 .connection { position: absolute; top: 8px; right: 20px; margin: 0; color: #f3eee7; background: #3a322e; border-radius: 8px; padding: 9px 12px; font-size: 13px; z-index: 5; }
-/* No gap below: the history starts level with the second sidebar card; a notice under the band clears the Load card instead. */
-.action-band { --control-height: 96px; display: grid; grid-template-columns: 72px repeat(2, minmax(0, 1fr)); grid-template-rows: var(--control-height); height: calc(32px + var(--control-height)); flex: none; gap: 8px; margin-bottom: 8px; padding-top: 32px; position: relative; z-index: 3; }  /* above the history, which overshoots under it when Info closes */
-.action-band + :is(.action-error-block, .library-notice) { margin-top: 8px; }
-/* The drawer slides out of a pocket whose mouth sits a gap below the buttons, where the history starts (animated in
-   App.tsx). It spans from the sidebar panel to the window edge like the history; its padding adds the margins back and more, so
-   the letter inside sits well in from its edges, lower than centre, as if set down there. Inset shadows, strongest
-   along the top, give the lighter interior a recessed edge. */
-.game-info-pocket { flex: none; margin: calc(var(--section-gap) - 2px) -16px var(--section-gap) -24px; overflow: hidden; }
-/* A long note scrolls the whole drawer, letter and all, rather than inside the letter. */
-.game-info-sheet { max-height: 55vh; overflow: hidden auto; scrollbar-color: #5b4c42 transparent; padding: 52px 56px 52px 64px; background: #2c2623; box-shadow: inset 0 72px 96px -48px #000b, inset 0 0 48px #0005; }
-/* Run sits above Info in a narrow column left of Save. */
-.game-launcher { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-/* Info's secondary colour with the main buttons' embossed bottom edge. */
-.launch-button { flex: 1; min-height: 0; border: 0; border-radius: 12px; display: grid; place-items: center; background: #3a322e; box-shadow: inset 0 -4px #241e1b; color: #f3eee7; }
-.launch-button:not(:disabled):hover { background: #51423a; }
-.launch-button:active:not(:disabled) { transform: translateY(3px); }
-.launch-button.stop .launch-icon { width: 18px; height: 18px; --icon: url(/icons/square.svg); }
-.launch-button:disabled { background: #1c1918; box-shadow: none; outline: 2px solid #3a322e; outline-offset: -2px; color: #685a51; }
-.launch-icon { --icon: url(/icons/triangle.svg); width: 22px; height: 22px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
-.info-button { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 32px; padding: 3px 5px; border: 0; border-radius: 6px; background: #3a322e; color: #f3eee7; font: 600 15px Chakra Petch, sans-serif; text-transform: uppercase; }
-.info-button .icon { width: 16px; height: 16px; }
-.info-button:not(:disabled):hover { background: #51423a; }
-.info-button[aria-expanded="true"] { background: #51423a; }
-.info-button:disabled { opacity: .45; }
+.action-band { --control-height: 96px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: var(--control-height); height: calc(32px + var(--control-height)); flex: none; gap: 8px; margin-bottom: var(--section-gap); padding-top: 32px; position: relative; z-index: 3; }  /* the Load card overhangs what follows */
+/* The Info line is the top edge of the history's scroll area and the drawer's front: the drawer slides out from under
+   its stroke (animated in App.tsx). The handle hangs from it, 12px from the history below, and over the open drawer. */
+.info-stack { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.info-stack.has-line .history-frame { margin-top: 2px; }  /* just below the stroke */
+.info-stack.has-line .history { --line-clearance: calc(var(--handle-height) + var(--section-gap)); padding-top: var(--line-clearance); }  /* the handle, then the gap */
+.info-line { position: absolute; z-index: 4; top: 0; right: 0; left: 0; display: flex; justify-content: center; padding-top: 2px; pointer-events: none; }
+/* Closed, the stroke's wings fade out toward the edges; as the drawer opens, a solid stroke fades in over them as its
+   top edge, and fades out as soon as it starts closing. */
+.info-line::before, .info-line::after { content: ''; position: absolute; top: 0; right: 0; left: 0; height: 2px; }
+.info-line::before { background: linear-gradient(to right, transparent, #3a322e 30%, #3a322e 70%, transparent); }
+.info-line::after { background: #3a322e; opacity: 0; transition: opacity .15s ease-out; }  /* quicker than the drawer, and in step with it both ways */
+.info-line.open::after { opacity: 1; }
+/* A drawer handle: the front's colour, flat on top where it joins the front, rounded below. */
+.info-handle { pointer-events: auto; display: flex; align-items: center; gap: var(--icon-gap); height: var(--handle-height); padding: 0 14px; border: 0; border-radius: 0 0 8px 8px;
+  background: #3a322e; color: #f3eee7; font: 600 13px Chakra Petch, sans-serif; text-transform: uppercase; transition: background .12s ease; }
+.info-handle:hover { background: #463b36; }
+.info-handle .icon { width: 13px; height: 13px; }
+/* The pocket hangs from the stroke, a little wider than the drawer, so the drawer sits loose in it. */
+.info-pocket { position: relative; margin: calc(-1 * var(--line-clearance)) 0 calc(var(--section-gap) * 2); padding: 0 var(--stack-gap); clip-path: inset(0 -100vw -100vh); }  /* clipped only at the stroke, so the drawer's shadow shows below */
+/* The shadow under the stroke is cast by a bar hidden just above the shade's clipped top: its blur falls off on every
+   side, so the shadow softens toward the drawer's corners. Inset so it fades out about where the drawer ends. The shade
+   fades in and out with the drawer (App.tsx), so it never darkens the history. */
+.info-shade { position: absolute; z-index: 1; inset: 0 0 auto; height: 64px; clip-path: inset(0 -100px -100px); pointer-events: none; }  /* clipped only at the top, where its bar hides */
+.info-shade::before { content: ''; position: absolute; bottom: 100%; right: 32px; left: 32px; height: 24px;
+  background: #000; box-shadow: 0 0 40px 20px #000c; pointer-events: none; }
+/* The drawer: a frame in the border colour (thin sides, a thick front edge below) around a body with its own rounded
+   corners, so the front edge curves up into the sides like a drawer's; it casts a shadow below. */
+.info-sheet { padding: 0 1px 10px; border-radius: 0 0 12px 12px; background: #3a322e; box-shadow: 0 8px 16px -4px #000c; }
+.info-sheet-body { padding: var(--drawer-pad); border-radius: 0 0 12px 12px; background: #2c2623; box-shadow: inset 0 0 24px #0008; }  /* shaded in from every edge */
 .action-slot { min-width: 0; height: var(--control-height); position: relative; }
 .shortcut-tab { position: absolute; top: -32px; left: 50%; transform: translateX(-50%); height: 40px; min-width: 72px; padding: 4px 12px; text-align: center; border-radius: 8px 8px 0 0; background: #2c2623; color: #d7c9ba; font: 600 18px/24px Chakra Petch, sans-serif; }
 .main-button { position: relative; width: 100%; height: var(--control-height); border-radius: 12px; border: 0; display: flex; align-items: center; justify-content: center; font: 600 clamp(44px, 4.5vw, 48px) Chakra Petch, sans-serif; --main-icon: 32px; --main-gap: 12px; }
@@ -186,12 +204,12 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .main-button.load .icon { filter: brightness(0) saturate(100%) invert(18%) sepia(15%) saturate(981%) hue-rotate(321deg); }
 .main-button:active:not(:disabled) { transform: translateY(3px); }
 .action-band.covers-save .action-slot.save, .action-band.covers-load .action-slot.load { visibility: hidden; pointer-events: none; }
-.action-slot.save { grid-area: 1 / 2; }
-.action-slot.load { grid-area: 1 / 3; }
-.guidance-panel { grid-area: 1 / 2 / 2 / 4; min-width: 0; min-height: 0; z-index: 3; display: grid; place-items: center;
+.action-slot.save { grid-area: 1 / 1; }
+.action-slot.load { grid-area: 1 / 2; }
+.guidance-panel { grid-area: 1 / 1 / 2 / 3; min-width: 0; min-height: 0; z-index: 3; display: grid; place-items: center;
   padding: 0 20px; border-radius: 12px; background: #292320; border: 2px solid #51443b; color: #f3eee7; text-align: center; }
-.guidance-panel.covers-save { grid-column: 2; }
-.guidance-panel.covers-load { grid-column: 3; }
+.guidance-panel.covers-save { grid-column: 1; }
+.guidance-panel.covers-load { grid-column: 2; }
 .guidance-content { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 0; width: 100%; max-height: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-color: #5b4c42 transparent; }
 .guidance-content > * { flex: none; }
 .guidance-content::-webkit-scrollbar { width: 8px; }
@@ -225,12 +243,12 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .library-notice { margin: 0 0 var(--section-gap); color: #f3eee7; background: #3a322e; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
 /* The note: a page lying in the drawer. */
 /* A letter of instructions: light paper, near-black ink. */
-.game-info-content { padding: 32px 40px; border-radius: 4px; color: #241d1a; font-size: 15px; line-height: 1.6; background: #f6f2ea; box-shadow: 0 4px 14px #000b; user-select: text; }
-.game-info-content p { margin: 0 0 12px; }
-.game-info-content p:last-child { margin-bottom: 0; }
-.game-info-content strong { font-family: Chakra Petch, sans-serif; font-weight: 700; }
-.game-info-content ol, .game-info-content ul { margin: 0 0 12px; padding-left: 24px; }
-.game-info-content li { margin: 0 0 4px; }
+.info-letter { padding: 32px 40px; border-radius: 4px; color: #241d1a; font-size: 17px; line-height: 1.6; background: #f6f2ea; box-shadow: 0 2px 4px #0006, 0 1px 1px #0004; user-select: text; }
+.info-letter p { margin: 0 0 12px; }
+.info-letter p:last-child { margin-bottom: 0; }
+.info-letter strong { font-family: Chakra Petch, sans-serif; font-weight: 700; }
+.info-letter ol, .info-letter ul { margin: 0 0 12px; padding-left: 24px; }
+.info-letter li { margin: 0 0 4px; }
 .undo-panel { position: fixed; z-index: 5; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 24px;
   padding: 10px 12px 10px 14px; border: 1px solid #3a322e; border-radius: 8px; background: #2c2623;
   box-shadow: 0 4px 16px #0d070755; color: #cfc4b8; font-size: 13px;
@@ -243,13 +261,16 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .undo-panel.exiting-right { pointer-events: none; animation: undo-exit-right .26s ease-in both, undo-timer-fade 5s linear forwards; }
 .history-frame { position: relative; flex: 1; min-height: 0; margin: 0 -16px 0 -24px; }  /* spans from the sidebar panel to the window edge so the top shadow runs full width */
 .history-frame::before { content: ''; position: absolute; z-index: 2; top: 0; right: 0; left: 0; height: 56px; background: linear-gradient(to bottom, #0d070766, transparent); opacity: var(--fade-top, 0); pointer-events: none; }
-.history { height: 100%; overflow-y: auto; padding: 0 16px 16px 24px; scrollbar-color: #5b4c42 transparent; }
+.history { height: 100%; overflow-y: auto; padding: 0 calc(16px - var(--scrollbar, 0px)) 16px 24px; scrollbar-color: #5b4c42 transparent; }
 .history-virtual { position: relative; }
 .virtual-item { position: absolute; left: 0; right: 0; height: 64px; }
 .day-lane { z-index: 1; pointer-events: none; }  /* above the rows, so they scroll under the pinned date; below the top shadow, so it darkens the date evenly */
 .day { position: sticky; top: 0; background: #1c1918; pointer-events: auto; }
 .day h2 { display: flex; align-items: center; justify-content: center; gap: 8px; height: 24px; margin: 0; line-height: 24px; letter-spacing: .08em; }
-.day h2::before, .day h2::after { content: ''; flex: 1; height: 1px; background: #221d1b; }  /* same divider and 8px gaps as game start/close */
+.day h2::before, .day h2::after { content: ''; flex: 1; height: 1px; }  /* same divider and 8px gaps as game start/close */
+/* Like the Info line, the dividers' wings fade out toward the edges. */
+:is(.day h2, .history-event)::before { background: linear-gradient(to right, transparent, #221d1b 70%); }
+:is(.day h2, .history-event)::after { background: linear-gradient(to left, transparent, #221d1b 70%); }
 .day h2 .icon { filter: brightness(0) saturate(100%) invert(56%) sepia(8%) saturate(470%) hue-rotate(343deg); }
 .day-name { color: #b3a79b; text-transform: uppercase; }
 .day-date { color: #7d7166; font-weight: 400; font-variant-numeric: tabular-nums; }
@@ -258,7 +279,7 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
 .history-row.flash, .history-row.arrived { animation: row-flash 1.8s ease-out; }
 .virtual-item:has(> .flash), .virtual-item:has(> .arrived) { z-index: 1; }  /* keep the highlight's top border above the sticky date lane */
 .history-event { display: flex; align-items: center; justify-content: center; gap: 8px; height: 24px; color: #8f8176; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
-.history-event::before, .history-event::after { content: ''; flex: 1; height: 1px; background: #221d1b; }  /* same as the row background */
+.history-event::before, .history-event::after { content: ''; flex: 1; height: 1px; }  /* the row background's colour, fading at the ends */
 .history-event .icon { filter: brightness(0) saturate(100%) invert(56%) sepia(8%) saturate(470%) hue-rotate(343deg); }
 .history-stamp { flex: none; width: 180px; min-width: 0; display: flex; align-items: center; }
 .history-stamp .checkpoint-card { width: 100%; min-height: 38px; }  /* same size with or without a label */

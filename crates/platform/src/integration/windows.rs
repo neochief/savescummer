@@ -453,9 +453,9 @@ fn show_menu(hwnd: HWND, state: &UiState) {
         append(MENU_ADD, "Add custom game…", true, Some(TrayIcon::Add));
         append(MENU_SCAN, "Scan for games", true, Some(TrayIcon::Scan));
         append(MENU_SETTINGS, "Settings…", true, Some(TrayIcon::Settings));
-        append(MENU_ABOUT, "About SaveScummer", true, Some(TrayIcon::About));
+        append(MENU_ABOUT, "About SaveScummer…", true, Some(TrayIcon::About));
         AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
-        append(MENU_EXIT, "Exit", true, Some(TrayIcon::Exit));
+        append(MENU_EXIT, "Quit", true, None);
         SetMenuDefaultItem(menu, MENU_MAIN as u32, 0);
         let mut pt = POINT { x: 0, y: 0 };
         GetCursorPos(&mut pt);

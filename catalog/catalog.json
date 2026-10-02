@@ -433,6 +433,87 @@
       ]
     },
     {
+      "id": "steam-1145350",
+      "name": "Hades II",
+      "info": "**Context:** A strong journey through the Underworld or Surface can have rare boons, a weapon aspect, keepsake, and resources that are hard to recreate after a death.\n\n**How progress is saved:** Like Hades, the game saves when Melinoë enters a new location, not in the middle of combat. Sync & Quit preserves that state for continuation.\n\n**SaveScummer value:** Checkpoint at a location entrance before a guardian, risky encounter, or boon choice. Restore the same build after a failed attempt instead of repeating the opening regions.",
+      "detect": {
+        "steam": 1145350
+      },
+      "installDirs": [
+        "Hades II"
+      ],
+      "executables": {
+        "windows": [
+          "Ship/Hades2.exe",
+          "Release/Hades2.exe"
+        ],
+        "macos": [
+          "Hades II.app"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{HOME}/Saved Games/Hades II/Profile*.sav*"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Supergiant Games/Hades II/Profile*.sav*"
+        }
+      ],
+      "exclude": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{HOME}/Saved Games/Hades II/GlobalSettingsWin.sjson"
+        }
+      ]
+    },
+    {
+      "id": "steam-1145360",
+      "name": "Hades",
+      "info": "**Context:** A strong escape attempt can have rare boons, a specific weapon aspect, keepsake, and resources that are hard to recreate after a death.\n\n**How progress is saved:** The game writes the current escape between encounters; entering a chamber after combat gives a reliable checkpoint. It does not save the middle of a fight.\n\n**SaveScummer value:** Checkpoint at a chamber entrance before a boss, risky encounter, or boon choice. Restore the same build after a failed attempt instead of rerolling the run.",
+      "detect": {
+        "steam": [
+          1145360,
+          1206340
+        ]
+      },
+      "installDirs": [
+        "Hades"
+      ],
+      "executables": {
+        "windows": [
+          "x86/Hades.exe",
+          "x64/Hades.exe",
+          "x64Vk/Hades.exe"
+        ],
+        "macos": [
+          "Game.macOS.app/Contents/MacOS/Game.macOS",
+          "Hades.app"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{DOCUMENTS}/Saved Games/Hades/Profile*.sav*"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Supergiant Games/Hades/Profile*.sav*"
+        }
+      ]
+    },
+    {
       "id": "steam-1175460",
       "name": "Revita",
       "info": "**Context:** A strong climb can depend on a delicate relic synergy and health-for-upgrade trades before the next tower section or secret-boss route.\n\n**How progress is saved:** Save & Quit is available at terminals after bosses rather than at arbitrary rooms.\n\n**SaveScummer value:** Checkpoint at the post-boss terminal. Restore the same relic/health build after the next section fails instead of rebuilding it from the first station.",
@@ -600,6 +681,61 @@
             "os": "windows"
           },
           "path": "{HOME}/AppData/LocalLow/Torpor Games/Suzerain/playersettings.dat"
+        }
+      ]
+    },
+    {
+      "id": "steam-1253920",
+      "name": "Rogue Legacy 2",
+      "info": "**Context:** A promising heir may have a valuable class, traits, relics, and castle progress before a hard biome or boss.\n\n**How progress is saved:** The game automatically persists the current heir, family, and castle state for continuation, but does not offer a reusable earlier state for a lost heir.\n\n**SaveScummer value:** Checkpoint after the game has saved and before a dangerous push. Restore the earlier heir and resources after death instead of accepting the next generation.",
+      "detect": {
+        "steam": 1253920
+      },
+      "installDirs": [
+        "Rogue Legacy 2"
+      ],
+      "executables": {
+        "windows": [
+          "Rogue Legacy 2.exe"
+        ],
+        "macos": [
+          "RogueLegacy2.app"
+        ],
+        "linux": [
+          "RogueLegacy2",
+          "RogueLegacy2.x86_64"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{HOME}/AppData/LocalLow/Cellar Door Games/Rogue Legacy 2/Saves/Steam/{STEAM_ID64}"
+        },
+        {
+          "when": {
+            "os": "macos",
+            "store": "steam"
+          },
+          "path": "{HOME}/Library/Application Support/Cellar Door Games/Rogue Legacy 2/Saves/Steam/{STEAM_ID64}"
+        },
+        {
+          "when": {
+            "os": "linux",
+            "store": "steam"
+          },
+          "path": "{XDG_CONFIG_HOME}/unity3d/Cellar Door Games/Rogue Legacy 2/Saves/Steam/{STEAM_ID64}"
+        }
+      ],
+      "exclude": [
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{HOME}/AppData/LocalLow/Cellar Door Games/Rogue Legacy 2/Saves/Steam/GameConfig.ini"
         }
       ]
     },
@@ -938,6 +1074,116 @@
             "os": "linux"
           },
           "path": "{XDG_DATA_HOME}/godot/app_userdata/Dome Keeper/options.txt"
+        }
+      ]
+    },
+    {
+      "id": "steam-1942280",
+      "name": "Brotato",
+      "info": "**Context:** A late wave can depend on a rare mix of weapons, items, stats, and shop rolls that is hard to repeat.\n\n**How progress is saved:** The game writes the active run between waves, making the shop a natural place to checkpoint. It does not save a wave in progress.\n\n**SaveScummer value:** Checkpoint in the shop before a risky purchase or a difficult wave. Restore the same character and loadout after defeat rather than rebuilding from wave one.",
+      "detect": {
+        "steam": [
+          1942280,
+          2868390,
+          3281080,
+          4498220
+        ],
+        "gog": [
+          1118951034,
+          1126351084,
+          1562256538,
+          1638201898,
+          2146695817
+        ]
+      },
+      "installDirs": [
+        "Brotato"
+      ],
+      "executables": {
+        "windows": [
+          "Brotato.exe"
+        ],
+        "macos": [
+          "Brotato.app"
+        ],
+        "linux": [
+          "Brotato.x86_64"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "linux"
+          },
+          "path": "{HOME}/.local/share/Brotato/{STEAM_ID64}/save_*.json"
+        },
+        {
+          "when": {
+            "os": "linux"
+          },
+          "path": "{HOME}/.local/share/Brotato/{STEAM_ACCOUNT_ID}/save_*.json"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Brotato/{STEAM_ID64}/*.json"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Brotato/{STEAM_ACCOUNT_ID}/*.json"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Brotato/{STEAM_ID64}/*.json"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Brotato/{STEAM_ACCOUNT_ID}/*.json"
+        }
+      ],
+      "exclude": [
+        {
+          "when": {
+            "os": "linux"
+          },
+          "path": "{HOME}/.local/share/Brotato/{STEAM_ID64}/settings.json"
+        },
+        {
+          "when": {
+            "os": "linux"
+          },
+          "path": "{HOME}/.local/share/Brotato/{STEAM_ACCOUNT_ID}/settings.json"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Brotato/{STEAM_ID64}/settings.json"
+        },
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Brotato/{STEAM_ACCOUNT_ID}/settings.json"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Brotato/{STEAM_ID64}/settings.json"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Brotato/{STEAM_ACCOUNT_ID}/settings.json"
         }
       ]
     },
@@ -1561,6 +1807,57 @@
       ]
     },
     {
+      "id": "steam-2379780",
+      "name": "Balatro",
+      "info": "**Context:** A high-ante run can hinge on rare Jokers, vouchers, upgraded hands, and a shop sequence that is difficult to rebuild.\n\n**How progress is saved:** The game keeps the active run on disk for Continue and updates it during play and when leaving for the menu. A checkpoint captures the last written state.\n\n**SaveScummer value:** Checkpoint before a boss blind, shop reroll, or irreversible Joker sale. Restore the same deck and economy after a failed choice instead of starting a new run.",
+      "detect": {
+        "steam": [
+          2379780,
+          2834460
+        ]
+      },
+      "installDirs": [
+        "Balatro"
+      ],
+      "executables": {
+        "windows": [
+          "Balatro.exe"
+        ],
+        "macos": [
+          "Balatro.app"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Balatro"
+        },
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{APPDATA}/Balatro"
+        }
+      ],
+      "exclude": [
+        {
+          "when": {
+            "os": "macos"
+          },
+          "path": "{HOME}/Library/Application Support/Balatro/settings.jkr"
+        },
+        {
+          "when": {
+            "os": "windows"
+          },
+          "path": "{APPDATA}/Balatro/settings.jkr"
+        }
+      ]
+    },
+    {
       "id": "steam-237990",
       "name": "The Banner Saga",
       "info": "**Context:** Deaths, caravan decisions, supplies, and major story choices can carry forward into later games in the trilogy.\n\n**How progress is saved:** The game autosaves at checkpoints rather than offering unrestricted branch saves.\n\n**SaveScummer value:** Checkpoint before a battle with possible hero loss or a major caravan/story decision. Restore to preserve a different import state for later games without replaying the whole journey.",
@@ -2116,6 +2413,90 @@
       ]
     },
     {
+      "id": "steam-2742830",
+      "name": "Monster Train 2",
+      "info": "**Context:** Like Monster Train, a late deck can depend on a very specific clan pair, champion, unit upgrades, spells, and equipment.\n\n**How progress is saved:** The current run and metagame progress are stored on disk for continuation. A checkpoint captures the last state the game wrote, rather than a turn-by-turn combat history.\n\n**SaveScummer value:** Checkpoint before a merchant, route choice, card upgrade, or difficult ring. Restore the same train after a loss or unwanted build decision instead of rebuilding it from the first ring.",
+      "detect": {
+        "steam": [
+          2742830,
+          3296150,
+          3580200,
+          3580220,
+          3993450,
+          4739980
+        ]
+      },
+      "installDirs": [
+        "Monster Train 2"
+      ],
+      "executables": {
+        "windows": [
+          "MonsterTrain2.exe"
+        ],
+        "macos": [
+          "Monster Train 2.app"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/metagameSave.json"
+        },
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/metagameSave.json.backup"
+        },
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/run-history/*.json"
+        },
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{HOME}/AppData/LocalLow/Shiny Shoe/MonsterTrain2/saves/*.json"
+        },
+        {
+          "when": {
+            "os": "macos",
+            "store": "steam"
+          },
+          "path": "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/metagameSave.json"
+        },
+        {
+          "when": {
+            "os": "macos",
+            "store": "steam"
+          },
+          "path": "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/metagameSave.json.backup"
+        },
+        {
+          "when": {
+            "os": "macos",
+            "store": "steam"
+          },
+          "path": "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/run-history/*.json"
+        },
+        {
+          "when": {
+            "os": "macos",
+            "store": "steam"
+          },
+          "path": "{HOME}/Library/Application Support/Shiny Shoe/MonsterTrain2/saves/*.json"
+        }
+      ]
+    },
+    {
       "id": "steam-274520",
       "name": "Darkwood",
       "info": "**Context:** Nightmare makes death final, while even normal play relies on autosaves rather than free manual rollback.\n\n**How progress is saved:** The current autosave is overwritten as the game advances; Nightmare death ends the playthrough.\n\n**SaveScummer value:** Checkpoint before a dangerous night defense, Silent Forest/Old Woods expedition, or irreversible story choice. Restore after a fatal night or bad outcome instead of replaying the region.",
@@ -2367,6 +2748,51 @@
             "os": "windows"
           },
           "path": "{APPDATA}/Void_War/*.sav"
+        }
+      ]
+    },
+    {
+      "id": "steam-2868840",
+      "name": "Slay the Spire 2",
+      "info": "**Context:** Like Slay the Spire, a late deck can contain a rare card and relic engine that may take many climbs to see again.\n\n**How progress is saved:** Each profile keeps a current run for Continue, but earlier deck and path states are overwritten as the climb advances.\n\n**SaveScummer value:** Checkpoint before an Act boss, elite path, event, shop, or build-defining reward. Restore to retry or compare the decision without rebuilding the deck.",
+      "detect": {
+        "steam": 2868840
+      },
+      "installDirs": [
+        "Slay the Spire 2"
+      ],
+      "executables": {
+        "windows": [
+          "SlayTheSpire2.exe"
+        ],
+        "macos": [
+          "SlayTheSpire2.app"
+        ],
+        "linux": [
+          "SlayTheSpire2"
+        ]
+      },
+      "save": [
+        {
+          "when": {
+            "os": "windows",
+            "store": "steam"
+          },
+          "path": "{APPDATA}/SlayTheSpire2/steam/{STEAM_ID64}/profile*"
+        },
+        {
+          "when": {
+            "os": "macos",
+            "store": "steam"
+          },
+          "path": "{HOME}/Library/Application Support/SlayTheSpire2/steam/{STEAM_ID64}/profile*"
+        },
+        {
+          "when": {
+            "os": "linux",
+            "store": "steam"
+          },
+          "path": "{XDG_DATA_HOME}/SlayTheSpire2/steam/{STEAM_ID64}/profile*"
         }
       ]
     },

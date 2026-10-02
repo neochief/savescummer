@@ -20,6 +20,7 @@
       h1 strong { color: #ff1e29; }
       p { margin: 0 auto; line-height: 1.6; }
       .subtitle { max-width: 39rem; color: #faf8ee; font-size: clamp(1.25rem, 3vw, 1.625rem); }
+      .hero .subtitle { max-width: 48rem; text-wrap: balance; }
       .supporting { max-width: 36rem; margin-top: 1.25rem; color: #d7c9ba; font-size: clamp(1rem, 2.2vw, 1.125rem); }
       .downloads { display: flex; justify-content: center; width: 100%; margin: 2.75rem auto 0; }
       .download { display: flex; align-items: center; justify-content: center; gap: .85rem; border-radius: .8rem; text-decoration: none; }
@@ -34,37 +35,70 @@
       .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
       .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.5rem, 5vw, 3.5rem)/1.1 "Chakra Petch", sans-serif; }
       .supported-copy { margin: 1.25rem auto 2.75rem; text-align: center; }
-      .game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; mask-image: linear-gradient(to bottom, #000 0%, #000 52%, #0003 100%); }
-      .game-grid.expanded { mask-image: none; }
-      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border: 2px solid transparent; border-radius: 10px; background: #3c302d; background-clip: padding-box; cursor: pointer; }
-      .game-card:hover, .game-card:focus-visible { border-color: var(--popup-bg); }
-      .game-card:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
+      .game-group + .game-group { margin-top: 2.5rem; }
+      .game-group-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+      .game-group-header::before, .game-group-header::after { content: ""; flex: 1; height: 1px; }
+      .game-group-header::before { background: linear-gradient(to right, transparent, #6a5650); }
+      .game-group-header::after { background: linear-gradient(to left, transparent, #6a5650); }
+      .game-group h3 { margin: 0; text-align: center; }
+      .game-group-label, .game-group-tagline { font: 700 clamp(1rem, 2.4vw, 1.25rem)/1.2 "Chakra Petch", sans-serif; }
+      .game-group-label { color: #faf8ee; text-transform: uppercase; letter-spacing: .08em; }
+      .game-group-separator { margin: 0 .45rem; color: #6a5650; font: 700 1.2rem/1 "Chakra Petch", sans-serif; }
+      .game-group-tagline { color: #bfaea1; }
+      .game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+      .game-groups:not(.expanded) { max-height: 38rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent); mask-image: linear-gradient(to bottom, #000 75%, transparent); }
+      .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border: 4px solid transparent; border-radius: 10px; background: #3c302d; background-clip: padding-box; cursor: pointer; }
+      .game-card:hover, .game-card:focus-within, .game-card.open { border-color: var(--popup-bg); }
+      .game-card:has(.game-card-trigger:focus-visible) { outline: 2px solid #faf8ee; outline-offset: 3px; }
+      .game-card-trigger { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
       .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
       .game-art { object-fit: cover; cursor: pointer; }
       .game-shade { background: linear-gradient(90deg, rgba(13,7,7,.72), rgba(13,7,7,.18)); }
       .game-logo { position: absolute; top: 10%; left: 12.5%; width: 75%; height: 80%; object-fit: contain; cursor: pointer; }
+      [data-art-style="self-contained"] .game-art { object-position: center top; }
+      [data-art-style="self-contained"] .game-shade { display: none; }
+      [data-art-style="nethack"] .game-shade { background: rgba(0, 0, 0, .7); }
+      [data-art-style="nethack"] .game-logo { left: 10%; width: 80%; filter: invert(1); mix-blend-mode: screen; }
       .game-fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: .75rem; text-align: center; font: 700 clamp(1rem, 2vw, 1.4rem)/1.1 "Chakra Petch", sans-serif; }
-      .show-more { display: block; margin: 1.5rem auto 0; padding: .8rem 1.4rem; border: 1px solid #6a5650; border-radius: .65rem; background: #2a2420; color: #faf8ee; font: 700 1rem "Chakra Petch", sans-serif; cursor: pointer; }
+      .game-link, .game-link-preview { position: absolute; left: 4px; bottom: 4px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: rgba(13,7,7,.7); color: #f3eee7; transition: background .12s ease, color .12s ease, opacity .15s ease; }
+      .game-card:not(.open) .game-link { opacity: 0; pointer-events: none; }
+      .game-link:hover, .game-link:focus-visible { background: #fff; color: #f51e2b; }
+      .game-tooltip-art.link-hover .game-link-preview { background: #fff; color: #f51e2b; }
+      .game-link:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
+      .game-link-icon { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+      .game-link-icon.steam { --icon: url("./icons/steam.svg"); }
+      .game-link-icon.website { --icon: url("./icons/planet.svg"); }
+      .show-more { display: block; margin: 1rem auto 0; padding: .8rem 1.4rem; border: 1px solid #6a5650; border-radius: .65rem; background: #2a2420; color: #faf8ee; font: 700 1rem "Chakra Petch", sans-serif; cursor: pointer; }
       .show-more[hidden] { display: none; }
       .show-more:hover { background: #3c302d; }
       .show-more:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
-      .game-tooltip { position: fixed; z-index: 10; width: min(29rem, calc(100vw - 1.5rem)); color: #faf8ee; pointer-events: none; }
+      .game-tooltip { position: fixed; z-index: 10; width: min(29rem, calc(100vw - 1.5rem)); color: #faf8ee; pointer-events: none; view-transition-name: game-popup; }
       .game-tooltip.flip { display: flex; flex-direction: column-reverse; }
       .game-tooltip[hidden] { display: none; }
-      .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 1.25rem solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; transform-origin: center top; animation: art-grow .28s ease-out both; }
+      .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 4px solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; transform-origin: center top; animation: art-grow .28s ease-out both; }
       .game-tooltip.flip .game-tooltip-art { transform-origin: center bottom; }
       .game-tooltip-copy { position: relative; z-index: 1; margin-top: -.25rem; padding: 1.125rem 1.25rem; border-radius: 10px; background: var(--popup-bg); transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
       .game-tooltip.flip .game-tooltip-copy { margin-top: 0; margin-bottom: -.25rem; transform-origin: center bottom; animation-name: popup-unfold-up; }
+      .game-tooltip.closing .game-tooltip-art { animation: art-shrink .28s ease-in both; }
+      .game-tooltip.closing .game-tooltip-copy { animation: popup-fold .28s cubic-bezier(.4,0,.8,.3) both; }
+      .game-tooltip.flip.closing .game-tooltip-copy { animation-name: popup-fold-up; }
+      .game-tooltip.switching .game-tooltip-art, .game-tooltip.switching .game-tooltip-copy { animation: none; }
       .game-tooltip-title { margin: 0 0 .75rem; color: #faf8ee; text-align: center; font: 700 1.4rem/1.15 "Chakra Petch", sans-serif; }
       .game-tooltip-context { margin: 0; color: #faf8ee; font-size: .925rem; line-height: 1.5; }
-      .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: #241c19; color: #d7c9ba; }
+      .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: linear-gradient(to bottom, #241c19, transparent); color: #d7c9ba; }
       .game-tooltip-value p { margin: 0; font-size: .875rem; line-height: 1.5; }
-      .game-tooltip-icon { display: block; width: 2.5rem; height: 2.5rem; margin-top: .05rem; flex: none; background: currentColor; mask: center / contain no-repeat; transform: translateY(2px); }
+      .game-tooltip-icon { display: block; width: 2.5rem; height: 2.5rem; margin-top: .05rem; flex: none; background: center / contain no-repeat; transform: translateY(2px); }
       @keyframes art-grow { from { transform: scale(1); } to { transform: scale(1.035); } }
+      @keyframes art-shrink { from { transform: scale(1.035); } to { transform: scale(1); } }
       @keyframes popup-unfold { from { opacity: 0; transform: translateY(-.75rem) scale(.95); } to { opacity: 1; transform: none; } }
       @keyframes popup-unfold-up { from { opacity: 0; transform: translateY(.75rem) scale(.95); } to { opacity: 1; transform: none; } }
+      @keyframes popup-fold { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-.75rem) scale(.95); } }
+      @keyframes popup-fold-up { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(.75rem) scale(.95); } }
+      ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+      ::view-transition-group(game-popup), ::view-transition-old(game-popup), ::view-transition-new(game-popup) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2,.7,.2,1); }
       @media (prefers-reduced-motion: reduce) {
-        .game-tooltip-art, .game-tooltip-copy { animation: none; }
+        .game-tooltip .game-tooltip-art, .game-tooltip .game-tooltip-copy { animation: none !important; }
+        ::view-transition-group(game-popup), ::view-transition-old(game-popup), ::view-transition-new(game-popup) { animation-duration: 0s; }
       }
       @media (max-width: 700px) {
         .hero { padding: 5rem 0 4rem; }
@@ -88,7 +122,7 @@
       <div class="hero">
         <img class="app-icon" src="./icon.svg" alt="" width="144" height="144" />
         <h1><span>Save</span><strong>Scummer</strong></h1>
-        <p class="subtitle">Create checkpoints in games that don't offer them.</p>
+        <p class="subtitle">Save your progress in games without a save feature.</p>
         <p class="supporting">Retry a tough moment, learn faster, and spend less time replaying what you already know, so you can get back to the stories, builds, and choices you care about.</p>
         <section class="downloads" aria-label="Download options">
           <a class="download github" href="https://github.com/neochief/savescummer/releases/latest">
@@ -104,12 +138,12 @@
             <p class="subtitle">I chose games where progress is costly to lose.</p>
             <p class="supporting">Permadeath ends fun builds, Ironman overwrites exciting campaigns, and autosaves lock in boring story choices.<br />There are too many games to suffer through the slog!</p>
           </div>
-          <div class="game-grid" id="game-grid"></div>
+          <div class="game-groups" id="game-groups"></div>
           <button class="show-more" id="show-more" type="button">Show all games</button>
         </div>
       </section>
     </main>
-    <div class="game-tooltip" id="game-tooltip" role="tooltip" hidden>
+    <div class="game-tooltip" id="game-tooltip" hidden>
       <div class="game-tooltip-art" id="game-tooltip-art" aria-hidden="true"></div>
       <div class="game-tooltip-copy">
         <h3 class="game-tooltip-title" id="game-tooltip-title"></h3>
@@ -120,7 +154,7 @@
         </div>
       </div>
     </div>
-    <script src="./games-data.js"></script>
+    <script src="./games-data.js?v=fa-duotone-solid"></script>
     <script>
       const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
       const mobile = navigator.userAgentData?.mobile || /android|iphone|ipad|ipod/i.test(navigator.userAgent)
@@ -132,8 +166,8 @@
         : null;
       if (label) document.getElementById("download-label").textContent = `Download for ${label}`;
 
-      const games = window.savescummerGames || [];
-      const grid = document.getElementById("game-grid");
+      const groups = window.savescummerGameGroups || [];
+      const gameGroups = document.getElementById("game-groups");
       const showMore = document.getElementById("show-more");
       const tooltip = document.getElementById("game-tooltip");
       const tooltipArt = document.getElementById("game-tooltip-art");
@@ -141,37 +175,106 @@
       const tooltipContext = document.getElementById("game-tooltip-context");
       const tooltipValue = document.getElementById("game-tooltip-value");
       const tooltipIcon = document.getElementById("game-tooltip-icon");
+      const tooltipCopy = tooltip.querySelector(".game-tooltip-copy");
       let activeCard = null;
+      let pinnedCard = null;
+      let hoveredCard = null;
+      let ignoredHoverCard = null;
+      let closeTimer = null;
+      let switchGeneration = 0;
 
-      function hideTooltip(card) {
-        if (card && card !== activeCard) return;
+      function finishClose() {
+        if (activeCard) return;
+        window.clearTimeout(closeTimer);
+        closeTimer = null;
         tooltip.hidden = true;
+        tooltip.classList.remove("closing");
+      }
+
+      function deactivateCard() {
+        if (!activeCard) return;
+        activeCard.classList.remove("open");
+        activeCard.querySelector(".game-card-trigger").setAttribute("aria-expanded", "false");
+        const link = activeCard.querySelector(".game-link");
+        link.tabIndex = -1;
+        link.setAttribute("aria-hidden", "true");
         activeCard = null;
       }
 
+      function hideTooltip() {
+        if (!activeCard) return;
+        deactivateCard();
+        tooltip.classList.add("closing");
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) finishClose();
+        else closeTimer = window.setTimeout(finishClose, 320);
+      }
+
       function showTooltip(card, game) {
+        window.clearTimeout(closeTimer);
+        closeTimer = null;
+        tooltip.classList.remove("closing");
+        if (activeCard === card) return;
+        deactivateCard();
         activeCard = card;
-        const cardRect = card.getBoundingClientRect();
-        tooltipArt.style.width = `${cardRect.width}px`;
-        tooltipArt.style.height = `${cardRect.height}px`;
+        card.classList.add("open");
+        card.querySelector(".game-card-trigger").setAttribute("aria-expanded", "true");
+        const link = card.querySelector(".game-link");
+        link.tabIndex = 0;
+        link.removeAttribute("aria-hidden");
         fillArtwork(tooltipArt, game, "eager");
+        tooltipArt.classList.remove("link-hover");
+        tooltipArt.append(makeGameLink(game, true));
         tooltipTitle.textContent = game.name;
         tooltipContext.textContent = game.context;
         tooltipValue.textContent = game.value;
-        tooltipIcon.style.maskImage = `url("./icons/value/${game.icon}.svg")`;
-        tooltipIcon.style.webkitMaskImage = tooltipIcon.style.maskImage;
+        tooltipIcon.style.backgroundImage = `url("./icons/value/${game.icon}.svg?v=fa-duotone-review-3")`;
         tooltip.classList.remove("flip");
         tooltip.hidden = false;
+        positionTooltip();
+      }
+
+      tooltipCopy.addEventListener("animationend", (event) => {
+        if (event.target === tooltipCopy && tooltip.classList.contains("closing")) finishClose();
+      });
+
+      function pinTooltip(card, game) {
+        const wasPinned = pinnedCard !== null;
+        pinnedCard = card;
+        ignoredHoverCard = null;
+        if (activeCard === card) return;
+        const generation = ++switchGeneration;
+        if (wasPinned && activeCard && document.startViewTransition && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+          const transition = document.startViewTransition(() => {
+            if (generation !== switchGeneration) return;
+            tooltip.classList.add("switching");
+            showTooltip(card, game);
+          });
+          const endSwitch = () => {
+            if (generation === switchGeneration) tooltip.classList.remove("switching");
+          };
+          transition.finished.then(endSwitch, endSwitch);
+        } else {
+          tooltip.classList.remove("switching");
+          showTooltip(card, game);
+        }
+      }
+
+      function positionTooltip() {
+        if (!activeCard) return;
+        const cardRect = activeCard.getBoundingClientRect();
+        const cardFrame = parseFloat(getComputedStyle(activeCard).borderLeftWidth) || 0;
+        tooltipArt.style.width = `${cardRect.width - cardFrame * 2}px`;
+        tooltipArt.style.height = `${cardRect.height - cardFrame * 2}px`;
         const imageFrame = parseFloat(getComputedStyle(tooltipArt).borderLeftWidth) || 0;
         const tipWidth = tooltip.offsetWidth;
         const tipHeight = tooltip.offsetHeight;
         const flip = cardRect.top + tipHeight > window.innerHeight - 12;
         tooltip.classList.toggle("flip", flip);
-        const top = flip ? cardRect.bottom + imageFrame - tipHeight : cardRect.top - imageFrame;
+        const top = flip ? cardRect.bottom - cardFrame + imageFrame - tipHeight : cardRect.top + cardFrame - imageFrame;
         const left = Math.max(12, Math.min(cardRect.left + cardRect.width / 2 - tipWidth / 2, window.innerWidth - tipWidth - 12));
         tooltip.style.top = `${Math.max(12, Math.min(top, window.innerHeight - tipHeight - 12))}px`;
         tooltip.style.left = `${left}px`;
-        tooltipArt.style.marginLeft = `${cardRect.left - left - imageFrame}px`;
+        tooltipArt.style.marginLeft = `${cardRect.left - left + cardFrame - imageFrame}px`;
       }
 
       function addImage(card, className, path, loading = "lazy") {
@@ -186,12 +289,13 @@
 
       function fillArtwork(container, game, loading = "lazy") {
         container.replaceChildren();
+        container.dataset.artStyle = game.artStyle || "";
         if (game.hero) addImage(container, "game-art", game.hero, loading);
         const shade = document.createElement("span");
         shade.className = "game-shade";
         container.append(shade);
         if (game.logo) addImage(container, "game-logo", game.logo, loading);
-        else {
+        else if (game.artStyle !== "self-contained") {
           const fallback = document.createElement("span");
           fallback.className = "game-fallback";
           fallback.textContent = game.name;
@@ -199,34 +303,104 @@
         }
       }
 
-      function renderCards(items) {
+      function makeGameLink(game, preview = false) {
+        const steam = game.steam != null;
+        const link = document.createElement(preview ? "span" : "a");
+        link.className = preview ? "game-link-preview" : "game-link";
+        if (!preview) {
+          link.href = steam ? `https://store.steampowered.com/app/${game.steam}/` : game.website;
+          link.target = "_blank";
+          link.rel = "nofollow noopener noreferrer";
+          link.setAttribute("aria-label", steam ? `View ${game.name} on Steam` : `Visit ${game.name} website`);
+          link.title = steam ? "View on Steam" : "Visit game website";
+          link.addEventListener("pointerenter", () => tooltipArt.classList.add("link-hover"));
+          link.addEventListener("pointerleave", () => tooltipArt.classList.remove("link-hover"));
+        }
+        const icon = document.createElement("span");
+        icon.className = `game-link-icon ${steam ? "steam" : "website"}`;
+        icon.setAttribute("aria-hidden", "true");
+        link.append(icon);
+        return link;
+      }
+
+      function renderCards(grid, items) {
         const fragment = document.createDocumentFragment();
         for (const game of items) {
           const card = document.createElement("div");
           card.className = "game-card";
-          card.setAttribute("role", "img");
-          card.setAttribute("aria-label", `${game.name}. ${game.context} ${game.value}`);
-          card.tabIndex = 0;
-          fillArtwork(card, game);
-          card.addEventListener("pointerenter", () => showTooltip(card, game));
-          card.addEventListener("pointerleave", () => hideTooltip(card));
-          card.addEventListener("focus", () => showTooltip(card, game));
-          card.addEventListener("blur", () => hideTooltip(card));
+          const trigger = document.createElement("button");
+          trigger.className = "game-card-trigger";
+          trigger.type = "button";
+          trigger.setAttribute("aria-label", `${game.name}. ${game.context} ${game.value}`);
+          trigger.setAttribute("aria-expanded", "false");
+          trigger.setAttribute("aria-controls", "game-tooltip");
+          fillArtwork(trigger, game);
+          const link = makeGameLink(game);
+          link.tabIndex = -1;
+          link.setAttribute("aria-hidden", "true");
+          card.append(trigger, link);
+          trigger.addEventListener("click", () => {
+            if (pinnedCard === card) {
+              ++switchGeneration;
+              pinnedCard = null;
+              ignoredHoverCard = hoveredCard === card ? card : null;
+              tooltip.classList.remove("switching");
+              hideTooltip();
+            } else pinTooltip(card, game);
+          });
+          card.addEventListener("pointerenter", () => {
+            hoveredCard = card;
+            if (!pinnedCard && ignoredHoverCard !== card) showTooltip(card, game);
+          });
+          card.addEventListener("pointerleave", () => {
+            if (hoveredCard === card) hoveredCard = null;
+            if (ignoredHoverCard === card) ignoredHoverCard = null;
+            if (!pinnedCard && activeCard === card && !card.contains(document.activeElement)) hideTooltip();
+          });
+          card.addEventListener("focusout", (event) => {
+            if (!pinnedCard && hoveredCard !== card && activeCard === card && !card.contains(event.relatedTarget)) hideTooltip();
+          });
           fragment.append(card);
         }
         grid.append(fragment);
       }
 
-      renderCards(games.slice(0, 20));
-      showMore.hidden = games.length <= 20;
-      showMore.textContent = `Show all ${games.length} games`;
+      for (const [index, group] of groups.entries()) {
+        const section = document.createElement("section");
+        section.className = "game-group";
+        section.setAttribute("aria-labelledby", `game-group-title-${index}`);
+        const header = document.createElement("div");
+        header.className = "game-group-header";
+        const title = document.createElement("h3");
+        title.id = `game-group-title-${index}`;
+        const label = document.createElement("span");
+        label.className = "game-group-label";
+        label.textContent = group.title;
+        title.append(label);
+        if (group.tagline) {
+          const separator = document.createElement("span");
+          separator.className = "game-group-separator";
+          separator.textContent = "·";
+          const tagline = document.createElement("span");
+          tagline.className = "game-group-tagline";
+          tagline.textContent = group.tagline;
+          title.append(separator, tagline);
+        }
+        const grid = document.createElement("div");
+        grid.className = "game-grid";
+        header.append(title);
+        section.append(header, grid);
+        gameGroups.append(section);
+        renderCards(grid, group.games);
+      }
+      showMore.hidden = gameGroups.scrollHeight <= gameGroups.clientHeight;
+      showMore.textContent = `Show all ${groups.reduce((count, group) => count + group.games.length, 0)} games`;
       showMore.addEventListener("click", () => {
-        renderCards(games.slice(20));
-        grid.classList.add("expanded");
+        gameGroups.classList.add("expanded");
         showMore.hidden = true;
       });
-      window.addEventListener("scroll", () => hideTooltip(), { passive: true });
-      window.addEventListener("resize", () => hideTooltip());
+      window.addEventListener("scroll", positionTooltip, { passive: true });
+      window.addEventListener("resize", positionTooltip);
     </script>
   </body>
 </html>

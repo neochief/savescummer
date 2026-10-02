@@ -79,7 +79,7 @@ game; the first row is the header.
 - `catalog/games.csv` is committed and is the only editing surface; the builder
   reads it directly. Git diffs, agents and scripts read the same file.
 
-Current list: 89 `Keep`, 10 `Remove`, 8 `Ignored`. `Name` must match the
+Current list: 96 `Keep`, 10 `Remove`, 8 `Ignored`. `Name` must match the
 manifest key exactly. The `Ignored` games have no usable save location in the
 manifest (Catacomb Kids, Vagante, UnReal World, Total War Saga: Thrones of
 Britannia, Darkest Dungeon, Watch Dogs: Legion, King of Dragon Pass, 80 Days);

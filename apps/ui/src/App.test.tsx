@@ -128,7 +128,7 @@ test('cards show Play while stopped and expose Terminate only when the host perm
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 4,
     games: [bridge.state.games[0], bridge.state.games[1]] }));
   expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/game-stop.wav');
-  expect(screen.getByRole('button', { name: 'Play Game A' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Play Game A' }, { timeout: 1500 })).toBeTruthy();  // after the play animation
 });
 
 test('double-clicking a stopped card plays once without clearing its selection', async () => {
@@ -226,6 +226,7 @@ test('Info reveals the full game instructions only when requested', async () => 
   expect(button.getAttribute('aria-expanded')).toBe('true');
   expect(screen.getByText(/How progress is saved: The save is overwritten/)).toBeTruthy();
 
+  expect(button.textContent).toBe('Close');
   fireEvent.click(button);
   expect((audio.mock.contexts.at(-1) as HTMLAudioElement).src).toContain('/sounds/drawer-close.wav');
   expect(audio).toHaveBeenCalledTimes(before + 2);
@@ -489,7 +490,7 @@ test('delete hides the row immediately and Undo restores it with the row animati
   const panel = screen.getByRole('status', { name: 'Checkpoint removed' });
   expect(undo.parentElement).toBe(panel);
   expect(panel.classList.contains('undo-panel')).toBe(true);
-  expect(screen.getByRole('button', { name: 'Info' }).closest('.game-launcher')).not.toContain(undo);
+  expect(screen.getByRole('button', { name: 'Info' }).closest('.info-line')).not.toContain(undo);
   expect(undo.classList.contains('undo-button')).toBe(true);
   expect(bridge.requests).not.toContainEqual({ type: 'delete', game: 'a', checkpoint: 'cp-a' });
   fireEvent.click(undo);
@@ -680,10 +681,12 @@ test('Configure shows the host’s portable paths and returns them untouched', a
     executable: undefined, save_location: '~/Saves/A/*.sav' })));
 });
 
-test('the card cog configures that card, not the selected game, and shows its checkpoints store', async () => {
+test('only the selected card has a cog, and it shows that game’s checkpoints store', async () => {
   const bridge = new FakeBridge();
   render(<App bridge={bridge} />);
   await screen.findByText('First checkpoint');
+  expect(screen.queryByRole('button', { name: 'Configure Game B' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Game B, Not running/ }));
   const cog = screen.getByRole('button', { name: 'Configure Game B' });
   fireEvent.click(cog);
   const dialog = await screen.findByRole('dialog', { name: 'Configure Game B' });
@@ -694,7 +697,6 @@ test('the card cog configures that card, not the selected game, and shows its ch
   expect(bridge.requests).not.toContainEqual({ type: 'open_checkpoints', game: 'b' });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Open checkpoints store' }));
   await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'open_checkpoints', game: 'b' }));
-  expect(screen.getByText('First checkpoint')).toBeTruthy();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
   expect(document.activeElement).toBe(cog);
 });
