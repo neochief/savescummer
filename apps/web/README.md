@@ -1,5 +1,12 @@
 # Website releases
 
+The Hades and Hades II popups use `dist/character/popup-hug.svg`, synced from the
+editable master in `apps/ui/public/character/popup-hug.svg`. After changing that
+master or the shared `apps/ui/src/skeletonEyes.ts` eye rig, run
+`node apps/web/sync-character.mjs`. Use `--check` to verify the release copies match.
+The controller in `dist/character/popup-hug.js` paints the torso behind the panel,
+anchors the hands to its edges, and respects reduced-motion preferences.
+
 The website stays in this monorepo. Publish only the committed `apps/web` snapshot
 from the local `website` branch. Pushing `main` does not deploy the website.
 Publication is manual; this setup installs no push-triggered deployment job.

@@ -14,7 +14,7 @@
       * { box-sizing: border-box; }
       body { margin: 0; background: #1c1918; color: #faf8ee; }
       main { width: 100%; }
-      .hero { display: flex; flex-direction: column; align-items: center; width: min(100% - 2.5rem, 80rem); margin: 0 auto; padding: 8rem 0 5rem; text-align: center; }
+      .hero { --shade-start: 44rem; display: flex; flex-direction: column; align-items: center; width: 100%; overflow-x: clip; padding: 8rem max(1.25rem, calc((100% - 80rem) / 2)) 10rem; background: linear-gradient(to bottom, #1c1918 var(--shade-start), #12100f calc(var(--shade-start) + 16rem)); text-align: center; }
       .app-icon { display: block; width: clamp(6rem, 24vw, 9rem); height: auto; margin: 0 auto 1rem; }
       h1 { margin: 0 0 1.25rem; color: #faf8ee; font: 700 clamp(2.5rem, 9vw, 5rem)/1.05 "Chakra Petch", sans-serif; letter-spacing: -.035em; -webkit-text-stroke: .035em #0d0707; paint-order: stroke fill; }
       h1 strong { color: #ff1e29; }
@@ -31,14 +31,23 @@
       .github:focus-visible { outline: 3px solid #ff1e29; outline-offset: 4px; }
       .github img { width: 2rem; height: 2rem; }
       .github .download-name { font-size: 1.5rem; white-space: nowrap; }
-      .benefits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3.5rem 1.75rem; width: calc(100% - 2rem); margin-top: 2.75rem; }
-      .benefit-card { padding: 1rem 1rem 1.5rem; border: 1px solid var(--card-accent); border-radius: 1rem; background: linear-gradient(160deg, var(--card-tint), #201b19 75%); box-shadow: inset 0 1px 0 #ffffff12, 0 5px 0 var(--card-edge), 0 7px 0 #0d0b0a, 0 18px 30px #0006; transform: rotate(var(--card-tilt)); transition: transform .2s ease; }
-      .benefit-skill { grid-column: 1; grid-row: 2; --card-tilt: -2deg; --card-accent: #c7a76b; --card-edge: #73603e; --card-tint: #413626; }
-      .benefit-time { grid-column: 2; grid-row: 2; --card-tilt: 1deg; --card-accent: #90ad98; --card-edge: #4d6c57; --card-tint: #293d33; }
-      .benefit-calm { grid-column: 3; grid-row: 2; --card-tilt: 2deg; --card-accent: #c39193; --card-edge: #764e55; --card-tint: #442c34; }
-      .benefit-platforms { grid-column: 4; grid-row: 2; --card-tilt: -1deg; --card-accent: #92a9c9; --card-edge: #4d607a; --card-tint: #2b3647; }
+      .benefits { display: grid; isolation: isolate; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 1.75rem; width: calc(100% - 2rem); max-width: 64rem; margin-top: 2.75rem; }
+      .benefits .downloads { margin-bottom: 8.5rem; }
+      .benefit-slot { position: relative; }
+      .benefit-slot::before { content: ""; position: absolute; top: calc(100% - 3rem); left: -20%; z-index: -1; width: 140%; height: 10rem; background: radial-gradient(ellipse at center, var(--card-accent), transparent 70%) center / 71.4286% 60% no-repeat; opacity: .16; filter: blur(.5rem); transition: background-size .2s ease; pointer-events: none; }
+      .benefit-card { position: relative; height: 100%; padding: 1rem 1rem 2.75rem; border: 1px solid var(--card-accent); border-radius: 1rem; background: linear-gradient(160deg, var(--card-tint), transparent 75%) #201b19; box-shadow: inset 0 1px 0 #ffffff12, 0 5px 0 var(--card-edge); cursor: default; transform: rotate(var(--card-tilt)); transition: transform .2s ease, background-color .2s ease; }
+      .benefit-card::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; opacity: .2; pointer-events: none; background: linear-gradient(135deg, transparent calc(50% - 50px), var(--card-accent) calc(50% - 50px), var(--card-accent) calc(50% + 50px), transparent calc(50% + 50px)) 100% 100% / 300% 300% no-repeat; }
+      @keyframes card-reflection { to { background-position: 0% 0%; } }
+      .benefit-skill { grid-column: 1 / span 2; grid-row: 2; --card-tilt: -2deg; --card-accent: #c7a76b; --card-edge: #73603e; --card-tint: #413626; }
+      .benefit-time { grid-column: 3 / span 2; grid-row: 2; --card-tilt: 1deg; --card-accent: #90ad98; --card-edge: #4d6c57; --card-tint: #293d33; }
+      .benefit-calm { grid-column: 5 / span 2; grid-row: 2; --card-tilt: 2deg; --card-accent: #c39193; --card-edge: #764e55; --card-tint: #442c34; }
+      .benefit-platforms { grid-column: 2 / span 2; grid-row: 3; --card-tilt: -1deg; --card-accent: #92a9c9; --card-edge: #4d607a; --card-tint: #2b3647; }
+      .benefit-human { grid-column: 4 / span 2; grid-row: 3; --card-tilt: 2deg; --card-accent: #b5a0c9; --card-edge: #6c567e; --card-tint: #3d3047; }
+      .benefit-platforms, .benefit-human { z-index: 1; margin-top: -1.25rem; }
+      .benefit-platforms .benefit-card, .benefit-human .benefit-card { padding-bottom: 1.5rem; }
       .benefit-art { display: grid; place-items: center; height: 7rem; }
       .benefit-art img { width: 5rem; height: 5rem; object-fit: contain; filter: drop-shadow(0 1px 0 #0d070799); }
+      .benefit-art .author-photo { width: 6rem; height: 6rem; border: 2px solid var(--card-accent); border-radius: 50%; object-fit: cover; }
       .platform-art { display: flex; justify-content: center; }
       .platform-logo { display: grid; place-items: center; flex: 0 0 3.5rem; height: 3.75rem; transform: rotate(-9deg); }
       .platform-logo + .platform-logo { margin-left: -.5rem; }
@@ -49,7 +58,9 @@
       .platform-logo:nth-child(2) img { width: 3.3rem; }
       .benefit-card h2 { margin: 1rem .25rem .75rem; color: #faf8ee; font: 700 1.35rem/1.2 "Chakra Petch", sans-serif; text-wrap: balance; }
       .benefit-card p { margin: 0 .4rem; color: #ded2c5; font-size: .9375rem; line-height: 1.6; }
-      .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #302824; background: #12100f; }
+      .benefit-card .author-signature { display: flex; align-items: center; justify-content: center; gap: .35rem; margin-top: .75rem; opacity: .75; }
+      .author-signature img { width: 1rem; height: 1rem; flex: none; }
+      .supported { padding: 5rem 1.25rem 6rem; background: #12100f; }
       .supported-inner { width: min(100%, 68rem); margin: 0 auto; }
       .supported h2 { margin: 0; text-align: center; font: 700 clamp(2.5rem, 5vw, 3.5rem)/1.1 "Chakra Petch", sans-serif; }
       .supported-copy { margin: 1.25rem auto 2.75rem; text-align: center; }
@@ -110,29 +121,48 @@
       .game-tooltip-value { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem -1.25rem -1.125rem; padding: .875rem 1.25rem 1.125rem; border-radius: 0 0 10px 10px; background: linear-gradient(to bottom, var(--popup-value-shade), transparent); color: var(--popup-value-text); }
       .game-tooltip-value p { margin: 0; font-size: .875rem; line-height: 1.5; }
       .game-tooltip-icon { display: block; width: 2.5rem; height: 2.5rem; margin-top: .05rem; flex: none; background: center / contain no-repeat; transform: translateY(2px); }
+      .game-tooltip-mascot { display: none; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; user-select: none; }
+      .game-tooltip.hugged { width: min(29rem, calc((100vw - 1.5rem) / 1.4)); }
+      .game-tooltip.hugged .game-tooltip-art { z-index: 0; }
+      .game-tooltip.hugged .game-tooltip-copy { isolation: isolate; margin-top: -.25rem; padding-top: 1.125rem; padding-left: 3.5rem; background: none; box-shadow: none; }
+      .game-tooltip.hugged.flip .game-tooltip-copy { margin-top: 0; margin-bottom: -.25rem; padding-bottom: 1.125rem; }
+      .game-tooltip.hugged .game-tooltip-copy::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--popup-bg); box-shadow: 0 16px 36px #0009; }
+      .game-tooltip.hugged .game-tooltip-mascot { display: block; }
+      .game-tooltip.hugged .game-tooltip-title { margin-left: -2.25rem; }
+      .game-tooltip.hugged .game-tooltip-value { margin-left: -3.5rem; padding-left: 3.5rem; }
+      .game-tooltip-mascot-back { z-index: -2; }
+      .game-tooltip-mascot-front { z-index: 3; }
       @keyframes popup-unfold { from { opacity: 0; transform: translateY(-.75rem) scale(.95); } to { opacity: 1; transform: none; } }
       @keyframes popup-unfold-up { from { opacity: 0; transform: translateY(.75rem) scale(.95); } to { opacity: 1; transform: none; } }
       @keyframes popup-fold { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-.75rem) scale(.95); } }
       @keyframes popup-fold-up { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(.75rem) scale(.95); } }
       @media (hover: hover) and (pointer: fine) {
-        .benefit-card:hover { z-index: 1; transform: rotate(calc(var(--card-tilt) * 2)) scale(1.035); }
+        .benefit-slot:hover::before { background-size: 100% 99%; }
+        .benefit-card:hover { z-index: 2; background-color: #302926; transform: rotate(calc(var(--card-tilt) * 2)) scale(1.035); }
+        .benefit-card:hover::after { animation: card-reflection .6s ease-out both; }
       }
       @media (prefers-reduced-motion: reduce) {
-        .benefit-card { transition: none; }
+        .benefit-card, .benefit-slot::before { transition: none; }
+        .benefit-card::after { display: none; }
         .game-tooltip .game-tooltip-copy { animation: none !important; }
       }
-      @media (max-width: 1200px) {
-        .benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 46rem; gap: 3rem 2rem; }
-        .benefit-card { grid-column: auto; grid-row: auto; }
+      @media (max-width: 900px) {
+        .hero { --shade-start: 40rem; }
+        .benefits { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 46rem; gap: 3rem 1rem; }
+        .benefits .downloads { margin-bottom: 3.5rem; }
+        .benefit-slot { grid-column: span 2; grid-row: auto; margin-top: 0; }
+        .benefit-card { padding-bottom: 1.5rem; }
+        .benefit-human { grid-column: 2 / span 2; }
       }
       @media (max-width: 700px) {
         .benefits { grid-template-columns: minmax(0, 22rem); grid-template-rows: auto; justify-content: center; gap: 2.25rem; width: calc(100% - 1.5rem); margin-top: 2.75rem; }
-        .downloads { grid-column: 1; grid-row: auto; margin-bottom: .75rem; }
-        .benefit-card { grid-column: 1; grid-row: auto; margin-top: 0; --card-tilt: -2deg; }
+        .benefits .downloads { grid-column: 1; grid-row: auto; margin-bottom: 3.75rem; }
+        .benefit-slot { grid-column: 1; grid-row: auto; margin-top: 0; --card-tilt: -2deg; }
         .benefit-time { --card-tilt: 2deg; }
         .benefit-calm { --card-tilt: -1deg; }
         .benefit-platforms { --card-tilt: 2deg; }
-        .hero { padding: 5rem 0 4rem; }
+        .benefit-human { --card-tilt: -1deg; }
+        .hero { --shade-start: 36rem; padding-block: 5rem 8rem; }
         .supported { padding-top: 4rem; }
         .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
       }
@@ -142,12 +172,23 @@
         .game-grid { grid-template-columns: 1fr; }
         .game-tooltip-title { font-size: 1.2rem; }
         .game-tooltip-context, .game-tooltip-value p { font-size: .8125rem; }
+        .game-tooltip.hugged .game-tooltip-copy { padding-left: 2rem; }
+        .game-tooltip.hugged .game-tooltip-title { margin-left: -.75rem; }
+        .game-tooltip.hugged .game-tooltip-value { margin-left: -2rem; padding-left: 2rem; }
       }
       @media (max-width: 380px) {
         .github img { width: 1.75rem; height: 1.75rem; }
         .platform-logo { flex-basis: 3rem; height: 3.5rem; }
         .platform-logo img { width: 2.5rem; height: 3rem; }
         .platform-logo:nth-child(2) img { width: 3rem; }
+      }
+      @media (max-height: 650px) {
+        .game-tooltip.hugged .game-tooltip-copy { padding-top: .875rem; padding-bottom: .875rem; }
+        .game-tooltip.hugged.flip .game-tooltip-copy { padding-bottom: .875rem; }
+        .game-tooltip.hugged .game-tooltip-title { margin-bottom: .5rem; }
+        .game-tooltip.hugged .game-tooltip-context, .game-tooltip.hugged .game-tooltip-value p { line-height: 1.4; }
+        .game-tooltip.hugged .game-tooltip-value { gap: .5rem; margin-top: .75rem; margin-bottom: -.875rem; padding-top: .625rem; padding-bottom: .875rem; }
+        .game-tooltip.hugged .game-tooltip-icon { width: 1.75rem; height: 1.75rem; }
       }
     </style>
   </head>
@@ -165,31 +206,47 @@
               <span class="download-name" id="download-label">Download on GitHub</span>
             </a>
           </section>
-          <article class="benefit-card benefit-skill">
-            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/swords.svg" alt="" width="80" height="80" /></div>
-            <h2>Build gaming skill without wasting time</h2>
-            <p>Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
-          </article>
-          <article class="benefit-card benefit-time">
-            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/watch-smart.svg" alt="" width="80" height="80" /></div>
-            <h2>Enjoy challenging games while having a life</h2>
-            <p>Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
-          </article>
-          <article class="benefit-card benefit-calm">
-            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/heart-pulse.svg" alt="" width="80" height="80" /></div>
-            <h2>Play with less pressure</h2>
-            <p>If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
-          </article>
-          <article class="benefit-card benefit-platforms">
-            <div class="benefit-art platform-art" aria-hidden="true">
-              <span class="platform-logo"><img src="./icons/platforms/windows.svg" alt="" width="32" height="38" /></span>
-              <span class="platform-logo"><img src="./icons/platforms/linux.svg" alt="" width="32" height="38" /></span>
-              <span class="platform-logo"><img src="./icons/platforms/apple.svg" alt="" width="32" height="38" /></span>
-              <span class="platform-logo"><img src="./icons/platforms/steam-deck.svg" alt="" width="32" height="38" /></span>
-            </div>
-            <h2>Works on PC, Mac, Linux, and Steam Deck</h2>
-            <p>Any <s>real</s> computer setup is covered. No consoles!</p>
-          </article>
+          <div class="benefit-slot benefit-skill">
+            <article class="benefit-card">
+              <div class="benefit-art" aria-hidden="true"><img src="./icons/value/swords.svg" alt="" width="80" height="80" /></div>
+              <h2>Build gaming skill without wasting time</h2>
+              <p>Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
+            </article>
+          </div>
+          <div class="benefit-slot benefit-time">
+            <article class="benefit-card">
+              <div class="benefit-art" aria-hidden="true"><img src="./icons/value/watch-smart.svg" alt="" width="80" height="80" /></div>
+              <h2>Enjoy challenging games while having a life</h2>
+              <p>Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
+            </article>
+          </div>
+          <div class="benefit-slot benefit-calm">
+            <article class="benefit-card">
+              <div class="benefit-art" aria-hidden="true"><img src="./icons/value/heart-pulse.svg" alt="" width="80" height="80" /></div>
+              <h2>Play with less pressure</h2>
+              <p>If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
+            </article>
+          </div>
+          <div class="benefit-slot benefit-platforms">
+            <article class="benefit-card">
+              <div class="benefit-art platform-art" aria-hidden="true">
+                <span class="platform-logo"><img src="./icons/platforms/windows.svg" alt="" width="32" height="38" /></span>
+                <span class="platform-logo"><img src="./icons/platforms/linux.svg" alt="" width="32" height="38" /></span>
+                <span class="platform-logo"><img src="./icons/platforms/apple.svg" alt="" width="32" height="38" /></span>
+                <span class="platform-logo"><img src="./icons/platforms/steam-deck.svg" alt="" width="32" height="38" /></span>
+              </div>
+              <h2>Works on PC, Mac, Linux, and Steam Deck</h2>
+              <p>Any <s>real</s> computer setup is covered. No consoles!</p>
+            </article>
+          </div>
+          <div class="benefit-slot benefit-human">
+            <article class="benefit-card">
+              <div class="benefit-art"><img class="author-photo" src="./images/alex2.webp" alt="Alexander Shvets" width="96" height="96" /></div>
+              <h2>Produced by a human</h2>
+              <p>With love to gaming, quality software and you!</p>
+              <p class="author-signature"><img src="./icons/value/heart.svg" alt="" aria-hidden="true" width="16" height="16" />Alexander Shvets</p>
+            </article>
+          </div>
         </div>
       </div>
       <section class="supported" aria-labelledby="supported-title">
@@ -216,7 +273,9 @@
       </div>
     </div>
     <script src="./games-data.js?v=fa-duotone-solid"></script>
-    <script>
+    <script type="module">
+      import { createPopupHug } from './character/popup-hug.js';
+
       const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
       const mobile = navigator.userAgentData?.mobile || /android|iphone|ipad|ipod/i.test(navigator.userAgent)
         || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -237,6 +296,7 @@
       const tooltipValue = document.getElementById("game-tooltip-value");
       const tooltipIcon = document.getElementById("game-tooltip-icon");
       const tooltipCopy = tooltip.querySelector(".game-tooltip-copy");
+      const mascot = createPopupHug(tooltip, tooltipCopy, positionTooltip);
       let activeCard = null;
       let pinnedCard = null;
       let hoveredCard = null;
@@ -256,6 +316,7 @@
         closeTimer = null;
         tooltip.hidden = true;
         tooltip.classList.remove("closing");
+        mascot.update();
       }
 
       function deactivateCard() {
@@ -315,6 +376,7 @@
         tooltipContext.textContent = game.context;
         tooltipValue.textContent = game.value;
         tooltipIcon.style.backgroundImage = `url("./icons/value/${game.icon}.svg?v=fa-duotone-review-3")`;
+        tooltip.classList.toggle("hugged", game.steam === 1145360 || game.steam === 1145350);
         tooltip.classList.remove("flip");
         tooltip.hidden = false;
         positionTooltip();
@@ -366,10 +428,21 @@
         const flip = cardRect.top + tipHeight > window.innerHeight - 12;
         tooltip.classList.toggle("flip", flip);
         const top = flip ? cardRect.bottom - cardFrame + imageFrame - tipHeight : cardRect.top + cardFrame - imageFrame;
-        const left = Math.max(12, Math.min(cardRect.left + cardRect.width / 2 - tipWidth / 2, window.innerWidth - tipWidth - 12));
+        const hugged = tooltip.classList.contains("hugged");
+        const extent = hugged ? mascot.bounds() : { left: 0, right: 0, top: 0, bottom: 0 };
+        const mascotLeft = extent.left;
+        const mascotRight = extent.right;
+        const left = Math.max(12 + mascotLeft, Math.min(cardRect.left + cardRect.width / 2 - tipWidth / 2, window.innerWidth - tipWidth - 12 - mascotRight));
         tooltip.style.top = `${Math.max(12, Math.min(top, window.innerHeight - tipHeight - 12))}px`;
         tooltip.style.left = `${left}px`;
         tooltipArt.style.marginLeft = `${cardRect.left - left + cardFrame - imageFrame}px`;
+        if (hugged) {
+          // Layout offsets stay stable while the copy unfolds or moves between cards.
+          const minTop = Math.min(0, tooltipCopy.offsetTop - extent.top);
+          const maxBottom = Math.max(tipHeight, tooltipCopy.offsetTop + tooltipCopy.offsetHeight + extent.bottom);
+          tooltip.style.top = `${Math.max(12 - minTop, Math.min(top, window.innerHeight - 12 - maxBottom))}px`;
+        }
+        mascot.update();
       }
 
       function addImage(card, className, path, loading = "lazy") {

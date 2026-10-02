@@ -7,13 +7,14 @@ import { easeGaze, eyeProblems, gazeOffset, morph, prepareEyes, sides } from './
 import crouching from '../public/character/no-checkpoints.svg?raw';
 import pointing from '../public/character/no-game-selected.svg?raw';
 import sleepy from '../public/character/no-games-found.svg?raw';
+import hugging from '../public/character/popup-hug.svg?raw';
 
 afterEach(cleanup);
 
 const parse = (source: string) => new DOMParser().parseFromString(source, 'image/svg+xml').documentElement;
 
 test('every character drawing lays its eyes out as the eye rig requires', () => {
-  for (const source of [crouching, pointing, sleepy]) expect(eyeProblems(parse(source))).toEqual([]);
+  for (const source of [crouching, pointing, sleepy, hugging]) expect(eyeProblems(parse(source))).toEqual([]);
 });
 
 test('a drawing that breaks the eye requirements is named, part by part, and not rigged', () => {
@@ -27,7 +28,7 @@ test('a drawing that breaks the eye requirements is named, part by part, and not
 
 test('the rigged eyes are plain shapes, with each clip right before what it clips', () => {
   // WebKitGTK drops a clip built from a <use>, which hides the red eyeballs.
-  for (const source of [crouching, pointing, sleepy]) {
+  for (const source of [crouching, pointing, sleepy, hugging]) {
     const svg = parse(source);
     prepareEyes(svg, { rimWidth: 16, lidDepth: 20 });
     expect(svg.querySelectorAll('use')).toHaveLength(0);
@@ -39,6 +40,31 @@ test('the rigged eyes are plain shapes, with each clip right before what it clip
       expect(svg.querySelector(`[id="iris-static-${side}"]`)).toBeNull();
     }
   }
+});
+
+test('the hugging artwork keeps its articulated chain and attachment guides inside their moving parts', () => {
+  const svg = parse(hugging);
+  const chain = ['left-arm', 'left-forearm', 'left-hand'];
+  for (let i = 1; i < chain.length; i++) {
+    expect(svg.querySelector(`[id="${chain[i]}"]`)!.parentElement!.id).toBe(chain[i - 1]);
+  }
+  const joints = [
+    ['head-pose', 'pivot-head'], ['left-arm', 'pivot-left-shoulder'],
+    ['left-forearm', 'pivot-left-elbow'], ['left-hand', 'pivot-left-wrist'],
+    ['left-hand', 'anchor-grip-left'], ['right-hand-pose', 'pivot-right-wrist'],
+    ['right-hand-pose', 'anchor-grip-right'],
+    ...['left', 'right'].flatMap((side) => ['inner', 'middle', 'outer'].map((finger) =>
+      [`${side}-finger-${finger}`, `pivot-${side}-finger-${finger}`])),
+  ];
+  for (const [part, joint] of joints) {
+    const guide = svg.querySelector(`[id="${part}"] [id="${joint}"]`)!;
+    expect(guide.localName).toBe('circle');
+    expect(guide.parentElement!.getAttribute('opacity')).toBe('0');
+  }
+  const ids = [...svg.querySelectorAll('[id]')].map((node) => node.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids.every((id) => /^[a-z][a-z0-9-]*$/.test(id))).toBe(true);
+  expect(svg.querySelectorAll('image, use, foreignObject')).toHaveLength(0);
 });
 
 test('every character shows round red eyes in place of the drawn crescents', () => {
