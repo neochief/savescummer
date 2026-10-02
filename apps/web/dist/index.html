@@ -10,11 +10,11 @@
     <style>
       @font-face { font-family: "Chakra Petch"; src: url("./fonts/ChakraPetch-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
       @font-face { font-family: Inter; src: url("./fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --popup-bg: #332822; --selected-popup-surface: #bfaea1; }
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --popup-bg: #332822; }
       * { box-sizing: border-box; }
       body { margin: 0; background: #1c1918; color: #faf8ee; }
       main { width: 100%; }
-      .hero { display: flex; flex-direction: column; align-items: center; width: min(100% - 2.5rem, 68rem); margin: 0 auto; padding: 8rem 0 5rem; text-align: center; }
+      .hero { display: flex; flex-direction: column; align-items: center; width: min(100% - 2.5rem, 80rem); margin: 0 auto; padding: 8rem 0 5rem; text-align: center; }
       .app-icon { display: block; width: clamp(6rem, 24vw, 9rem); height: auto; margin: 0 auto 1rem; }
       h1 { margin: 0 0 1.25rem; color: #faf8ee; font: 700 clamp(2.5rem, 9vw, 5rem)/1.05 "Chakra Petch", sans-serif; letter-spacing: -.035em; -webkit-text-stroke: .035em #0d0707; paint-order: stroke fill; }
       h1 strong { color: #ff1e29; }
@@ -31,13 +31,22 @@
       .github:focus-visible { outline: 3px solid #ff1e29; outline-offset: 4px; }
       .github img { width: 2rem; height: 2rem; }
       .github .download-name { font-size: 1.5rem; white-space: nowrap; }
-      .benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3.5rem 2.5rem; width: calc(100% - 2rem); margin-top: 2.75rem; }
-      .benefit-card { padding: 1rem 1rem 1.5rem; border: 1px solid var(--card-accent); border-radius: 1rem; background: linear-gradient(160deg, var(--card-tint), #201b19 75%); box-shadow: inset 0 1px 0 #ffffff12, 0 5px 0 var(--card-edge), 0 7px 0 #0d0b0a, 0 18px 30px #0006; transform: rotate(var(--card-tilt)); }
+      .benefits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3.5rem 1.75rem; width: calc(100% - 2rem); margin-top: 2.75rem; }
+      .benefit-card { padding: 1rem 1rem 1.5rem; border: 1px solid var(--card-accent); border-radius: 1rem; background: linear-gradient(160deg, var(--card-tint), #201b19 75%); box-shadow: inset 0 1px 0 #ffffff12, 0 5px 0 var(--card-edge), 0 7px 0 #0d0b0a, 0 18px 30px #0006; transform: rotate(var(--card-tilt)); transition: transform .2s ease; }
       .benefit-skill { grid-column: 1; grid-row: 2; --card-tilt: -2deg; --card-accent: #c7a76b; --card-edge: #73603e; --card-tint: #413626; }
       .benefit-time { grid-column: 2; grid-row: 2; --card-tilt: 1deg; --card-accent: #90ad98; --card-edge: #4d6c57; --card-tint: #293d33; }
       .benefit-calm { grid-column: 3; grid-row: 2; --card-tilt: 2deg; --card-accent: #c39193; --card-edge: #764e55; --card-tint: #442c34; }
+      .benefit-platforms { grid-column: 4; grid-row: 2; --card-tilt: -1deg; --card-accent: #92a9c9; --card-edge: #4d607a; --card-tint: #2b3647; }
       .benefit-art { display: grid; place-items: center; height: 7rem; }
-      .benefit-art img { width: 5rem; height: 5rem; object-fit: contain; filter: drop-shadow(0 4px 3px #0006); }
+      .benefit-art img { width: 5rem; height: 5rem; object-fit: contain; filter: drop-shadow(0 1px 0 #0d070799); }
+      .platform-art { display: flex; justify-content: center; }
+      .platform-logo { display: grid; place-items: center; flex: 0 0 3.5rem; height: 3.75rem; transform: rotate(-9deg); }
+      .platform-logo + .platform-logo { margin-left: -.5rem; }
+      .platform-logo:nth-child(2) { transform: translateY(-.2rem) rotate(-3deg); }
+      .platform-logo:nth-child(3) { transform: translateY(-.15rem) rotate(4deg); }
+      .platform-logo:nth-child(4) { transform: rotate(10deg); }
+      .platform-logo img { width: 2.75rem; height: 3.3rem; }
+      .platform-logo:nth-child(2) img { width: 3.3rem; }
       .benefit-card h2 { margin: 1rem .25rem .75rem; color: #faf8ee; font: 700 1.35rem/1.2 "Chakra Petch", sans-serif; text-wrap: balance; }
       .benefit-card p { margin: 0 .4rem; color: #ded2c5; font-size: .9375rem; line-height: 1.6; }
       .supported { padding: 5rem 1.25rem 6rem; border-top: 1px solid #302824; background: #12100f; }
@@ -59,7 +68,7 @@
       .game-groups:not(.expanded) { max-height: 38rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent); mask-image: linear-gradient(to bottom, #000 75%, transparent); }
       .game-card { position: relative; min-width: 0; aspect-ratio: 8 / 3; overflow: hidden; border: 4px solid transparent; border-radius: 10px; background: #3c302d; background-clip: padding-box; cursor: pointer; }
       .game-card:hover, .game-card:focus-within, .game-card.open { border-color: var(--popup-bg); }
-      .game-card.pinned { border-color: var(--selected-popup-surface); }
+      .game-card.pinned, .game-tooltip.pinned { --popup-bg: #40322b; }
       .game-card:has(.game-card-trigger:focus-visible) { outline: 2px solid #faf8ee; outline-offset: 3px; }
       .game-card-trigger { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; user-select: none; }
       .game-art, .game-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -72,25 +81,26 @@
       [data-art-style="nethack"] .game-shade { background: rgba(0, 0, 0, .7); }
       [data-art-style="nethack"] .game-logo { left: 10%; width: 80%; filter: invert(1); mix-blend-mode: screen; }
       .game-fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: .75rem; text-align: center; font: 700 clamp(1rem, 2vw, 1.4rem)/1.1 "Chakra Petch", sans-serif; }
-      .game-link, .game-link-preview { position: absolute; left: 4px; bottom: 4px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: rgba(13,7,7,.7); color: #f3eee7; transition: background .12s ease, color .12s ease, opacity .15s ease; }
+      .game-link, .game-link-preview { position: absolute; left: 4px; bottom: 4px; display: flex; align-items: center; gap: 5px; width: max-content; height: 24px; padding: 0 7px; border-radius: 6px; background: rgba(13,7,7,.7); color: #f3eee7; font-size: .75rem; line-height: 1; text-decoration: none; white-space: nowrap; transition: background .12s ease, color .12s ease, opacity .15s ease; }
       .game-card:not(.open) .game-link { opacity: 0; pointer-events: none; }
       .game-link:hover, .game-link:focus-visible { background: #fff; color: #f51e2b; }
       .game-tooltip-art.link-hover .game-link-preview { background: #fff; color: #f51e2b; }
       .game-link:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
-      .game-link-icon { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+      .game-link-icon { width: 13px; height: 13px; flex: none; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
       .game-link-icon.steam { --icon: url("./icons/steam.svg"); }
       .game-link-icon.website { --icon: url("./icons/planet.svg"); }
-      .show-more { display: block; margin: 1rem auto 0; padding: .8rem 1.4rem; border: 1px solid #6a5650; border-radius: .65rem; background: #2a2420; color: #faf8ee; font: 700 1rem "Chakra Petch", sans-serif; cursor: pointer; }
+      .show-more { position: relative; z-index: 1; display: block; min-height: 3.75rem; margin: 1rem auto 0; padding: 1.1rem 2rem; border: 1px solid #6a5650; border-radius: .8rem; background: #2a2420; color: #faf8ee; font: 700 1.25rem "Chakra Petch", sans-serif; cursor: pointer; }
       .show-more[hidden] { display: none; }
       .show-more:hover { background: #3c302d; }
       .show-more:focus-visible { outline: 2px solid #faf8ee; outline-offset: 3px; }
       .game-tooltip { --popup-body-offset: 10px; --popup-text: #faf8ee; --popup-value-text: #d7c9ba; --popup-value-shade: #241c19; position: fixed; z-index: 10; isolation: isolate; width: min(29rem, calc(100vw - 1.5rem)); color: var(--popup-text); pointer-events: none; }
-      .game-tooltip.pinned { --popup-bg: var(--selected-popup-surface); --popup-text: #1c1918; --popup-value-text: #2d241e; --popup-value-shade: #a48e7f; }
+      .game-tooltip.pinned { --popup-value-shade: #2e231f; }
       .game-tooltip.flip { display: flex; flex-direction: column-reverse; }
       .game-tooltip[hidden] { display: none; }
       .game-tooltip-art { position: relative; z-index: 2; box-sizing: content-box; width: 100%; aspect-ratio: 8 / 3; flex: none; overflow: hidden; border: 4px solid var(--popup-bg); border-radius: 10px; background: #3c302d; cursor: pointer; }
       /* Extra overlap hides the card corners; matching padding keeps the artwork anchor and text spacing fixed. */
       .game-tooltip-copy { position: relative; z-index: 1; margin-top: calc(-.25rem - var(--popup-body-offset)); padding: calc(1.125rem + var(--popup-body-offset)) 1.25rem 1.125rem; border-radius: 10px; background: var(--popup-bg); box-shadow: 0 16px 36px #0009; transform-origin: center top; animation: popup-unfold .28s cubic-bezier(.2,.7,.2,1) both; }
+      .game-tooltip.pinned .game-tooltip-copy { pointer-events: auto; user-select: text; }
       .game-tooltip.flip .game-tooltip-copy { margin-top: 0; margin-bottom: calc(-.25rem - var(--popup-body-offset)); padding-top: 1.125rem; padding-bottom: calc(1.125rem + var(--popup-body-offset)); transform-origin: center bottom; animation-name: popup-unfold-up; }
       .game-tooltip.closing .game-tooltip-copy { animation: popup-fold .28s cubic-bezier(.4,0,.8,.3) both; }
       .game-tooltip.flip.closing .game-tooltip-copy { animation-name: popup-fold-up; }
@@ -104,17 +114,24 @@
       @keyframes popup-unfold-up { from { opacity: 0; transform: translateY(.75rem) scale(.95); } to { opacity: 1; transform: none; } }
       @keyframes popup-fold { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-.75rem) scale(.95); } }
       @keyframes popup-fold-up { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(.75rem) scale(.95); } }
+      @media (hover: hover) and (pointer: fine) {
+        .benefit-card:hover { z-index: 1; transform: rotate(calc(var(--card-tilt) * 2)) scale(1.035); }
+      }
       @media (prefers-reduced-motion: reduce) {
+        .benefit-card { transition: none; }
         .game-tooltip .game-tooltip-copy { animation: none !important; }
       }
-      @media (max-width: 950px) {
+      @media (max-width: 1200px) {
+        .benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 46rem; gap: 3rem 2rem; }
+        .benefit-card { grid-column: auto; grid-row: auto; }
+      }
+      @media (max-width: 700px) {
         .benefits { grid-template-columns: minmax(0, 22rem); grid-template-rows: auto; justify-content: center; gap: 2.25rem; width: calc(100% - 1.5rem); margin-top: 2.75rem; }
         .downloads { grid-column: 1; grid-row: auto; margin-bottom: .75rem; }
         .benefit-card { grid-column: 1; grid-row: auto; margin-top: 0; --card-tilt: -2deg; }
         .benefit-time { --card-tilt: 2deg; }
         .benefit-calm { --card-tilt: -1deg; }
-      }
-      @media (max-width: 700px) {
+        .benefit-platforms { --card-tilt: 2deg; }
         .hero { padding: 5rem 0 4rem; }
         .supported { padding-top: 4rem; }
         .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
@@ -128,6 +145,9 @@
       }
       @media (max-width: 380px) {
         .github img { width: 1.75rem; height: 1.75rem; }
+        .platform-logo { flex-basis: 3rem; height: 3.5rem; }
+        .platform-logo img { width: 2.5rem; height: 3rem; }
+        .platform-logo:nth-child(2) img { width: 3rem; }
       }
     </style>
   </head>
@@ -151,14 +171,24 @@
             <p>Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
           </article>
           <article class="benefit-card benefit-time">
-            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/hourglass-half.svg" alt="" width="80" height="80" /></div>
+            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/watch-smart.svg" alt="" width="80" height="80" /></div>
             <h2>Enjoy challenging games while having a life</h2>
             <p>Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
           </article>
           <article class="benefit-card benefit-calm">
-            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/heart-circle-check.svg" alt="" width="80" height="80" /></div>
+            <div class="benefit-art" aria-hidden="true"><img src="./icons/value/heart-pulse.svg" alt="" width="80" height="80" /></div>
             <h2>Play with less pressure</h2>
             <p>If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
+          </article>
+          <article class="benefit-card benefit-platforms">
+            <div class="benefit-art platform-art" aria-hidden="true">
+              <span class="platform-logo"><img src="./icons/platforms/windows.svg" alt="" width="32" height="38" /></span>
+              <span class="platform-logo"><img src="./icons/platforms/linux.svg" alt="" width="32" height="38" /></span>
+              <span class="platform-logo"><img src="./icons/platforms/apple.svg" alt="" width="32" height="38" /></span>
+              <span class="platform-logo"><img src="./icons/platforms/steam-deck.svg" alt="" width="32" height="38" /></span>
+            </div>
+            <h2>Works on PC, Mac, Linux, and Steam Deck</h2>
+            <p>Any <s>real</s> computer setup is covered. No consoles!</p>
           </article>
         </div>
       </div>
@@ -212,6 +242,7 @@
       let hoveredCard = null;
       let ignoredHoverCard = null;
       let closeTimer = null;
+      let hoverCloseTimer = null;
       let moveAnimation = null;
 
       function stopMove() {
@@ -238,7 +269,10 @@
       }
 
       function hideTooltip() {
+        window.clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = null;
         if (!activeCard) return;
+        stopMove();
         deactivateCard();
         tooltip.classList.remove("settled");
         tooltip.classList.add("closing");
@@ -246,11 +280,27 @@
         else closeTimer = window.setTimeout(finishClose, 320);
       }
 
+      function scheduleHoverClose() {
+        window.clearTimeout(hoverCloseTimer);
+        // Keep the popup open while the pointer crosses the gap to another card.
+        hoverCloseTimer = window.setTimeout(() => {
+          hoverCloseTimer = null;
+          if (!pinnedCard && activeCard && hoveredCard !== activeCard && !activeCard.contains(document.activeElement)) hideTooltip();
+        }, 180);
+      }
+
       function showTooltip(card, game) {
+        window.clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = null;
         window.clearTimeout(closeTimer);
         closeTimer = null;
         tooltip.classList.remove("closing");
         if (activeCard === card) return;
+        const switchingCards = activeCard !== null;
+        const shouldMove = switchingCards && tooltipCopy.animate && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        const from = shouldMove ? tooltipCopy.getBoundingClientRect() : null;
+        stopMove();
+        tooltip.classList.toggle("settled", switchingCards);
         deactivateCard();
         activeCard = card;
         card.classList.add("open");
@@ -268,29 +318,9 @@
         tooltip.classList.remove("flip");
         tooltip.hidden = false;
         positionTooltip();
-      }
-
-      tooltipCopy.addEventListener("animationend", (event) => {
-        if (event.target === tooltipCopy && tooltip.classList.contains("closing")) finishClose();
-      });
-
-      function pinTooltip(card, game) {
-        const wasPinned = pinnedCard !== null;
-        if (pinnedCard) pinnedCard.classList.remove("pinned");
-        pinnedCard = card;
-        card.classList.add("pinned");
-        tooltip.classList.add("pinned");
-        ignoredHoverCard = null;
-        if (activeCard === card) return;
-        const switchingCards = wasPinned && activeCard;
-        const shouldMove = switchingCards && tooltip.animate && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-        const from = shouldMove ? tooltipArt.getBoundingClientRect() : null;
-        stopMove();
-        tooltip.classList.toggle("settled", !!switchingCards);
-        showTooltip(card, game);
         if (!shouldMove) return;
-        const to = tooltipArt.getBoundingClientRect();
-        const animation = tooltip.animate([
+        const to = tooltipCopy.getBoundingClientRect();
+        const animation = tooltipCopy.animate([
           { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` },
           { transform: "translate(0, 0)" },
         ], { duration: 160, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" });
@@ -299,6 +329,19 @@
           if (moveAnimation === animation) stopMove();
         };
         animation.finished.then(finishMove, finishMove);
+      }
+
+      tooltipCopy.addEventListener("animationend", (event) => {
+        if (event.target === tooltipCopy && tooltip.classList.contains("closing")) finishClose();
+      });
+
+      function pinTooltip(card, game) {
+        if (pinnedCard) pinnedCard.classList.remove("pinned");
+        pinnedCard = card;
+        card.classList.add("pinned");
+        tooltip.classList.add("pinned");
+        ignoredHoverCard = null;
+        showTooltip(card, game);
       }
 
       function unpinTooltip() {
@@ -372,7 +415,9 @@
         const icon = document.createElement("span");
         icon.className = `game-link-icon ${steam ? "steam" : "website"}`;
         icon.setAttribute("aria-hidden", "true");
-        link.append(icon);
+        const label = document.createElement("span");
+        label.textContent = steam ? "Steam" : "Website";
+        link.append(icon, label);
         return link;
       }
 
@@ -403,10 +448,10 @@
           card.addEventListener("pointerleave", () => {
             if (hoveredCard === card) hoveredCard = null;
             if (ignoredHoverCard === card) ignoredHoverCard = null;
-            if (!pinnedCard && activeCard === card && !card.contains(document.activeElement)) hideTooltip();
+            if (!pinnedCard && activeCard === card && !card.contains(document.activeElement)) scheduleHoverClose();
           });
           card.addEventListener("focusout", (event) => {
-            if (!pinnedCard && hoveredCard !== card && activeCard === card && !card.contains(event.relatedTarget)) hideTooltip();
+            if (!pinnedCard && hoveredCard !== card && activeCard === card && !card.contains(event.relatedTarget)) scheduleHoverClose();
           });
           fragment.append(card);
         }
@@ -448,7 +493,7 @@
         showMore.hidden = true;
       });
       document.addEventListener("click", (event) => {
-        if (pinnedCard && !pinnedCard.contains(event.target)) unpinTooltip();
+        if (pinnedCard && !pinnedCard.contains(event.target) && !tooltipCopy.contains(event.target)) unpinTooltip();
       });
       window.addEventListener("scroll", positionTooltip, { passive: true });
       window.addEventListener("resize", positionTooltip);
