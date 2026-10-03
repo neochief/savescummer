@@ -515,7 +515,7 @@ fn menu_bitmap(icon: TrayIcon, size: i32) -> Option<HBITMAP> {
         return None;
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(bits as *mut u8, (size * size * 4) as usize) };
-    for (source, dest) in pixels.pixels().zip(dest.chunks_exact_mut(4)) {
+    for (source, dest) in pixels.pixels().zip(dest.as_chunks_mut::<4>().0) {
         let alpha = source[3] as u16;
         dest[0] = (source[2] as u16 * alpha / 255) as u8;
         dest[1] = (source[1] as u16 * alpha / 255) as u8;

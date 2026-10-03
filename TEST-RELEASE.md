@@ -1,6 +1,6 @@
 # Release smoke test
 
-Run this on your Windows PC or Apple Silicon Mac. Use Steam and a disposable **FTL: Faster Than Light** run. Record the release version and mark each step pass or fail.
+Run this for the Windows or Apple Silicon Mac release asset. Linux AppImages have local build paths but no CI or release job yet; use the [Linux acceptance checks](PLAN-BUILD.md#linux-release-target) before adding them to this release test. Use Steam and a disposable **FTL: Faster Than Light** run. Record the release version and mark each step pass or fail.
 
 Save shortcut: **Ctrl+F5** on Windows; **⌥F5** on Mac.
 

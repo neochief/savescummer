@@ -1,148 +1,83 @@
 # SaveScummer
 
-[![CI](https://github.com/neochief/savescummer/actions/workflows/ci.yml/badge.svg)](https://github.com/neochief/savescummer/actions/workflows/ci.yml)
+[![Release](https://github.com/neochief/savescummer/actions/workflows/release.yml/badge.svg)](https://github.com/neochief/savescummer/actions/workflows/release.yml)
 
-SaveScummer helps you save and restore progress in games where that isn't possible by design. It helps you learn difficult games faster and spend less time replaying what you already know. Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments, experiment, fail, learn, and keep going.
+SaveScummer keeps checkpoints of a game's on-disk saves so you can return to earlier progress. It is useful in games that do not offer saving progression on demand or present it in a way that is inconvenient for your play style.
 
-If your time is limited, it helps you reach interesting stories, builds, and decisions without losing hours of progress before you _got gud_.
+It is not a cheat engine; it does not modify the game or its memory.
 
-If you or your child is an anxious player, it lets you keep playing, experimenting, learning, and having fun without being punished for every mistake.
+## How to use it
 
-## How it works
+1. Open SaveScummer and select a detected game (about 100 games are already supported out of the box).
 
-Most games persist progress on disk in one way or another. SaveScummer gives you keyboard shortcuts you can use in-game to checkpoint that progress and restore it later.
+    Use **Scan for games** or **Add custom game** if it is missing; you may need to point SaveScummer to the game's save files if the game is not supported.
 
-Depending on the game, restoring progress may require returning to the main menu or even relaunching the game. It may not be perfectly convenient, but it's still much faster than repeating an evening-long run after one stupid mistake or non-optimal choice.
+2. Play, then **quit the game normally** so it writes its progress to disk.
 
+3. In SaveScummer, press **Save** to make a checkpoint. Return to the game and keep playing.
 
----
+4. Later on, if you want to return to that checkpoint, quit the game, and in SaveScummer, press **Load** on that checkpoint in history (or main Load button if that was the most recent checkpoint). Then launch the game again.
+
+Saving and loading while a game is running is disabled by default. Many games keep progress in memory, so changing their files mid-game may not have the intended effect. A per-game **Expert mode** allows it for games you have confirmed can handle it, but use it at your own risk. SaveScummer does not guarantee that a game will work correctly after loading a checkpoint.
 
 ## Install
 
-| Platform | Download |
+Download the latest supported build from [Releases](https://github.com/neochief/savescummer/releases):
+
+| Platform | File |
 | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
 | macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` |
-| Linux x86_64 (glibc 2.35+) | `SaveScummer-linux-x86_64-<version>.AppImage` (coming) |
-| Linux ARM64 (glibc 2.35+), experimental | `SaveScummer-linux-aarch64-<version>.AppImage` (coming) |
 
-Get the Windows installer or macOS disk image from [Releases](https://github.com/neochief/savescummer/releases). Linux AppImages will be published once they pass on CI. Windows is unsigned; macOS uses an ad hoc signature, so each OS may ask before first launch:
+On Windows, run the installer. It installs for your user without admin access. The unsigned installer may trigger SmartScreen; choose **More info → Run anyway** if you trust the download.
 
-- **Windows:** run the installer. SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It installs for your user only (no admin), into `%LOCALAPPDATA%\Programs\SaveScummer`, and offers to launch at sign-in.
-  - **Upgrade:** run the new installer; it closes the running app safely and keeps your settings.
-  - **Remove:** *Settings → Apps → SaveScummer → Uninstall*.
-- **macOS:** open the DMG and drag SaveScummer to Applications. The first launch is blocked: open *System Settings → Privacy & Security* and choose **Open Anyway**. It lives in the menu bar; open the app from Finder, Launchpad or Spotlight (the programs inside the bundle aren't meant to be double-clicked).
-  - **Hotkeys:** **⌥F5** saves and **⌥F9** loads (Ctrl can't be used: macOS keeps ⌃F5 for itself). On most Mac keyboards the top row is brightness and media keys, so press **fn+⌥+F5**, unless *Keyboard settings → Use F1, F2, etc. keys as standard function keys* is on. Careful with ⌘F5 next to it: it turns VoiceOver on (press it again to turn it off).
-  - **Permissions:** macOS asks before an app reads some places: Documents, Desktop, Downloads, iCloud Drive, external disks, other apps' data. SaveScummer asks only when you do something (the first launch, Scan for games, adding a game, *Allow access*); a game whose saves are somewhere it may not read yet waits, marked in the app, and you get one notification per place. If you chose *Don't Allow*, turn it on in *System Settings → Privacy & Security*.
-  - **Upgrade:** quit it (menu-bar icon → Exit) and drag the new app over the old one. The app isn't signed with a Developer ID, so macOS treats each version as a new app: allow access again, once, when it asks.
-  - **Remove:** turn off launch at login (*System Settings → General → Login Items*, under *Allow in the Background*), quit, drag it to the Trash.
-- **Linux:** make the AppImage executable (`chmod +x SaveScummer-*.AppImage`) and run it. Tools like Gear Lever or AppImageLauncher can add it to your app menu.
-  - **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
-  - **Remove:** turn off launch at login, quit, delete the file.
+On macOS, drag SaveScummer from the disk image to Applications. If macOS blocks the first launch, use **System Settings → Privacy & Security → Open Anyway**. SaveScummer lives in the menu bar and may ask for access to a game's save folder. Because the app is not signed with a Developer ID, an upgrade may require you to allow access again.
 
-## Your data
+Linux AppImages for x86_64 and ARM64 are configured but are not release assets yet. See [building from source](docs/building.md) to try a development build.
 
-Checkpoints are your saves, so installing, upgrading and removing the app never touch them:
+## Your checkpoints
 
-- Windows: `%LOCALAPPDATA%\SaveScummer`
-- macOS: `~/Library/Application Support/SaveScummer`
-- Linux: `~/.local/share/SaveScummer`
+Checkpoints are stored in the `checkpoints` folder under SaveScummer's app data directory unless you move the checkpoint store in Settings:
 
-Checkpoints go in its `checkpoints` folder unless you move them.
+| Platform | App data directory |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\SaveScummer` |
+| macOS | `~/Library/Application Support/SaveScummer` |
+| Linux | `~/.local/share/SaveScummer` |
 
-## Development
+Installing, upgrading, or uninstalling SaveScummer does not delete your checkpoints.
 
-You need [rustup](https://rustup.rs) and Git. On Windows, also Visual Studio 2022+ (or its Build Tools) with "Desktop development with C++"; on macOS, the Xcode command-line tools; on Linux, the packages in [Linux setup](#linux-setup). rustup installs the pinned Rust version on first use.
+## Develop
 
-```bash
-git clone https://github.com/neochief/savescummer.git
-cd savescummer
-cargo xtask check
-```
-
-`check` runs Rust format, clippy and tests plus the catalog gate. To build and test the full installer or disk image, run `cargo xtask dist` on its platform.
-
-### Run it
-
-The host runs in the Windows tray or macOS menu bar and opens the Tauri UI; the CLI is also included. Development uses its own data in `.runtime/dev`, or disposable `.runtime/dev-demo` for `run --demo`, never your real checkpoints. Install Node.js 22 and pnpm 12 to build the UI on every platform.
-
-The dev package runs like the installed app, with the UI and hotkeys (Ctrl+F5 / Ctrl+F9 on Windows; ⌥F5 / ⌥F9 on macOS). macOS packaging also needs `rsvg-convert` for the app icon (`brew install librsvg`).
+Install [Rust through rustup](https://rustup.rs), Git, Node.js 22, and pnpm 12. Windows also needs Visual Studio 2022 or its Build Tools with **Desktop development with C++**. macOS needs the Xcode command-line tools and `rsvg-convert` (`brew install librsvg`). See [building and packaging](docs/building.md) for the full setup and checks.
 
 ```bash
 cargo xtask setup cargo-about
 cargo xtask run
 ```
 
-The dev host keeps running after `run` returns; `cargo xtask host stop` stops it.
-
-On Linux, follow [Linux setup](#linux-setup) first; it includes `setup linux-tools`.
-
-Without the UI, build and use the binaries directly. The CLI starts the host itself when it isn't running:
-
-```bash
-cargo build
-./target/debug/savescummer-cli --data-dir .runtime/dev status
-```
+`run` builds and opens the app with separate development data in `.runtime/dev`. The host stays running afterward; stop it with `cargo xtask host stop`. Use `cargo xtask test` for the full format, lint, Rust and UI tests, build, and catalog checks; `test crates`, `test e2e` and `test ui` run development sections. Use `cargo xtask dist` to package a release for this platform.
 
 ### Linux setup
 
-Everything a clean Ubuntu 22.04 or newer needs before `cargo xtask run`. Other distros need the same packages under their own names.
-
-The build tools and the WebKitGTK and GTK libraries Tauri builds against:
+On Ubuntu 22.04 or newer, install the build dependencies, then [Rust](https://rustup.rs) and Node.js 22 with pnpm 12 through Corepack. Before `cargo xtask run`, install the pinned packaging tools:
 
 ```bash
 sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev patchelf gstreamer1.0-plugins-base gstreamer1.0-plugins-good
-```
-
-Rust through rustup, not apt or snap, so `rust-toolchain.toml` picks the version:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Node.js 22 through [nvm](https://github.com/nvm-sh/nvm), since Ubuntu's own Node is older:
-
-```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-```
-
-Open a new terminal so `cargo` and `nvm` are on `PATH`, or run `source ~/.cargo/env` and `source ~/.nvm/nvm.sh` in this one. Then install Node and let Corepack provide the pnpm version `apps/ui/package.json` pins:
-
-```bash
-nvm install 22
-corepack enable
-```
-
-Fetch that pnpm once, answering yes when Corepack asks to download it:
-
-```bash
-(cd apps/ui && pnpm --version)
-```
-
-From the repo, the pinned packaging tools, once:
-
-```bash
 cargo xtask setup linux-tools
 cargo xtask setup cargo-about
 ```
 
-`cargo xtask run` now builds and starts the app. If a shell says `cargo` or `pnpm` isn't found, it started before the installers changed `~/.bashrc`: open a new terminal or `source` the files above.
+## CLI
 
-### Drive it
-
-The same commands work on every OS:
+The included CLI drives the same app host. Save and Load still require the game to be closed by default. For a development build, use the game ID shown by `games` (for example, `steam-212680`):
 
 ```bash
+./target/debug/savescummer-cli --data-dir .runtime/dev status
 ./target/debug/savescummer-cli --data-dir .runtime/dev games
 ./target/debug/savescummer-cli --data-dir .runtime/dev save <game>
 ./target/debug/savescummer-cli --data-dir .runtime/dev history <game>
 ./target/debug/savescummer-cli --data-dir .runtime/dev load <game>
-./target/debug/savescummer-cli --data-dir .runtime/dev shutdown
 ```
 
-`<game>` is the id `games` prints, such as `steam-212680`. `--help` lists the rest, and `--json` gives machine-readable output.
-
-### More
-
-- [docs/building.md](docs/building.md): every `cargo xtask` command, packaging, installers, releases, CI.
-- [PLAN.md](PLAN.md): how the app fits together, and the plan for each part.
+`load` uses the latest saved checkpoint by default. Use `--help` for more commands and options.

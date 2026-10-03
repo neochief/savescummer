@@ -151,8 +151,8 @@ revision: <commit sha>
 sha256: <hash of data/manifest.yaml at that revision>
 ```
 
-The generator verifies `sha256` after reading the manifest. CI and local builds
-use the same revision until a maintainer bumps the lock (a normal reviewed
+The generator verifies `sha256` after reading the manifest. Local catalog generation
+uses the pinned revision until a maintainer bumps the lock (a normal reviewed
 commit).
 
 ## 3. Builder (build pipeline)
@@ -364,13 +364,13 @@ running game holds open refuses every Load. Each listed game gets an addendum
 `override` pointing at its real save folders (`save games/`; Terraria's
 `Players/` and `Worlds/`).
 
-### 3.6 Determinism and CI
+### 3.6 Determinism and checks
 
 - Sorted games and candidates; no timestamps in the bundle (source revision only).
-- CI runs the generator and fails on a dirty `git diff`.
+- The local `cargo xtask release` command checks the catalog before the release branch is pushed; the tag workflow checks it again as part of `cargo xtask test`.
 - `cargo xtask catalog` regenerates the bundle and prints the build report.
   `--check` regenerates in memory and fails if the committed bundle differs
-  (what CI runs). `--strict` also fails on warnings, for cleanup passes.
+  (what `cargo xtask test` runs). `--strict` also fails on warnings, for cleanup passes.
 - Regenerating from the same lock + inputs must be byte-identical.
 
 ### 3.7 Worked example: HighFleet (manifest → bundle)

@@ -50,20 +50,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Task {
-    /// The quality gate: fmt, clippy, tests, build, catalog check.
-    Check,
-    /// Build the host, CLI and UI.
-    Build {
-        /// Optimized release build; always assembles the app package.
-        #[arg(long)]
-        release: bool,
-        /// Also run the Rust and UI tests.
-        #[arg(long)]
-        test: bool,
-        /// Assemble the app package under build/<mode>/package/.
-        #[arg(long)]
-        package: bool,
+    /// Run the full quality gate, or one development test section.
+    Test {
+        /// Development section: crates, e2e, or ui. Omit for the full gate.
+        #[arg(value_enum)]
+        section: Option<build::TestSection>,
     },
+    /// Build the host, CLI and UI for development.
+    Build,
     /// Dev build, then the dev host, which shows the UI.
     Run {
         /// Simulated games and operations.
@@ -81,7 +75,7 @@ enum Task {
         #[command(subcommand)]
         action: HostAction,
     },
-    /// `build --release --test`, then this platform's release file in dist/.
+    /// Package this platform's release file in dist/.
     Dist,
     /// Stop output processes and remove build/ and dist/.
     Clean {
@@ -89,13 +83,10 @@ enum Task {
         #[arg(long)]
         deep: bool,
     },
-    /// Cut a release: bump the version, check, commit, tag, and push the branch (the tag waits for CI).
+    /// Cut a release: bump the version, check the catalog, commit, tag, and push the branch (the tag waits for CI).
     Release {
         /// The new version, e.g. 1.2.3 (a leading `v` is fine).
         version: String,
-        /// Skip `cargo xtask check` (emergencies only).
-        #[arg(long)]
-        skip_checks: bool,
         /// Print the push commands instead of running them.
         #[arg(long)]
         no_push: bool,
@@ -151,14 +142,14 @@ fn main() -> ExitCode {
                 Err(e) => fail(e),
             };
         }
-        Task::Check => build::check(),
-        Task::Build { release, test, package } => build::build(&build::Options { release, test, package }).map(drop),
+        Task::Test { section } => build::test(section),
+        Task::Build => build::build(paths::Mode::Dev, false).map(drop),
         Task::Run { demo, no_integrations, stop_other_hosts } => session::run(demo, no_integrations, stop_other_hosts),
         Task::Host { action: HostAction::Start { demo } } => session::host_start(demo),
         Task::Host { action: HostAction::Stop } => session::host_stop(),
         Task::Dist => build::dist(),
         Task::Clean { deep } => clean::clean(deep),
-        Task::Release { version, skip_checks, no_push } => release::release(&version, skip_checks, no_push),
+        Task::Release { version, no_push } => release::release(&version, no_push),
         Task::Publish => release::publish(),
         Task::Setup { tool } => match tool {
             Tool::Qt => setup::qt(),

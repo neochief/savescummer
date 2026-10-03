@@ -8,7 +8,7 @@
 //!    operation finishes
 //! 3. terminate whatever is still running
 //!
-//! Every build, `check`, `dist` and `clean` starts by stopping everything
+//! Every build, `test`, `dist` and `clean` starts by stopping everything
 //! running from the output folders (`target/`, `build/`, `dist/`): hosts,
 //! CLIs, UIs, test binaries. A rebuild is then always clean: nothing
 //! half-replaced, no stale host serving old code, no "access denied" on a

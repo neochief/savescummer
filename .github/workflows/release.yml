@@ -1,5 +1,6 @@
-# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag builds the Windows
-# installer and macOS disk image into a draft GitHub release. A human publishes it.
+# Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag checks all four
+# platforms, then drafts a GitHub release with Windows and macOS files.
+# A human publishes it.
 #
 # Build commands are `cargo xtask` commands.
 name: Release
@@ -50,7 +51,9 @@ jobs:
         run: cargo xtask setup cargo-about
       - name: Set up Inno Setup
         run: cargo xtask setup inno
-      - name: Build the installer
+      - name: Test
+        run: cargo xtask test
+      - name: Package the installer
         run: cargo xtask dist
       - uses: actions/upload-artifact@v7
         with:
@@ -87,7 +90,9 @@ jobs:
         run: brew install librsvg
       - name: Set up cargo-about
         run: cargo xtask setup cargo-about
-      - name: Build the disk image
+      - name: Test
+        run: cargo xtask test
+      - name: Package the disk image
         run: cargo xtask dist
       - uses: actions/upload-artifact@v7
         with:
@@ -95,9 +100,58 @@ jobs:
           path: dist/*.dmg
           if-no-files-found: error
 
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev file
+      - name: Rust toolchain
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: apps/ui/package.json
+          cache: true
+          cache_dependency_path: apps/ui/pnpm-lock.yaml
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Cache tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            .runtime/tools/cargo-about
+            .runtime/tools/tauri-cache
+            .runtime/tools/appimage
+          key: tools-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('xtask/src/pins.rs') }}
+      - name: Set up cargo-about
+        run: cargo xtask setup cargo-about
+      - name: Set up the AppImage tools
+        run: cargo xtask setup linux-tools
+      - name: Test
+        run: cargo xtask test
+      - name: Package the AppImage
+        run: cargo xtask dist
+
   publish:
     name: Draft release
-    needs: [windows, macos]
+    needs: [windows, macos, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write

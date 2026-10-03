@@ -5,7 +5,7 @@
             "label": "SaveScummer: build dev",
             "type": "process",
             "command": "cargo",
-            "args": ["xtask", "build", "--package"],
+            "args": ["xtask", "build"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": ["$rustc", "$msCompile"]
@@ -14,18 +14,10 @@
             "label": "SaveScummer: test",
             "type": "process",
             "command": "cargo",
-            "args": ["xtask", "build", "--test"],
+            "args": ["xtask", "test"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "test", "isDefault": true },
             "problemMatcher": ["$rustc", "$msCompile"]
-        },
-        {
-            "label": "SaveScummer: check",
-            "type": "process",
-            "command": "cargo",
-            "args": ["xtask", "check"],
-            "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": ["$rustc"]
         },
         {
             "label": "SaveScummer: start dev host",

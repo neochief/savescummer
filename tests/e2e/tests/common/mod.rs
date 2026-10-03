@@ -610,8 +610,8 @@ fn unique() -> u128 {
 /// The screen, for a test whose windows take focus: only when
 /// `SAVESCUMMER_DESKTOP_TESTS` is set (CI sets it; locally they would fight
 /// the user for focus), one such test at a time (tests in one binary run in
-/// parallel), and none on a locked Mac, which keeps `loginwindow` in front.
-/// None: the test can't run; it says so and passes.
+/// parallel). Without the variable, the test says it was skipped and passes.
+/// With the variable, a locked Mac fails: CI must not silently skip it.
 pub fn desktop(test: &str) -> Option<std::sync::MutexGuard<'static, ()>> {
     static SCREEN: std::sync::Mutex<()> = std::sync::Mutex::new(());
     if std::env::var_os("SAVESCUMMER_DESKTOP_TESTS").is_none() {
@@ -622,10 +622,10 @@ pub fn desktop(test: &str) -> Option<std::sync::MutexGuard<'static, ()>> {
     #[cfg(target_os = "macos")]
     {
         let out = Command::new("ioreg").args(["-n", "Root", "-d1"]).output().expect("ioreg");
-        if String::from_utf8_lossy(&out.stdout).contains("\"IOConsoleLocked\" = Yes") {
-            eprintln!("{test}: skipped, the screen is locked (focus needs an unlocked desktop session)");
-            return None;
-        }
+        assert!(
+            !String::from_utf8_lossy(&out.stdout).contains("\"IOConsoleLocked\" = Yes"),
+            "{test}: the screen is locked, so this desktop focus test cannot run"
+        );
     }
     let _ = test;
     Some(screen)

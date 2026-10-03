@@ -2,13 +2,13 @@
 
 I want building, packaging and releasing the app to be boring: one command to build, one command to cut a release, and one file per platform for users to download.
 
-**Current implementation (2026-09-28):** Windows builds the UI, host and CLI in an Inno Setup installer. macOS builds the same three programs in an ad hoc signed app bundle and DMG. CI calls `cargo xtask dist` on both platforms; the tag workflow uploads both files to a draft GitHub Release. A tag-triggered release has not yet been verified here. Linux packaging remains planned. Use [docs/building.md](docs/building.md) for current commands.
+**Current implementation (2026-10-03):** Windows builds the UI, host and CLI in an Inno Setup installer. macOS builds the same three programs in an ad hoc signed app bundle and DMG. Linux has AppDir and AppImage packaging for x86_64 and aarch64. The only CI workflow runs on `v*` tags, checks and packages all four targets, then creates a draft release with the Windows and macOS files if every job passes. Linux AppImage behavior and a tag-triggered release have not yet been verified here. Use [docs/building.md](docs/building.md) for current commands.
 
 This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN-HOST.md and PLAN-UI.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
 
-This plan contains both implemented behavior and future platform targets. The status above and [docs/building.md](docs/building.md) identify what works today; the macOS and Linux release descriptions below are acceptance targets.
+This plan contains both implemented behavior and acceptance targets. The status above and [docs/building.md](docs/building.md) identify what is configured today; the platform DONE WHEN lists require verification on their target systems.
 
-Windows builds the complete Tauri UI installer; macOS builds the complete Tauri UI disk image. Linux packaging is future work. The shared build machinery keeps platform details in modules:
+Windows builds the complete Tauri UI installer; macOS builds the complete Tauri UI disk image. Linux AppImage packaging runs in the tag workflow but remains outside published releases. The shared build machinery keeps platform details in modules:
 
 - shared code stays platform-neutral
 - platform logic lives in its own module
@@ -20,17 +20,17 @@ Build order:
 2. Windows, end to end.
 3. macOS and Linux.
 
-CI gets a job for each platform as it lands. The work is done when every platform's DONE WHEN list passes.
+Tag CI checks every platform; a platform's artifact ships when its DONE WHEN list passes.
 
 
 ## PRINCIPLES
 
 - **One build tool, in Rust.** All automation is `cargo xtask`: no PowerShell, bash or Python scripts, no just/make. It runs the same on every OS. Besides Rust, it needs only what the build itself needs: the UI frontend's toolchain (see TOOLCHAINS) and `gh` for publishing.
-- **CI runs the same build commands developers run.** Workflows install prerequisites and call `cargo xtask` for checks, builds, packaging and publishing.
+- **CI runs the same build commands developers run.** The tag workflow installs prerequisites and calls `cargo xtask` for tests, packaging and publishing.
 - **One release version, in `Cargo.toml`.** The Tauri and npm versions are checked against it and updated by `cargo xtask release`.
 - **One file per platform per release,** in the friendliest format that platform has. Users never have to pick, and nothing else is uploaded.
 - **Fixed executable names.** Platforms change how the programs are packaged, never what they're called.
-- **Pin build inputs.** `cargo xtask setup` installs pinned packaging tools. Windows and macOS also need Node.js and the pnpm version declared in `apps/ui/package.json`; `pnpm install --frozen-lockfile` fetches the locked frontend dependencies. The Windows installer may fetch WebView2 during setup if the runtime is absent.
+- **Pin build inputs.** `cargo xtask setup` installs pinned packaging tools. Every platform also needs Node.js and the pnpm version declared in `apps/ui/package.json`; `pnpm install --frozen-lockfile` fetches the locked frontend dependencies. The Windows installer may fetch WebView2 during setup if the runtime is absent.
 - **User data is sacred.** No install, upgrade, uninstall or clean ever touches the app's data directory or the checkpoint store, wherever the user has moved it: checkpoints are the user's saves.
 - **Only a human publishes.** Tooling makes draft releases; I look at them and press publish.
 - **Every failure says what to run next,** e.g. a missing Tauri build prerequisite names pnpm or the relevant `cargo xtask setup` command.
@@ -44,7 +44,7 @@ The app is three programs:
 - **UI** — Tauri/WebView2 on Windows, Tauri/WebKit on macOS and Tauri/WebKitGTK on Linux, started by the host
 - **CLI** — Rust command-line client
 
-The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.exe` and `SaveScummer.CLI.exe`. Other platforms use the same program names where their UI is implemented. Every launcher, shortcut and sign-in entry points at `SaveScummer`.
+The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.exe` and `SaveScummer.CLI.exe`. The macOS and Linux packages use the same names without `.exe`; the Linux AppImage dispatches to them through `AppRun`. Every launcher, shortcut and sign-in entry points at `SaveScummer`.
 
 | Platform | Release file | Why this format |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ The Windows build always produces `SaveScummer.exe` (the host), `SaveScummer.UI.
 | Linux x86_64, glibc 2.35+ (built, not shipped yet) | `SaveScummer-linux-x86_64-<ver>.AppImage` | One file to run without root or installation |
 | Linux aarch64, glibc 2.35+ (built, not shipped yet; experimental) | `SaveScummer-linux-aarch64-<ver>.AppImage` | The same, for ARM Linux |
 
-These minimums are recorded here and in xtask platform constants. Future build flags, `Info.plist`, Linux build system, CI runners and test machines must follow them.
+These minimums are recorded here and in xtask platform constants. Build flags, `Info.plist`, Linux build systems, CI runners and test machines must follow them.
 
 What ends up on the user's machine:
 
@@ -90,11 +90,11 @@ All release files are named `SaveScummer-<os>-<arch>-<version>[-<suffix>].<ext>`
 
 Commands:
 
-- `check` — the quality gate (see CHECK).
-- `build [--release] [--test] [--package]` — build Rust and the UI. `--test` runs Rust and UI tests. `--package` assembles the APP PACKAGE; `--release` always does.
+- `test` — the full quality gate for Rust, UI and catalog (see TEST). `test crates`, `test e2e` and `test ui` run broad development sections.
+- `build` — build Rust and the UI for development.
 - `run [--demo] [--stop-other-hosts]` — dev build, then the dev host, launched the way a user launches the app, so it shows the UI. `--demo` uses simulated operations.
 - `host start [--demo]` / `host stop` — just the dev host, with `--minimized`; used by VS Code debugging.
-- `dist` — `build --release --test`, then the platform's release file in `dist/`.
+- `dist` — build the release package and this platform's release file in `dist/`, without running tests.
 - `clean [--deep]` — stop output processes, remove `build/` and `dist/` (`--deep` also `target/`). Works without Qt or any other tool, so a broken setup can always be cleaned.
 - `release <version>` — cut a release (see RELEASING).
 - `publish` — upload `dist/` to a draft GitHub release (see RELEASING).
@@ -111,7 +111,7 @@ Every command validates its inputs up front.
 
 The dev host uses its own data, so development never touches the real app's data. An installed host is left running, and xtask warns that the dev instance won't own the tray icon or global shortcuts. `--stop-other-hosts` stops it instead (gracefully).
 
-The dev host runs from the dev APP PACKAGE and outlives xtask. On macOS, xtask opens the app through Launch Services so the app owns its privacy requests; xtask reads the ready line and pid from `.runtime/dev/host.log` (or the demo data folder's log). On other platforms, startup output goes to `build/dev/logs/host.log` and the host inherits only its own stdio (NUL and the log), so a terminal pipeline or IDE task reading xtask's output does not hang until the host exits. On Windows and macOS, `run` opens the packaged Tauri UI.
+The dev host runs from the dev APP PACKAGE and outlives xtask. On macOS, xtask opens the app through Launch Services so the app owns its privacy requests; xtask reads the ready line and pid from `.runtime/dev/host.log` (or the demo data folder's log). On other platforms, startup output goes to `build/dev/logs/host.log` and the host inherits only its own stdio (NUL and the log), so a terminal pipeline or IDE task reading xtask's output does not hang until the host exits. `run` opens the packaged Tauri UI on all three platforms.
 
 xtask honors `CARGO_TARGET_DIR` like Cargo, so it can build next to another checkout's running binaries.
 
@@ -174,18 +174,18 @@ The APP PACKAGE is the assembled, runnable app under `build/<mode>/package/`: a 
 
 Every current package contains:
 
-- the host and CLI executables, with their platform runtime files; Windows and macOS packages also require the UI executable
+- the host, CLI and Tauri UI executables, with their platform runtime files
 - the Qt license texts when a Qt frontend is packaged
 - `THIRD-PARTY-LICENSES.html`
-- `WEB-THIRD-PARTY-LICENSES.html` for Windows and macOS JavaScript production dependencies
+- `WEB-THIRD-PARTY-LICENSES.html` for JavaScript production dependencies
 - `.savescummer-package.json` (mode, version, platform, UI toolkit, configuration, creation time), which marks it as generated output
 - `SHA256SUMS.txt`
 
 `THIRD-PARTY-LICENSES.html` is generated by cargo-about from the packaged Rust crates, including the Tauri UI, for the platform's own target, and merged into one page listing each license text once. A crate under a license not in `about.toml` fails packaging, so licensing is checked on every build rather than at release time. The app's own crates are `publish = false` and ignored as private, so they need no license of their own.
 
-Each platform module declares what its package must contain, and packaging fails if anything required is missing. Windows and macOS require all three executables.
+Each platform module declares what its package must contain, and packaging fails if anything required is missing. All three platforms require the host, CLI and UI; Linux also requires Tauri's AppDir hook and its UI wrapper.
 
-On Windows and macOS the Tauri UI is required. The frontend build uses `pnpm install --frozen-lockfile`, runs the UI tests under `build --test` or `dist`, embeds the Vite assets and stages `SaveScummer.UI` beside the host. Packaging fails if that executable is absent. Linux may still omit the UI until its frontend is implemented.
+The frontend build uses `pnpm install --frozen-lockfile`, embeds the Vite assets and stages `SaveScummer.UI` with the host. `test` runs the UI typecheck and headless tests separately. Linux packages Tauri's AppDir and adds a `SaveScummer.UI` wrapper around the bundled WebKitGTK libraries. Packaging fails if any required executable is absent.
 
 Cargo can't put dots in binary names, so Cargo builds `savescummer-host` and `savescummer-cli`, and packaging renames them to the fixed names.
 
@@ -204,7 +204,7 @@ A running host may be in the middle of a save, and Windows can't replace a runni
 
 It's used for:
 
-- **Output processes.** Every `build` (whatever its flags, so also `run`, `host start` and `dist`), `check` and `clean` starts by stopping everything running from this checkout's output folders: `target/`, `build/` and `dist/`. That covers hosts and CLIs started straight from `target/`, the dev host, packaged copies, UIs and test binaries. Why: a rebuild must be clean. A process left running either locks its executable (Windows can't replace it, so the build fails with "access denied") or keeps serving old code next to the new build. Exempt are xtask itself and Cargo's build scripts, which belong to a build in progress. Never stopped: anything from `.runtime/` or installed copies (see below).
+- **Output processes.** Every `build` (so also `run`, `host start` and `dist`), `test` and `clean` starts by stopping everything running from this checkout's output folders: `target/`, `build/` and `dist/`. That covers hosts and CLIs started straight from `target/`, the dev host, packaged copies, UIs and test binaries. Why: a rebuild must be clean. A process left running either locks its executable (Windows can't replace it, so the build fails with "access denied") or keeps serving old code next to the new build. Exempt are xtask itself and Cargo's build scripts, which belong to a build in progress. Never stopped: anything from `.runtime/` or installed copies (see below).
 - **The dev host.** `build/dev/session.json` records its PID, start time and path. It's stopped only if all three still match, so a reused PID is never killed. The session file is deleted last.
 - **Other hosts,** only with `run --stop-other-hosts`.
 
@@ -213,9 +213,9 @@ It's used for:
 The toolchains come in two layers, so the UI frontend can be replaced without touching anything else:
 
 - **Core** — Rust and the packaging tools. The host, CLI, xtask, packaging and releases depend only on these.
-- **UI frontend** — Tauri, Node.js and pnpm on Windows. The inactive Qt setup path is retained for an older frontend design.
+- **UI frontend** — Tauri, Node.js and pnpm on Windows, macOS and Linux. The inactive Qt setup path is retained for an older frontend design.
 
-The packaging tools are installed by setup commands into `.runtime/`. Windows UI builds use Node.js and the version of pnpm pinned in `apps/ui/package.json` from `PATH`; CI installs them explicitly.
+The packaging tools are installed by setup commands into `.runtime/`. UI builds on every platform use Node.js and the version of pnpm pinned in `apps/ui/package.json` from `PATH`; the tag workflow installs them on every platform.
 
 ### Core
 
@@ -233,16 +233,16 @@ All pins, and the supported-platform minimums, live in `xtask/src/pins.rs`; CI c
 
 Whatever the frontend is built with, it plugs into xtask the same way:
 
-- **its prerequisites:** Windows uses Node.js and pnpm from `PATH`; a future platform UI must declare its own requirements
+- **its prerequisites:** Tauri uses Node.js and pnpm from `PATH` on every platform
 - **a build step** that takes the mode and the version and produces the `SaveScummer.UI` executable, plus the runtime files it needs, for the APP PACKAGE
-- **a test step** that runs in CI (`pnpm test` for Windows)
+- **a test step** that runs in tag CI on every platform (`pnpm test`)
 - **its license notices,** shipped in every package
 
-Extending the frontend to macOS and Linux means adding its setup, build, test and runtime packaging steps there. The core, release file naming and executable names remain shared.
+The Tauri frontend has setup, build, test and runtime packaging paths on all three platforms. The core, release file naming and executable names remain shared.
 
 ### Retired Qt frontend design
 
-No Qt UI project exists in the current tree, and neither macOS nor Linux currently packages a Qt UI. The following notes describe the earlier Qt path; they are not prerequisites for the Windows build or the current macOS CI job. The cross-platform UI gate is now the Tauri validation in [PLAN-UI.md](PLAN-UI.md).
+No Qt UI project exists in the current tree, and no platform packages a Qt UI. The following notes describe the earlier Qt path; they are not prerequisites for current builds. The cross-platform UI gate is now the Tauri validation in [PLAN-UI.md](PLAN-UI.md).
 
 The retired Qt plan called for following the latest minor release, with its exact version pinned in xtask. Its maintenance rules were:
 
@@ -251,7 +251,7 @@ The retired Qt plan called for following the latest minor release, with its exac
 - a minor that raises a platform's minimum OS is adopted only as a deliberate decision to drop that OS version
 - a Qt UI would use Widgets, Network and Svg
 
-`setup qt` installs the pinned Qt kit via aqtinstall (in a venv under `.runtime/tools/`; needs Python 3.9+) into `.runtime/Qt/<version>/`. Safe to re-run. CI caches it keyed on the pin.
+`setup qt` installs the pinned Qt kit via aqtinstall (in a venv under `.runtime/tools/`; needs Python 3.9+) into `.runtime/Qt/<version>/`. Safe to re-run; the current tag workflow does not use it.
 
 **C++,** needed only for the Qt frontend:
 
@@ -269,19 +269,38 @@ The retired Qt plan called for following the latest minor release, with its exac
 The CMake project sets C++17, `AUTOMOC`/`AUTORCC`, `find_package(Qt6 REQUIRED COMPONENTS Widgets Network Svg)` (xtask points it at the pinned kit), the `SaveScummer.UI` output name, `install()` rules, and `qt_generate_deploy_app_script` for deploying Qt. Test screenshots go to `build/<mode>/ui/screenshots`, never the source tree.
 
 
-## CHECK
+## TEST
 
-Tests always build as dev, even under `build --release --test`: they check dev-only behavior too, such as dev hosts refusing to create a sign-in entry.
+Tests always build as dev: they check dev-only behavior too, such as dev hosts refusing to create a sign-in entry.
 
-`cargo xtask check` runs, stopping at the first failure:
+`cargo xtask test` runs, stopping at the first failure:
 
 1. `cargo fmt --all --check`
 2. `cargo clippy --workspace --all-targets --locked -- -D warnings`
-3. `cargo test --workspace --locked -- --test-threads=1` (desktop focus tests run serially)
-4. `cargo build --workspace --exclude xtask --locked` (rebuilding xtask would relink the running `xtask.exe`, which Windows can't replace; clippy and the tests already cover it)
+3. `cargo test --workspace --locked -- --test-threads=1` (one Rust invocation for all workspace packages, including end-to-end tests; those that steal focus require `SAVESCUMMER_DESKTOP_TESTS=1`)
+4. `cargo build --workspace --exclude xtask --locked` (rebuilding xtask would relink the running `xtask.exe`, which Windows can't replace; clippy and the tests above cover it)
 5. `cargo xtask catalog --check`
+6. `pnpm install --frozen-lockfile` and `pnpm test` (UI typecheck and headless tests)
 
-UI tests are not part of `check`; they run with `build --test`.
+### Testing entry points
+
+| Command | Scope |
+| --- | --- |
+| `cargo xtask test` | The full gate above. Tag CI runs this once on each platform before `cargo xtask dist`. |
+| `cargo xtask test crates` | Rust tests in every workspace package except `savescummer-e2e`: the libraries, host, CLI, Tauri bridge and xtask. |
+| `cargo xtask test e2e` | The `savescummer-e2e` host and CLI integration suite, run serially. |
+| `cargo xtask test ui` | Frozen pnpm install, TypeScript typecheck and headless React tests. |
+| `cargo xtask catalog --check` | Compare the generated catalog with `catalog/catalog.json` without running the other test sections. |
+
+The three named `test` sections are for development. They do not run formatting, Clippy, the workspace build, catalog check or the other sections. The full gate uses one `cargo test --workspace` invocation instead of invoking `test crates` and `test e2e` separately: different Cargo feature sets would rebuild shared dependencies twice. `dist` only packages; CI runs the full gate before it.
+
+For a narrower run, use the test runner directly:
+
+- One Rust package: `cargo test -p savescummer-host --locked` (substitute `savescummer-core`, `savescummer-ui` or another workspace package).
+- One end-to-end file: `cargo test -p savescummer-e2e --test checkpoints --locked -- --test-threads=1` (`checkpoints` is the filename under `tests/e2e/tests/`).
+- One React test file, from `apps/ui`: `pnpm exec vitest run src/App.test.tsx`. This runs Vitest only; `cargo xtask test ui` also typechecks.
+
+The end-to-end tests that take window focus report a skip and pass when `SAVESCUMMER_DESKTOP_TESTS` is absent. CI sets the variable; if it is set on a locked Mac, those tests fail instead of silently passing. Four manual or very slow Rust tests are marked `#[ignore]` and remain outside the normal full gate: two 100,000-row scale tests, audible sound playback and a Windows tray integration test.
 
 
 ## Windows
@@ -384,11 +403,11 @@ The README gives both:
 
 x86_64 and aarch64, any mainstream distro with the minimum glibc or newer (Ubuntu, Fedora, Arch, SteamOS, Raspberry Pi OS…). No `.deb` or `.rpm`: one AppImage per architecture runs on all of them, without installing or root. x86_64 is the main target (the Steam Deck). aarch64 is experimental: most games there are x86 games run through FEX or Box64, whose processes the monitor can't recognize yet (PLAN-HOST.md MONITOR AND ACTIVE STACK), and on Asahi Linux games may run in a micro-VM (muvm) the host can't see into.
 
-Both build, and CI builds both (`ci.yml`), but neither ships yet (`naming.rs`, `ships: false`): Linux joins `release.yml` once its CI jobs pass on real runners.
+Both architectures have build and packaging paths and run in tag CI. Neither ships yet (`naming.rs`, `ships: false`): Linux joins the publish allowlist after both CI builds pass on real runners and the AppImages pass the runtime checks below.
 
 ### Build
 
-Built on the oldest supported Ubuntu, locally or on the matching `ubuntu-*` runner in CI (`ubuntu-22.04` and `ubuntu-22.04-arm`). A binary only runs on a glibc at least as new as the one it was built against, so the oldest supported system has to be the build system. A newer machine (like an Ubuntu 26.04 development VM) builds and tests fine, but its AppImage only runs on systems as new as it.
+Build on the oldest supported Ubuntu, 22.04, on each architecture. A binary only runs on a glibc at least as new as the one it was built against, so the oldest supported system has to be the build system. A newer machine (like an Ubuntu 26.04 development VM) builds and tests fine, but its AppImage only runs on systems as new as it.
 
 ### App package and release file
 
@@ -434,21 +453,11 @@ The README gives both:
 
 ## CI
 
-Two workflows in `.github/workflows/`. Setup actions install toolchains and caches; the app build and packaging steps call `cargo xtask`.
-
-**ci.yml** — so nothing merges that breaks a platform:
-
-- Runs on pushes to the `release` branch, and by hand (the Actions tab) for any branch. Other pushes, pull requests and tags don't start it. Why: work lands on `main` unchecked by CI to save time, and releasing is when every platform must pass. Merging `main` into `release` runs it; the tag is pushed only once it passes (RELEASING).
-- A concurrency group per ref cancels superseded runs.
-- A Windows job on `windows-latest`: checkout, Rust cache, Node.js 22, pnpm from `apps/ui/package.json`, packaging tool caches, `setup cargo-about`, `setup inno`, `check`, then `dist`. This compiles and tests the Tauri UI and produces the real installer on every CI run.
-- A macOS job on `macos-latest` (Apple Silicon): checkout, Rust cache, Node.js 22, pnpm, tool cache, `setup cargo-about`, `check`, `dist`. Packaging in CI means an unaccepted license fails the run.
-- A Linux job for each architecture, on `ubuntu-22.04` and `ubuntu-22.04-arm` (the oldest supported Ubuntu): the system's WebKitGTK and GTK development packages, the same caches plus the AppImage tools, `setup cargo-about`, `setup linux-tools`, `check`, `dist`, and the AppImage uploaded. Until Linux ships it's `continue-on-error`: a Linux failure shows in the run without failing it, so it never holds up a Windows or macOS release.
-
-**release.yml** — builds the Windows installer and macOS disk image into a draft GitHub Release:
+The only workflow is `.github/workflows/release.yml`. Setup actions install toolchains and caches; every platform calls `cargo xtask test` once, then `cargo xtask dist` to build its release file:
 
 - Runs on `v*` tags only, with a concurrency group that never cancels, so a release is never half-built.
-- The Windows and macOS build jobs: checkout with full history and caches, Node.js/pnpm and packaging tools, `dist`, upload their release files from `dist/` (`if-no-files-found: error`).
-- A final publish job (`needs:` both build jobs, `contents: write`) downloads the files into `dist/`, fetches the tag and runs `cargo xtask publish` with `GH_TOKEN`.
+- Windows and macOS upload their installer and disk image from `dist/` (`if-no-files-found: error`). Linux x86_64 and aarch64 also build AppImages, but do not upload them for publication.
+- A final publish job (`needs:` all three platform jobs, including both Linux matrix entries; `contents: write`) runs only after every platform succeeds. It downloads the Windows and macOS files into `dist/`, fetches the tag and runs `cargo xtask publish` with `GH_TOKEN`.
 
 
 ## RELEASING
@@ -459,10 +468,10 @@ Two workflows in `.github/workflows/`. Setup actions install toolchains and cach
 
 1. Checks that the version has three parts (a leading `v` is fine), I'm on a branch, the tree is clean, the version differs from the current one, and tag `v<version>` exists neither locally nor on origin.
 2. Writes the version into `Cargo.toml`, `apps/ui/package.json` and `apps/ui/src-tauri/tauri.conf.json`, then refreshes `Cargo.lock` (`cargo update --workspace`).
-3. Runs `cargo xtask check` (`--skip-checks` for emergencies). If it fails, the bump is undone and the tree is left clean.
+3. Runs the catalog check. If it fails, the bump is undone and the tree is left clean.
 4. Commits "Release <version>", creates the annotated tag `v<version>`, and pushes the branch only (`--no-push` prints the commands instead).
 
-It runs on the `release` branch, after merging `main` into it locally. The branch push runs CI on every platform; the tag is pushed by hand once that passes, and starts release.yml. Why the tag waits: the release build and the draft should only exist for a commit every platform passed. Why the branch can't wait too: `release` is the catalog channel (PLAN-CATALOG.md 6), and pushing it is how the release commit reaches CI. The local `check`, which includes `catalog --check`, is the gate before the catalog goes out.
+It runs on the `release` branch, after merging `main` into it locally. The branch push updates the catalog channel (PLAN-CATALOG.md 6), so the local catalog check is the gate before the catalog goes out. Pushing the tag by hand starts `release.yml`; the tag workflow tests and packages all four targets before drafting the release.
 
 ### Publishing
 

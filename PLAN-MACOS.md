@@ -4,7 +4,7 @@ Everything needed to make the host, the CLI, packaging and CI fully work on macO
 
 The target is the one PLAN-BUILD.md already fixes: macOS 13+, Apple Silicon only, one `SaveScummer-macos-arm64-<ver>.dmg`. This plan doesn't change any rule in PLAN-HOST.md: it lists the macOS adapters and fixes, and the few places where macOS forces a decision.
 
-Status (2026-09-28): the macOS host, CLI, Tauri UI bundle, DMG and CI job are implemented. The release workflow builds the macOS disk image alongside the Windows installer. The implementation checklist below records the original macOS port; use `docs/building.md` for current commands. FTL, Into the Breach and Six Ages (Steam) are found and their macOS save folders resolve; Six Ages waits for access to other apps' data.
+Status (2026-10-03): the macOS host, CLI, Tauri UI bundle and DMG are implemented. The tag-triggered release workflow builds and tests the macOS disk image alongside the Windows installer; there is no branch CI workflow. The implementation checklist below records the original macOS port; use `docs/building.md` for current commands. FTL, Into the Breach and Six Ages (Steam) are found and their macOS save folders resolve; Six Ages waits for access to other apps' data.
 
 
 ## PRINCIPLES
@@ -104,7 +104,7 @@ Done when:
   - The macOS menu-bar item has to be `objc2` AppKit code, because `tray-icon` takes one bitmap and the template needs both 1x and 2x representations.
   - Windows notifications are tray balloons sent through the app's own icon, which `tray-icon` doesn't expose. Moving the Windows tray would mean writing toast notifications.
   - That leaves the hotkeys, which are a few lines of `RegisterHotKey` on Windows. The hand-written Windows file already handles Explorer restarts, display-scale changes and the popup menu's dismiss quirk, and swapping crates in would only mean re-testing those.
-  - Linux won't share this code either. `global-hotkey` there is X11-only, KDE on Wayland needs the GlobalShortcuts portal, and a StatusNotifierItem fits better than `tray-icon`'s GTK. Linux gets its own file when it comes.
+  - Linux doesn't share this code either. `global-hotkey` there is X11-only, Wayland needs the GlobalShortcuts portal, and a StatusNotifierItem fits better than `tray-icon`'s GTK. Linux has its own integration files.
 - **The keys: ⌥F5 runs Save and ⌥F9 runs Load.** F5 and F9 keep the quicksave and quickload habit Mac players know from PC ports. There's no macOS-wide convention for quicksave; ⌘S and ⌘L (what emulators like OpenEmu use) can't be taken globally, since that would break Save in every other app. Ctrl, as on Windows, is out: macOS reserves ⌃F1–⌃F8 for keyboard navigation, and ⌃F5 ("Move focus to the window toolbar") is on by default.
   - Nearby slips are harmless: ⌥F4 does nothing on macOS (quitting is ⌘Q). The one to know is ⌘F5, next to ⌥F5, which turns VoiceOver on; pressing it again turns it off. An accidental Load can be undone with Revert.
   - By default the Mac F-row is brightness, media and dictation keys, so most users press fn+⌥+F5 unless they turned on "Use F1, F2, etc. keys as standard function keys". The README says so.
@@ -211,7 +211,7 @@ Done when a CLI started from a terminal leaves a host that survives closing the 
 
 ## TESTS
 
-Rust and e2e tests must pass on macOS without being skipped wholesale. Today `cargo xtask check` is green on macOS because the tests that wait for a macOS adapter are ignored there, each naming its section of this plan; every section un-ignores its own.
+Rust and e2e tests must pass on macOS without being skipped wholesale. Today `cargo xtask test` is green on macOS because the tests that wait for a macOS adapter are ignored there, each naming its section of this plan; every section un-ignores its own.
 
 - **Scale test numbers.** `tests/e2e/tests/scale.rs` measures memory and CPU through `ps` off Windows, and reports write counts as 0. Replace with `proc_pid_rusage`, which also has write counts.
 - **The e2e world is a Windows world.** `World` writes `"platform": "windows"` and the fake game is `*.exe`. Keep that world (it exercises the rules), and add a macOS world: `platform: macos`, `~/Library/Application Support` saves, the fake game inside a `.app` bundle, so monitoring and matching of bundles are tested.
@@ -221,7 +221,7 @@ Rust and e2e tests must pass on macOS without being skipped wholesale. Today `ca
 - **Timing.** FSEvents batches with a latency; the watcher tests' waits may need to allow for it.
 - **Real-game checks.** Add the macOS entries to TEST-REAL-GAMES.md: FTL, Into the Breach, Terraria (`Players`/`Worlds` names), and the Steam Cloud checks from PLAN-HOST on macOS.
 
-Done when `cargo xtask check` passes on an Apple Silicon Mac.
+Done when `cargo xtask test` passes on an Apple Silicon Mac.
 
 
 ## BUILD AND PACKAGING
@@ -245,7 +245,7 @@ Rust's `Instant` doesn't advance while a Mac sleeps, so the 15-minute scan and a
 
 ## CI AND DOCS
 
-- **CI:** the `macos-latest` job runs `check` and `dist`; `release.yml` builds and uploads the DMG alongside Windows.
+- **CI:** the tag-triggered `macos-latest` job runs `test`, then `dist`; `release.yml` builds and uploads the DMG alongside Windows. `release` checks the catalog locally before the release branch is pushed.
 - **docs/building.md:** keep macOS prerequisites, bundle contents and release availability accurate.
 - **README:** the macOS install section already exists; add the hotkeys and the fn note (HOTKEYS), permission prompts and re-allowing access after each update (PRIVACY PERMISSIONS), and screenshots for *Open Anyway*.
 - **PLAN-HOST.md:** fill in the macOS column of "Per OS" and the PLATFORMS table in PLAN.md.

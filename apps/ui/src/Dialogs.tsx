@@ -351,6 +351,7 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
               <li><strong>Allow saving and loading while the game is running.</strong> Beware: this won’t work as expected for LOTS of games that keep progress in memory. For those games, we can only save or load progress while it’s on disk and the game is stopped. But some games can be fooled into saving progress mid-game. This depends on the game and takes expert save-scumming skills to figure out.</li>
               <li><strong>Allow terminating a running game from its game card.</strong> This is much faster than quitting through the game’s menus, so it’s super efficient for save scumming. But it may also prevent some games from saving properly and cause problems. Knowing which games are safe to terminate takes expert save-scumming skills.</li>
             </ul>
+            <p className="dialog-expert-mode-ending"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z" /><path d="M12 9v5m0 3v.01" /></svg>Use Expert mode at your own risk. SaveScummer does not guarantee correct saving or loading checkpoints mid-game.</p>
           </div>}
         </>}
         {kind === 'flush' && <>

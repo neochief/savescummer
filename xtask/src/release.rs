@@ -6,7 +6,7 @@ use std::process::Command;
 
 use anyhow::{Context, bail};
 
-use crate::{build, cmd, naming, paths, version};
+use crate::{catalog, cmd, naming, paths, version};
 
 fn git() -> Command {
     let mut command = Command::new("git");
@@ -20,10 +20,9 @@ fn gh() -> Command {
     command
 }
 
-/// Bumps the version, runs the checks, commits, tags and pushes the branch.
-/// The tag stays local: pushing it starts the release build, which must
-/// wait for CI on the branch (the `release` branch runs CI on every push).
-pub fn release(input: &str, skip_checks: bool, no_push: bool) -> anyhow::Result<()> {
+/// Bumps the version, checks the catalog, commits, tags and pushes the branch.
+/// The tag stays local: pushing it starts the release tests and build.
+pub fn release(input: &str, no_push: bool) -> anyhow::Result<()> {
     let version = version::parse(input)?;
     let tag = version::tag(&version);
     let branch = cmd::output(git().args(["symbolic-ref", "--short", "-q", "HEAD"]))
@@ -50,7 +49,7 @@ pub fn release(input: &str, skip_checks: bool, no_push: bool) -> anyhow::Result<
                     .args(["update", "--workspace"]),
             )
         })
-        .and_then(|()| if skip_checks { Ok(()) } else { build::check() });
+        .and_then(|()| catalog::check());
     if let Err(e) = prepared {
         // The tree was clean, so restoring the version files leaves it clean again.
         let _ = cmd::run(git().args([
@@ -78,10 +77,12 @@ pub fn release(input: &str, skip_checks: bool, no_push: bool) -> anyhow::Result<
     let push_branch = format!("git push origin {branch}");
     let push_tag = format!("git push origin {tag}");
     if no_push {
-        println!("not pushed; when ready, run:\n  {push_branch}\n  then, once CI passes on {branch}:\n  {push_tag}");
+        println!(
+            "not pushed; when ready, run:\n  {push_branch}\n  then push the tag to run CI and build the draft release:\n  {push_tag}"
+        );
     } else {
         cmd::run(git().args(["push", "origin", &branch]))?;
-        println!("pushed {branch}; once CI passes on it, push the tag to build the draft release:\n  {push_tag}");
+        println!("pushed {branch}; push the tag to run CI and build the draft release:\n  {push_tag}");
     }
     Ok(())
 }

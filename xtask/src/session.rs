@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::build::{self, Options};
+use crate::build;
 use crate::naming::{CLI, HOST, UI};
 use crate::paths::{self, Mode};
 use crate::{platform, procs};
@@ -72,7 +72,7 @@ pub fn run(demo: bool, no_integrations: bool, stop_other_hosts: bool) -> anyhow:
 }
 
 fn dev_package() -> anyhow::Result<PathBuf> {
-    let built = build::build(&Options { release: false, test: false, package: true })?;
+    let built = build::build(Mode::Dev, true)?;
     Ok(built.package.expect("packaged"))
 }
 

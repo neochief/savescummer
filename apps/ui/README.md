@@ -15,7 +15,7 @@ The host launches the UI on startup. To raise the same window later, use `target
 
 For a macOS WebKit bundle smoke test, build an unsigned trial app from `apps/ui` with `pnpm tauri build --debug --bundles app --no-sign --config '{"bundle":{"active":true}}'`. Point `SAVESCUMMER_UI_EXE` at `target/debug/bundle/macos/SaveScummer.app/Contents/MacOS/savescummer-ui` when launching the demo host. This bundle is for local inspection; its `com.savescummer.ui.trial` identity is deliberately separate from the host's eventual app identity.
 
-On Windows, `cargo xtask dist` builds and tests the host, CLI and Tauri UI, assembles the package, and produces the Inno Setup installer in `dist/`. For a standalone debug UI binary, run `pnpm tauri build --debug --no-bundle` from `apps/ui`. The Tauri build embeds the Vite assets in the executable. A plain `cargo build -p savescummer-ui` builds the development executable, which expects the Vite server and otherwise shows a connection error. The Tauri Windows build also requires `src-tauri/icons/icon.ico`.
+On Windows, `cargo xtask test` checks the host, CLI and Tauri UI; `cargo xtask dist` assembles the release package and produces the Inno Setup installer in `dist/`. For a standalone debug UI binary, run `pnpm tauri build --debug --no-bundle` from `apps/ui`. The Tauri build embeds the Vite assets in the executable. A plain `cargo build -p savescummer-ui` builds the development executable, which expects the Vite server and otherwise shows a connection error. The Tauri Windows build also requires `src-tauri/icons/icon.ico`.
 
 ## Preview UI states
 
@@ -55,7 +55,7 @@ An isolated real host detected the local Steam FTL installation and its Windows 
 
 ### Windows installer check (2026-09-28)
 
-`cargo xtask dist` built the optimized Windows host, CLI and Tauri UI, ran the Rust and UI suites, assembled a checked package, and produced the Inno Setup installer. A silent per-user install into an isolated test location placed all three executables. Launching the installed host opened its sibling UI; Save and Load succeeded against simulated game data. The test install was uninstalled afterward. The installer is unsigned; the WebView2 download path was compiled but not exercised because this machine already has the Runtime.
+During Windows validation, `cargo xtask test` ran the Rust and UI suites, then `cargo xtask dist` built the optimized host, CLI and Tauri UI, assembled the package, and produced the Inno Setup installer. A silent per-user install into an isolated test location placed all three executables. Launching the installed host opened its sibling UI; Save and Load succeeded against simulated game data. The test install was uninstalled afterward. The installer is unsigned; the WebView2 download path was compiled but not exercised because this machine already has the Runtime.
 
 ### Mac debug-build process sample (2026-09-27)
 

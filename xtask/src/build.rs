@@ -1,21 +1,16 @@
-//! `build`, `dist` and `check` (PLAN-BUILD.md XTASK, CHECK).
+//! `test`, `build` and `dist` (PLAN-BUILD.md XTASK, TEST).
 
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, bail};
+use clap::ValueEnum;
 
 use crate::naming::{self, CARGO_CLI, CARGO_HOST};
 use crate::package::{self, Inputs};
 use crate::paths::{self, Mode};
 use crate::{cache, catalog, cmd, frontend, platform, procs, version};
-
-pub struct Options {
-    pub release: bool,
-    pub test: bool,
-    pub package: bool,
-}
 
 /// What a build produced.
 pub struct Built {
@@ -30,8 +25,18 @@ fn cargo() -> Command {
     Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
 }
 
-pub fn build(options: &Options) -> anyhow::Result<Built> {
-    let mode = if options.release { Mode::Release } else { Mode::Dev };
+/// Broad development test sections. Bare `test` is always the full gate.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum TestSection {
+    /// Rust workspace packages except the end-to-end harness.
+    Crates,
+    /// Host and CLI end-to-end tests.
+    E2e,
+    /// UI typecheck and headless tests.
+    Ui,
+}
+
+pub fn build(mode: Mode, package: bool) -> anyhow::Result<Built> {
     let version = version::current()?;
     platform::check_build_machine()?;
     if !frontend::present() {
@@ -41,10 +46,10 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
     procs::stop_outputs()?;
 
     // Release builds must match Cargo.lock exactly; dev builds may refresh it.
-    let locked: &[&str] = if options.release { &["--locked"] } else { &[] };
+    let locked: &[&str] = if mode == Mode::Release { &["--locked"] } else { &[] };
     let mut rust = cargo();
     rust.args(["build", "-p", CARGO_HOST, "-p", CARGO_CLI]).args(locked);
-    if options.release {
+    if mode == Mode::Release {
         // Only release builds may create a sign-in entry (PLAN-BUILD.md WHAT
         // THE APP MUST PROVIDE); dev hosts refuse.
         rust.arg("--release").env("SAVESCUMMER_RELEASE_BUILD", "1");
@@ -60,29 +65,16 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
         }
         Ok(key)
     };
-    cache::Step::new("rust", mode, !options.test, vec![host.clone(), cli.clone()])
-        .run(rust_inputs, || cmd::run(&mut rust))?;
-
-    if options.test {
-        // Tests always build as dev: they check dev-only behavior too.
-        // Several end-to-end tests use the foreground desktop. Keep test
-        // cases serial so another case cannot take focus during one of them.
-        cmd::run(cargo().args(["test", "--workspace"]).args(locked).args(["--", "--test-threads=1"]))?;
-    }
+    cache::Step::new("rust", mode, true, vec![host.clone(), cli.clone()]).run(rust_inputs, || cmd::run(&mut rust))?;
 
     let ui = if frontend::present() {
-        let test_host = Mode::Dev.cargo_out().join(naming::exe(CARGO_HOST));
-        if options.test && !test_host.is_file() {
-            cmd::run(cargo().args(["build", "-p", CARGO_HOST]).args(locked))?;
-        }
-        let package = options.package || options.release;
-        Some(frontend::build(mode, &version, options.test, package, if options.test { &test_host } else { &host })?)
+        Some(frontend::build(mode, &version, package)?)
     } else {
         println!("UI: {} doesn't exist yet; building the host and CLI only", paths::show(&frontend::source()));
         None
     };
 
-    let package = if options.package || options.release {
+    let package = if package {
         Some(package::assemble(&Inputs { mode, version: &version, host, cli, ui: ui.as_ref() })?)
     } else {
         None
@@ -90,9 +82,9 @@ pub fn build(options: &Options) -> anyhow::Result<Built> {
     Ok(Built { version, package })
 }
 
-/// `build --release --test`, then the platform's one release file in `dist/`.
+/// Release build and this platform's release file, without running tests.
 pub fn dist() -> anyhow::Result<()> {
-    let built = build(&Options { release: true, test: true, package: true })?;
+    let built = build(Mode::Release, true)?;
     let package = built.package.expect("release builds always package");
     let dist = paths::dist();
     if dist.exists() {
@@ -111,19 +103,49 @@ pub fn dist() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The quality gate, stopping at the first failure.
-pub fn check() -> anyhow::Result<()> {
+/// The full quality gate, or a broad development test section.
+pub fn test(section: Option<TestSection>) -> anyhow::Result<()> {
+    match section {
+        Some(TestSection::Crates) => {
+            procs::stop_outputs()?;
+            test_crates()
+        }
+        Some(TestSection::E2e) => {
+            procs::stop_outputs()?;
+            test_e2e()
+        }
+        Some(TestSection::Ui) => frontend::test(),
+        None => test_all(),
+    }
+}
+
+fn test_all() -> anyhow::Result<()> {
     procs::stop_outputs()?;
     cmd::run(cargo().args(["fmt", "--all", "--check"]))?;
     cmd::run(cargo().args(["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"]))?;
+    // Keep the full Rust run in one Cargo invocation. Separate invocations
+    // unify features differently and rebuild shared dependencies twice.
     cmd::run(cargo().args(["test", "--workspace", "--locked", "--", "--test-threads=1"]))?;
     // Not xtask itself: workspace-wide feature unification would relink the
     // running xtask.exe, which Windows can't replace. It's already built, and
     // clippy and the tests above cover it.
     cmd::run(cargo().args(["build", "--workspace", "--exclude", "xtask", "--locked"]))?;
-    println!("> cargo xtask catalog --check");
-    match catalog::run(true, false, Default::default())? {
-        savescummer_catalog_build::RunResult::Ok => Ok(()),
-        _ => bail!("the catalog check failed (see above); `cargo xtask catalog` regenerates it"),
-    }
+    catalog::check()?;
+    frontend::test()
+}
+
+fn test_crates() -> anyhow::Result<()> {
+    cmd::run(cargo().args([
+        "test",
+        "--workspace",
+        "--exclude",
+        "savescummer-e2e",
+        "--locked",
+        "--",
+        "--test-threads=1",
+    ]))
+}
+
+fn test_e2e() -> anyhow::Result<()> {
+    cmd::run(cargo().args(["test", "-p", "savescummer-e2e", "--locked", "--", "--test-threads=1"]))
 }

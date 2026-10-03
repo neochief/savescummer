@@ -10,6 +10,14 @@ use savescummer_catalog_build::{Lock, Options, Paths, RunResult, build_from_file
 
 use crate::paths;
 
+pub fn check() -> anyhow::Result<()> {
+    println!("> cargo xtask catalog --check");
+    match run(true, false, Options::default())? {
+        RunResult::Ok => Ok(()),
+        _ => bail!("catalog check failed; run `cargo xtask catalog` to regenerate it"),
+    }
+}
+
 pub fn run(check: bool, strict: bool, options: Options) -> anyhow::Result<RunResult> {
     let root = paths::root();
     let paths = Paths {

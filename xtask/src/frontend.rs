@@ -7,7 +7,7 @@
 //!
 //! - a setup command for any SDK it needs (`setup qt` on Qt platforms)
 //! - a build step producing the `SaveScummer.UI` executable and its runtime files
-//! - a test step that runs headless against the freshly built host
+//! - a test step that typechecks and runs headless UI tests
 //! - its license texts, shipped in every package
 //!
 //! Windows and macOS require the Tauri UI. Linux still allows the frontend to
@@ -59,8 +59,16 @@ pub fn configuration(mode: Mode) -> &'static str {
     }
 }
 
+/// Run the UI tests without building or packaging the app.
+pub fn test() -> anyhow::Result<()> {
+    anyhow::ensure!(present(), "the Tauri UI source is missing from {}", paths::show(&source()));
+    let source = source();
+    let pnpm = install(&source)?;
+    cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))
+}
+
 /// Build the Tauri UI and stage it under the fixed package name.
-pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path) -> anyhow::Result<Ui> {
+pub fn build(mode: Mode, version: &str, package: bool) -> anyhow::Result<Ui> {
     let source = source();
     let config: serde_json::Value = serde_json::from_slice(&fs::read(source.join("src-tauri/tauri.conf.json"))?)?;
     anyhow::ensure!(
@@ -88,28 +96,7 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
         Ok(key)
     };
     let work = || -> anyhow::Result<()> {
-        let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
-        let manifest: serde_json::Value = serde_json::from_slice(&fs::read(source.join("package.json"))?)?;
-        let required_pnpm = manifest["packageManager"]
-            .as_str()
-            .and_then(|value| value.strip_prefix("pnpm@"))
-            .context("apps/ui/package.json must specify a pnpm version")?;
-        let installed_pnpm = cmd::output(Command::new(&pnpm).current_dir(&source).arg("--version"))?;
-        // Only a different major version can change the lockfile format or how
-        // packages install; --frozen-lockfile pins the dependencies themselves.
-        let major = |version: &str| version.split('.').next().unwrap_or_default().to_owned();
-        anyhow::ensure!(
-            major(&installed_pnpm) == major(required_pnpm),
-            "the Tauri UI needs pnpm {required_pnpm}, but {} is {installed_pnpm}",
-            paths::show(&pnpm)
-        );
-        if installed_pnpm != required_pnpm {
-            eprintln!("warning: apps/ui/package.json pins pnpm {required_pnpm}; building with {installed_pnpm}");
-        }
-        cmd::run(Command::new(&pnpm).current_dir(&source).args(["install", "--frozen-lockfile"]))?;
-        if test {
-            cmd::run(Command::new(&pnpm).current_dir(&source).arg("test"))?;
-        }
+        let pnpm = install(&source)?;
         // The frontend is built here rather than by Tauri's beforeBuildCommand, so
         // its output can be fixed up before Cargo looks at it.
         cmd::run(Command::new(&pnpm).current_dir(&source).arg("build"))?;
@@ -125,7 +112,7 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
         }
         cmd::run(&mut build)
     };
-    cache::Step::new("ui", mode, !test, vec![binary.clone()]).run(inputs, work)?;
+    cache::Step::new("ui", mode, true, vec![binary.clone()]).run(inputs, work)?;
 
     anyhow::ensure!(binary.is_file(), "the Tauri build did not create {}", paths::show(&binary));
     let install = mode.dir().join("ui-install");
@@ -139,6 +126,29 @@ pub fn build(mode: Mode, version: &str, test: bool, package: bool, _host: &Path)
         platform::stage_tauri_bundle(mode, &install)?;
     }
     Ok(Ui { install })
+}
+
+fn install(source: &Path) -> anyhow::Result<PathBuf> {
+    let pnpm = cmd::on_path("pnpm", "install pnpm for the Tauri UI build")?;
+    let manifest: serde_json::Value = serde_json::from_slice(&fs::read(source.join("package.json"))?)?;
+    let required_pnpm = manifest["packageManager"]
+        .as_str()
+        .and_then(|value| value.strip_prefix("pnpm@"))
+        .context("apps/ui/package.json must specify a pnpm version")?;
+    let installed_pnpm = cmd::output(Command::new(&pnpm).current_dir(source).arg("--version"))?;
+    // Only a different major version can change the lockfile format or how
+    // packages install; --frozen-lockfile pins the dependencies themselves.
+    let major = |version: &str| version.split('.').next().unwrap_or_default().to_owned();
+    anyhow::ensure!(
+        major(&installed_pnpm) == major(required_pnpm),
+        "the Tauri UI needs pnpm {required_pnpm}, but {} is {installed_pnpm}",
+        paths::show(&pnpm)
+    );
+    if installed_pnpm != required_pnpm {
+        eprintln!("warning: apps/ui/package.json pins pnpm {required_pnpm}; building with {installed_pnpm}");
+    }
+    cmd::run(Command::new(&pnpm).current_dir(source).args(["install", "--frozen-lockfile"]))?;
+    Ok(pnpm)
 }
 
 /// Gives each file in `dist` whose content is the same as at the last build
