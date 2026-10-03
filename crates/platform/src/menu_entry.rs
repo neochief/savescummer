@@ -7,8 +7,8 @@
 //! and the icon (`~/.local/share/icons/hicolor/scalable/apps/savescummer.svg`)
 //! at every start of a release build, pointing at the AppImage file. Besides
 //! the menu, the desktop uses the entry to name the app: the dock groups the
-//! window under it (`StartupWMClass`), notifications carry its name and
-//! icon, and the shortcuts portal knows the host by its id (see
+//! window under it (`StartupWMClass`), and the shortcuts portal knows the
+//! host by its id (see
 //! `integration::linux::portal`).
 //!
 //! Like the autostart entry (`autostart/linux.rs`), ours carries

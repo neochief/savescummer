@@ -159,30 +159,17 @@ pub fn find(host: &Host, id: &str) -> Option<Operation> {
 }
 
 /// Accepts or rejects an operation at once. Accepted means recorded.
-pub fn submit(
-    host: &Arc<Host>,
-    request_id: &str,
-    game: &str,
-    request: Request,
-    hotkey: bool,
-) -> Result<Operation, Failure> {
+pub fn submit(host: &Arc<Host>, request_id: &str, game: &str, request: Request) -> Result<Operation, Failure> {
     // Repeating a request id returns the same operation.
     if let Some(existing) = by_request(host, request_id) {
         return Ok(existing);
     }
     let kind = request.kind();
-    let result = submit_new(host, request_id, game, request, hotkey);
+    let result = submit_new(host, request_id, game, request);
     if let Err(f) = &result
         && let Some(sound) = rejection_cue(kind, f)
     {
         cue(host, sound);
-    }
-    if hotkey && let Err(f) = &result {
-        match f.kind {
-            ErrorKind::GameRunning => notify_exit_first(host, f.game.as_deref().unwrap_or(game)),
-            ErrorKind::Busy | ErrorKind::NoGameData | ErrorKind::NoSaves => {}
-            _ => notify_failure(host, f),
-        }
     }
     result
 }
@@ -229,13 +216,7 @@ fn by_request(host: &Host, request_id: &str) -> Option<Operation> {
     db::operation_by_request(host.db().conn(), request_id).ok().flatten().map(|row| from_row(&row))
 }
 
-fn submit_new(
-    host: &Arc<Host>,
-    request_id: &str,
-    game: &str,
-    request: Request,
-    hotkey: bool,
-) -> Result<Operation, Failure> {
+fn submit_new(host: &Arc<Host>, request_id: &str, game: &str, request: Request) -> Result<Operation, Failure> {
     let kind = request.kind();
     let op_id = new_id("op");
     let game_id;
@@ -311,9 +292,6 @@ fn submit_new(
             return Err(Failure::new(ErrorKind::NotRecorded, e.to_string()).game(&game_id));
         }
         inner.ops.insert(op_id.clone(), operation.clone());
-        if hotkey {
-            inner.hotkey_ops.insert(op_id.clone());
-        }
         inner.notices.remove(&game_id);
         match &request {
             Request::Delete { .. } => {
@@ -385,7 +363,7 @@ fn report_stalled(host: &Arc<Host>, op_id: &str, game_id: &str) {
         Failure::new(ErrorKind::Stalled, "file work stopped responding; macOS may be waiting on a permission prompt")
             .game(game_id);
     crate::trace(&format!("{op_id} for {game_id} stalled; the game stays locked until it ends"));
-    let (hotkey, kind) = {
+    let kind = {
         let mut inner = host.lock();
         let Some(operation) = inner.ops.get_mut(op_id).filter(|o| !o.status.is_final()) else { return };
         let kind = operation.kind.clone();
@@ -393,15 +371,11 @@ fn report_stalled(host: &Arc<Host>, op_id: &str, game_id: &str) {
         operation.error = Some(failure.clone());
         let operation = operation.clone();
         inner.last_results.insert(game_id.to_string(), operation);
-        let hotkey = inner.hotkey_ops.remove(op_id);
         host.publish(&mut inner);
-        (hotkey, kind)
+        kind
     };
     if let Some(sound) = completion_cue(OpStatus::Failed, &kind) {
         cue(host, sound);
-    }
-    if hotkey {
-        notify_failure(host, &failure);
     }
 }
 
@@ -1083,7 +1057,7 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
     // Always record the outcome: Save, Load and Revert also mark success in
     // their own transaction, but Delete and Flush rely on this write.
     let _ = db::finish_operation(host.db().conn(), op_id, db_status, &value, &at);
-    let (hotkey, kind, hidden, already_final) = {
+    let (kind, already_final) = {
         let mut inner = host.lock();
         let mut operation =
             inner.ops.get(op_id).cloned().unwrap_or_else(|| op(op_id, None, Some(game_id), "unknown", status));
@@ -1109,17 +1083,10 @@ pub fn finish(host: &Arc<Host>, op_id: &str, game_id: &str, outcome: Result<OpRe
         inner.last_results.insert(game_id.to_string(), operation.clone());
         host.refresh_cache(&mut inner, game_id);
         host.publish(&mut inner);
-        let hidden = !inner.ui.visible;
-        (inner.hotkey_ops.remove(op_id), operation.kind.clone(), hidden, already_final)
+        (operation.kind.clone(), already_final)
     };
     if !already_final && let Some(sound) = completion_cue(status, &kind) {
         cue(host, sound);
-    }
-    if let Some(e) = &error
-        && hidden
-        && hotkey
-    {
-        notify_failure(host, e);
     }
     if let Some(e) = &error {
         crate::privacy::after_failure(host, e);
@@ -1140,38 +1107,6 @@ pub fn cue(host: &Host, cue: Cue) {
         && let Some(player) = &host.sounds
     {
         player.play(cue);
-    }
-}
-
-fn notify_failure(host: &Host, failure: &Failure) {
-    if host.lock().ui.visible {
-        return;
-    }
-    let game = failure.game.as_deref().unwrap_or_default();
-    let name = host.lock().games.get(game).map(|g| g.name.clone()).unwrap_or_else(|| game.into());
-    let text = if failure.kind == ErrorKind::AccessNeeded {
-        let category = failure.access.as_ref().map(|a| a.category.as_str()).unwrap_or(&failure.detail);
-        let category =
-            serde_json::from_value::<savescummer_platform::privacy::Category>(serde_json::json!(category)).ok();
-        format!(
-            "SaveScummer needs access to {} for {name}.",
-            category.map(|c| c.display_name()).unwrap_or("this game's saves")
-        )
-    } else {
-        format!("{name}: {}", failure.kind.as_str().replace('_', " "))
-    };
-    crate::trace(&format!("notification: {text}"));
-    if let Some(integration) = host.integration.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        integration.notify("SaveScummer", &text);
-    }
-}
-
-/// A hotkey press while the game runs: the user is in the game and sees no
-/// window.
-fn notify_exit_first(host: &Host, game_id: &str) {
-    let name = host.lock().games.get(game_id).map(|g| g.name.clone()).unwrap_or_default();
-    if let Some(integration) = host.integration.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        integration.notify("SaveScummer", &format!("Save and exit {name} to save or load checkpoints."));
     }
 }
 

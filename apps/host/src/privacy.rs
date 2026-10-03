@@ -39,8 +39,6 @@ struct Grants {
     granted: BTreeSet<Category>,
     /// Asked this run and refused: macOS won't ask again.
     denied: BTreeSet<Category>,
-    /// Already notified about this run.
-    notified: BTreeSet<Category>,
 }
 
 pub struct Privacy {
@@ -159,12 +157,6 @@ impl Privacy {
         false
     }
 
-    /// Categories not notified about in this run yet; marks them notified.
-    fn first_notices(&self, categories: impl IntoIterator<Item = Category>) -> Vec<Category> {
-        let mut grants = self.grants();
-        categories.into_iter().filter(|c| grants.notified.insert(*c)).collect()
-    }
-
     fn save(&self) {
         let saved = Saved { identity: self.identity.clone(), granted: self.grants().granted.clone() };
         let text = serde_json::to_string_pretty(&saved).expect("grants serialize");
@@ -199,53 +191,39 @@ pub fn game_needs(host: &Host, targets: &[PathBuf], install_dirs: &[PathBuf]) ->
 }
 
 /// Installed games waiting for each category, with a path that needs it.
-fn waiting(inner: &Inner) -> BTreeMap<Category, (PathBuf, Vec<String>)> {
-    let mut out: BTreeMap<Category, (PathBuf, Vec<String>)> = BTreeMap::new();
+fn waiting(inner: &Inner) -> BTreeMap<Category, PathBuf> {
+    let mut out: BTreeMap<Category, PathBuf> = BTreeMap::new();
     for (id, derived) in &inner.derived {
         if let Some((path, category)) = &derived.access
             && inner.games.get(id).is_some_and(|g| g.installed)
         {
-            out.entry(*category).or_insert_with(|| (path.clone(), Vec::new())).1.push(id.clone());
+            out.entry(*category).or_insert_with(|| path.clone());
         }
     }
     out
 }
 
-/// After a scan: a user's scan (or the first run) asks for every category
-/// installed games wait for; a background scan only notifies, once per
-/// category per run.
+/// After a user's scan (or the first run), ask for every category installed
+/// games wait for. Background scans leave access guidance in the app's UI.
 pub fn after_scan(host: &Arc<Host>, user: bool) {
+    if !user {
+        return;
+    }
     let waiting = waiting(&host.lock());
     if waiting.is_empty() {
         return;
     }
-    if user {
-        let mut any = false;
-        for (category, (path, _)) in &waiting {
-            if !host.privacy.is_denied(*category) {
-                any |= host.privacy.ask(path, *category);
-            }
+    let mut any = false;
+    for (category, path) in &waiting {
+        if !host.privacy.is_denied(*category) {
+            any |= host.privacy.ask(path, *category);
         }
-        if any {
-            granted(host);
-        } else {
-            // A denial shows as such.
-            host.publish(&mut host.lock());
-        }
-        return;
     }
-    if first_run_asks(host) {
-        // The app's first run asks once it's ready (see `lib.rs`).
-        return;
-    }
-    for category in host.privacy.first_notices(waiting.keys().copied()) {
-        let games = waiting[&category].1.len();
-        let text = format!(
-            "SaveScummer needs access to {} for {games} game{}. Open SaveScummer to allow it.",
-            category.display_name(),
-            if games == 1 { "" } else { "s" }
-        );
-        notify(host, &text);
+    if any {
+        granted(host);
+    } else {
+        // A denial shows as such.
+        host.publish(&mut host.lock());
     }
 }
 
@@ -294,7 +272,7 @@ pub fn request_access(host: &Arc<Host>, game: &str) -> Result<serde_json::Value,
 }
 
 /// After an operation failed: if macOS took back access to where it read,
-/// the games there turn inactive and the user hears about it.
+/// the games there turn inactive and their UI guidance updates.
 pub fn after_failure(host: &Arc<Host>, failure: &Failure) {
     let taken = failure.paths.iter().any(|p| host.privacy.taken_back(Path::new(p)));
     if !taken {
@@ -305,7 +283,6 @@ pub fn after_failure(host: &Arc<Host>, failure: &Failure) {
         crate::library::derive_all(host, &mut inner);
         host.publish(&mut inner);
     }
-    after_scan(host, false);
 }
 
 /// Asks before a user-typed location is used (adding or configuring a
@@ -341,11 +318,4 @@ fn granted(host: &Arc<Host>) {
     let mut inner = host.lock();
     crate::monitoring::activate_running(&mut inner);
     host.publish(&mut inner);
-}
-
-fn notify(host: &Host, text: &str) {
-    crate::trace(&format!("notification: {text}"));
-    if let Some(integration) = host.integration.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        integration.notify("SaveScummer", text);
-    }
 }

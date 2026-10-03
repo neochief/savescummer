@@ -1,4 +1,4 @@
-//! The macOS menu-bar item, global hotkeys (⌥F5, ⌥F9), notifications,
+//! The macOS menu-bar item, global hotkeys (⌥F5, ⌥F9),
 //! reopen and quit, all on the main thread's `NSApplication` run loop.
 //!
 //! The host's main thread runs that loop for the whole run
@@ -8,27 +8,21 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Once};
 
-use block2::RcBlock;
+use super::{
+    HotkeyAction, Key, MenuSource, Shortcut, Shortcuts, Signal, TrayDialog, TrayGameAction, TrayIcon, icon_png,
+};
 use dispatch2::{DispatchQueue, run_on_main};
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use objc2::rc::Retained;
-use objc2::runtime::{AnyObject, Bool, NSObject, ProtocolObject};
+use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSBitmapImageRep,
     NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenu, NSMenuDelegate, NSMenuItem, NSStatusBar, NSStatusItem,
     NSVariableStatusItemLength,
 };
-use objc2_foundation::{NSData, NSError, NSObjectProtocol, NSPoint, NSSize, NSString, NSUUID};
-use objc2_user_notifications::{
-    UNAuthorizationOptions, UNMutableNotificationContent, UNNotification, UNNotificationPresentationOptions,
-    UNNotificationRequest, UNNotificationResponse, UNUserNotificationCenter, UNUserNotificationCenterDelegate,
-};
-
-use super::{
-    HotkeyAction, Key, MenuSource, Shortcut, Shortcuts, Signal, TrayDialog, TrayGameAction, TrayIcon, icon_png,
-};
+use objc2_foundation::{NSData, NSObjectProtocol, NSPoint, NSSize, NSString};
 
 /// The menu-bar template, 22 × 22 points at 1x and 2x.
 const ICON_1X: &[u8] = include_bytes!("../../../../assets/tray/macos/status.png");
@@ -132,13 +126,6 @@ pub fn start(
 }
 
 impl Integration {
-    /// Shows a notification. It asks for permission the first time; without
-    /// it, or outside an app bundle, nothing shows. Never blocks.
-    pub fn notify(&self, title: &str, text: &str) {
-        let (title, text) = (title.to_string(), text.to_string());
-        DispatchQueue::main().exec_async(move || notify_now(&title, &text));
-    }
-
     pub fn hotkey_errors(&self) -> Vec<String> {
         self.hotkey_errors.clone()
     }
@@ -472,80 +459,4 @@ mod tests {
         assert_eq!(hotkey_action(press), Some(HotkeyAction::Save), "the next press saves");
         assert_eq!(hotkey_action(GlobalHotKeyEvent { id, state: HotKeyState::Released }), None);
     }
-}
-
-// --- Notifications: `UNUserNotificationCenter`, which only works inside an
-// app bundle.
-
-fn notify_now(title: &str, text: &str) {
-    if !objc2_foundation::NSBundle::mainBundle().bundleIdentifier().is_some_and(|id| !id.is_empty()) {
-        return;
-    }
-    let center = UNUserNotificationCenter::currentNotificationCenter();
-    listen_to_notifications(&center);
-    let content = UNMutableNotificationContent::new();
-    content.setTitle(&NSString::from_str(title));
-    content.setBody(&NSString::from_str(text));
-    let id = NSUUID::UUID().UUIDString();
-    let request = UNNotificationRequest::requestWithIdentifier_content_trigger(&id, &content, None);
-    let request = Mutex::new(Some(request));
-    // Asks once; later calls answer at once with the user's choice.
-    let then = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
-        if let Some(request) = lock(&request).take().filter(|_| granted.as_bool()) {
-            UNUserNotificationCenter::currentNotificationCenter()
-                .addNotificationRequest_withCompletionHandler(&request, None);
-        }
-    });
-    center.requestAuthorizationWithOptions_completionHandler(
-        UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
-        &then,
-    );
-}
-
-define_class!(
-    // SAFETY: NSObject has no subclassing requirements; no Drop.
-    #[unsafe(super(NSObject))]
-    #[name = "SaveScummerNotificationDelegate"]
-    struct NotificationDelegate;
-
-    unsafe impl NSObjectProtocol for NotificationDelegate {}
-
-    unsafe impl UNUserNotificationCenterDelegate for NotificationDelegate {
-        /// Show it even when the host counts as the active app.
-        #[unsafe(method(userNotificationCenter:willPresentNotification:withCompletionHandler:))]
-        fn will_present(
-            &self,
-            _center: &UNUserNotificationCenter,
-            _notification: &UNNotification,
-            completion: &block2::DynBlock<dyn Fn(UNNotificationPresentationOptions)>,
-        ) {
-            completion.call((UNNotificationPresentationOptions::Banner | UNNotificationPresentationOptions::List,));
-        }
-
-        /// Clicking a notification opens the UI.
-        #[unsafe(method(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:))]
-        fn did_receive(
-            &self,
-            _center: &UNUserNotificationCenter,
-            _response: &UNNotificationResponse,
-            completion: &block2::DynBlock<dyn Fn()>,
-        ) {
-            emit(Signal::OpenMainWindow);
-            completion.call(());
-        }
-    }
-);
-
-fn listen_to_notifications(center: &UNUserNotificationCenter) {
-    static DELEGATE: Mutex<Option<Retained<NotificationDelegate>>> = Mutex::new(None);
-    let mut slot = lock(&DELEGATE);
-    if slot.is_some() {
-        return;
-    }
-    let this = NotificationDelegate::alloc().set_ivars(());
-    // SAFETY: NSObject's plain initializer.
-    let delegate: Retained<NotificationDelegate> = unsafe { msg_send![super(this), init] };
-    // The center holds it weakly: kept here for the process's lifetime.
-    center.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-    *slot = Some(delegate);
 }

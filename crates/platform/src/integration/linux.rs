@@ -1,5 +1,4 @@
-//! Linux: the tray icon, global hotkeys (Ctrl+F5, Ctrl+F9) and
-//! notifications.
+//! Linux: the tray icon and global hotkeys (Ctrl+F5, Ctrl+F9).
 //!
 //! The tray is a StatusNotifierItem ([`tray`]).
 //!
@@ -13,16 +12,12 @@
 //! Wine and Proton ones, but not native Wayland apps). While the desktop's
 //! dialog waits for the user, and if the user declines it, the X11 grabs
 //! stand in. Without the portal or any X display there are no hotkeys.
-//!
-//! Notifications go through `notify-send` (libnotify), which every
-//! mainstream desktop has; without it nothing shows.
 
 #[path = "linux/portal.rs"]
 mod portal;
 #[path = "linux/tray.rs"]
 mod tray;
 
-use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, Once, Weak};
 use std::time::Duration;
 
@@ -120,28 +115,6 @@ fn wait_for_portal(hotkeys: Weak<Mutex<Hotkeys>>, first: std::sync::mpsc::Receiv
 }
 
 impl Integration {
-    /// Shows a notification. Never blocks.
-    pub fn notify(&self, title: &str, text: &str) {
-        let child = Command::new("notify-send")
-            .args([
-                "--app-name=SaveScummer",
-                "--icon=savescummer",
-                "--hint=string:desktop-entry:com.savescummer.SaveScummer",
-                "--",
-                title,
-                text,
-            ])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn();
-        if let Ok(mut child) = child {
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
-        }
-    }
-
     pub fn hotkey_errors(&self) -> Vec<String> {
         self.hotkey_errors.clone()
     }

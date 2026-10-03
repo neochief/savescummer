@@ -63,8 +63,8 @@ checkpoint identity, target compatibility, space and file safety at the request.
 
 Hotkeys use the same result. A request rejected because another operation owns the
 game produces the short busy cue. Lockdowns, including a running game, no game data
-and no saves, produce the failure cue. A hidden-window failure can notify with the
-reason. No action is queued for game exit.
+and no saves, produce the failure cue. Visual error feedback stays inside the app
+UI when its window is open; no OS notifications are shown. No action is queued for game exit.
 
 ## Exit rule and recovery
 

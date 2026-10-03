@@ -78,6 +78,7 @@ These accepted decisions began in the 2026-09-27 interactive prototype. They are
 
 These decide the cases this document doesn't cover:
 
+- **No OS notifications.** Visual errors and permission guidance appear only inside the app UI when its window is open.
 - **Controls report their own results.** The button that started an action shows its progress and its outcome. Don't add toasts, results panels or success dialogs. Why: feedback shows up where the user is already looking, and there is nothing to dismiss.
 - **Only show what applies right now.** No empty groups or controls without a target. Keep a heading for every non-empty sidebar group, even when it is the only group, to preserve alignment with the main actions. Why: a list of games that repeats "INSTALLED" on every item, or hotkeys when there are no games, is noise.
 - **Stable layout.** Controls stay in fixed places. Background updates and midnight regrouping preserve the user's scroll position and row sizes. User-triggered Save, Load and Revert actions scroll the history to the new entry. Why: the user is often mid-game and glances at the window.

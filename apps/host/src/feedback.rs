@@ -30,7 +30,7 @@ pub fn hotkey(host: &Arc<Host>, request_id: &str, action: HotkeyAction) -> Resul
         HotkeyAction::Save => ops::Request::Save { label: None },
         HotkeyAction::Load => ops::Request::Load { checkpoint: None },
     };
-    ops::submit(host, request_id, &game, request, true)
+    ops::submit(host, request_id, &game, request)
 }
 
 /// Starts hotkeys and the tray.
@@ -58,17 +58,13 @@ pub fn start(host: &Arc<Host>) {
                             TrayGameAction::Play => crate::lifecycle::play(&host, &game).map(|_| ()),
                             TrayGameAction::Stop => crate::lifecycle::close(&host, &game).map(|_| ()),
                             TrayGameAction::Save => {
-                                ops::submit(&host, &new_id("tray"), &game, ops::Request::Save { label: None }, false)
+                                ops::submit(&host, &new_id("tray"), &game, ops::Request::Save { label: None })
                                     .map(|_| ())
                             }
-                            TrayGameAction::Load => ops::submit(
-                                &host,
-                                &new_id("tray"),
-                                &game,
-                                ops::Request::Load { checkpoint: None },
-                                false,
-                            )
-                            .map(|_| ()),
+                            TrayGameAction::Load => {
+                                ops::submit(&host, &new_id("tray"), &game, ops::Request::Load { checkpoint: None })
+                                    .map(|_| ())
+                            }
                         };
                         if let Err(error) = result {
                             crate::trace(&format!("tray action failed: {error}"));

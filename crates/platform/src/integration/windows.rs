@@ -1,4 +1,4 @@
-//! The Windows tray icon, its menu, notifications (tray balloons) and the
+//! The Windows tray icon, its menu and the
 //! global hotkeys, all on one dedicated UI thread.
 
 use std::cell::Cell;
@@ -15,8 +15,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN, RegisterHotKey, UnregisterHotKey,
 };
 use windows_sys::Win32::UI::Shell::{
-    NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
-    NIN_SELECT, NINF_KEY, NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
+    NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NIN_SELECT, NINF_KEY,
+    NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconFromResourceEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
@@ -35,8 +35,6 @@ use crate::win::{copy_wide, wide};
 
 /// Tray callback message (see `uCallbackMessage`).
 const WM_TRAY: u32 = WM_APP + 1;
-/// Posted by `notify`; `lParam` owns a `Box<Balloon>`.
-const WM_BALLOON: u32 = WM_APP + 2;
 const WM_REBIND: u32 = WM_APP + 3;
 const TRAY_ID: u32 = 1;
 const MENU_MAIN: usize = 1;
@@ -53,11 +51,6 @@ const TOOLTIP: &str = "SaveScummer";
 const ICO: &[u8] = include_bytes!("../../../../assets/icon.ico");
 
 const HOTKEYS: [(i32, HotkeyAction); 2] = [(1, HotkeyAction::Save), (2, HotkeyAction::Load)];
-
-struct Balloon {
-    title: String,
-    text: String,
-}
 
 struct Rebind {
     shortcuts: Shortcuts,
@@ -124,18 +117,6 @@ pub fn start(
 }
 
 impl Integration {
-    /// Shows an OS notification (a tray balloon). Never blocks.
-    pub fn notify(&self, title: &str, text: &str) {
-        let balloon = Box::into_raw(Box::new(Balloon { title: title.into(), text: text.into() }));
-        // SAFETY: on success the UI thread takes ownership of the box back;
-        // on failure we still own it and free it here.
-        unsafe {
-            if PostMessageW(self.hwnd as HWND, WM_BALLOON, 0, balloon as LPARAM) == 0 {
-                drop(Box::from_raw(balloon));
-            }
-        }
-    }
-
     pub fn hotkey_errors(&self) -> Vec<String> {
         self.hotkey_errors.clone()
     }
@@ -316,12 +297,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             }
             0
         }
-        WM_BALLOON => {
-            // SAFETY: `notify` posted a Box<Balloon> and gave up ownership.
-            let balloon = unsafe { Box::from_raw(lparam as *mut Balloon) };
-            show_balloon(hwnd, &balloon);
-            0
-        }
         WM_REBIND => {
             let request = unsafe { Box::from_raw(lparam as *mut Rebind) };
             let old = state.shortcuts.get();
@@ -403,16 +378,6 @@ fn add_tray_icon(hwnd: HWND, state: &UiState) {
         }
         Shell_NotifyIconW(NIM_SETVERSION, &nid);
     }
-}
-
-fn show_balloon(hwnd: HWND, balloon: &Balloon) {
-    let mut nid = tray_data(hwnd);
-    nid.uFlags = NIF_INFO;
-    nid.dwInfoFlags = NIIF_INFO;
-    copy_wide(&mut nid.szInfoTitle, &balloon.title);
-    copy_wide(&mut nid.szInfo, &balloon.text);
-    // SAFETY: `nid` is fully initialized and sized.
-    unsafe { Shell_NotifyIconW(NIM_MODIFY, &nid) };
 }
 
 fn show_menu(hwnd: HWND, state: &UiState) {

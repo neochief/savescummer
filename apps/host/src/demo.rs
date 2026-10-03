@@ -247,7 +247,7 @@ fn pause(host: &Host, time: Duration) -> bool {
 
 /// Runs an operation and waits for it to finish.
 fn operate(host: &Arc<Host>, game: &str, request: ops::Request) {
-    let Ok(op) = ops::submit(host, &new_id("demo"), game, request, false) else { return };
+    let Ok(op) = ops::submit(host, &new_id("demo"), game, request) else { return };
     for _ in 0..600 {
         match ops::find(host, &op.id) {
             Some(op) if op.status.is_final() => return,

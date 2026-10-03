@@ -1,4 +1,4 @@
-//! No tray, hotkeys or notifications on this OS yet.
+//! No tray or hotkeys on this OS yet.
 
 use super::{MenuSource, Shortcuts, Signal};
 
@@ -16,8 +16,6 @@ pub fn start(
 }
 
 impl Integration {
-    pub fn notify(&self, _title: &str, _text: &str) {}
-
     pub fn hotkey_errors(&self) -> Vec<String> {
         Vec::new()
     }

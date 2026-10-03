@@ -278,21 +278,19 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
                 source: target.map(|t| t.1.to_string()),
             })
         }
-        Command::Save { game, label } => {
-            json(ops::submit(host, request_id, &game, ops::Request::Save { label }, false)?)
-        }
+        Command::Save { game, label } => json(ops::submit(host, request_id, &game, ops::Request::Save { label })?),
         Command::Load { game, checkpoint } => {
-            json(ops::submit(host, request_id, &game, ops::Request::Load { checkpoint }, false)?)
+            json(ops::submit(host, request_id, &game, ops::Request::Load { checkpoint })?)
         }
         Command::Revert { game, checkpoint } => {
-            json(ops::submit(host, request_id, &game, ops::Request::Revert { checkpoint }, false)?)
+            json(ops::submit(host, request_id, &game, ops::Request::Revert { checkpoint })?)
         }
         Command::Delete { game, checkpoint } => {
-            json(ops::submit(host, request_id, &game, ops::Request::Delete { checkpoint }, false)?)
+            json(ops::submit(host, request_id, &game, ops::Request::Delete { checkpoint })?)
         }
-        Command::Flush { game } => json(ops::submit(host, request_id, &game, ops::Request::Flush, false)?),
+        Command::Flush { game } => json(ops::submit(host, request_id, &game, ops::Request::Flush)?),
         Command::MoveStore { path } => json(ops::move_store(host, request_id, &path)?),
-        Command::Retry { game } => json(ops::submit(host, request_id, &game, ops::Request::Retry, false)?),
+        Command::Retry { game } => json(ops::submit(host, request_id, &game, ops::Request::Retry)?),
         Command::Play { game } => json(crate::lifecycle::play(host, &game)?),
         Command::CloseGame { game } => json(crate::lifecycle::close(host, &game)?),
         Command::SetLabel { checkpoint, label } => queries::set_label(host, &checkpoint, label.as_deref()),

@@ -386,7 +386,7 @@ The app works on files. The user is responsible for the game picking up a restor
 
 ### Games that write their progress on exit
 
-Most games keep progress in memory and write it to disk only when the player saves and exits (FTL writes its run only then). A Save made while such a game runs copies stale files, and a Load is overwritten when the game exits. So, for a game with *wait for the game to close* on (the default), Save, Load, Revert and Retry are refused with `game_running` while a configured game process is observed, including games awaiting privacy access outside the ACTIVE STACK. Every entry point and the summary use the shared action policy; activity or another prerequisite may refuse first (PLAN-LOCKDOWN, REASONS). A hotkey press gets the failure cue and a notification to save and exit the game, since the user is in the game and sees no window. Once the observed process exits, the exit rule lifts without an added delay. Other writers or unrecognized helper processes remain outside that guarantee. Delete, Flush, labels and Configure are unaffected: they don't touch the game's files.
+Most games keep progress in memory and write it to disk only when the player saves and exits (FTL writes its run only then). A Save made while such a game runs copies stale files, and a Load is overwritten when the game exits. So, for a game with *wait for the game to close* on (the default), Save, Load, Revert and Retry are refused with `game_running` while a configured game process is observed, including games awaiting privacy access outside the ACTIVE STACK. Every entry point and the summary use the shared action policy; activity or another prerequisite may refuse first (PLAN-LOCKDOWN, REASONS). A hotkey press gets the failure cue; error guidance appears only inside the app UI when its window is open. Once the observed process exits, the exit rule lifts without an added delay. Other writers or unrecognized helper processes remain outside that guarantee. Delete, Flush, labels and Configure are unaffected: they don't touch the game's files.
 
 Action availability, stable guidance, activity and operation results are separate host facts (PLAN-LOCKDOWN). The common policy checks only conditions relevant to each action. Every successful Save creates a new deliberate checkpoint, including when its bytes match an older one; Load and Save have no content-equality refusal.
 
@@ -606,7 +606,7 @@ Hotkey-triggered Save and Load play a start cue when the request is accepted, th
 - A failed operation plays the failure cue instead of completion, never a success cue.
 - For very fast operations, keep both cues distinguishable. Sound never delays the file work or holds the lock.
 - One **Play sounds** setting, on by default.
-- When the window is hidden, a failure also shows an OS notification.
+- Never show OS notifications or ask for notification permission. Visual error feedback stays inside the app UI when its window is open.
 
 ### Per OS
 
@@ -615,7 +615,6 @@ Hotkey-triggered Save and Load play a start cue when the request is accepted, th
 | Process and focus watching | Yes | Yes: `libproc`, the frontmost app from `NSWorkspace` | Yes: `/proc`, Wine and Proton games by their Windows program (MONITOR AND ACTIVE STACK); the foreground from the X11 window manager (`_NET_ACTIVE_WINDOW`, `_NET_WM_PID`) |
 | Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 (Carbon hot keys, no permission needed) | Ctrl+F5 / Ctrl+F9: the desktop portal under Wayland where there is one, else X11 key grabs |
 | Tray | Notification area | Menu bar (template icon) | StatusNotifierItem (`ksni`): KDE, Ubuntu's GNOME, most others; stock GNOME shows none, and opening the app again shows the window |
-| Notifications | Tray balloons | `UNUserNotificationCenter`, asked the first time one is needed | `notify-send` (libnotify); without it, none |
 | Open-file check before a Load | No (a handle without delete sharing fails stage 2) | Yes (`libproc`) | Yes (`/proc/<pid>/fd`) |
 | Privacy prompts for save locations | None | Protected games wait for a user action to allow access; background work and hotkeys never prompt (PLAN.md, PLATFORMS) | None |
 | Sounds | `PlaySound` | `NSSound` | `pw-play`, else `paplay`, else `aplay`, fed the WAV on stdin |
@@ -654,7 +653,7 @@ The UI shows Steam art for known games: hero art and logo for sidebar cards, the
   - it can pass a request ID of its own, so repeated requests can be tested;
   - it can resolve any folder the UI would open and print its path without opening a window.
 - **No generic retry.** After an ordinary failure, running the same command again is the retry. Only a blocked game has its own retry command.
-- **What it doesn't replace:** real hotkey presses, the tray, sounds and notifications. Those are OS adapters, not protocol, and stay under "By hand".
+- **What it doesn't replace:** real hotkey presses, the tray and sounds. Those are OS adapters, not protocol, and stay under "By hand".
 - It never opens the database or touches game files itself. A Save from the CLI can set a label, and a separate command sets or clears one later.
 - It starts the host (with `--minimized`) when a command needs it, and never becomes a second host. `--no-start` makes it fail instead of starting one, for tools like the installer that only want to talk to a running host.
 - It prints readable output by default and machine-readable output on request, with exit codes that tell success, rejection and failure apart.
@@ -774,7 +773,7 @@ Rules must be provable without a UI, and the OS parts must be proven for real. U
 
 ### By hand, for now
 
-Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, notifications, the sign-in entry (including that no window appears when the host starts at sign-in or from the CLI), launching the app while it runs, antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform. On macOS, sleep and resume means: put the Mac to sleep with the host running, wake it, and see a scan start at once (the host log says "the computer woke from sleep"), also with a Steam library disk plugged in or removed meanwhile.
+Some things aren't worth automating yet: real hotkey delivery (including fullscreen games and elevated processes), tray behavior, the sign-in entry (including that no window appears when the host starts at sign-in or from the CLI), launching the app while it runs, antivirus interference, sleep and resume, and audible sound quality. Keep them as a short checklist per platform. On macOS, sleep and resume means: put the Mac to sleep with the host running, wake it, and see a scan start at once (the host log says "the computer woke from sleep"), also with a Steam library disk plugged in or removed meanwhile.
 
 Steam Cloud must be checked by hand on a real machine before relying on the after-Load check, with one game of each kind: Isaac (writes through Steam's cloud API into `remote`), Slay the Spire (Steam Auto-Cloud of its install folder) and Risk of Rain Returns (both). For each: a Load with the game closed, then launch; a Load that deletes a file; and, where possible, a Load while the cloud has newer progress from another device. Why by hand: only real Steam shows whether it uploads, re-downloads or asks.
 

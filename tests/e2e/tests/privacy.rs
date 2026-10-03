@@ -43,7 +43,7 @@ fn access(world: &World, game: &str) -> Value {
 }
 
 #[test]
-fn a_game_found_in_the_background_waits_without_asking_and_is_notified_once() {
+fn a_game_found_in_the_background_waits_without_asking_or_notifying() {
     let world = World::new();
     let game = documents_game(&world, 9001, "Docs One");
     guard(&world, &world.documents, "granted");
@@ -52,13 +52,13 @@ fn a_game_found_in_the_background_waits_without_asking_and_is_notified_once() {
     assert_eq!(access(&world, &game)["category"], "documents");
     assert_eq!(world.game(&game)["save"]["reason"], "access_needed");
     assert_eq!(world.cli(&["save", &game]).error_kind(), "access_needed");
-    // A background scan (the window gaining focus) notifies no more.
+    // A background scan (the window gaining focus) stays quiet too.
     world.ok(&["ui-report", "--focused"]);
     wait_for("the focus scan", Duration::from_secs(10), || {
         (world.state()["scan"]["scans"].as_u64() >= Some(2)).then_some(())
     });
     let log = world.host_log();
-    assert_eq!(log.matches("notification: SaveScummer needs access to Documents for 1 game").count(), 1, "{log}");
+    assert!(!log.contains("notification:"), "{log}");
     assert!(!log.contains("asking for access"), "nothing asked in the background: {log}");
 
     // Allow access: the game becomes active and saves.
@@ -132,7 +132,7 @@ fn a_new_build_forgets_what_the_old_one_was_allowed() {
     assert_eq!(access(&world, &game)["category"], "documents");
     let log = world.host_log();
     assert!(log.contains("a new build: macOS forgot access to Documents"), "{log}");
-    assert!(log.contains("notification: SaveScummer needs access to Documents"), "{log}");
+    assert!(!log.contains("notification:"), "{log}");
     assert!(!log.contains("asking for access"), "{log}");
 }
 
@@ -160,7 +160,7 @@ fn a_hotkey_in_front_of_a_waiting_game_fails_and_changes_nothing() {
     assert_eq!(out.last()["error"]["game"], game.as_str());
     assert!(world.state()["active_stack"].as_array().unwrap().is_empty(), "never on the stack");
     assert!(world.kinds(&game).is_empty(), "no markers, no checkpoints");
-    assert!(world.host_log().contains("notification: SaveScummer needs access to Documents for Docs One"));
+    assert!(!world.host_log().contains("notification:"));
 }
 
 #[test]
@@ -231,9 +231,9 @@ fn a_prompt_while_configuring_never_freezes_the_host() {
 }
 
 #[test]
-fn a_guarded_game_found_later_in_the_first_run_is_notified() {
+fn a_guarded_game_found_later_in_the_first_run_waits_without_notifying() {
     let world = World::new();
-    documents_game(&world, 9001, "Docs One");
+    let game = documents_game(&world, 9001, "Docs One");
     world.steam_uninstall(9001, "Docs One");
     guard(&world, &world.documents, "granted");
     // The app's first launch, by the user: nothing waits for access yet.
@@ -244,8 +244,10 @@ fn a_guarded_game_found_later_in_the_first_run_is_notified() {
     wait_for("the focus scan", Duration::from_secs(10), || {
         (world.state()["scan"]["scans"].as_u64() >= Some(2)).then_some(())
     });
+    assert_eq!(access(&world, &game)["category"], "documents");
     let log = world.host_log();
-    assert!(log.contains("notification: SaveScummer needs access to Documents for 1 game"), "{log}");
+    assert!(!log.contains("notification:"), "{log}");
+    assert!(!log.contains("asking for access"), "{log}");
 }
 
 #[test]

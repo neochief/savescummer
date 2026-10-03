@@ -1,11 +1,10 @@
-//! Global hotkeys, the tray icon and notifications, so they work with no
+//! Global hotkeys and the tray icon, so they work with no
 //! window open. Each OS has its own file; this one holds what they share.
 //!
 //! - Ctrl+F5 → Save, Ctrl+F9 → Load; ⌥F5 and ⌥F9 on macOS, which reserves
 //!   ⌃F5. Each OS file holds its own table. Holding a key triggers once.
 //! - Tray: a click opens the main window; its menu shows the active game and
 //!   the main window's common actions.
-//! - [`Integration::notify`] shows an OS notification.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeyAction {
@@ -118,10 +117,9 @@ mod tests {
     /// global hotkeys, then removes both.
     #[test]
     #[ignore = "needs a desktop session; run by hand"]
-    fn starts_notifies_and_stops() {
+    fn starts_and_stops() {
         let integration = start(Box::new(|_| {}), Box::new(TrayMenu::default), Shortcut::defaults()).expect("started");
         eprintln!("hotkey errors: {:?}", integration.hotkey_errors());
-        integration.notify("SaveScummer test", "Integration test notification");
         std::thread::sleep(std::time::Duration::from_millis(500));
         integration.stop();
 

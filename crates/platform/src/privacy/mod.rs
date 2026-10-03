@@ -45,7 +45,7 @@ impl Category {
         }
     }
 
-    /// How macOS names it, for notifications and logs.
+    /// How macOS names it, for UI guidance and logs.
     pub fn display_name(self) -> &'static str {
         match self {
             Category::Documents => "Documents",

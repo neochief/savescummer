@@ -3,7 +3,7 @@
 //!
 //! Lock order is always `inner` before `db`. File work never holds either.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::Instant;
@@ -111,8 +111,6 @@ pub struct Inner {
     /// it on again.
     pub launch_needs_approval: bool,
     pub revision: u64,
-    /// Hotkey operations that may need a failure notification.
-    pub hotkey_ops: HashSet<String>,
     /// Cached art by Steam app id.
     pub artwork: HashMap<u64, savescummer_ipc::Artwork>,
 }
@@ -575,7 +573,6 @@ impl Inner {
             launch_on_startup: false,
             launch_needs_approval: false,
             revision: 0,
-            hotkey_ops: HashSet::new(),
             artwork: HashMap::new(),
         }
     }
