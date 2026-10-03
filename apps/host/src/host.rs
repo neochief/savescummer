@@ -614,14 +614,11 @@ mod tests {
         let games = [game("a", "Alpha"), game("b", "beta"), game("c", "Gamma"), game("d", "Delta"), game("e", "Echo")];
         let mut list: Vec<&Game> = games.iter().collect();
         let stack = vec!["e".to_string()];
-        let focused: HashMap<String, String> = [
-            ("c", "2026-10-01T10:00:00.000Z"),
-            ("d", "2026-10-01T12:00:00.000Z"),
-            ("e", "2026-09-01T00:00:00.000Z"),
-        ]
-        .into_iter()
-        .map(|(g, at)| (g.to_string(), at.to_string()))
-        .collect();
+        let focused: HashMap<String, String> =
+            [("c", "2026-10-01T10:00:00.000Z"), ("d", "2026-10-01T12:00:00.000Z"), ("e", "2026-09-01T00:00:00.000Z")]
+                .into_iter()
+                .map(|(g, at)| (g.to_string(), at.to_string()))
+                .collect();
         sort_library(&mut list, &stack, &focused);
         let ids: Vec<&str> = list.iter().map(|g| g.id.as_str()).collect();
         // Running first; then newest focus; then never focused, by name.
