@@ -2,7 +2,7 @@
 
 I want building, packaging and releasing the app to be boring: one command to build, one command to cut a release, and one file per platform for users to download.
 
-**Current implementation (2026-10-03):** Windows builds the UI, host and CLI in an Inno Setup installer. macOS builds the same three programs in an app bundle and DMG. Linux builds them in AppImages for x86_64 and aarch64, and has been exercised with real games. The tag workflow checks and packages all four targets, then creates a draft release with all four files if every job passes. Use [docs/building.md](docs/building.md) for current commands.
+**Current implementation (2026-10-03):** Windows builds the UI, host and CLI in an Inno Setup installer. macOS builds the same three programs in an app bundle and DMG. Linux releases them in AppImages for x86_64 and aarch64. The tag workflow checks and packages all four targets, then creates a draft release with all four files if every job passes. Use [docs/building.md](docs/building.md) for current commands. Real-game validation of catalog entries is tracked separately in [docs/testing.md](docs/testing.md#real-game-checks).
 
 This plan covers only the machinery around the app: builds, packaging, installers, CI and releases. App behavior lives in PLAN-HOST.md and PLAN-UI.md; the few things this plan needs from the app are listed under WHAT THE APP MUST PROVIDE.
 
@@ -139,7 +139,7 @@ savescummer/
 |-- rust-toolchain.toml  pinned Rust
 |-- about.toml           licenses cargo-about accepts
 |-- xtask/               the build program
-|-- docs/building.md     the how-to
+|-- docs/                installation, building and manual testing guides
 |-- packaging/
 |   |-- windows/         savescummer.iss, README.txt
 |   |-- macos/           Info.plist.in, com.savescummer.SaveScummer.host.plist (login agent)
@@ -466,11 +466,10 @@ Tooling only ever makes drafts; I publish by hand. A published release is never 
 
 ## DOCS
 
-- `docs/building.md` — the how-to per OS: prerequisites, every `cargo xtask` command and flag, outputs, the release runbook, CI, dev data locations, VS Code tasks.
-- `README.md` — the short version, linking to the guide:
-  - install, upgrade and removal per platform, including the Linux `chmod +x` step
-  - where data lives
-  - the quickest build commands
+- `README.md` — brief app workflow and CLI usage, linking to the guides.
+- `docs/install.md` — installation and checkpoint locations for users.
+- `docs/building.md` — prerequisites, `cargo xtask` commands, outputs, release runbook, CI and dev data.
+- `docs/testing.md` — manual release smoke test and real-game catalog checks.
 
 Whenever the build changes, this plan and `docs/building.md` change with it.
 

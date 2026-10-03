@@ -31,8 +31,8 @@ use super::{
 };
 
 /// The menu-bar template, 22 × 22 points at 1x and 2x.
-const ICON_1X: &[u8] = include_bytes!("../../../../assets/macos/SaveScummerTemplate.png");
-const ICON_2X: &[u8] = include_bytes!("../../../../assets/macos/SaveScummerTemplate@2x.png");
+const ICON_1X: &[u8] = include_bytes!("../../../../assets/tray/macos/status.png");
+const ICON_2X: &[u8] = include_bytes!("../../../../assets/tray/macos/status@2x.png");
 const ICON_POINTS: f64 = 22.0;
 
 type Handler = Arc<Mutex<Box<dyn Fn(Signal) + Send + 'static>>>;

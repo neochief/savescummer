@@ -168,7 +168,7 @@
 # Windows (battle replays and more besides `save_games`). Its Linux path,
 # `<xdgData>/feral-interactive/SaveData`, doesn't name the game and may be a
 # folder shared by Feral's ports, so Linux is left out until it's checked on a
-# real machine (TEST-REAL-GAMES.md, section 1).
+# real machine (docs/testing.md, Real-game checks, section 1).
 "Total War: Shogun 2":
   override:
     save:

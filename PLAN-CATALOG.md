@@ -7,6 +7,8 @@ it can be built and tested in isolation.
 
 Catalog inputs live in `catalog/games.csv` and `catalog/addendum.yaml`; the scanner consumes the generated bundle.
 
+Most catalog entries have not yet been verified with a real game's save-and-restore run. Builder and resolver tests check the catalog machinery; the `Tested` columns in `catalog/games.csv` record real-game validation separately for each platform.
+
 ---
 
 ## 1. Goals and principles
@@ -63,7 +65,7 @@ game; the first row is the header.
 - `Tested Windows`, `Tested MacOS`, `Tested Linux (Native)` and `Tested Linux
   (Proton)` track, for development only, which platforms a person has checked
   the game on. The app never reads them. Tested means a person ran the game
-  through the save-and-restore part of `TEST-RELEASE.md` (play, Save, play on,
+  through the save-and-restore part of `docs/testing.md` (play, Save, play on,
   Load, the game resumes at the saved point) on that platform, which proves
   the combined manifest and addendum paths are where the game really reads and
   writes. A cell holds:

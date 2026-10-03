@@ -27,4 +27,4 @@ Run `pnpm test` and `pnpm build` in `apps/ui`, then `cargo test -p savescummer-u
 
 ## Platform packages
 
-`cargo xtask dist` packages this Tauri UI with the host and CLI on Windows, macOS and Linux. Windows produces an installer, macOS a disk image, and Linux an AppImage for x86_64 or aarch64. The Linux app has been exercised with real games. See [building and packaging](../../docs/building.md) for prerequisites, checks and release commands.
+`cargo xtask dist` packages this Tauri UI with the host and CLI on Windows, macOS and Linux. Windows produces an installer, macOS a disk image, and Linux releases AppImages for x86_64 and aarch64. See [building and packaging](../../docs/building.md) for prerequisites, checks and release commands. [Real-game checks](../../docs/testing.md#real-game-checks) track validation of the catalog entries across platforms.

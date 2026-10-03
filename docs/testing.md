@@ -1,6 +1,46 @@
-# Real-game checks
+# Testing SaveScummer
 
-Things the catalog and the host assume about specific games that only a real install can confirm. Each entry says what to look at, why it matters, and what the answer changes.
+Run automated build and test checks with the commands in [Building SaveScummer](building.md#commands). The manual checks below cover a release package and individual games in the catalog.
+
+## Release smoke test
+
+Run this for a Windows, Apple Silicon Mac, or Linux release asset. Use Steam and a disposable **FTL: Faster Than Light** run. Record the release version, platform and architecture, and mark each step pass or fail. This checks the release package and one real game; it does not validate the rest of the catalog.
+
+Default Save shortcut: **Ctrl+F5** on Windows and Linux; **⌥F5** on Mac.
+
+### Prepare and install
+
+1. Remove the old SaveScummer install:
+   - **Windows:** Tray icon → **Exit**; then *Settings → Apps → SaveScummer → Uninstall*.
+   - **Mac:** Turn off **Launch on startup**; menu bar icon → **Exit**; move `SaveScummer.app` from Applications to Trash.
+   - **Linux:** Tray icon → **Exit**; move the previous AppImage out of the test location. The AppImage has no installer.
+2. Confirm no SaveScummer process remains. On Windows and Mac, confirm the previous installed app is gone.
+3. Open [GitHub Releases](https://github.com/neochief/savescummer/releases). Download this version's Windows `setup.exe`, Mac `.dmg`, or Linux AppImage for the machine's architecture. Stop if your platform has no release asset.
+4. Install and launch:
+   - **Windows:** Run setup with **Launch at sign-in** checked.
+   - **Mac:** Open the DMG, drag the app to Applications, and open it.
+   - **Linux:** Make the AppImage executable (`chmod +x SaveScummer-linux-*.AppImage`) and run it.
+   - **Check:** The main window and tray/menu-bar icon appear.
+
+### Check launch behavior
+
+5. Close the main window. The icon should remain; **Main window** from its menu should reopen the UI.
+6. Run `%LOCALAPPDATA%\Programs\SaveScummer\bin\SaveScummer.exe` on Windows, open `SaveScummer.app` on Mac, or run the same AppImage again on Linux. Confirm only one UI window appears.
+7. Icon → **Exit**. Launch the app again; the UI should return.
+8. Enable **Launch on startup** if needed, then sign out and back in. The icon should appear **without** a window. Launch the app normally; the window should open.
+
+### Check an FTL save and restore
+
+9. In Steam, install FTL if needed and wait for it to finish. Start a disposable run. Confirm FTL appears under **RUNNING** and Save is unavailable while it runs.
+10. **Write down the run's sector and beacon (position A).** Save and quit FTL, then exit the game completely.
+11. Select FTL in SaveScummer. Press **SAVE**, then press the Save shortcut with the UI focused. Confirm two checkpoints appear in history.
+12. Relaunch FTL and advance to a different position (B). Save and quit FTL; exit completely.
+13. Close the SaveScummer window and press the Save shortcut with no UI open. Reopen it and confirm a new checkpoint appears.
+14. With FTL closed, load the **first** checkpoint from history. Relaunch FTL. **Pass:** the run resumes at position A.
+
+## Real-game checks
+
+Things the catalog and the host assume about specific games that only a real install can confirm. Most cataloged games have not yet had a recorded save-and-restore run on any platform. This checklist tracks game-specific validation across Windows, macOS and Linux; the released platform packages are covered by the build and release checks. Each entry says what to look at, why it matters, and what the answer changes.
 
 The catalog is built from the Ludusavi manifest, which lists where saves may be but not how a game uses them. The builder keeps those paths exactly as targets (PLAN-CATALOG.md, Section 3.1), and the runtime backs up and restores every applicable target together. So most wrong guesses are now harmless: an exact name matches whatever is on disk, parts of one save are never split, and a local copy and a Steam Cloud copy are both restored. What's left is what the design can't settle on its own:
 
@@ -10,7 +50,7 @@ The catalog is built from the Ludusavi manifest, which lists where saves may be 
 How to record a result: add the date, platform, store and what was seen under the entry, then change the catalog (an addendum entry) or the plan if the answer requires it.
 
 
-## 1. Paths the manifest may get wrong
+### 1. Paths the manifest may get wrong
 
 A wrong path no longer backs up or restores the wrong thing: its target is just absent, and the game shows "no game data" on that platform. These checks find out whether a game silently has no saves.
 
@@ -33,7 +73,9 @@ A wrong path no longer backs up or restores the wrong thing: its target is just 
   - If the folder holding the save has another name (the `.swf` instead of the app, say): change that segment in the override. Note that the game deletes `nsSGv1.sol` when the survivor dies, so look for it while a survivor is alive.
 
 
-## 2. Files the running game keeps open
+### 2. Files the running game keeps open
+
+Enable the per-game Expert mode for this check, then restore the default exit rule afterward. Save and Load are otherwise refused while the game is running.
 
 A Load renames every file it replaces or deletes to `.ssold` before swapping the checkpoint's files in (PLAN-HOST.md, LOAD). On Windows, renaming a file another program holds open usually fails, and then the Load is undone and refused. That's safe, but if it happens for a file the game always holds while running, Load never works while the game is running, and the usual flow (die, back to the menu, Load hotkey) is broken.
 
@@ -55,7 +97,7 @@ With the game running, at the main menu:
 - What the answer changes: an unusual log name gets added to the built-in log exclude. If the save file itself is held open, that game can only be loaded with the game closed, and its instructions in `games.csv` should say so.
 
 
-## 3. Steam Cloud after a Load
+### 3. Steam Cloud after a Load
 
 The host never touches Steam's own files. It restores every copy of a save, including Steam's `userdata/<id>/<appid>/remote` folder, and at the next start of the game compares the restored files with the checkpoint (PLAN-HOST.md, LOAD). Only real Steam shows how it reacts to files changed behind its back.
 
@@ -74,7 +116,7 @@ For each:
 - What the answer changes: whether the check at the next launch is enough, and what the Loaded row tells the user.
 
 
-## 4. Our temporary files during a Load (optional)
+### 4. Our temporary files during a Load (optional)
 
 While a Load copies files, `name.ssnew` copies sit next to the saves for a moment. Between two of the Load stages, the save names briefly don't exist.
 
@@ -83,11 +125,11 @@ While a Load copies files, `name.ssnew` copies sit next to the saves for a momen
 - What the answer changes: nothing is expected. A game that does react gets a note in its instructions, or Load for it waits until the game is closed.
 
 
-## 5. macOS
+### 5. macOS
 
 What only a real Mac shows (PLAN-MACOS.md). Found on a Mac with Steam, 2026-09-25: FTL at `~/Library/Application Support/fasterthanlight`, Into the Breach at `~/Library/Application Support/IntoTheBreach/profile_*`, Six Ages in its group container `group.com.a-sharp.Six-Ages`.
 
-- **FTL and Into the Breach.** ⌥F5 in fullscreen makes a checkpoint with both cues, ⌥F9 restores it; starting from Steam and quitting write the start and close markers; ⌘-Tab between the two moves the focused one to the top of the stack; after quitting FTL (fullscreen) with Into the Breach still running, ⌥F9 within 5 seconds loads FTL, even if macOS brings Into the Breach forward; with Into the Breach left in front, ⌥F9 after 5 seconds loads Into the Breach.
+- **FTL and Into the Breach.** With Expert mode enabled for each game, ⌥F5 in fullscreen makes a checkpoint with both cues and ⌥F9 restores it; restore the default exit rule after this check. Starting from Steam and quitting write the start and close markers; ⌘-Tab between the two moves the focused one to the top of the stack; after quitting FTL (fullscreen) with Into the Breach still running, ⌥F9 within 5 seconds loads FTL, even if macOS brings Into the Breach forward; with Into the Breach left in front, ⌥F9 after 5 seconds targets Into the Breach, whose exit rule must be off to permit loading while it still runs.
 - **Terraria.** The `Players`/`Worlds` names, as in section 1.
 - **Six Ages** (a group container: macOS 14+ asks for *other apps' data*). The host finds it in the background without asking and marks it waiting; *Allow access* (`request-access`) shows the prompt once, naming SaveScummer; after allowing, Save and Load work, and a new build asks again. Record what denying returns and which System Settings pane lists the grant.
 - **Slay the Spire** (saves inside its `.app`: App Management guards writes). Does a Load prompt, and does the prompt name SaveScummer?
@@ -95,7 +137,7 @@ What only a real Mac shows (PLAN-MACOS.md). Found on a Mac with Steam, 2026-09-2
 - **Unknowns to settle once** (PLAN-MACOS.md, PRIVACY PERMISSIONS): whether an FSEvents watch on a guarded folder prompts or silently gets nothing; whether `stat` inside one prompts; whether picking a folder in the UI's open panel grants the host anything.
 
 
-## Resolved by the save-set design
+### Resolved by the save-set design
 
 These were open questions when every game had one save folder. They no longer need a real install:
 

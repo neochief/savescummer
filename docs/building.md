@@ -2,7 +2,7 @@
 
 All build automation is `cargo xtask`: one Rust program that runs the same on every OS, locally and in CI. There are no PowerShell, bash or Python build scripts. The design and the reasons behind it are in [PLAN-BUILD.md](../PLAN-BUILD.md); this guide is the how-to.
 
-Windows, macOS and Linux build the complete host, CLI and Tauri UI. Windows packages an installer, macOS a disk image and Linux an AppImage for x86_64 or aarch64. Linux has also been exercised with real games.
+Windows, macOS and Linux build the complete host, CLI and Tauri UI. Windows packages an installer, macOS a disk image and Linux releases AppImages for x86_64 and aarch64. Manual release and real-game checks are in [Testing SaveScummer](testing.md).
 
 
 ## Prerequisites
@@ -33,8 +33,6 @@ Linux (x86_64 or aarch64):
   ```bash
   sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev patchelf gstreamer1.0-plugins-base gstreamer1.0-plugins-good
   ```
-
-  The README has a short [Linux setup summary](../README.md#linux-setup).
 
 - **Node.js 22 and pnpm 12** on `PATH` for the Tauri UI, as on Windows and macOS.
 - `cargo xtask setup linux-tools` before packaging (`run`, `host start`, `dist`); plain builds and tests don't need it.

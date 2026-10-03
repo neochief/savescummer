@@ -20,20 +20,6 @@
       "port": 41987
     },
     {
-      "name": "ui-prototype",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "5180",
-        "--bind",
-        "127.0.0.1",
-        "--directory",
-        "ui-prototype"
-      ],
-      "port": 5180
-    },
-    {
       "name": "ui-vite-skeleton",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

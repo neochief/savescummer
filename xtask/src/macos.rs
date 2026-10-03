@@ -126,7 +126,7 @@ fn sign(bundle: &Path) -> anyhow::Result<()> {
 }
 
 /// The full-color Dock and Finder icon, rendered from `assets/icon.svg` at
-/// every size an `.icns` holds. (The menu-bar template in `assets/macos/` is
+/// every size an `.icns` holds. (The menu-bar template in `assets/tray/macos/` is
 /// the host's own.)
 fn make_icns(out: &Path) -> anyhow::Result<()> {
     let rsvg = cmd::on_path("rsvg-convert", "install it with `brew install librsvg` (it renders the app icon)")?;

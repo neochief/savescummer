@@ -7,7 +7,7 @@ The app should feel like a game-oriented utility: not a generic settings app, an
 
 ## TAURI AND WEB UI
 
-The UI is a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The interactive design in [`ui-prototype/`](ui-prototype/) is the visual and interaction reference. A packaged UI loads local bundled assets without a development server.
+The UI is a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The implemented UI in [`apps/ui/`](apps/ui/) is the visual and interaction reference. A packaged UI loads local bundled assets without a development server.
 
 Keep the existing process boundary:
 
@@ -17,14 +17,12 @@ Keep the existing process boundary:
 - The host remains authoritative for busy rejection, deletion deadlines, operation results and current game state. The frontend may format time, manage selection/editing, animate and scroll, but never invents a successful operation or executes one on a local timer.
 - Game artwork is supplied by the host and exposed to the webview through a narrowly scoped local asset path or bridge response, without letting web content address arbitrary files.
 
-**Windows implementation:** the host launches the Tauri window, the UI connects to the real host, and Save and Load have been exercised through an installed package against simulated game data. Closing and reopening the UI and restarting the host were also exercised. The remaining controls, dialogs, deletion flow, virtualization and accessibility rules in this plan are product work beyond the Windows packaging gate.
-
 **Cross-platform checks:** Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout on each platform. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed. macOS activation and bundle identity are covered by [`PLAN-MACOS.md`](PLAN-MACOS.md).
 
 
-## PROTOTYPE DECISIONS
+## VISUAL DECISIONS
 
-These decisions come from the interactive prototype in [`ui-prototype/`](ui-prototype/) (2026-09-27). Where they contradict anything below, **this section wins**; the rest of the document still applies.
+These accepted decisions began in the 2026-09-27 interactive prototype. They are recorded here so the retired prototype is no longer needed. Keep related sections below in sync when these decisions change.
 
 ### Icons
 - **Font Awesome Pro 7.3.1 Whiteboard Semibold**, single tone, for every app-owned icon. Mapping: Save `flag`; Load, Revert, Loaded and Reverted rows `rotate-left`; Scan for games and every busy spinner `arrows-rotate` (rotated with CSS; Whiteboard has no spinner); success `check`; label `tag`; delete and Flush `trash`; Add custom game `plus`; Settings `gear`; Open checkpoints folder `folder`; Configure paths `sliders`; More `ellipsis`; Game started `circle-play`; Game closed `circle-stop`; badge time `clock`; expand/collapse `angle-down`/`angle-up`; close `xmark`.
@@ -76,9 +74,6 @@ These decisions come from the interactive prototype in [`ui-prototype/`](ui-prot
 ### Cursor and selection
 - Pointer cursor on every interactive element (buttons, menu rows, cards, chips, badge); arrow elsewhere. Text isn't selectable except in inputs.
 
-### Open question
-- Hotkey presentation: candidates are separate raised keycaps on the tab, key chips inside the button, reveal-on-modifier, or tooltip only.
-
 ## PRINCIPLES
 
 These decide the cases this document doesn't cover:
@@ -108,14 +103,14 @@ To make it feel like a game, use presentation: dark layered surfaces, strong typ
 ### Typography, icons and surfaces
 
 - Use **Chakra Petch** for the main Save and Load controls, their shortcut hints, and the small Load and Revert buttons in history. Use **Inter** for the main content body, descriptions, editable labels, dates, notes, library controls and dialog content. Game logos keep their own lettering.
-- Use **Font Awesome Pro 7.3.1, Whiteboard Semibold** single-tone icons for app-owned UI controls. The jump-to-checkpoint hover uses Duotone `crosshairs`, the one exception. The icons used by the interactive design are embedded in [`ui-prototype/index.html`](ui-prototype/index.html). The symbols in the text mockups are placeholders. The app's identity icon and game artwork remain separate assets.
+- Use **Font Awesome Pro 7.3.1, Whiteboard Semibold** single-tone icons for app-owned UI controls. The jump-to-checkpoint hover uses Duotone `crosshairs`, the one exception. The app's identity icon and game artwork remain separate assets.
 - Main Save is red and Load is ivory, with rounded corners and a shallow raised bottom edge. History action buttons use a compact version of this button family, subordinate to the main controls.
 - Render the title bar seamlessly with the window: continue the underlying dark surfaces into it, without a separate colored strip, divider or shadow. Keep the app title quiet and the platform's window controls usable. The title bar must retain normal dragging and window behavior (see WINDOW).
 - Checkpoint labels use a leading Font Awesome tag icon inside an inline chip. Saved chips are editable; Loaded and Reverted chips are read-only. Other text editable in place uses an always-visible trailing pencil within the same edit target. Ordinary form fields need neither affordance.
 
 ### Main-window visual mockup
 
-The interactive design in [`ui-prototype/index.html`](ui-prototype/index.html) is the visual reference for the main window.
+The implemented UI in [`apps/ui/`](apps/ui/) is the visual reference for the main window.
 
 This is the visual reference for the main window and its button family. It uses the app's actual identity icon and locally cached Steam artwork for Void War, XCOM 2 and Noita. The text mockups below describe the other window states and control placement. The behavior sections remain authoritative for interaction details.
 
@@ -127,14 +122,14 @@ This is the visual reference for the main window and its button family. It uses 
 - **Surfaces:** the window is `#1c1918`, with no separate sidebar fill. The `RUNNING` heading has a `#2c2623` tint that fades down the card. The `INSTALLED` panel is `#2c2623` with 12 px corners. History boxes are `#221d1b`, without borders, with 8 px corners and 8 px gaps.
 - **Save:** red face (`#f51e2b`), ivory icon and label, approximately 12 px corners and a 4 px darker bottom edge. **Load:** ivory face (`#f3eee7`), dark icon and label, matching corners and a muted brown bottom edge. Both controls are 96 px tall and equal in width, matching the game cards. Include the raised edge inside these bounds so it does not alter alignment or consume the next section's gap.
 - **Action typography:** bold Chakra Petch, approximately 36 px for the main labels, with 32 px Font Awesome icons and a 16 px gap. Keep the two icon-and-title groups centered at the same height. Load's separate ivory badge hangs from the button's bottom edge without shifting its icon or title.
-- **Shortcut tabs (prototype treatment; presentation remains open):** brown keycaps centered behind the buttons, with rounded top corners and 18 px semibold Chakra Petch text on a 24 px line. Keep the 40 px band aligned with the first sidebar heading. The text sits 4 px from the tab top. Lower the tabs by 8 px so they extend behind the button faces; pressing a button lowers its face 4 px while retaining overlap. Keep the key text fully above the face.
+- **Shortcut tabs:** brown keycaps centered behind the buttons, with rounded top corners and 18 px semibold Chakra Petch text on a 24 px line. Keep the 40 px band aligned with the first sidebar heading. The text sits 4 px from the tab top. Lower the tabs by 8 px so they extend behind the button faces; pressing a button lowers its face 4 px while retaining overlap. Keep the key text fully above the face.
 - **More:** a separate 48 px square brown raised button with an ellipsis, vertically centered beside the main buttons. Reserve its width before dividing the remaining space equally between Save and Load.
 - **History buttons:** Load and Revert share a 104 × 30 px footprint and use visible 12 px Chakra Petch labels with the same Whiteboard `rotate-left` icon. Delete uses an unfilled target separated by 8 px. Reserve a 144 px minimum action column that grows leftward for the delete countdown. Rows have a 56 px minimum height with vertically centered contents; the age sits under the time when present, and the time centers when absent. Loaded notes begin at the event icon's left edge.
 - **Library items:** game artwork fills the card edge to edge, clipped to its rounded corners, with zero internal padding and no surrounding artwork mat. Draw the selected border over the artwork inside the existing card bounds; selection must not grow the card, move the artwork or protrude into its surrounding spacing. Keep the 8 px gaps between cards. Library footer controls and popup commands share the same row geometry described below.
 - **Shared icon rows:** bottom-left library controls and popup commands use the same component geometry: 8 px padding on all sides, a 24 × 24 px Font Awesome icon box, an 8 px icon-to-label gap, and 14 px Inter text on a 24 px line. The resulting row is 40 px tall (`8 + 24 + 8`). Both containers have 8 px outer padding, so icons begin 16 px from the container edge and text begins 48 px from it, excluding the border. Center each SVG in that same 24 px box; do not size footer icons independently from popup icons. Consecutive rows have no extra margin.
 - **States:** a small brightness change on hover; the face moves down and the raised edge shrinks while pressed. Busy rotates the initiating button's `arrows-rotate` icon and changes its label to SAVING, LOADING or REVERTING, then briefly shows a check on success without changing its footprint. Respect reduced-motion preferences.
 
-Use the Whiteboard Semibold single-tone icons shown in the prototype for app-owned controls. Load and Revert use the same `rotate-left` icon at the same size; their labels distinguish the actions.
+Use Whiteboard Semibold single-tone icons for app-owned controls. Load and Revert use the same `rotate-left` icon at the same size; their labels distinguish the actions.
 
 | Control or state | Font Awesome icon |
 | --- | --- |
@@ -222,7 +217,7 @@ Nothing is preselected. The sidebar shows the installed games under `INSTALLED`,
 
 The running game gets its own group at the top of the sidebar. A slowly pulsing red dot before `RUNNING` identifies the group; the card itself has no marker. The game is selected when nothing else is, or when the user switches to its window (see ACTIVE STACK). The running group tint fades down its card. The unbroken `INSTALLED` panel begins 16 px below it and contains the stopped games and library controls.
 
-The main view starts with Save, Load and More. Save and Load have equal-width 96 px faces with centered icon-and-title groups. Load's separate ivory badge hangs from its lower edge. The title and actions stay fixed while history scrolls independently below them. The first day heading aligns with `INSTALLED`; each history row has an event icon, exact time, optional age, event word, optional chip and its own action controls. The history has no visible `HISTORY` title. The prototype is the visual reference for this state; the behavior rules below cover the other states and interactions.
+The main view starts with Save, Load and More. Save and Load have equal-width 96 px faces with centered icon-and-title groups. Load's separate ivory badge hangs from its lower edge. The title and actions stay fixed while history scrolls independently below them. The first day heading aligns with `INSTALLED`; each history row has an event icon, exact time, optional age, event word, optional chip and its own action controls. The history has no visible `HISTORY` title. The behavior rules below cover the other states and interactions.
 
 ## ACTIVE STACK, SELECTION AND FOCUS
 
@@ -312,7 +307,7 @@ There is no game name, icon or status header above the buttons. The selected sid
 - **Height:** Save and Load are both the same height as a sidebar game card (roughly 96 px), with matching top and bottom edges.
 - **Width:** reserve a fixed-width area at the right for `···` and the gaps between controls. Divide all remaining main-view width equally between Save and Load: 50/50. They keep equal widths as the window resizes.
 - **Contents:** center each button's icon-and-title group at the same height. Hang Load's separate ivory badge from its bottom edge. The badge never moves the main title and is its own interactive control.
-- **Shortcut hints:** the prototype places the current shortcuts on centered keycaps behind their buttons. Lower the tabs to overlap the button faces by 8 px at rest and 4 px when pressed; no background gap may appear. Keep the text above the faces, within the first sidebar heading's 40 px band. The final hotkey presentation remains an open design choice.
+- **Shortcut hints:** centered keycaps sit behind their buttons. Lower the tabs to overlap the button faces by 8 px at rest and 4 px when pressed; no background gap may appear. Keep the text above the faces, within the first sidebar heading's 40 px band.
 - **Availability:** the host decides whether each action is available, separately from whether the game is running, and gives one reason when it isn't. The separate host `guidance` field selects the panel and its Save/Load coverage (PLAN-LOCKDOWN, LOCKDOWN PANEL). The UI does not select guidance by ranking availability reasons. Row actions combine checkpoint eligibility with the current host gate.
 - The order is fixed: Save, then Load, then `···`, which is always last.
 - Below the buttons and the Load caption sit the **error block**, then the **instructions block**. The error block stays until the next action or game selection and never becomes a modal dialog.
@@ -325,7 +320,7 @@ This is the main action and has the strongest emphasis. It supports the core loo
 
 The main Load button restores the **latest retained checkpoint**. Only checkpoints the app made count; copies the user makes by hand are not checkpoints.
 
-What Load will restore is shown in the separate ivory badge hanging on its bottom edge (see PROTOTYPE DECISIONS). The first line shows a clock, exact local time and relative age, with a fixed 54 px slot for the age: today `12:24:03`, yesterday `Yesterday 23:20:12`, or older `2026-09-20 12:24:03`. Clicking the badge jumps to the latest checkpoint without triggering Load; hover or focus expands a long label in place and changes its tag icon to crosshairs. With no checkpoints, Load has a muted 2 px outline and no shortcut tab, and no badge: the lockdown panel covers it. Missing live game data alone does not prevent Load: a usable checkpoint can be restored when targets are valid and accessible and the other host checks pass.
+What Load will restore is shown in the separate ivory badge hanging on its bottom edge (see VISUAL DECISIONS). The first line shows a clock, exact local time and relative age, with a fixed 54 px slot for the age: today `12:24:03`, yesterday `Yesterday 23:20:12`, or older `2026-09-20 12:24:03`. Clicking the badge jumps to the latest checkpoint without triggering Load; hover or focus expands a long label in place and changes its tag icon to crosshairs. With no checkpoints, Load has a muted 2 px outline and no shortcut tab, and no badge: the lockdown panel covers it. Missing live game data alone does not prevent Load: a usable checkpoint can be restored when targets are valid and accessible and the other host checks pass.
 
 If that save has a label, the badge adds a second line with a tag icon and the label, separated from the time line by a hairline. Long labels truncate in the resting badge and wrap in the expanded hover/focus state. The badge never changes the button's size or the vertical alignment of its icon and title.
 
@@ -337,7 +332,7 @@ Load always restores the whole checkpoint, every save location in it, exactly as
 
 ### `···` menu
 
-Each command has its own Whiteboard icon. The interactive prototype shows the popup's current visual treatment. The menu contains Open checkpoints folder, Configure paths… and Flush checkpoints… in that order.
+Each command has its own Whiteboard icon. The menu contains Open checkpoints folder, Configure paths… and Flush checkpoints… in that order.
 
 The popup is anchored to the More button, right edges aligned, with an 8 px gap below the trigger. Use a 320 px width, 8 px outer padding and 12 px corners. Reuse the library footer's icon-row geometry exactly: 40 px height, 8 px padding on all sides, a 24 × 24 px icon box, an 8 px gap, and 14 px Inter text on a 24 px line. Thus icons and labels have the same offsets from their containing surface in both places. Put a quiet separator before Flush with 8 px margin on all sides inside the padded popup. Flush's icon follows its text color. Keep the popup inside the window at smaller sizes.
 
@@ -515,7 +510,7 @@ The current shortcuts appear on tabs behind their corresponding main buttons, lo
 
 ## DIALOGS
 
-There are four dialogs: Settings, Add custom game, Configure paths and Flush checkpoints. The [interactive prototype](ui-prototype/index.html) shows their visual treatment and field states. They open inside the main window, one at a time, over a `rgba(12,10,9,.62)` scrim. The dialog surface is `#2a2420` with a 1 px `#3d342d` border and 12 px corners; a hairline separates its 15 px/600 title row from the body. The scrim fades in and the dialog rises slightly with CSS, with an instant reduced-motion state.
+There are four dialogs: Settings, Add custom game, Configure paths and Flush checkpoints. They open inside the main window, one at a time, over a `rgba(12,10,9,.62)` scrim. The dialog surface is `#2a2420` with a 1 px `#3d342d` border and 12 px corners; a hairline separates its 15 px/600 title row from the body. The scrim fades in and the dialog rises slightly with CSS, with an instant reduced-motion state.
 
 - Settings is 480 px wide, Flush 560 px, and Add custom game and Configure paths 680 px. Each fits within the window with 24 px minimum clearance on every side; its body scrolls if its content is taller than the available space. The dialogs cannot be resized separately.
 - Labels occupy a 128 px column. Fields are 32 px tall on `#1c1918`, with a red focus border. Inline errors appear at 12 px in `#ff7a80` beneath their fields. The save-location hint stays visible above its error.
@@ -550,7 +545,7 @@ Opened by the cog-and-text `⚙ Settings` button directly below Scan for games, 
 - `Play sounds` enables or disables sound effects; `Launch on startup` enables or disables starting the host at sign-in. These preferences appear only here, not in the main window.
 - Apply changes on **Save**, the default button, after the host validates and accepts them. Cancel or closing the dialog discards unapplied edits. Accepted settings persist across restarts; shortcut hints update immediately.
 - A duplicate, unsupported or unavailable shortcut shows an inline error beside its field. Keep the dialog and entered values open for correction; rejected changes leave the saved configuration and previous bindings intact.
-- The host owns shortcut registration, persistence, sound playback and startup integration. Shortcut reassignment requires extending the host's settings contract beyond its currently documented fixed defaults (PLAN-HOST.md, Hotkeys and protocol settings); the UI does not register a second independent set of global hotkeys.
+- The host owns shortcut registration, persistence, sound playback and startup integration. The UI saves shortcut changes through the host's settings contract; it does not register a second independent set of global hotkeys.
 
 ### The save location field
 
@@ -802,7 +797,7 @@ For the Tauri UI, test React views against a fake typed bridge that can simulate
     - a failure restores the row with no retry.
 - **Midnight:** rows regroup without moving the scroll position.
 - **Dialogs:**
-    - the four in-window dialogs use the scrim, surface, widths, 128 px label column, field focus/error styling and text-only button treatments shown in the prototype; a tall Details list scrolls within the dialog;
+    - the four in-window dialogs use the scrim, surface, widths, 128 px label column, field focus/error styling and text-only button treatments described above; a tall Details list scrolls within the dialog;
     - opening a dialog moves focus inside, Tab stays within it, Escape/×/Cancel close it and return focus to its opener, and Enter follows the active form or focused button; reduced motion removes the entrance animation;
     - Settings opens below Scan for games in all layouts; there is no status bar;
     - reassign both shortcuts, save and verify the hints and actual bindings, reopen and verify persistence; Cancel leaves settings unchanged;

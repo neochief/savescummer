@@ -7,6 +7,7 @@ The app finds supported games on the computer by itself and lets the user add ot
 It works on Windows, macOS and Linux through platform adapters around the same host and UI design.
 
 The app icon is [assets/icon.svg](assets/icon.svg).
+Its winking skull is a playful homage to Skelly, the repeatedly defeated training dummy from *Hades*; the red rewind arrow ties the character to the save-and-retry loop.
 
 This document is the map. Each part of the app has its own plan, written so that part can be rebuilt from scratch without reading the others (see PLANS).
 
@@ -80,6 +81,7 @@ Rules for the plans:
 - **Each plan says how to test its part.** There is no separate test plan.
 - **The host owns the protocol.** The UI plan changes to follow it, not the other way round. Both change together when the protocol does.
 - **Plans explain why.** They describe principles, main parts and core logic, and leave implementation details to the code.
+- **Plans use concrete examples.** State the behavior and the reason for it in plain language, including what happens when an operation fails or a platform differs.
 
 
 ## PRINCIPLES
@@ -98,7 +100,7 @@ These hold across every part:
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Status | Host, CLI and Tauri UI in an installer | Host, CLI and Tauri UI in a DMG | Host, CLI and Tauri UI in x86_64 and aarch64 AppImages; exercised with real games |
+| Status | Host, CLI and Tauri UI in an installer | Host, CLI and Tauri UI in a DMG | Released host, CLI and Tauri UI in x86_64 and aarch64 AppImages |
 | Game monitoring | Implemented | Implemented | Implemented |
 | Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 | Ctrl+F5 / Ctrl+F9 through the desktop portal where available, with X11 fallback |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
