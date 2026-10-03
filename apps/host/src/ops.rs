@@ -177,13 +177,11 @@ pub fn submit(
     {
         cue(host, sound);
     }
-    if hotkey {
-        if let Err(f) = &result {
-            match f.kind {
-                ErrorKind::GameRunning => notify_exit_first(host, f.game.as_deref().unwrap_or(game)),
-                ErrorKind::Busy | ErrorKind::NoGameData | ErrorKind::NoSaves => {}
-                _ => notify_failure(host, f),
-            }
+    if hotkey && let Err(f) = &result {
+        match f.kind {
+            ErrorKind::GameRunning => notify_exit_first(host, f.game.as_deref().unwrap_or(game)),
+            ErrorKind::Busy | ErrorKind::NoGameData | ErrorKind::NoSaves => {}
+            _ => notify_failure(host, f),
         }
     }
     result
