@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(not(target_os = "macos"), path = "unsupported.rs")]
 mod imp;
 
-/// What macOS asks about, one grant each.
+/// The kinds of protection macOS asks about. Containers and volumes can
+/// have independent grants within the same category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
@@ -94,6 +95,12 @@ impl Table {
     /// filled in, links resolved one step at a time so nothing inside a
     /// guarded location is ever touched, even to check it exists.
     pub fn category_of(&self, path: &Path) -> Option<Category> {
+        self.location_of(path).map(|(category, _)| category)
+    }
+
+    /// The protection and its location, without reading inside it. Container,
+    /// volume and bundle approvals must not authorize unrelated locations.
+    pub fn location_of(&self, path: &Path) -> Option<(Category, PathBuf)> {
         if self.is_empty() || !path.is_absolute() {
             return None;
         }
@@ -101,12 +108,14 @@ impl Table {
         pending.reverse();
         let mut hops = 0;
         while let Some(name) = pending.pop() {
-            if let Some(category) = self.lexical(&current) {
-                return Some(category);
+            if self.lexical(&current).is_some() {
+                current.push(name);
+                current.extend(pending.iter().rev());
+                return self.lexical(&current);
             }
             let next = current.join(&name);
             if self.is_volume(&next) {
-                return Some(Category::Volumes);
+                return Some((Category::Volumes, next));
             }
             let Ok(meta) = fs::symlink_metadata(&next) else {
                 // Missing (or unreadable): the rest can only be judged by name.
@@ -136,19 +145,32 @@ impl Table {
     }
 
     /// The category of a path with every link already resolved.
-    fn lexical(&self, path: &Path) -> Option<Category> {
-        if let Some((_, category)) = self.folders.iter().find(|(root, _)| path.starts_with(root)) {
-            return Some(*category);
+    fn lexical(&self, path: &Path) -> Option<(Category, PathBuf)> {
+        if let Some((root, category)) = self.folders.iter().find(|(root, _)| path.starts_with(root)) {
+            let location = if *category == Category::AppData {
+                path.strip_prefix(root).ok()?.components().next().map_or_else(|| root.clone(), |c| root.join(c))
+            } else {
+                root.clone()
+            };
+            return Some((*category, location));
         }
         if let Some(volumes) = &self.volumes
             && let Ok(rest) = path.strip_prefix(volumes)
             && let Some(first) = rest.components().next()
             && imp::is_mount_point(&volumes.join(first))
         {
-            return Some(Category::Volumes);
+            return Some((Category::Volumes, volumes.join(first)));
         }
-        let in_bundle = path.components().any(|c| c.as_os_str().to_string_lossy().to_lowercase().ends_with(".app"));
-        (self.app_bundles && in_bundle).then_some(Category::AppBundles)
+        if self.app_bundles {
+            let mut bundle = PathBuf::new();
+            for component in path.components() {
+                bundle.push(component);
+                if component.as_os_str().to_string_lossy().to_lowercase().ends_with(".app") {
+                    return Some((Category::AppBundles, bundle));
+                }
+            }
+        }
+        None
     }
 
     /// A volume's mount point itself: judged before it's looked at.
@@ -180,6 +202,8 @@ pub enum Access {
     Granted,
     /// macOS refused without asking: the user denied it before.
     Denied,
+    /// No successful access was established (missing location or I/O failure).
+    Unverified,
 }
 
 /// Reads `path` (its nearest existing folder) the way a Save would, which
@@ -188,7 +212,7 @@ pub enum Access {
 /// there.
 pub fn probe(path: &Path, category: Category) -> Access {
     let Some(folder) = path.ancestors().find(|p| fs::metadata(p).is_ok_and(|m| m.is_dir())) else {
-        return Access::Granted;
+        return Access::Unverified;
     };
     if let Err(e) = fs::read_dir(folder) {
         return access(&e);
@@ -206,9 +230,9 @@ pub fn probe(path: &Path, category: Category) -> Access {
 }
 
 /// A permission error (`EPERM`, "operation not permitted") is the privacy
-/// refusal; anything else is some other problem the OS let us run into.
+/// refusal; another I/O failure doesn't establish access.
 pub fn access(e: &io::Error) -> Access {
-    if is_privacy_refusal(e) { Access::Denied } else { Access::Granted }
+    if is_privacy_refusal(e) { Access::Denied } else { Access::Unverified }
 }
 
 /// Whether an error is macOS's privacy refusal. Plain file permissions give
@@ -266,5 +290,31 @@ mod tests {
     #[test]
     fn plain_permission_errors_are_not_privacy_refusals() {
         assert!(!is_privacy_refusal(&io::Error::from(io::ErrorKind::NotFound)));
+        assert_eq!(access(&io::Error::from(io::ErrorKind::PermissionDenied)), Access::Unverified);
+        assert_eq!(access(&io::Error::from(io::ErrorKind::NotFound)), Access::Unverified);
+    }
+
+    #[test]
+    fn protected_locations_have_separate_container_and_bundle_scopes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let containers = root.join("Containers");
+        let t =
+            Table { folders: vec![(containers.clone(), Category::AppData)], app_bundles: true, ..Default::default() };
+        for name in ["GameOne", "GameTwo"] {
+            let container = containers.join(name);
+            assert_eq!(t.location_of(&container.join("Data/saves")), Some((Category::AppData, container)));
+        }
+        let bundle = root.join("Game.app");
+        assert_eq!(t.location_of(&bundle.join("Contents/saves")), Some((Category::AppBundles, bundle)));
+        #[cfg(unix)]
+        {
+            fs::create_dir_all(&containers).unwrap();
+            std::os::unix::fs::symlink(containers.join("GameOne"), root.join("LinkedGame")).unwrap();
+            assert_eq!(
+                t.location_of(&root.join("LinkedGame/saves")),
+                Some((Category::AppData, containers.join("GameOne")))
+            );
+        }
     }
 }

@@ -15,7 +15,7 @@ This is a first-launch feature, not a recurring readiness screen.
 - Preserve configured or cleared shortcuts and existing OS grants/denials. Do not reset permissions or restore default bindings as part of setup.
 - Register shortcuts silently where possible. Defer any registration that may open an approval/configuration dialog until an explicit action.
 - Request macOS file access only for protected locations needed by games detected on this machine.
-- No detected games means no game-save permission row. A scan still in progress is not an empty library.
+- With no detected games, offer game access only when a known game library or discovery location is protected. A scan still in progress is not an empty library.
 - Show only applicable permission rows. If there are none, go directly to the normal app.
 - Initially label the exit button **Skip**. Change it to **Continue** after at least one requested permission is confirmed as granted. It does not require every row to succeed.
 - Opening a dialog or System Settings does not count as approval. Denial, cancellation, timeout, and failure do not count either.
@@ -174,8 +174,9 @@ Use the existing window and app styling. No additional navigation or permanent s
 | Before you play                                                 |
 |                                                                 |
 | --------------------------------------------------------------  |
-| Allow reading your saves                       [ Allow access ] |
-| Needed to back up and restore your progress.                    |
+| Allow access to your games                     [ Allow access ] |
+| Needed to find your games and back up and restore               |
+| your progress.                                                  |
 | --------------------------------------------------------------  |
 | Start at login optional                       [ Open settings ] |
 | Keeps your hotkeys ready whenever you play.                     |
@@ -195,8 +196,9 @@ If only one row applies, omit the other row. Do not show a disabled or already-c
 | Before you play                                                 |
 |                                                                 |
 | --------------------------------------------------------------  |
-| Allow reading your saves                            [ Allowed ] |
-| Needed to back up and restore your progress.                    |
+| Allow access to your games                          [ Allowed ] |
+| Needed to find your games and back up and restore               |
+| your progress.                                                  |
 | --------------------------------------------------------------  |
 | Start at login optional                       [ Open settings ] |
 | Keeps your hotkeys ready whenever you play.                     |
@@ -268,14 +270,14 @@ Do not add an autostart question or a "setup complete" screen. Folder access err
 2. For a genuinely unconfigured, eligible app bundle, attempt login-item registration. Record an approval row only if registration needs user approval and intended startup is on.
 3. Register shortcuts through the existing implementation; it does not require an Accessibility setup request.
 4. Discover installed games without reading unapproved protected locations. Use known paths and the existing privacy guard to identify required access.
-5. Add Game saves only if detected games need protected locations whose access has not been established. With no detected games, omit it. Do not probe unrelated app containers merely to force an OS prompt.
+5. Add game access when a known library/discovery location or a detected game's saves need protected access. A blocked library can hide every game in it, so include that location even with no detected games. Do not probe unrelated app containers merely to force an OS prompt.
 6. If no rows remain, finish and open the app. Otherwise show the one screen.
-7. Allow access initiates the necessary scoped access operations, one permission scope at a time. Open settings for login approval navigates to Login Items.
+7. One Allow access action requests known library locations first, rescans after each approval, and continues to newly discovered protected saves. Serialize native requests and stop scheduling them if the screen is dismissed. Open settings for login approval navigates to Login Items.
 8. Verify outcomes, update rows, and change Skip to Continue after any confirmed grant. Finish only when the user exits the screen.
 
 #### What Game saves covers
 
-The row can include Files and Folders access (for example Documents or external volumes), other apps' protected data containers, and App Management only if a detected game really stores saves inside an `.app` bundle and restore requires writing there. These are separate OS protections represented by one app-level row; one click may lead to multiple sequential native requests.
+The row can include Files and Folders access for game discovery or saves (for example Documents or external volumes), other apps' protected data containers, and App Management only if a detected game really stores saves inside an `.app` bundle and restore requires writing there. These are separate OS protections represented by one app-level row; one click may lead to multiple sequential native requests. Approval for one container or drive must not imply approval for another. Partial approval keeps the remaining access action available.
 
 Other apps' data access is not Automation permission. Do not request Automation, Accessibility, or Full Disk Access for these current features.
 
@@ -382,7 +384,7 @@ commands:
   finish_onboarding(session)
 ```
 
-Row messages and actions come from the host; the UI owns only each kind's name and explanation, and marks the login row with a dimmed "optional": the app works without it. Game saves: Allow access asks for each waiting category in turn; a refusal offers Open settings, which opens the pane of a refused category, then Check again, which reads again (macOS never prompts twice). Start at login: Open settings opens Login Items; the row turns Allowed only when the service reports enabled, read again whenever the window regains focus.
+Row messages and actions come from the host; the UI owns only each kind's name and explanation, and marks the login row with a dimmed "optional": the app works without it. Game access: Allow access asks for each waiting scope in turn, rescanning after approval; a refusal offers Open settings, which opens the pane of a refused category, then Check again, which reads again (macOS never prompts twice). Start at login: Open settings opens Login Items; the row turns Allowed only when the service reports enabled, read again whenever the window regains focus.
 
 - Host validates that the session is active and the requested row is applicable; UI visibility is not authorization.
 - Use the existing state/event publication path. OS callback/worker results update the host and then the UI.
@@ -433,7 +435,7 @@ Use fake OS adapters for deterministic lifecycle/decision tests and native relea
 ### Native platform checks
 
 - **Windows:** test installer on/off and a release app launched without the installer. Verify silent per-user startup setup and no permission screen; a shortcut conflict must not fabricate a permission row.
-- **macOS:** test zero games, readable saves, protected saves, and both pending save access and login approval. Verify no access request before the row action; confirm the host obtains access; test denial, settings return without approval, actual approval, and restart with transient access no longer valid. Existing per-game guidance handles later needs without onboarding.
+- **macOS:** test zero games with and without a blocked known library, readable saves, protected saves, and both pending game access and login approval. Approve a blocked library and verify the same action discovers its games and requests protected saves; test two independent drives and containers, partial approval, and dismissal before the next request. Verify no access request before the row action; confirm the host obtains access; test denial, settings return without approval, actual approval, and restart with transient access no longer valid. Existing per-game guidance handles later needs without onboarding.
 - **Linux/X11:** verify silent autostart/menu setup and shortcut registration. No permission screen for those successful operations.
 - **Linux/Wayland:** test supported GNOME/KDE portal environments and an unavailable backend. GNOME 50: first launch with ids already allowed shows the row and Set up binds without a dialog (verified); the next start must rebind silently from the host's record; revoking the shortcuts in GNOME Settings must ask once at the next start and, if cancelled, never again. Record whether each backend binds silently or prompts; verify the screen follows capabilities rather than OS/session name alone. Verify cancellation, remembered bindings, changed/cleared shortcuts, incomplete binding, fallback limitations, and late successful responses.
 

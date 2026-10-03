@@ -59,7 +59,7 @@ pub fn check_paths(host: &Host, game: &str) -> Result<(), Failure> {
                     let mut f = Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(path).game(game);
                     f.access = Some(Box::new(savescummer_core::AccessInfo {
                         category: category.as_str().into(),
-                        denied: host.privacy.is_denied(category),
+                        denied: host.privacy.is_denied(path, category),
                         settings_url: category.settings_url().into(),
                     }));
                     return Err(f);

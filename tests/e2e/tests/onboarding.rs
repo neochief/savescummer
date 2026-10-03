@@ -145,6 +145,90 @@ fn a_denial_keeps_skip_and_offers_the_settings_pane() {
 }
 
 #[test]
+fn one_allow_action_discovers_a_blocked_library_then_allows_its_saves() {
+    let setup = Setup::new();
+    let game = setup.guarded_game("granted");
+    setup.world.set_env(
+        "privacy",
+        json!({ "folders": [
+        [setup.world.steam, "volumes"], [setup.world.documents, "documents"]
+    ] }),
+    );
+    setup.world.set_env("privacy_answers", json!({ "volumes": "granted", "documents": "granted" }));
+    let _host = setup.host(true, &[]);
+    let screen = setup.screen();
+    assert!(setup.world.state()["games"].as_array().unwrap().is_empty(), "the library hasn't been read");
+    assert_eq!(screen["rows"][0]["kind"], "game_access");
+    assert!(!setup.world.host_log().contains("asking for access"));
+
+    assert_eq!(setup.request(&s(&screen["session"]), "game_access")["result"]["status"], "granted");
+    assert_eq!(setup.world.game(&game)["installed"], true);
+    assert!(setup.world.game(&game)["access"].is_null());
+    assert_eq!(setup.world.state()["onboarding"]["any_permission_confirmed"], true);
+    let log = setup.world.host_log();
+    assert_eq!(log.matches("asking for access").count(), 2, "{log}");
+    assert!(log.find("asking for access to removable").unwrap() < log.find("asking for access to Documents").unwrap());
+}
+
+#[test]
+fn a_library_grant_and_a_save_denial_are_partial_approval() {
+    let setup = Setup::new();
+    let game = setup.guarded_game("denied");
+    setup.world.set_env(
+        "privacy",
+        json!({ "folders": [
+        [setup.world.steam, "volumes"], [setup.world.documents, "documents"]
+    ] }),
+    );
+    setup.world.set_env("privacy_answers", json!({ "volumes": "granted", "documents": "denied" }));
+    let _host = setup.host(true, &[]);
+    let session = s(&setup.screen()["session"]);
+    assert_eq!(setup.request(&session, "game_access")["result"]["status"], "partial");
+    let screen = setup.world.state()["onboarding"].clone();
+    assert_eq!(screen["rows"][0]["action"], "open_settings");
+    assert_eq!(screen["any_permission_confirmed"], true);
+    assert_eq!(setup.world.game(&game)["access"]["denied"], true);
+    assert_eq!(setup.world.host_log().matches("asking for access").count(), 2);
+    setup.finish(&session);
+    assert!(setup.world.state()["onboarding"].is_null());
+}
+
+#[test]
+fn a_protected_library_can_need_access_before_any_game_is_installed() {
+    let setup = Setup::new();
+    setup.world.set_env("privacy", json!({ "folders": [[setup.world.steam, "volumes"]] }));
+    setup.world.set_env("privacy_answers", json!({ "volumes": "granted" }));
+    let _host = setup.host(true, &[]);
+    let screen = setup.screen();
+    assert_eq!(screen["rows"][0]["kind"], "game_access");
+    assert!(setup.world.state()["games"].as_array().unwrap().is_empty());
+    assert_eq!(setup.request(&s(&screen["session"]), "game_access")["result"]["status"], "granted");
+    assert!(setup.world.state()["games"].as_array().unwrap().is_empty());
+    assert_eq!(setup.world.host_log().matches("asking for access").count(), 1);
+}
+
+#[test]
+fn one_allow_action_reaches_a_second_drive_revealed_by_the_first_library() {
+    let setup = Setup::new();
+    let second = setup.world.root.join("Second drive");
+    std::fs::create_dir_all(second.join("steamapps")).unwrap();
+    write(
+        &setup.world.steam.join("steamapps/libraryfolders.vdf"),
+        &format!("\"libraryfolders\" {{ \"1\" {{ \"path\" {} }} }}", serde_json::to_string(&second).unwrap()),
+    );
+    setup.world.set_env("privacy", json!({ "folders": [[setup.world.steam, "volumes"], [second, "volumes"]] }));
+    setup.world.set_env("privacy_answers", json!({ "volumes": "granted" }));
+    let _host = setup.host(true, &[]);
+    let session = s(&setup.screen()["session"]);
+    assert!(!setup.world.host_log().contains("asking for access"));
+
+    assert_eq!(setup.request(&session, "game_access")["result"]["status"], "granted");
+    let log = setup.world.host_log();
+    assert_eq!(log.matches("asking for access").count(), 2, "each drive is checked: {log}");
+    assert!(log.contains(&second.display().to_string()), "the newly discovered drive was checked: {log}");
+}
+
+#[test]
 fn closing_the_window_finishes_setup() {
     let setup = Setup::new();
     setup.guarded_game("granted");

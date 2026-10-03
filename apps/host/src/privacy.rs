@@ -4,7 +4,7 @@
 //!
 //! - The guarded locations come from the environment (the OS's table, or a
 //!   test's). A path is judged by its location alone, before any read.
-//! - Granted categories are remembered in the data folder for this build's
+//! - Granted scopes are remembered in the data folder for this build's
 //!   code identity: a new build starts with none, as macOS does. Other
 //!   apps' data is granted for the process's lifetime only (Apple's
 //!   rule): it's never remembered across runs.
@@ -34,13 +34,15 @@ const FILE: &str = "privacy.json";
 struct Saved {
     identity: String,
     granted: BTreeSet<Category>,
+    #[serde(default)]
+    locations: BTreeSet<(Category, PathBuf)>,
 }
 
 #[derive(Debug, Default)]
 struct Grants {
-    granted: BTreeSet<Category>,
+    granted: BTreeSet<(Category, PathBuf)>,
     /// Asked this run and refused: macOS won't ask again.
-    denied: BTreeSet<Category>,
+    denied: BTreeSet<(Category, PathBuf)>,
 }
 
 pub struct Privacy {
@@ -56,8 +58,7 @@ pub struct Privacy {
 pub enum Answer {
     Granted,
     Denied,
-    /// Nothing inside the location exists to read yet: neither proven nor
-    /// refused.
+    /// No successful access was established: missing location or I/O failure.
     Unverified,
 }
 
@@ -67,18 +68,24 @@ impl Privacy {
         let identity = privacy::code_identity().unwrap_or_default();
         let saved: Option<Saved> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok());
         let mut granted = match saved {
-            Some(saved) if saved.identity == identity => saved.granted,
-            Some(saved) if !saved.granted.is_empty() => {
-                crate::trace(&format!(
-                    "a new build: macOS forgot access to {}",
-                    saved.granted.iter().map(|c| c.display_name()).collect::<Vec<_>>().join(", ")
-                ));
+            Some(saved) if saved.identity == identity => {
+                let mut grants: BTreeSet<_> =
+                    saved.granted.into_iter().filter(|c| !scoped(*c)).map(|c| (c, PathBuf::new())).collect();
+                grants.extend(saved.locations);
+                grants
+            }
+            Some(saved) if !saved.granted.is_empty() || !saved.locations.is_empty() => {
+                let categories: BTreeSet<_> =
+                    saved.granted.into_iter().chain(saved.locations.into_iter().map(|(c, _)| c)).collect();
+                for category in categories {
+                    crate::trace(&format!("a new build: macOS forgot access to {}", category.display_name()));
+                }
                 BTreeSet::new()
             }
             _ => BTreeSet::new(),
         };
         // Recorded by an earlier build, which remembered everything.
-        granted.retain(|c| remembered(*c));
+        granted.retain(|(c, _)| remembered(*c));
         Privacy {
             table: env.privacy.clone(),
             answers: env.privacy_answers.clone(),
@@ -95,11 +102,22 @@ impl Privacy {
     /// The guarded category `path` needs and doesn't have yet.
     pub fn needed(&self, path: &Path) -> Option<Category> {
         let category = self.table.category_of(path)?;
-        (!self.grants().granted.contains(&category)).then_some(category)
+        (!self.grants().granted.contains(&self.scope(path, category))).then_some(category)
     }
 
-    pub fn is_denied(&self, category: Category) -> bool {
-        self.grants().denied.contains(&category)
+    /// The OS scope actually tested. Ordinary folder permissions cover the
+    /// category; other containers, volumes and app bundles stay independent.
+    pub fn scope(&self, path: &Path, category: Category) -> (Category, PathBuf) {
+        let location = if scoped(category) {
+            self.table.location_of(path).map_or_else(|| path.to_path_buf(), |(_, root)| root)
+        } else {
+            PathBuf::new()
+        };
+        (category, location)
+    }
+
+    pub fn is_denied(&self, path: &Path, category: Category) -> bool {
+        self.grants().denied.contains(&self.scope(path, category))
     }
 
     /// Reads `path` to ask macOS for its category, and waits for the answer.
@@ -120,13 +138,18 @@ impl Privacy {
             None => privacy::probe(path, category),
         };
         let granted = access == Access::Granted;
+        if access == Access::Unverified {
+            crate::trace(&format!("access to {}: couldn't verify it", category.display_name()));
+            return Answer::Unverified;
+        }
+        let scope = self.scope(path, category);
         {
             let mut grants = self.grants();
             if granted {
-                grants.granted.insert(category);
-                grants.denied.remove(&category);
+                grants.granted.insert(scope.clone());
+                grants.denied.remove(&scope);
             } else {
-                grants.denied.insert(category);
+                grants.denied.insert(scope);
             }
         }
         crate::trace(&format!("access to {}: {}", category.display_name(), if granted { "granted" } else { "denied" }));
@@ -146,8 +169,8 @@ impl Privacy {
         self.table.category_of(folder) == Some(category) && !(category == Category::AppData && root)
     }
 
-    fn revoke(&self, category: Category) -> bool {
-        let removed = self.grants().granted.remove(&category);
+    fn revoke(&self, path: &Path, category: Category) -> bool {
+        let removed = self.grants().granted.remove(&self.scope(path, category));
         if removed {
             crate::trace(&format!("access to {} was taken back", category.display_name()));
             self.save();
@@ -160,13 +183,13 @@ impl Privacy {
     /// is forgotten. Only reads where access was granted, so it never asks.
     pub fn taken_back(&self, path: &Path) -> bool {
         let Some(category) = self.table.category_of(path) else { return false };
-        if !self.grants().granted.contains(&category) {
+        if !self.grants().granted.contains(&self.scope(path, category)) {
             return false;
         }
         for folder in path.ancestors() {
             match std::fs::read_dir(folder) {
                 Ok(_) => return false,
-                Err(e) if privacy::is_privacy_refusal(&e) => return self.revoke(category),
+                Err(e) if privacy::is_privacy_refusal(&e) => return self.revoke(path, category),
                 Err(_) => continue,
             }
         }
@@ -174,8 +197,11 @@ impl Privacy {
     }
 
     fn save(&self) {
-        let granted = self.grants().granted.iter().copied().filter(|c| remembered(*c)).collect();
-        let saved = Saved { identity: self.identity.clone(), granted };
+        let grants = self.grants();
+        let granted = grants.granted.iter().filter(|(c, _)| !scoped(*c)).map(|(c, _)| *c).collect();
+        let locations = grants.granted.iter().filter(|(c, _)| scoped(*c) && remembered(*c)).cloned().collect();
+        let saved = Saved { identity: self.identity.clone(), granted, locations };
+        drop(grants);
         let text = serde_json::to_string_pretty(&saved).expect("grants serialize");
         if let Err(e) = std::fs::write(&self.file, text) {
             crate::trace(&format!("can't record granted access in {}: {e}", self.file.display()));
@@ -187,6 +213,10 @@ impl Privacy {
 /// the process's lifetime.
 fn remembered(category: Category) -> bool {
     category != Category::AppData
+}
+
+fn scoped(category: Category) -> bool {
+    matches!(category, Category::Volumes | Category::AppData | Category::AppBundles)
 }
 
 /// Installs the privacy guard: file helpers leave locations not granted yet
@@ -213,20 +243,38 @@ pub fn game_needs(host: &Host, targets: &[PathBuf], install_dirs: &[PathBuf]) ->
     })
 }
 
-/// Installed games waiting for each category, with a path that needs it.
-pub fn waiting(inner: &Inner) -> BTreeMap<Category, PathBuf> {
-    let mut out: BTreeMap<Category, PathBuf> = BTreeMap::new();
+/// Installed games waiting for access. Keep separate locations so one
+/// container or volume's approval never hides another one's request.
+pub fn waiting(inner: &Inner) -> Vec<(Category, PathBuf)> {
+    let mut out = BTreeSet::new();
     for (id, derived) in &inner.derived {
         if let Some((path, category)) = &derived.access
             && inner.games.get(id).is_some_and(|g| g.installed)
         {
-            out.entry(*category).or_insert_with(|| path.clone());
+            out.insert((*category, path.clone()));
         }
     }
-    out
+    out.into_iter().collect()
 }
 
-/// After a user's scan, ask for every category installed games wait for. Background scans leave access guidance in the app's UI.
+/// Known discovery locations first, then saves of installed games. Unknown
+/// protected folders are never searched just to make a permission request.
+pub fn onboarding_waiting(host: &Host) -> Vec<(Category, PathBuf)> {
+    let mut locations = Vec::new();
+    let mut seen = BTreeSet::new();
+    let discovery = host.env.discovery_locations().into_iter().filter_map(|path| {
+        host.privacy.needed(&path).filter(|c| *c != Category::AppBundles).map(|category| (category, path))
+    });
+    let games = waiting(&host.lock());
+    for (category, path) in discovery.chain(games) {
+        if seen.insert(host.privacy.scope(&path, category)) {
+            locations.push((category, path));
+        }
+    }
+    locations
+}
+
+/// After a user's scan, ask for the scopes installed games wait for. Background scans leave access guidance in the app's UI.
 pub fn after_scan(host: &Arc<Host>, user: bool) {
     if !user {
         return;
@@ -237,7 +285,7 @@ pub fn after_scan(host: &Arc<Host>, user: bool) {
     }
     let mut any = false;
     for (category, path) in &waiting {
-        if !host.privacy.is_denied(*category) {
+        if host.privacy.needed(path).is_some() && !host.privacy.is_denied(path, *category) {
             any |= host.privacy.ask(path, *category) == Answer::Granted;
         }
     }
@@ -320,7 +368,7 @@ pub fn ask_for(host: &Host, path: &Path) -> Result<(), Failure> {
 /// and a scan resolves them again with their locations readable. A scan
 /// running now (the one that asked) read without access, so it's a new one,
 /// queued after it.
-pub fn granted(host: &Arc<Host>) {
+pub fn granted(host: &Arc<Host>) -> u64 {
     {
         let mut inner = host.lock();
         crate::library::derive_all(host, &mut inner);
@@ -330,7 +378,7 @@ pub fn granted(host: &Arc<Host>) {
             host.bump_history(&mut inner, &id);
         }
     }
-    host.scans.request_again(false, "access was granted");
+    let scan = host.scans.request_again(false, "access was granted");
     let watcher = host.watcher.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(watcher) = watcher.as_ref() {
         watcher.set_paths(host.env.watch_locations());
@@ -339,4 +387,63 @@ pub fn granted(host: &Arc<Host>) {
     let mut inner = host.lock();
     crate::monitoring::activate_running(&mut inner);
     host.publish(&mut inner);
+    scan
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn approving_one_drive_does_not_approve_another_and_container_grants_expire() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let usb = root.join("USB");
+        let network = root.join("Network");
+        let containers = root.join("Containers");
+        let one = containers.join("One/saves");
+        let two = containers.join("Two/saves");
+        let env: Environment = serde_json::from_value(json!({
+            "platform": "macos", "folders": {},
+            "privacy": { "folders": [[usb, "volumes"], [network, "volumes"], [containers, "app_data"]] },
+            "privacy_answers": { "volumes": "granted", "app_data": "granted" }
+        }))
+        .unwrap();
+        let privacy = Privacy::load(&root, &env);
+        assert_eq!(privacy.ask(&usb, Category::Volumes), Answer::Granted);
+        assert_eq!(privacy.needed(&usb.join("Steam/steamapps")), None);
+        assert_eq!(privacy.needed(&network), Some(Category::Volumes));
+        assert_eq!(privacy.ask(&one, Category::AppData), Answer::Granted);
+        assert_eq!(privacy.needed(&one), None);
+        assert_eq!(privacy.needed(&two), Some(Category::AppData));
+        let restarted = Privacy::load(&root, &env);
+        assert_eq!(restarted.needed(&usb), None);
+        assert_eq!(restarted.needed(&network), Some(Category::Volumes));
+        assert_eq!(restarted.needed(&one), Some(Category::AppData));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_folder_is_unverified_and_never_cached_as_granted() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let folder = root.join("Documents");
+        std::fs::create_dir(&folder).unwrap();
+        let env: Environment = serde_json::from_value(json!({
+            "platform": "macos", "folders": {}, "privacy": { "folders": [[folder, "documents"]] }
+        }))
+        .unwrap();
+        let privacy = Privacy::load(&root, &env);
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o0)).unwrap();
+        let read = std::fs::read_dir(&folder);
+        let answer = privacy.ask(&folder, Category::Documents);
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).unwrap();
+        if read.is_err() {
+            // A root test runner can read regardless of mode.
+            assert_eq!(answer, Answer::Unverified);
+            assert_eq!(privacy.needed(&folder), Some(Category::Documents));
+        }
+    }
 }

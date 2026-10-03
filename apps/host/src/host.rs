@@ -294,9 +294,9 @@ impl Host {
             retry: facts.availability(Action::Retry),
             guidance: facts.guidance(),
             config_error: derived.active.as_ref().err().cloned(),
-            access: derived.access.as_ref().map(|(_, category)| AccessInfo {
+            access: derived.access.as_ref().map(|(path, category)| AccessInfo {
                 category: category.as_str().to_string(),
-                denied: self.privacy.is_denied(*category),
+                denied: self.privacy.is_denied(path, *category),
                 settings_url: category.settings_url().to_string(),
             }),
             latest: cache.latest.clone(),
@@ -421,15 +421,15 @@ impl Host {
         let derived = inner.derived.get(game_id).cloned().unwrap_or_default();
         let contextual = |mut f: Failure| {
             if f.kind == ErrorKind::AccessNeeded {
-                let category = f
+                let access = f
                     .paths
                     .iter()
-                    .find_map(|p| self.privacy.needed(Path::new(p)))
-                    .or_else(|| derived.access.as_ref().map(|(_, c)| *c));
-                if let Some(category) = category {
+                    .find_map(|p| self.privacy.needed(Path::new(p)).map(|c| (Path::new(p), c)))
+                    .or_else(|| derived.access.as_ref().map(|(p, c)| (p.as_path(), *c)));
+                if let Some((path, category)) = access {
                     f.access = Some(Box::new(AccessInfo {
                         category: category.as_str().into(),
-                        denied: self.privacy.is_denied(category),
+                        denied: self.privacy.is_denied(path, category),
                         settings_url: category.settings_url().into(),
                     }));
                 }

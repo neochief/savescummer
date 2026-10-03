@@ -10,7 +10,7 @@ use savescummer_catalog::KnownFolders;
 use crate::{GogGame, RegistryKey};
 
 /// Where GOG Galaxy on macOS records its installs, for every user.
-const GALAXY_DB: &str = "/Users/Shared/GOG.com/Galaxy/Storage/galaxy-2.0.db";
+pub(crate) const GALAXY_DB: &str = "/Users/Shared/GOG.com/Galaxy/Storage/galaxy-2.0.db";
 
 pub fn known_folders() -> KnownFolders {
     let home = std::env::var_os("HOME").map(PathBuf::from);
@@ -46,6 +46,9 @@ pub fn gog_games() -> Vec<GogGame> {
 /// waiting: a missing, locked or unexpected database lists nothing, and the
 /// next scan tries again.
 pub fn galaxy_games(db: &Path) -> Vec<GogGame> {
+    if savescummer_snapshots::is_guarded(db) {
+        return Vec::new();
+    }
     let read = || -> rusqlite::Result<Vec<GogGame>> {
         let connection = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         connection.busy_timeout(Duration::ZERO)?;

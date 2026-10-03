@@ -6,8 +6,8 @@ import type { Onboarding, OnboardingAction, OnboardingKind, OnboardingRow } from
 // What each permission is, in the user's words, and whether the app works without it. Which rows apply, and their
 // results, come from the host.
 const rows: Record<OnboardingKind, { name: string; text: string; optional?: boolean }> = {
-  game_access: { name: 'Allow reading your saves',
-    text: 'Needed to back up and restore your progress.' },
+  game_access: { name: 'Allow access to your games',
+    text: 'Needed to find your games and back up and restore your progress.' },
   login_approval: { name: 'Start at login', optional: true,
     text: 'Keeps your hotkeys ready whenever you play.' },
   shortcuts: { name: 'Allow keyboard shortcuts',

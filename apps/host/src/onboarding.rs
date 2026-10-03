@@ -186,7 +186,7 @@ fn prepare(host: &Arc<Host>, id: &str) {
         std::thread::sleep(Duration::from_millis(100));
     }
     let mut rows = Vec::new();
-    if !crate::privacy::waiting(&host.lock()).is_empty() {
+    if !crate::privacy::onboarding_waiting(host).is_empty() {
         rows.push(Row::new(OnboardingKind::GameAccess, OnboardingAction::AllowAccess));
     }
     if os_setup(host) && launch_needs_approval(host) {
@@ -343,19 +343,19 @@ pub fn request(host: &Arc<Host>, session: &str, row: &str) -> Result<serde_json:
     Ok(serde_json::json!({ "row": row, "status": status }))
 }
 
-/// Allow access: asks for each category detected games wait for, one at a
-/// time, stopping when setup ends. Open settings goes to the pane of one
+/// Allow access: asks for known libraries and then the saves they reveal,
+/// one scope at a time, stopping when setup ends. Open settings goes to the pane of one
 /// still refused; Check again asks again (macOS doesn't prompt twice, so
 /// it only reads).
 fn game_access(host: &Arc<Host>, id: &str, action: OnboardingAction, before: OnboardingStatus) -> Update {
     if action == OnboardingAction::OpenSettings {
-        let waiting = crate::privacy::waiting(&host.lock());
+        let waiting = crate::privacy::onboarding_waiting(host);
         // A refused category's pane: that's where the user turns access on.
         let pane = waiting
-            .keys()
-            .find(|c| host.privacy.is_denied(**c))
-            .or_else(|| waiting.keys().next())
-            .map(|c| c.settings_url());
+            .iter()
+            .find(|(c, path)| host.privacy.is_denied(path, *c))
+            .or_else(|| waiting.first())
+            .map(|(c, _)| c.settings_url());
         if let Some(url) = pane
             && let Err(e) = savescummer_platform::open_folder(Path::new(url))
         {
@@ -371,24 +371,32 @@ fn game_access(host: &Arc<Host>, id: &str, action: OnboardingAction, before: Onb
     let mut asked = std::collections::BTreeSet::new();
     let (mut granted, mut denied) = (false, false);
     loop {
-        // A grant can reveal the next category a game waits for.
-        let next = crate::privacy::waiting(&host.lock()).into_iter().find(|(c, _)| !asked.contains(c));
+        // A granted library reveals games and their save locations in the
+        // rescan; they are included in this same explicit action.
+        let next = crate::privacy::onboarding_waiting(host)
+            .into_iter()
+            .find(|(c, path)| !asked.contains(&host.privacy.scope(path, *c)));
         let Some((category, path)) = next else { break };
         if !is_active(host, id) {
             break;
         }
-        asked.insert(category);
+        asked.insert(host.privacy.scope(&path, category));
         match host.privacy.ask(&path, category) {
             Answer::Granted => {
                 granted = true;
-                crate::privacy::granted(host);
+                let scan = crate::privacy::granted(host);
+                while host.scans.wait(scan, Duration::from_millis(100)).is_none() {
+                    if !is_active(host, id) || host.lock().phase == Phase::ShuttingDown {
+                        return Update { status: before, message: None, action: Some(action), confirmed: granted };
+                    }
+                }
             }
             Answer::Denied => denied = true,
             Answer::Unverified => {}
         }
     }
-    let remaining = crate::privacy::waiting(&host.lock());
-    let some_denied = remaining.keys().any(|c| host.privacy.is_denied(*c));
+    let remaining = crate::privacy::onboarding_waiting(host);
+    let some_denied = remaining.iter().any(|(c, path)| host.privacy.is_denied(path, *c));
     let retry = if some_denied { OnboardingAction::OpenSettings } else { OnboardingAction::AllowAccess };
     if remaining.is_empty() {
         Update { status: OnboardingStatus::Granted, message: None, action: None, confirmed: true }
@@ -409,7 +417,7 @@ fn game_access(host: &Arc<Host>, id: &str, action: OnboardingAction, before: Onb
     } else {
         Update {
             status: OnboardingStatus::Failed,
-            message: Some("Nothing to check yet: the saves aren't there."),
+            message: Some("Couldn't verify access to some locations. Check that they're available, then try again."),
             action: Some(OnboardingAction::AllowAccess),
             confirmed: false,
         }

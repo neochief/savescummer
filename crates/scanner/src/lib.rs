@@ -207,7 +207,7 @@ impl Environment {
         let mut libraries = vec![root.clone()];
         let mut seen = vec![real(root)];
         let file = root.join("steamapps").join("libraryfolders.vdf");
-        if let Some(map) = fs::read_to_string(&file).ok().and_then(|t| vdf::parse(&t))
+        if let Some(map) = read_text(&file).ok().and_then(|t| vdf::parse(&t))
             && let Some(folders) = map.map("libraryfolders")
         {
             for (_, entry) in folders.maps() {
@@ -224,6 +224,23 @@ impl Environment {
         libraries
     }
 
+    /// Locations the install scan has evidence to inspect. Listing these
+    /// does not read inside protected libraries: onboarding can request
+    /// access before a game in one has been discovered.
+    pub fn discovery_locations(&self) -> Vec<PathBuf> {
+        let mut locations: Vec<_> = self.steam_libraries().into_iter().map(|p| p.join("steamapps")).collect();
+        locations.extend(self.folders.steam_root.clone());
+        locations.extend(self.epic_manifests.clone());
+        locations.extend(self.loose_roots.iter().map(|r| r.path.clone()));
+        locations.extend(self.gog().into_iter().map(|g| g.path));
+        locations.extend(self.epic_manifests.as_deref().map(epic_installs).unwrap_or_default());
+        #[cfg(target_os = "macos")]
+        if self.query_os {
+            locations.push(PathBuf::from(os::GALAXY_DB));
+        }
+        locations
+    }
+
     /// The current Steam account, in the order PLAN-CATALOG.md 4.4 gives:
     /// the running client's ActiveUser, `MostRecent` in loginusers.vdf, the
     /// newest `Timestamp` there, then the only `userdata` folder.
@@ -235,7 +252,7 @@ impl Environment {
         if let Some(account) = login_users(&root.join("config").join("loginusers.vdf")) {
             return Some(account);
         }
-        let userdata: Vec<u32> = fs::read_dir(root.join("userdata"))
+        let userdata: Vec<u32> = read_directory(root.join("userdata"))
             .ok()?
             .flatten()
             .filter(|e| e.path().is_dir())
@@ -247,7 +264,7 @@ impl Environment {
 
     fn active_user(&self) -> Option<u32> {
         if let Some(file) = &self.steam_active_user_file {
-            return fs::read_to_string(file).ok()?.trim().parse().ok();
+            return read_text(file).ok()?.trim().parse().ok();
         }
         if self.query_os
             && let Some(active) = os::steam_active_user()
@@ -255,7 +272,7 @@ impl Environment {
             return Some(active);
         }
         // registry.vdf: Registry/HKCU/Software/Valve/Steam/ActiveProcess/ActiveUser
-        let text = fs::read_to_string(self.steam_registry_file.as_ref()?).ok()?;
+        let text = read_text(self.steam_registry_file.as_ref()?).ok()?;
         let map = vdf::parse(&text)?;
         let active = map.path(&["Registry", "HKCU", "Software", "Valve", "Steam", "ActiveProcess"])?;
         active.text("ActiveUser")?.parse().ok()
@@ -375,7 +392,7 @@ impl Environment {
 }
 
 fn login_users(path: &Path) -> Option<SteamAccount> {
-    let map = vdf::parse(&fs::read_to_string(path).ok()?)?;
+    let map = vdf::parse(&read_text(path).ok()?)?;
     let users = map.map("users")?;
     let mut best: Option<(u64, u64)> = None; // (timestamp, id64)
     for (id, user) in users.maps() {
@@ -435,7 +452,7 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
             found.unreadable.push(library.clone());
             continue;
         }
-        let entries = match fs::read_dir(&steamapps) {
+        let entries = match read_directory(&steamapps) {
             Ok(entries) => entries,
             Err(_) => {
                 if savescummer_snapshots::presence(&steamapps) != Presence::Missing {
@@ -454,7 +471,7 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
                 continue;
             };
             let Some(games) = by_steam.get(&appid) else { continue };
-            let Some(manifest) = fs::read_to_string(entry.path()).ok().and_then(|t| vdf::parse(&t)) else { continue };
+            let Some(manifest) = read_text(entry.path()).ok().and_then(|t| vdf::parse(&t)) else { continue };
             let Some(state) = manifest.map("AppState") else { continue };
             let Some(dir) = state.text("installdir") else { continue };
             // Steam writes the manifest when an install starts and rewrites it
@@ -464,7 +481,7 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
                 continue;
             }
             let install_dir = steamapps.join("common").join(dir);
-            if !install_dir.is_dir() {
+            if !readable_directory(&install_dir) {
                 continue;
             }
             let proton_prefix = (env.platform == Platform::Linux)
@@ -475,9 +492,12 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
                 bundle.game(id).is_none_or(|g| {
                     let exes = &g.executables;
                     exes.is_empty()
-                        || Platform::ALL
-                            .iter()
-                            .any(|p| exes.for_platform(*p).iter().any(|exe| install_dir.join(exe).exists()))
+                        || Platform::ALL.iter().any(|p| {
+                            exes.for_platform(*p).iter().any(|exe| {
+                                let path = install_dir.join(exe);
+                                !savescummer_snapshots::is_guarded(&path) && path.exists()
+                            })
+                        })
                 })
             }) {
                 found.installs.push(Install {
@@ -494,7 +514,7 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
     // GOG: Galaxy lists each install with its id.
     for gog in env.gog() {
         if let Some(games) = by_gog.get(&gog.id)
-            && gog.path.is_dir()
+            && readable_directory(&gog.path)
         {
             for game in games {
                 push_unique(
@@ -570,8 +590,14 @@ pub fn discover(bundle: &Bundle, env: &Environment) -> Discovery {
                 if root.store == Store::Epic && has_epic_manifests {
                     continue; // the launcher's manifests are the better source
                 }
+                if savescummer_snapshots::is_guarded(&root.path) {
+                    if !found.unreadable.contains(&root.path) {
+                        found.unreadable.push(root.path.clone());
+                    }
+                    continue;
+                }
                 let candidate = root.path.join(dir);
-                if candidate.is_dir() && has_executable(game, &candidate, env.platform) {
+                if readable_directory(&candidate) && has_executable(game, &candidate, env.platform) {
                     push_unique(
                         &mut found.installs,
                         Install {
@@ -613,18 +639,21 @@ fn steam_fully_installed(flags: Option<&str>) -> bool {
 fn has_executable(game: &savescummer_catalog::Game, dir: &Path, platform: Platform) -> bool {
     let exes = game.executables.for_platform(platform);
     // A game without listed executables can't be validated by one.
-    !exes.is_empty() && exes.iter().any(|exe| dir.join(exe).exists())
+    !exes.is_empty()
+        && exes.iter().any(|exe| {
+            let path = dir.join(exe);
+            !savescummer_snapshots::is_guarded(&path) && path.exists()
+        })
 }
 
 fn epic_installs(dir: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(dir) else { return Vec::new() };
+    let Ok(entries) = read_directory(dir) else { return Vec::new() };
     let mut out = Vec::new();
     for entry in entries.flatten() {
         if entry.path().extension().is_none_or(|e| !e.eq_ignore_ascii_case("item")) {
             continue;
         }
-        let Some(item) =
-            fs::read_to_string(entry.path()).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        let Some(item) = read_text(entry.path()).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
         else {
             continue;
         };
@@ -633,6 +662,26 @@ fn epic_installs(dir: &Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+fn read_text(path: impl AsRef<Path>) -> std::io::Result<String> {
+    let path = path.as_ref();
+    if savescummer_snapshots::is_guarded(path) {
+        return Err(std::io::ErrorKind::PermissionDenied.into());
+    }
+    fs::read_to_string(path)
+}
+
+fn read_directory(path: impl AsRef<Path>) -> std::io::Result<fs::ReadDir> {
+    let path = path.as_ref();
+    if savescummer_snapshots::is_guarded(path) {
+        return Err(std::io::ErrorKind::PermissionDenied.into());
+    }
+    fs::read_dir(path)
+}
+
+fn readable_directory(path: &Path) -> bool {
+    !savescummer_snapshots::is_guarded(path) && path.is_dir()
 }
 
 /// The real machine, as the resolver observes it.
@@ -676,10 +725,7 @@ impl Probe for RealProbe<'_> {
     }
 
     fn list_dirs(&self, path: &Path) -> Option<Vec<String>> {
-        if savescummer_snapshots::is_guarded(path) {
-            return None;
-        }
-        let entries = fs::read_dir(path).ok()?;
+        let entries = read_directory(path).ok()?;
         Some(
             entries
                 .flatten()
