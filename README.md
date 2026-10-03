@@ -91,7 +91,7 @@ Everything a clean Ubuntu 22.04 or newer needs before `cargo xtask run`. Other d
 The build tools and the WebKitGTK and GTK libraries Tauri builds against:
 
 ```bash
-sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev
+sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev patchelf gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 ```
 
 Rust through rustup, not apt or snap, so `rust-toolchain.toml` picks the version:

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The UI inside the AppImage: the Tauri binary (usr/bin/savescummer-ui) with
 # the GTK and WebKit bundled beside it, set up the way Tauri's own AppImage
-# does (linuxdeploy's GTK hook and the libraries in usr/lib).
+# does (linuxdeploy's GTK and GStreamer hooks and the libraries in usr/lib).
+# Without the GStreamer hook the bundled libgstreamer finds no plugins and
+# WebKit's web process aborts: the window stays blank.
 #
 # The environment it started with is kept in SAVESCUMMER_OUTER_ENV, so what
 # the UI starts (the host, a browser, a file manager) gets it back and never
@@ -15,6 +17,7 @@ if [ -z "${SAVESCUMMER_OUTER_ENV:-}" ]; then
 fi
 export APPDIR="$appdir"
 source "$appdir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
+source "$appdir/apprun-hooks/linuxdeploy-plugin-gstreamer.sh"
 export LD_LIBRARY_PATH="$appdir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # WebKit finds its helper processes relative to the working directory:
 # Tauri's bundler rewrites their path in the bundled library to ././/lib/….

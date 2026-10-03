@@ -110,14 +110,27 @@ fn make_executable(path: &Path) -> anyhow::Result<()> {
 /// Packaging builds Tauri's AppImage for its AppDir, from the pinned tools
 /// only (Tauri downloads nothing it finds in its cache). Other builds make
 /// no bundle.
+///
+/// `bundleMediaFramework` adds GStreamer's plugins and their hook (its
+/// script is built into Tauri's CLI): the bundled libgstreamer looks for
+/// plugins only inside the AppDir, and WebKitGTK 2.52's web process aborts
+/// when it can't make `appsink` or `autoaudiosink`, leaving a blank window.
 pub fn tauri_bundle(build: &mut Command, package: bool) -> anyhow::Result<()> {
     if !package {
         build.arg("--no-bundle");
         return Ok(());
     }
     check_tools()?;
+    // linuxdeploy's GStreamer plugin needs it, and otherwise fails with only
+    // "failed to run linuxdeploy" from Tauri.
+    cmd::on_path("patchelf", "install it to bundle GStreamer (`sudo apt install patchelf`)")?;
     build
-        .args(["--bundles", "appimage", "--config", r#"{"bundle":{"active":true}}"#])
+        .args([
+            "--bundles",
+            "appimage",
+            "--config",
+            r#"{"bundle":{"active":true,"linux":{"appimage":{"bundleMediaFramework":true}}}}"#,
+        ])
         .env("XDG_CACHE_HOME", tauri_cache())
         // Its tools are AppImages; this runs them without FUSE (CI runners).
         .env("APPIMAGE_EXTRACT_AND_RUN", "1");
@@ -167,12 +180,12 @@ fn copy_tree(from: &Path, to: &Path) -> anyhow::Result<()> {
 /// ```text
 /// AppRun                               packaging/linux/AppRun: host, `ui` or `cli`
 /// com.savescummer.SaveScummer.desktop, savescummer.svg, .DirIcon
-/// apprun-hooks/                        linuxdeploy's GTK setup, for the UI
+/// apprun-hooks/                        linuxdeploy's GTK and GStreamer setup, for the UI
 /// usr/bin/SaveScummer                  host
 /// usr/bin/SaveScummer.CLI              CLI
 /// usr/bin/SaveScummer.UI               packaging/linux/SaveScummer.UI: the UI's wrapper
 /// usr/bin/savescummer-ui               the Tauri UI
-/// usr/lib/                             GTK, WebKit and their helpers
+/// usr/lib/                             GTK, WebKit, GStreamer and their helpers
 /// usr/share/applications/com.savescummer.SaveScummer.desktop, usr/share/icons/…
 /// usr/share/savescummer/               licenses, manifest and checksums
 /// ```
@@ -206,7 +219,9 @@ pub fn fill_package(root: &Path, inputs: &Inputs) -> anyhow::Result<Layout> {
         make_executable(&path)?;
     }
     anyhow::ensure!(program(root, TAURI_UI).is_file(), "the Tauri AppDir has no usr/bin/{TAURI_UI}");
-    anyhow::ensure!(root.join("apprun-hooks").is_dir(), "the Tauri AppDir has no apprun-hooks/");
+    for hook in ["linuxdeploy-plugin-gtk.sh", "linuxdeploy-plugin-gstreamer.sh"] {
+        anyhow::ensure!(root.join("apprun-hooks").join(hook).is_file(), "the Tauri AppDir has no apprun-hooks/{hook}");
+    }
 
     let desktop = linux.join(DESKTOP_ENTRY);
     package::copy_file(&desktop, &root.join(DESKTOP_ENTRY))?;

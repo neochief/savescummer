@@ -392,12 +392,12 @@ Built on the oldest supported Ubuntu, locally or on the matching `ubuntu-*` runn
 
 ### App package and release file
 
-The UI's GTK and WebKit come from Tauri's own AppImage bundling (`tauri build --bundles appimage`), which solves what bundling WebKitGTK needs: it copies WebKit's helper processes (`WebKitWebProcess`, `WebKitNetworkProcess`, the injected bundle) into the AppDir and rewrites their path in the bundled library to one relative to the working directory, deploys GTK's modules with linuxdeploy's GTK plugin, and adds that plugin's environment hook. xtask builds it only when packaging, from the pinned tools (`setup linux-tools`), and keeps its AppDir; its own AppImage isn't used.
+The UI's GTK and WebKit come from Tauri's own AppImage bundling (`tauri build --bundles appimage`), which solves what bundling WebKitGTK needs: it copies WebKit's helper processes (`WebKitWebProcess`, `WebKitNetworkProcess`, the injected bundle) into the AppDir and rewrites their path in the bundled library to one relative to the working directory, deploys GTK's modules with linuxdeploy's GTK plugin, and adds that plugin's environment hook. `bundleMediaFramework` also deploys GStreamer's plugins with linuxdeploy's GStreamer plugin and its hook. Why: the bundled libgstreamer looks for plugins only inside the AppDir, and WebKitGTK's web process (2.52 at least) aborts at startup when it can't create `appsink` or `autoaudiosink`, so without them the window stays blank (background color only). xtask builds it only when packaging, from the pinned tools (`setup linux-tools`), and keeps its AppDir; its own AppImage isn't used.
 
 The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`: Tauri's AppDir with
 
 - the host and CLI beside the UI in `usr/bin/` (`SaveScummer`, `SaveScummer.CLI`); the Tauri UI stays `usr/bin/savescummer-ui`
-- `usr/bin/SaveScummer.UI`, from `packaging/linux/SaveScummer.UI`: the UI's wrapper, which runs linuxdeploy's GTK hook, puts `usr/lib` on the library path and starts the UI from `usr/` (where WebKit finds its helpers)
+- `usr/bin/SaveScummer.UI`, from `packaging/linux/SaveScummer.UI`: the UI's wrapper, which runs linuxdeploy's GTK and GStreamer hooks, puts `usr/lib` on the library path and starts the UI from `usr/` (where WebKit finds its helpers)
 - `AppRun` replaced by `packaging/linux/AppRun`, and Tauri's desktop entry and icons by `packaging/linux/com.savescummer.SaveScummer.desktop` and `assets/icon.svg`. The entry is named for the app id, `com.savescummer.SaveScummer`, the same as the macOS bundle; the UI names its window class (GTK's program name, the Wayland app id) the same, and `StartupWMClass` repeats it, so docks group the window under the entry and show its icon
 - licenses, notices, manifest and checksums in `usr/share/savescummer/`
 

@@ -31,7 +31,7 @@ Linux (x86_64 or aarch64):
 - **A C toolchain and the WebKitGTK and GTK development packages** Tauri builds against. On Ubuntu or Debian:
 
   ```bash
-  sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev
+  sudo apt install build-essential pkg-config curl git file libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev patchelf gstreamer1.0-plugins-base gstreamer1.0-plugins-good
   ```
 
   The README's [Linux setup](../README.md#linux-setup) walks through a clean Ubuntu, Rust and Node included.
