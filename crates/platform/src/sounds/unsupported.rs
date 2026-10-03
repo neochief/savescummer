@@ -1,4 +1,4 @@
-//! No sound on this OS yet (PLAN-MACOS.md, SOUNDS).
+//! No sound on this OS yet.
 
 pub fn play(wav: &'static [u8]) {
     let _ = wav;

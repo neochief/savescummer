@@ -115,8 +115,7 @@ pub struct Environment {
     #[serde(default)]
     pub loose_roots: Vec<LooseRoot>,
     /// Locations macOS guards behind a permission prompt: the OS's own on a
-    /// Mac, fixture folders marked in tests (PLAN-MACOS.md, PRIVACY
-    /// PERMISSIONS).
+    /// Mac, fixture folders marked in tests (PLAN.md, PLATFORMS).
     #[serde(default)]
     pub privacy: PrivacyTable,
     /// What asking for access answers, in tests: the real prompt when
@@ -347,7 +346,7 @@ impl Environment {
     /// locations): each library's `steamapps`, the main `libraryfolders.vdf`
     /// and Epic's manifests folder.
     /// Guarded locations are left out until macOS allows access
-    /// (PLAN-MACOS.md, PRIVACY PERMISSIONS). On macOS `/Volumes` is watched
+    /// (PLAN.md, PLATFORMS). On macOS `/Volumes` is watched
     /// too, so a disk being attached triggers a scan.
     pub fn watch_locations(&self) -> Vec<PathBuf> {
         let mut out: Vec<PathBuf> = self.steam_libraries().into_iter().map(|l| l.join("steamapps")).collect();

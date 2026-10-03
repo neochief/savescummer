@@ -308,7 +308,7 @@ The host and CLI get version resources (see VERSION) and `assets/icon.ico`; the 
 
 ## macOS release target
 
-`cargo xtask dist` produces the complete app bundle and DMG with the Tauri UI. See [PLAN-MACOS.md](PLAN-MACOS.md) for platform behavior and manual acceptance checks.
+`cargo xtask dist` produces the complete app bundle and DMG with the Tauri UI. User-visible macOS behavior follows the [platform guidance](PLAN.md#platforms); manual checks are in [docs/testing.md](docs/testing.md).
 
 Apple Silicon (M1 or later) only, on the minimum macOS or later. Intel Macs aren't supported, and xtask refuses to build on one.
 
@@ -338,11 +338,11 @@ The host, CLI, UI and bundle must agree on the minimum macOS.
 
 ### Integration
 
-**Launch at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*, under *Allow in the Background*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS. Details in PLAN-MACOS.md, LAUNCH AT LOGIN.
+**Launch at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*, under *Allow in the Background*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS.
 
 ### Upgrade and removal
 
-The README gives both:
+The [installation guide](docs/install.md) gives the user steps; packaging preserves these behaviors:
 
 - **Upgrade:** quit (menu-bar icon → Quit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
 - **Remove:** turn off launch at login, quit, drag to Trash. `~/Library/Application Support/SaveScummer` is never touched.

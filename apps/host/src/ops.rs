@@ -357,8 +357,8 @@ fn submit_new(
     Ok(operation)
 }
 
-/// The safety net for a read that blocks (PLAN-MACOS.md, PRIVACY
-/// PERMISSIONS: a guarded location the table misses): after `--stall-secs`
+/// The safety net for a read that blocks (PLAN-ERRORS.md, E-C18:
+/// a guarded location the table misses): after `--stall-secs`
 /// without any progress of its own file work, the operation is reported
 /// failed. Its thread
 /// is left to finish and keeps the game's lock until it does, so no second

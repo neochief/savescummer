@@ -71,7 +71,6 @@ The app is three programs:
 | [PLAN-UI.md](PLAN-UI.md) | The UI, the main window: layouts, sidebar, actions, history, dialogs. Its own tests. | The protocol in PLAN-HOST |
 | [PLAN-CATALOG.md](PLAN-CATALOG.md) | The catalog: how it's authored and built, and the resolver that builds each game's save set at runtime. Its own tests. | Nothing |
 | [PLAN-BUILD.md](PLAN-BUILD.md) | Builds, packaging, installers, CI and releases. | The few things the app must provide, listed there |
-| [PLAN-MACOS.md](PLAN-MACOS.md) | What macOS needs beyond the shared design: its adapters, its packaging and the decisions macOS forces. | PLAN-HOST, PLAN-BUILD |
 | [PLAN-ERRORS.md](PLAN-ERRORS.md) | A catalog of failure and interruption scenarios: what the host detects, what the user sees, how to test it. Spans host and UI. | PLAN-HOST, PLAN-UI |
 | [PLAN-LOCKDOWN.md](PLAN-LOCKDOWN.md) | Host-owned action policy, stable guidance, tracked Retry and startup recovery. Defines the implemented scope and deferred features. | PLAN-HOST, PLAN-UI |
 
@@ -104,6 +103,14 @@ These hold across every part:
 | Game monitoring | Implemented | Implemented | Implemented |
 | Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 | Ctrl+F5 / Ctrl+F9 through the desktop portal where available, with X11 fallback |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
+
+Platform differences that affect the user or the safety of saves belong here and in the plan for the behavior they change. Build and release details belong in [PLAN-BUILD.md](PLAN-BUILD.md); adapter APIs and past porting steps belong in code and its history.
+
+- **Windows:** the host lives in the notification area. A game holding a save file without delete sharing can block a Load; the shared operation rules refuse or undo it without leaving a partial restore.
+- **macOS:** one app bundle gives the host, UI and CLI a consistent app identity. The host lives in the menu bar; the UI gets a Dock icon while its window is open. Bundled host launches use Launch Services so privacy prompts name SaveScummer. Use public system APIs and request only the permissions needed for a user's action. Protected save locations include Documents, Desktop, Downloads, iCloud Drive, removable volumes, other apps' containers and app bundles. Background work lists games waiting for access without reading those locations or prompting. Only a user action asks for access; hotkeys never prompt. Denied access directs the user to System Settings, and a new signed build may need permission again.
+- **Linux:** the AppImage contains the host, UI and CLI. The catalog resolves native and Proton saves separately. Global shortcuts and focus observation depend on the desktop's X11 and Wayland facilities, as detailed in [PLAN-HOST.md](PLAN-HOST.md#per-os).
+
+On macOS and Linux, a Load checks for affected files held open by the game before replacing them: Unix renames can succeed while the game still holds the old file. The check is best-effort when the OS does not allow process inspection ([PLAN-HOST.md](PLAN-HOST.md#interference-from-the-running-game)).
 
 
 ## TECHNOLOGY

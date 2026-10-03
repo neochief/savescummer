@@ -78,8 +78,8 @@ pub enum ErrorKind {
     KindConflict,
     /// A checkpoint folder can't be read right now (unreadable, not changed).
     CheckpointUnreadable,
-    /// macOS hasn't allowed access to a location yet (PLAN-MACOS.md,
-    /// PRIVACY PERMISSIONS). The detail names the category.
+    /// macOS hasn't allowed access to a location yet (PLAN.md, PLATFORMS).
+    /// The detail names the category.
     AccessNeeded,
     /// File work stopped making progress (a read waiting on a permission
     /// prompt nobody sees). Reported failed; the game stays locked until

@@ -17,7 +17,7 @@ Keep the existing process boundary:
 - The host remains authoritative for busy rejection, deletion deadlines, operation results and current game state. The frontend may format time, manage selection/editing, animate and scroll, but never invents a successful operation or executes one on a local timer.
 - Game artwork is supplied by the host and exposed to the webview through a narrowly scoped local asset path or bridge response, without letting web content address arbitrary files.
 
-**Cross-platform checks:** Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout on each platform. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed. macOS activation and bundle identity are covered by [`PLAN-MACOS.md`](PLAN-MACOS.md).
+**Cross-platform checks:** Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout on each platform. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed. macOS activation and bundle identity follow the [platform guidance](PLAN.md#platforms).
 
 
 ## VISUAL DECISIONS

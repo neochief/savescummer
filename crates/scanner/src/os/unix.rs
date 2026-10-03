@@ -67,7 +67,7 @@ pub fn uninstall_location(_root: &RegistryKey, _key: &str) -> Option<PathBuf> {
 /// `~/.steam/registry.vdf`. macOS Steam has a `registry.vdf` too, but it
 /// holds no ActiveUser, not even while a logged-in client runs (checked
 /// 2026-09-25: only HKLM `SteamPID` and HKCU settings), so macOS falls back to
-/// `loginusers.vdf` (PLAN-MACOS.md, SCANNER). The running account does show
+/// `loginusers.vdf` (PLAN-CATALOG.md, section 4.4). The running account does show
 /// in `logs/connection_log.txt` (`Logged On … [U:1:<account id>]`).
 pub fn steam_registry_file(folders: &KnownFolders) -> Option<PathBuf> {
     if cfg!(target_os = "macos") {

@@ -1,4 +1,4 @@
-//! macOS privacy permissions (PLAN-MACOS.md, PRIVACY PERMISSIONS). A prompt
+//! macOS privacy permissions (PLAN.md, PLATFORMS). A prompt
 //! only ever follows a user action; background work only touches locations
 //! already granted.
 //!

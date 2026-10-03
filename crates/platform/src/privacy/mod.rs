@@ -1,5 +1,5 @@
 //! Locations macOS guards behind a permission prompt (TCC), decided from the
-//! path alone (PLAN-MACOS.md, PRIVACY PERMISSIONS). There's no public way to
+//! path alone (PLAN.md, PLATFORMS). There's no public way to
 //! ask whether access is granted: reading is the test, and reading is what
 //! prompts. So nothing here reads inside a guarded location, except
 //! [`probe`], which exists to prompt.

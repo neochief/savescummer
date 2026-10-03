@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- The launch-at-login agent, registered by the host with SMAppService.agent
-     (PLAN-MACOS.md LAUNCH AT LOGIN). Paths are relative to the bundle. -->
+     (PLAN-BUILD.md macOS Integration). Paths are relative to the bundle. -->
 <plist version="1.0">
 <dict>
 	<key>Label</key>

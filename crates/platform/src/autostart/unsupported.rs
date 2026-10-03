@@ -1,4 +1,4 @@
-//! No sign-in entry on this OS yet (PLAN-MACOS.md, LAUNCH AT LOGIN).
+//! No sign-in entry on this OS yet.
 
 use std::path::Path;
 

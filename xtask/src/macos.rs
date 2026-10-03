@@ -1,5 +1,5 @@
-//! macOS 13+, Apple Silicon (PLAN-BUILD.md macOS, PLAN-MACOS.md BUILD AND
-//! PACKAGING): `SaveScummer.app`, ad-hoc signed, in a drag-to-Applications DMG.
+//! macOS 13+, Apple Silicon (PLAN-BUILD.md, macOS release target):
+//! `SaveScummer.app`, ad-hoc signed, in a drag-to-Applications DMG.
 
 use std::ffi::OsString;
 use std::fs;
@@ -20,8 +20,8 @@ pub const QT_AQT_HOST: &str = "mac";
 pub const QT_AQT_ARCH: &str = "clang_64";
 pub const QT_KIT_DIR: &str = "macos";
 
-/// The login agent the host registers with `SMAppService.agent` (PLAN-MACOS.md
-/// LAUNCH AT LOGIN).
+/// The login agent the host registers with `SMAppService.agent`
+/// (PLAN-BUILD.md, macOS Integration).
 const LOGIN_AGENT: &str = "com.savescummer.SaveScummer.host.plist";
 
 pub fn package_name() -> String {

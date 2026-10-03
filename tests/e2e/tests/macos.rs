@@ -1,4 +1,4 @@
-//! A macOS machine (PLAN-MACOS.md, TESTS): games as `.app` bundles, saves
+//! A macOS machine (docs/testing.md, macOS): games as `.app` bundles, saves
 //! under `~/Library/Application Support`, and the frontmost app as the top of
 //! the ACTIVE STACK. The other suites keep their Windows-shaped world, which
 //! exercises the rules the same way here.

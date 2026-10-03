@@ -1,4 +1,4 @@
-//! No process list on this OS yet (PLAN-MACOS.md, PROCESS MONITORING): no
+//! No process list on this OS yet: no
 //! game is ever seen running.
 
 use crate::{Proc, ProcessSource};

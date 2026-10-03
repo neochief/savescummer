@@ -1,4 +1,4 @@
-//! No tray, hotkeys or notifications on this OS yet (PLAN-MACOS.md).
+//! No tray, hotkeys or notifications on this OS yet.
 
 use super::{MenuSource, Shortcuts, Signal};
 

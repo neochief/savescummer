@@ -169,7 +169,7 @@ Why focus: it is the moment the user looks, and the cooldown means alt-tabbing n
 Per platform:
 
 - **Windows:** folder change notifications and registry change notifications. A folder watch keeps the folder open, which would stop the user from safely removing a USB drive holding a Steam library, so the host releases a drive's watches when Windows asks to remove it and watches again when the drive returns.
-- **macOS:** FSEvents; it holds nothing open, so ejecting is never blocked. The first access to a removable or network volume, or to Documents, makes macOS ask the user for permission. Only a user action may cause that prompt (first run, Scan for games, adding a game, Allow access); background scans skip locations not yet granted and list their games as inactive until the user allows access. Why: a permission dialog out of nowhere looks like the app is snooping, and one during a fullscreen game may go unseen while the read waits on it. Details in PLAN-MACOS, PRIVACY PERMISSIONS.
+- **macOS:** FSEvents holds nothing open, so ejecting is never blocked. Background scans skip protected locations until access is granted and list affected games as inactive. User actions may request access under the rule in [PLAN.md](PLAN.md#platforms).
 - **Linux / SteamOS:** inotify; a watch is dropped automatically on unmount. New mounts (a Steam Deck SD card under `/run/media`) are watched for so their libraries are picked up.
 - **Everywhere:** network drives don't reliably report changes, and the OS may drop events under load and only say "something changed". Both are answered with a scan; focus and periodic scans remain the safety net.
 
@@ -584,7 +584,7 @@ Each of these is a small adapter the host owns, so it works with no window open.
 
 ### Hotkeys
 
-- **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5 (PLAN-MACOS.md, HOTKEYS).
+- **Ctrl+F5** runs Save and **Ctrl+F9** runs Load; on macOS **⌥F5** and **⌥F9**, because macOS reserves ⌃F5.
 - When the UI's window is focused, they act on the game selected in it, even a stopped one. Otherwise they act on the active game. With neither, they do nothing. The UI reports its focus and selection to the host so the host can decide.
 - Holding a key triggers one operation, not many.
 - A request rejected because another operation owns the game gets a short, rate-limited busy cue. A press refused for a lockdown gets the failure cue (PLAN-LOCKDOWN, REASONS).
@@ -617,7 +617,7 @@ Hotkey-triggered Save and Load play a start cue when the request is accepted, th
 | Tray | Notification area | Menu bar (template icon) | StatusNotifierItem (`ksni`): KDE, Ubuntu's GNOME, most others; stock GNOME shows none, and opening the app again shows the window |
 | Notifications | Tray balloons | `UNUserNotificationCenter`, asked the first time one is needed | `notify-send` (libnotify); without it, none |
 | Open-file check before a Load | No (a handle without delete sharing fails stage 2) | Yes (`libproc`) | Yes (`/proc/<pid>/fd`) |
-| Privacy prompts for save locations | None | Games wait until the user allows access (PLAN-MACOS, PRIVACY PERMISSIONS) | None |
+| Privacy prompts for save locations | None | Protected games wait for a user action to allow access; background work and hotkeys never prompt (PLAN.md, PLATFORMS) | None |
 | Sounds | `PlaySound` | `NSSound` | `pw-play`, else `paplay`, else `aplay`, fed the WAV on stdin |
 | Waking from sleep | — | `NSWorkspaceDidWakeNotification` | `CLOCK_BOOTTIME` running ahead of `CLOCK_MONOTONIC` (the time asleep), checked every 3 seconds |
 
@@ -692,7 +692,7 @@ Commands:
 - Open a folder by what it is (see Opening folders), or only resolve it
 - Retry a blocked game as a tracked, durably accepted operation under the per-game reservation, subject to the recovery and exit checks (an ordinary failure has no retry command: the client sends the original command again with a new request ID)
 - Refresh the catalog now
-- Ask macOS for access to where a waiting game lives (the UI's *Allow access*; answered once the user has, granted or denied; PLAN-MACOS, PRIVACY PERMISSIONS)
+- Ask macOS for access to where a waiting game lives (the UI's *Allow access*; answered once the user has, granted or denied; PLAN.md, PLATFORMS)
 - Shut down (the same safe Quit as the tray menu)
 
 Queries:

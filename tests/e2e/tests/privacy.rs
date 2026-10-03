@@ -1,4 +1,4 @@
-//! macOS privacy permissions (PLAN-MACOS.md, PRIVACY PERMISSIONS): games
+//! macOS privacy permissions (PLAN.md, PLATFORMS): games
 //! whose saves are somewhere macOS guards wait, inactive, until the user
 //! allows access, and only a user action ever asks. The guarded table and
 //! the user's answers come from the test environment, so these run on every

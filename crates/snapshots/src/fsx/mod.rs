@@ -77,8 +77,8 @@ pub(crate) fn advance() {
     });
 }
 
-// ---- Locations the OS guards (macOS privacy, PLAN-MACOS.md PRIVACY
-// PERMISSIONS). Touching one before the user allowed it makes macOS ask, and
+// ---- Locations the OS guards (macOS privacy, PLAN.md PLATFORMS).
+// Touching one before the user allowed it makes macOS ask, and
 // the read waits until someone answers: the host says which paths to leave
 // alone for now.
 

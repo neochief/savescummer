@@ -11,6 +11,12 @@ Download the package for your platform from [GitHub Releases](https://github.com
 
 The Linux AppImage includes the host, UI and CLI; it needs no installation or root access.
 
+## Upgrade or remove
+
+- **Windows:** run the new installer to upgrade, or uninstall SaveScummer in Settings → Apps.
+- **macOS:** quit from the menu bar, then drag the new app over the old one to upgrade. To remove it, turn off launch at login, quit, then move the app to Trash.
+- **Linux:** quit from the tray and run the new AppImage. To remove it, turn off launch at login, quit, then delete the AppImage.
+
 ## Checkpoint storage
 
 Checkpoints are stored in the `checkpoints` folder under SaveScummer's app data directory unless you move the checkpoint store in Settings:
