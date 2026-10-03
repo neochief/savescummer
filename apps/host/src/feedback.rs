@@ -12,6 +12,7 @@ use savescummer_ipc::{EventBody, HotkeyAction, Operation, TrayDialogRequest};
 use savescummer_platform::integration::{self, Signal, TrayDialog, TrayGameAction, TrayMenu};
 
 use crate::host::{Host, hotkey_target, new_id};
+use crate::model::{PORTAL_SHORTCUTS_LEGACY, SETTING_PORTAL_SHORTCUTS};
 use crate::ops;
 
 /// Runs what a hotkey press runs: Save or Load on the hotkeys' target.
@@ -38,6 +39,12 @@ pub fn start(host: &Arc<Host>) {
     let weak = Arc::downgrade(host);
     let menu_host = Arc::downgrade(host);
     let shortcuts = host.lock().shortcuts;
+    let allowed = match savescummer_storage::setting(host.db().conn(), SETTING_PORTAL_SHORTCUTS).ok().flatten() {
+        Some(text) if text == PORTAL_SHORTCUTS_LEGACY => integration::portal_ids(shortcuts),
+        Some(text) => serde_json::from_str(&text).unwrap_or_default(),
+        None => Vec::new(),
+    };
+    integration::remember_allowed_shortcuts(allowed);
     let result = integration::start(
         Box::new(move |signal| {
             let Some(host) = weak.upgrade() else { return };
@@ -90,6 +97,17 @@ pub fn start(host: &Arc<Host>) {
                     show_ui(&host);
                 }
                 Signal::Exit => host.request_shutdown(),
+                Signal::ShortcutsAllowed(ids) => {
+                    // Off the portal's thread, which may be answering Settings.
+                    std::thread::spawn(move || {
+                        let text = serde_json::to_string(&ids).expect("ids serialize");
+                        let write =
+                            host.db().write(|c| savescummer_storage::set_setting(c, SETTING_PORTAL_SHORTCUTS, &text));
+                        if let Err(e) = write {
+                            crate::trace(&format!("can't record the allowed shortcuts: {e}"));
+                        }
+                    });
+                }
             }
         }),
         Box::new(move || menu_host.upgrade().map_or_else(TrayMenu::default, |host| tray_menu(&host))),
@@ -150,8 +168,10 @@ impl Shown {
 }
 
 /// Shows the UI (PLAN-HOST, PROCESSES): a connected UI comes to the front;
-/// otherwise one starts.
+/// otherwise one starts. Every deliberate opening comes here, so the
+/// profile's first one starts first-launch setup.
 pub fn show_ui(host: &Arc<Host>) -> Shown {
+    crate::onboarding::begin(host);
     {
         let mut inner = host.lock();
         if inner.ui_connections > 0 {

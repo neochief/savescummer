@@ -70,6 +70,12 @@ export function createMockBridge(): Bridge {
   }
   state.active_stack = [];
   scenario.setup?.({ state, facts, game: find });
+  const firstActions = { game_access: 'allow_access', login_approval: 'open_settings', shortcuts: 'set_up' } as const;
+  if (scenario.onboarding) {
+    state.onboarding = { session: 'onboarding-mock', inspecting: Boolean(scenario.onboarding.inspecting), any_permission_confirmed: false,
+      rows: scenario.onboarding.rows.map((kind) => ({ id: kind, kind, status: 'needs_action', action: firstActions[kind] })) };
+  }
+  const answered: Record<string, number> = {};
   if (scenario.focus && !state.active_stack.includes(scenario.focus)) state.active_stack = [scenario.focus, ...state.active_stack];
   state.games.forEach(lock);
 
@@ -160,6 +166,25 @@ export function createMockBridge(): Bridge {
           for (const rows of Object.values(history)) for (const row of rows) if (row.checkpoint === request.checkpoint) row.label = request.label;
           for (const g of state.games) if (g.latest?.id === request.checkpoint) { g.latest.label = request.label; g.labels_version++; publish(); }
           return {} as T;
+        }
+        case 'request_onboarding_permission': {
+          const row = state.onboarding?.rows.find((r) => r.id === request.row);
+          if (!state.onboarding || state.onboarding.session !== request.session || !row) throw new Error('first-launch setup is over');
+          row.status = 'requesting';
+          publish();
+          await new Promise((r) => setTimeout(r, 900));
+          const answers = scenario.onboarding?.answers?.[row.kind] ?? [{ status: 'granted' }];
+          const answer = answers[Math.min(answered[row.id] = (answered[row.id] ?? -1) + 1, answers.length - 1)];
+          if (!state.onboarding) return {} as T;
+          Object.assign(row, { message: undefined, action: undefined }, answer);
+          if (answer.status === 'granted' || answer.status === 'partial') state.onboarding.any_permission_confirmed = true;
+          publish();
+          return { row: row.id, status: row.status } as T;
+        }
+        case 'finish_onboarding': {
+          state.onboarding = undefined;
+          publish();
+          return { finished: true } as T;
         }
         case 'picker_start': return { path: request.path || null, exists: Boolean(request.path) } as T;
         case 'open_checkpoints': return { path: `${state.settings?.checkpoint_store}/${request.game}`, opened: !request.resolve_only } as T;

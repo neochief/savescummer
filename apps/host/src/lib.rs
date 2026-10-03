@@ -8,6 +8,7 @@
 //! and see the host starting.
 
 pub mod artwork;
+pub mod autostart;
 pub mod catalog_update;
 pub mod checkpoints;
 pub mod demo;
@@ -19,6 +20,7 @@ pub mod lifecycle;
 pub mod log;
 pub mod model;
 pub mod monitoring;
+pub mod onboarding;
 pub mod ops;
 pub mod options;
 pub mod policy;
@@ -94,7 +96,7 @@ pub fn main() -> ExitCode {
     // Logged from here on, even when another host owns the folder.
     log::init(&data_dir);
     if let Some(mode) = &opts.autostart {
-        return autostart(mode == "on", &opts);
+        return autostart(mode == "on", &opts, &data_dir);
     }
     // One host per user and data folder.
     let lock_path = data_dir.join("host.lock");
@@ -132,25 +134,58 @@ fn hand_over(data_dir: &Path) {
     }
 }
 
-fn autostart(on: bool, opts: &Options) -> ExitCode {
-    let exe = match std::env::current_exe() {
-        Ok(exe) => exe,
-        Err(e) => {
-            trace(&format!("launch on startup: {e}"));
-            return ExitCode::from(2);
-        }
+/// `--autostart on|off` (the installer): records the choice and applies it,
+/// then exits. No window, scan or recorded run, and first-launch setup
+/// stays ahead. With a host running for this data folder, the choice goes
+/// through it, one at a time with its own; otherwise the host lock keeps
+/// one from starting meanwhile.
+fn autostart(on: bool, opts: &Options, data_dir: &Path) -> ExitCode {
+    let result = match fs::OpenOptions::new().create(true).truncate(false).write(true).open(data_dir.join("host.lock"))
+    {
+        Ok(lock) if lock.try_lock().is_ok() => std::env::current_exe().map_err(|e| e.to_string()).and_then(|exe| {
+            let mut storage = Storage::open(&data_dir.join("host.db")).map_err(|e| format!("the database: {e}"))?;
+            autostart::choose(&mut storage, on, &exe, opts.data_dir.as_deref())
+        }),
+        Ok(_) => autostart_through_host(on, data_dir),
+        Err(e) => Err(format!("can't open the host lock: {e}")),
     };
-    match savescummer_platform::autostart::set(on, &exe, opts.data_dir.as_deref()) {
+    match result {
         Ok(()) => {
-            let text = format!("launch on startup: {}", if on { "on" } else { "off" });
+            let text = format!("start at login: {}", if on { "on" } else { "off" });
             trace(&text);
             println!("{text}");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            trace(&format!("launch on startup: {e}"));
+            trace(&format!("start at login: {e}"));
             ExitCode::from(2)
         }
+    }
+}
+
+/// The running host applies the choice, as Settings does. It may still be
+/// starting, before it listens.
+fn autostart_through_host(on: bool, data_dir: &Path) -> Result<(), String> {
+    let endpoint = savescummer_ipc::endpoint(data_dir);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut client = loop {
+        match savescummer_ipc::Client::connect(&endpoint) {
+            Ok(client) => break client,
+            Err(e) if Instant::now() >= deadline => return Err(format!("can't reach the running host: {e}")),
+            Err(_) => std::thread::sleep(Duration::from_millis(200)),
+        }
+    };
+    let command = savescummer_ipc::Command::Settings {
+        play_sounds: None,
+        launch_on_startup: Some(on),
+        save_shortcut: None,
+        load_shortcut: None,
+        flush_old_checkpoints: None,
+    };
+    let response = client.request(None, command).map_err(|e| e.to_string())?;
+    match response.error {
+        None if response.ok => Ok(()),
+        error => Err(error.map_or_else(|| "the running host refused".into(), |e| e.to_string())),
     }
 }
 
@@ -210,7 +245,7 @@ fn load_catalog(opts: &Options, data_dir: &Path) -> Result<CatalogState, String>
 }
 
 fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
-    let storage = match Storage::open(&data_dir.join("host.db")) {
+    let mut storage = match Storage::open(&data_dir.join("host.db")) {
         Ok(s) => s,
         Err(e) => {
             ready_line(false, &format!("can't open the database: {e}"), None);
@@ -234,6 +269,8 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    // Before this run is recorded: a run makes a profile an old one.
+    let first_launch = onboarding::init(&mut storage);
     let setting = |key: &str| db::setting(storage.conn(), key).ok().flatten();
     // Drives seen before: one unplugged since reads as disconnected.
     let drives: Vec<PathBuf> = setting(SETTING_DRIVES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
@@ -245,6 +282,7 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
     let play_sounds = setting(SETTING_PLAY_SOUNDS).is_none_or(|v| v == "1");
     let notices = db::notices(storage.conn()).unwrap_or_default();
     let mut inner = Inner::new(store, play_sounds);
+    inner.onboarding = first_launch;
     inner.flush_old = setting(SETTING_FLUSH_OLD).is_none_or(|v| v == "1");
     let defaults = Shortcut::defaults();
     // A stored empty value is a shortcut the user removed; a missing one is the default.
@@ -364,16 +402,10 @@ fn run(opts: Options, data_dir: PathBuf) -> ExitCode {
         watcher.set_registry_keys(scan::registry_keys(&host));
         *host.watcher.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
     }
+    host.started.store(true, std::sync::atomic::Ordering::SeqCst);
     ready_line(true, "", Some(&host));
     if !opts.minimized {
         feedback::show_ui(&host);
-    }
-    if privacy::first_run_asks(&host) {
-        let asking = host.clone();
-        std::thread::spawn(move || {
-            privacy::after_scan(&asking, true);
-            asking.privacy.end_first_run();
-        });
     }
     if opts.demo {
         let demo_host = host.clone();

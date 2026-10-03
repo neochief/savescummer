@@ -42,7 +42,7 @@ The app ships as three programs:
 Only one host runs per user. How it starts decides whether the UI shows:
 
 - **The user launches SaveScummer** (Start menu, Dock, Finder, app menu, the installer's last page): the host starts and shows the UI once it's ready.
-- **At sign-in** (when Launch on startup is on), the entry passes `--minimized`: the host starts in the tray with no window.
+- **At sign-in** (when Start at login is on), the entry passes `--minimized`: the host starts in the tray with no window.
 - **The user launches it while it's running:** the new process finds the running host, asks it to show the UI, and exits. The user just sees the window. On macOS the OS itself delivers the second launch to the running host.
 - **A client needs a host that isn't running:** the CLI (for a command) or the UI (if its host has gone) starts one from the same install folder with `--minimized`, and waits until it's ready. Help and syntax errors don't start anything.
 
@@ -112,7 +112,7 @@ The host has a few options for the build tooling, tests and the sign-in entry. T
 
 - `--minimized` — start in the tray without showing the UI (used by the sign-in entry and by clients that start a host).
 - `--data-dir <dir>` — use another data folder (development and tests).
-- `--autostart on|off` — see Launch on startup.
+- `--autostart on|off` — see Start at login.
 - `--demo` — simulated games and operations, for UI development without touching real saves.
 - `--no-catalog-update` — never fetch a newer catalog, and ignore one fetched earlier: the host runs its built-in catalog (tests, isolated runs and the dev session).
 - `--no-integrations` — no hotkeys, tray, sounds or sign-in changes (automated tests).
@@ -122,11 +122,13 @@ When a host is ready to serve, or fails to start, it writes one machine-readable
 
 A second host started for a data folder that already has one asks the running host to show the UI (unless it has `--minimized`), then reports "another host is running" in its ready line and exits, as before.
 
-### Launch on startup
+### Start at login
 
 The host is the only thing that writes the sign-in entry, so the checkbox and the real entry can't drift apart:
 
-- The UI checkbox and `SaveScummer --autostart on|off` use the same code: set the preference, write or remove the OS entry (Windows `Run` value, macOS login agent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it).
+- The UI checkbox and `SaveScummer --autostart on|off` use the same code: record the choice, then write or remove the OS entry (Windows `Run` value, macOS login agent, Linux XDG autostart), and report the result (the host's exit code and log; the UI shows it). The choice stays recorded when the OS refuses. Why: an explicit off must keep first-launch setup from turning startup on (PLAN-onboarding.md).
+- `--autostart` exits without a window, scan or recorded run, and leaves first-launch setup ahead. With a host running for the data folder, the choice goes through it, one at a time with first-launch setup's default.
+- First-launch setup turns startup on once, only when nothing was chosen and the OS has no entry by our name; an entry turned off in the OS's settings, or another copy's, is left alone.
 - `off` removes only an entry that points at this host.
 - An AppImage re-points its entry to its own path on every start, because each version is a new file. Other platforms install to a fixed path and never rewrite the entry on their own.
 - Development builds never create a sign-in entry: `--autostart on` refuses and the checkbox is disabled. Why: signing in must never start a debug host, and a dev host must not touch the installed app's entry.
@@ -684,7 +686,7 @@ Commands:
 - Add a custom game
 - Configure a game (executable, save location, name for custom games, reset overrides, wait for the game to close, keep a checkpoint when the game closes)
 - Scan
-- Change settings (Play sounds, Launch on startup)
+- Change settings (Play sounds, Start at login)
 - Move the checkpoint store
 - Report the UI's focus and selected game (a connection that reports and watches is the UI; a one-off report, like the CLI's, stays in effect after it disconnects)
 - Show the UI (what a second launch and the tray send)
@@ -717,7 +719,7 @@ Queries:
 
 A client that watches gets the full current state, then a new state whenever something changes:
 
-- The state is a **summary**, and it's self-contained: games in library order (configuration, install tag, install and availability status, instructions, artwork, host-computed Save, Load, Restore, Delete, Flush, Configure and Retry availability, stable guidance with its coverage and remedy, structured reasons, and the exit-rule setting (PLAN-LOCKDOWN)), settings (on macOS, whether launch at login was turned off in System Settings), the ACTIVE STACK, the hotkeys' target, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
+- The state is a **summary**, and it's self-contained: games in library order (configuration, install tag, install and availability status, instructions, artwork, host-computed Save, Load, Restore, Delete, Flush, Configure and Retry availability, stable guidance with its coverage and remedy, structured reasons, and the exit-rule setting (PLAN-LOCKDOWN)), settings (on macOS, whether start at login was turned off in System Settings), the ACTIVE STACK, the hotkeys' target, scan state, each game's latest checkpoint (with its label) and whether it has history, the size of what a Flush would delete, busy and blocked games with their errors, pending delete countdowns, and each game's last result.
 - It never contains full history or old records, so its size doesn't grow with history. History is always queried separately, in pages.
 - Every state carries a revision and a host instance ID. A new instance ID means the host restarted: throw away everything cached and start again.
 - Progress can be coalesced; each delivered state stands on its own.

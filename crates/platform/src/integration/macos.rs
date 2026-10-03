@@ -9,11 +9,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Once};
 
 use super::{
-    HotkeyAction, Key, MenuSource, Shortcut, Shortcuts, Signal, TrayDialog, TrayGameAction, TrayIcon, icon_png,
+    HotkeyAction, MenuSource, Shortcut, ShortcutSetup, Shortcuts, Signal, TrayDialog, TrayGameAction, TrayIcon,
+    hotkeys, icon_png,
 };
 use dispatch2::{DispatchQueue, run_on_main};
-use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
@@ -130,30 +130,24 @@ impl Integration {
         self.hotkey_errors.clone()
     }
 
+    /// Carbon hotkeys need no permission: nothing to allow.
+    pub fn shortcut_setup(&self, _wait: std::time::Duration) -> ShortcutSetup {
+        ShortcutSetup::Ready
+    }
+
+    pub fn set_up_shortcuts(&self) -> std::sync::mpsc::Receiver<Result<(), String>> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = tx.send(Err("the shortcuts need no setup on macOS".into()));
+        rx
+    }
+
     pub fn rebind(&self, shortcuts: Shortcuts) -> Result<(), String> {
         run_on_main(move |_| {
             MAIN.with(|main| {
                 let mut main = main.borrow_mut();
                 let state = main.as_mut().ok_or("hotkeys are not running")?;
                 let manager = state.hotkeys.as_ref().ok_or("hotkeys are unavailable")?;
-                let old = state.shortcuts;
-                for shortcut in old.into_iter().flatten() {
-                    let _ = manager.unregister(native_shortcut(shortcut));
-                }
-                let mut registered = Vec::new();
-                for shortcut in shortcuts.into_iter().flatten() {
-                    let hotkey = native_shortcut(shortcut);
-                    if let Err(error) = manager.register(hotkey) {
-                        for hotkey in registered {
-                            let _ = manager.unregister(hotkey);
-                        }
-                        for shortcut in old.into_iter().flatten() {
-                            let _ = manager.register(native_shortcut(shortcut));
-                        }
-                        return Err(format!("{} is unavailable: {error}", shortcut.canonical()));
-                    }
-                    registered.push(hotkey);
-                }
+                hotkeys::rebind(manager, state.shortcuts, shortcuts)?;
                 state.shortcuts = shortcuts;
                 *lock(&ACTIVE_SHORTCUTS) = Some(shortcuts);
                 Ok(())
@@ -385,37 +379,9 @@ fn register_hotkeys(shortcuts: Shortcuts) -> (Option<GlobalHotKeyManager>, Vec<S
         Ok(manager) => manager,
         Err(e) => return (None, vec![format!("hotkeys are unavailable: {e}")]),
     };
-    let mut errors = Vec::new();
-    for shortcut in shortcuts.into_iter().flatten() {
-        if let Err(e) = manager.register(native_shortcut(shortcut)) {
-            errors.push(format!("{} is unavailable: another app already uses it ({e})", shortcut.canonical()));
-        }
-    }
+    let errors = hotkeys::register(&manager, shortcuts);
     listen_to_hotkeys();
     (Some(manager), errors)
-}
-
-fn native_shortcut(shortcut: Shortcut) -> HotKey {
-    let mut modifiers = Modifiers::empty();
-    if shortcut.ctrl {
-        modifiers |= Modifiers::CONTROL;
-    }
-    if shortcut.alt {
-        modifiers |= Modifiers::ALT;
-    }
-    if shortcut.shift {
-        modifiers |= Modifiers::SHIFT;
-    }
-    if shortcut.meta {
-        modifiers |= Modifiers::SUPER;
-    }
-    let name = match shortcut.key {
-        Key::Function(number) => format!("F{number}"),
-        Key::Letter(letter) => format!("Key{letter}"),
-        Key::Digit(digit) => format!("Digit{digit}"),
-    };
-    let code: Code = name.parse().expect("validated shortcut key");
-    HotKey::new((!modifiers.is_empty()).then_some(modifiers), code)
 }
 
 /// `global-hotkey` takes one handler per process: it forwards to whoever
@@ -436,19 +402,14 @@ fn listen_to_hotkeys() {
 /// filter, and no key-up to wait for: one macOS loses (the screen locking
 /// while the key is down) can't leave a key dead.
 fn hotkey_action(event: GlobalHotKeyEvent) -> Option<HotkeyAction> {
-    if event.state != HotKeyState::Pressed {
-        return None;
-    }
-    let shortcuts = lock(&ACTIVE_SHORTCUTS).unwrap_or_else(Shortcut::defaults);
-    shortcuts
-        .iter()
-        .position(|shortcut| shortcut.is_some_and(|shortcut| native_shortcut(shortcut).id() == event.id))
-        .map(|index| if index == 0 { HotkeyAction::Save } else { HotkeyAction::Load })
+    hotkeys::action(event, lock(&ACTIVE_SHORTCUTS).unwrap_or_else(Shortcut::defaults))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use global_hotkey::HotKeyState;
+    use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 
     #[test]
     fn a_press_after_a_lost_release_still_counts() {

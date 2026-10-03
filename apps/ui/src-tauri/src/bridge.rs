@@ -124,6 +124,13 @@ enum UiRequest {
     PickerStart {
         path: String,
     },
+    RequestOnboardingPermission {
+        session: String,
+        row: String,
+    },
+    FinishOnboarding {
+        session: String,
+    },
 }
 
 impl UiRequest {
@@ -190,6 +197,8 @@ impl UiRequest {
                 Command::Open { target: OpenTarget::TargetRoot { game, target }, resolve_only: false }
             }
             Self::PickerStart { path } => Command::PickerStart { path },
+            Self::RequestOnboardingPermission { session, row } => Command::RequestOnboardingPermission { session, row },
+            Self::FinishOnboarding { session } => Command::FinishOnboarding { session },
         }
     }
 }

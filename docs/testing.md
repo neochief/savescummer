@@ -12,12 +12,12 @@ Default Save shortcut: **Ctrl+F5** on Windows and Linux; **⌥F5** on Mac.
 
 1. Remove the old SaveScummer install:
    - **Windows:** Tray icon → **Exit**; then *Settings → Apps → SaveScummer → Uninstall*.
-   - **Mac:** Turn off **Launch on startup**; menu bar icon → **Exit**; move `SaveScummer.app` from Applications to Trash.
+   - **Mac:** Turn off **Start at login**; menu bar icon → **Exit**; move `SaveScummer.app` from Applications to Trash.
    - **Linux:** Tray icon → **Exit**; move the previous AppImage out of the test location. The AppImage has no installer.
 2. Confirm no SaveScummer process remains. On Windows and Mac, confirm the previous installed app is gone.
 3. Open [GitHub Releases](https://github.com/neochief/savescummer/releases). Download this version's Windows `setup.exe`, Mac `.dmg`, or Linux AppImage for the machine's architecture. Stop if your platform has no release asset.
 4. Install and launch:
-   - **Windows:** Run setup with **Launch at sign-in** checked.
+   - **Windows:** Run setup with **Start at login** checked.
    - **Mac:** Open the DMG, drag the app to Applications, and open it.
    - **Linux:** Make the AppImage executable (`chmod +x SaveScummer-linux-*.AppImage`) and run it.
    - **Check:** The main window and tray/menu-bar icon appear.
@@ -27,7 +27,7 @@ Default Save shortcut: **Ctrl+F5** on Windows and Linux; **⌥F5** on Mac.
 5. Close the main window. The icon should remain; **Main window** from its menu should reopen the UI.
 6. Run `%LOCALAPPDATA%\Programs\SaveScummer\bin\SaveScummer.exe` on Windows, open `SaveScummer.app` on Mac, or run the same AppImage again on Linux. Confirm only one UI window appears.
 7. Icon → **Exit**. Launch the app again; the UI should return.
-8. Enable **Launch on startup** if needed, then sign out and back in. The icon should appear **without** a window. Launch the app normally; the window should open.
+8. Enable **Start at login** if needed, then sign out and back in. The icon should appear **without** a window. Launch the app normally; the window should open.
 
 ### Check an FTL save and restore
 

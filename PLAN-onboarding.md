@@ -1,6 +1,6 @@
 # First-launch setup and permissions
 
-**Status:** implementation spec. The ASCII screens below define the agreed UI; the conversation sketches are illustrative. No application implementation is included in this document.
+**Status:** implemented (`apps/host/src/onboarding.rs` coordinates it). The ASCII screens below define the agreed UI; the conversation sketches are illustrative. Native checks in section 8 are still to be done on macOS, Windows and Wayland desktops.
 
 ## 1. Purpose and scope
 
@@ -155,9 +155,9 @@ Platform inspection needs more information than a single `is_enabled` boolean: d
 
 ### Per-OS action
 
-- **Windows:** reuse the per-user HKCU Run entry. No administrator access or permission screen is needed. Preserve the installer's `--autostart on|off` result.
+- **Windows:** reuse the per-user HKCU Run entry. No administrator access or permission screen is needed. Preserve the installer's `--autostart on|off` result. An entry turned off in Task Manager (its `Explorer\StartupApproved\Run` value, first byte odd) is disabled for first-launch setup's inspection only; the Settings checkbox keeps reading the `Run` value, so it can never get stuck off.
 - **Linux:** write our user-level XDG autostart `.desktop` file. No administrator access or permission prompt. Target the persistent AppImage file, not its temporary mounted host binary.
-- **macOS:** register the bundled `SMAppService` agent. If enabled, no row. If approval is required for an intended on registration, show Launch at login / Open settings. Read `SMAppService.status` to confirm approval. Do not register a copy running from a temporary installer mount as a permanent login target.
+- **macOS:** register the bundled `SMAppService` agent. If enabled, no row. If approval is required for an intended on registration, show Start at login / Open settings. Read `SMAppService.status` to confirm approval. Do not register a copy running from a temporary location as a permanent login target: App Translocation (an app opened from Downloads without being moved) or a read-only volume such as the installer's disk image. This limits only first-launch setup's default; an explicit choice in Settings registers any bundle, including one kept on a writable external drive.
 
 Existing maintenance of an already-enabled Linux entry after an AppImage update remains ordinary maintenance. It must not re-enable a disabled entry or rerun first-launch setup.
 
@@ -169,62 +169,57 @@ Use the existing window and app styling. No additional navigation or permanent s
 
 ```text
 +-----------------------------------------------------------------+
-| SAVESCUMMER                                                     |
+| (sleepy skeleton illustration)                                  |
 |                                                                 |
-| A couple of permissions                                         |
-| Finish setting up SaveScummer on your Mac.                      |
+| Before you play                                                 |
 |                                                                 |
 | --------------------------------------------------------------  |
-| Game saves                                  [ Allow access... ] |
-| Access your games' save files to back up                        |
-| and restore progress.                                           |
+| Allow reading your saves                       [ Allow access ] |
+| Needed to back up and restore your progress.                    |
 | --------------------------------------------------------------  |
-| Launch at login                            [ Open settings... ] |
-| Approve SaveScummer in macOS Login Items.                       |
+| Start at login optional                       [ Open settings ] |
+| Keeps your hotkeys ready whenever you play.                     |
 |                                                                 |
-| You can do this later.                               [ Skip ]   |
+|                            [ Skip ]                             |
 +-----------------------------------------------------------------+
 ```
 
-If only one row applies, omit the other row and use **One last permission**. Do not show a disabled or already-configured row when the screen initially opens.
+If only one row applies, omit the other row. Do not show a disabled or already-configured row when the screen initially opens.
 
 ### macOS: one action confirmed, another still available
 
 ```text
 +-----------------------------------------------------------------+
-| SAVESCUMMER                                                     |
+| (sleepy skeleton illustration)                                  |
 |                                                                 |
-| A couple of permissions                                         |
-| Finish setting up SaveScummer on your Mac.                      |
+| Before you play                                                 |
 |                                                                 |
 | --------------------------------------------------------------  |
-| Game saves                                          [ Allowed ] |
-| Access your games' save files to back up                        |
-| and restore progress.                                           |
+| Allow reading your saves                            [ Allowed ] |
+| Needed to back up and restore your progress.                    |
 | --------------------------------------------------------------  |
-| Launch at login                            [ Open settings... ] |
-| Approve SaveScummer in macOS Login Items.                       |
+| Start at login optional                       [ Open settings ] |
+| Keeps your hotkeys ready whenever you play.                     |
 |                                                                 |
-| You can do this later.                           [ Continue ]   |
+|                          [ Continue ]                           |
 +-----------------------------------------------------------------+
 ```
 
-Allowed is a noninteractive confirmation. Keep a completed row in place during this screen's lifetime to avoid moving the remaining controls. If every displayed action is complete, remove the "You can do this later" hint. Continue still requires a click; do not automatically advance.
+Allowed is a noninteractive confirmation. Keep a completed row in place during this screen's lifetime to avoid moving the remaining controls. Continue still requires a click; do not automatically advance.
 
 ### Linux: desktop needs shortcut approval/configuration
 
 ```text
 +-----------------------------------------------------------------+
-| SAVESCUMMER                                                     |
+| (sleepy skeleton illustration)                                  |
 |                                                                 |
-| One last permission                                             |
-| Finish setting up SaveScummer on your desktop.                  |
+| Before you play                                                 |
 |                                                                 |
 | --------------------------------------------------------------  |
-| Keyboard shortcuts                                [ Set up... ] |
-| Use Save and Load while another app is in front.                |
+| Allow keyboard shortcuts                             [ Set up ] |
+| Needed to save and load from inside your game.                  |
 |                                                                 |
-| You can do this later.                               [ Skip ]   |
+|                            [ Skip ]                             |
 +-----------------------------------------------------------------+
 ```
 
@@ -311,16 +306,26 @@ After this first-launch session, new games and later access failures use existin
 | Environment | Silent behavior | Onboarding |
 | --- | --- | --- |
 | X11 | Register configured shortcuts normally. | No row; conflicts use existing settings/error handling. |
-| Wayland with verified silent binding/reuse supported | Bind/reuse configured shortcuts silently. | No row when already usable. |
+| Wayland, every configured shortcut id allowed before (listed by the portal, or recorded by the host after a confirmed bind) | Bind/reuse configured shortcuts silently. | No row when already usable. |
 | Wayland with a supported portal where binding may prompt | Inspect capabilities/prior bindings without starting a prompting bind. | Set up explicitly initiates that bind. |
 | No supported portal | Retain available X11/XWayland fallback. | No fictional permission action or universal installer button. |
 | Shortcuts explicitly cleared in Settings | Keep them cleared. | No row asking to recreate them. |
 
-Do not equate Wayland with a mandatory dialog. Portal behavior varies by backend. `BindShortcuts` may present a configuration dialog; portal availability, session creation, and a previous binding list alone do not prove that a new bind is silent or active. If silence cannot be established for the backend, defer the potentially prompting call to Set up. Validate supported backend behavior with native checks.
+Do not equate Wayland with a mandatory dialog. Portal behavior varies by backend. `BindShortcuts` may present a configuration dialog; portal availability and session creation do not prove that a new bind is silent or active, and only the bind's response confirms active bindings. The evidence for a silent rebind is that exactly these ids were allowed before (below); anything else defers the potentially prompting call to Set up. Validate supported backend behavior with native checks.
+
+Each shortcut id carries its key (`save:CTRL+F5`), so a changed shortcut is a new id the desktop asks about again, and an unchanged one rebinds silently.
+
+**GNOME 50 (verified 2026-10-03):** `ListShortcuts` in a new session lists nothing, although GNOME remembers allowed ids per app (`/org/gnome/settings-daemon/global-shortcuts/`) and binding them again shows no dialog. So "allowed before" also comes from the host's own record:
+
+- After every confirmed bind (startup rebind, Set up, a Settings change), the host stores the bound ids in the settings (`portal_shortcuts`), per profile. The next start binds silently when every configured id is recorded or listed.
+- A recorded rebind the desktop refuses (the user revoked the shortcuts in the desktop's settings, so it asked once and was cancelled) clears the record: later starts don't ask again and wait for Set up or a Settings change.
+- Profiles from before onboarding are recorded as `legacy` at migration, meaning their current shortcuts: those versions bound at every start, so the user already answered the dialog.
+
+Accepted trade-off: shortcuts revoked in the desktop's settings make the next start show the desktop's dialog once.
 
 XWayland fallback covers X11-focused windows, not every native Wayland window. Do not report that fallback as a confirmed global portal grant. A delayed successful portal reply must update the host's live state and release duplicate fallback grabs as appropriate.
 
-If setup is skipped, do not immediately call the same prompting bind from another startup path. Save the opt-out from this first-launch request; ordinary non-prompting registration/reuse continues on later launches. Explicit Settings changes may request configuration later without reopening onboarding. Missing Linux components remain ordinary support/repair cases, outside this screen.
+If setup is skipped, do not immediately call the same prompting bind from another startup path. Save the opt-out from this first-launch request; ordinary non-prompting registration/reuse continues on later launches. A shortcut changed in Settings is bound through the portal even when the portal doesn't carry the shortcuts yet, which may show the desktop's dialog; Settings waits for the answer, and a declined dialog keeps the new shortcuts on the X11/XWayland grabs. Missing Linux components remain ordinary support/repair cases, outside this screen.
 
 ## 7. Behavior and code ownership
 
@@ -351,7 +356,7 @@ Keep the current OS-specific architecture. Limit cleanup to concrete duplication
 - **First-launch state:** remove `Privacy::first_run`, `first_run_asks`, and `end_first_run` when the coordinator replaces them. The settings-backed lifecycle is the sole source of onboarding completion; the privacy cache records access only.
 - **File access:** extend the existing `Privacy::ask` and platform probe with verified, scoped results and correct grant lifetime. Preserve the separate scan, configuration, and per-game workflows: scans skip previously denied categories, per-game requests prioritize store/recovery access, and configuration asks before committing a proposed path. Keep refresh/publication at the appropriate caller boundary rather than introducing a general request framework.
 - **Autostart:** share intent persistence and application of startup choices across flags, Settings, and onboarding, with the precedence and serialization defined in section 4. Keep OS registration in the existing adapters. The shared operation must also work without constructing a normal `Host` for flag-only invocations. Update Settings' rollback behavior deliberately to preserve recorded intent on OS failure.
-- **Linux portal:** adapt the existing binding worker to separate inspection from potentially prompting calls and publish verified live results. Preserve X11/XWayland fallback, delayed replies, and Settings' wait-for-result behavior. A failed replacement must retain the previous portal session. Do not replace the worker or make every caller asynchronous merely to share onboarding code.
+- **Linux portal:** adapt the existing binding worker to separate inspection from potentially prompting calls and publish verified live results. The worker reports each confirmed bind's ids to the host, which records them (section 6) and hands them back before the next start. Preserve X11/XWayland fallback, delayed replies, and Settings' wait-for-result behavior. A failed replacement must retain the previous portal session. Do not replace the worker or make every caller asynchronous merely to share onboarding code.
 - **Shortcut duplication:** extract only the duplicated macOS/Linux conversion, event-to-action mapping, and registration/rollback algorithms into small internal helpers. Pass existing managers and bindings into those helpers. Keep manager ownership, event listeners, thread dispatch, and fallback handling in the platform modules; leave Windows' native integration separate.
 
 Leave unrelated desktop-entry module reorganization outside this task. The onboarding coordinator consumes existing capabilities and operations; it does not take ownership of their resources or permission caches.
@@ -362,24 +367,28 @@ Expose one optional onboarding snapshot in the normal host state. Proposed shape
 
 ```text
 onboarding: null | {
-  session_id,
+  session,
+  inspecting,                  # rows not known yet: the UI shows its loading state
   rows: [{ id, kind, status, message?, action? }],
   any_permission_confirmed
 }
 
 kind:   game_access | login_approval | shortcuts
 status: needs_action | requesting | granted | partial | denied | failed
+action: allow_access | open_settings | check_again | set_up
 
-actions:
-  request_onboarding_permission(session_id, row_id)
-  finish_onboarding(session_id)
+commands:
+  request_onboarding_permission(session, row)   # answers once the OS result is known
+  finish_onboarding(session)
 ```
+
+Row messages and actions come from the host; the UI owns only each kind's name and explanation, and marks the login row with a dimmed "optional": the app works without it. Game saves: Allow access asks for each waiting category in turn; a refusal offers Open settings, which opens the pane of a refused category, then Check again, which reads again (macOS never prompts twice). Start at login: Open settings opens Login Items; the row turns Allowed only when the service reports enabled, read again whenever the window regains focus.
 
 - Host validates that the session is active and the requested row is applicable; UI visibility is not authorization.
 - Use the existing state/event publication path. OS callback/worker results update the host and then the UI.
 - Group game-access targets in the host; the UI must not invent paths or OS permission categories.
 - Derive the footer label from confirmed results, not attempted actions or silent setup successes.
-- Exiting through Skip or Continue invokes the same finish operation. Closing the window does likewise.
+- Exiting through Skip or Continue invokes the same finish operation. Closing the window does likewise: the UI finishes on its close request, and the host also finishes a session whose UI connection stays gone (or never comes) for a grace period (30 s; `--onboarding-grace-secs` for tests), which still lets a transient disconnect resume.
 - Reject stale/new prompting requests after finish. Late callbacks may update ordinary capability state, but cannot resurrect onboarding or launch a subsequent queued prompt.
 - Add matching UI mock scenarios and protocol types. Keep platform checks out of the component except for presentation supplied by the host.
 
@@ -426,7 +435,7 @@ Use fake OS adapters for deterministic lifecycle/decision tests and native relea
 - **Windows:** test installer on/off and a release app launched without the installer. Verify silent per-user startup setup and no permission screen; a shortcut conflict must not fabricate a permission row.
 - **macOS:** test zero games, readable saves, protected saves, and both pending save access and login approval. Verify no access request before the row action; confirm the host obtains access; test denial, settings return without approval, actual approval, and restart with transient access no longer valid. Existing per-game guidance handles later needs without onboarding.
 - **Linux/X11:** verify silent autostart/menu setup and shortcut registration. No permission screen for those successful operations.
-- **Linux/Wayland:** test supported GNOME/KDE portal environments and an unavailable backend. Record whether each backend binds silently or prompts; verify the screen follows capabilities rather than OS/session name alone. Verify cancellation, remembered bindings, changed/cleared shortcuts, incomplete binding, fallback limitations, and late successful responses.
+- **Linux/Wayland:** test supported GNOME/KDE portal environments and an unavailable backend. GNOME 50: first launch with ids already allowed shows the row and Set up binds without a dialog (verified); the next start must rebind silently from the host's record; revoking the shortcuts in GNOME Settings must ask once at the next start and, if cancelled, never again. Record whether each backend binds silently or prompts; verify the screen follows capabilities rather than OS/session name alone. Verify cancellation, remembered bindings, changed/cleared shortcuts, incomplete binding, fallback limitations, and late successful responses.
 
 When implementing Rust changes, run `cargo fmt --all`, then `cargo clippy -q --workspace --all-targets --locked -- -D warnings`, and relevant behavioral tests. Run the UI checks for UI/IPC changes. This spec alone does not require builds or tests.
 

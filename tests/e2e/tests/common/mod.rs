@@ -253,6 +253,13 @@ impl World {
         self.spawn_host(self.launch_args(), env)
     }
 
+    /// A user launch with more arguments.
+    pub fn host_launched_with(&self, args: &[&str], env: &[(&str, &str)]) -> HostProcess {
+        let mut all = self.launch_args();
+        all.extend(args.iter().map(|a| a.to_string()));
+        self.spawn_host(all, env)
+    }
+
     /// The arguments of a user launch: the test host's, without `--minimized`.
     pub fn launch_args(&self) -> Vec<String> {
         self.host_args().into_iter().filter(|a| a != "--minimized").collect()
