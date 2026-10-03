@@ -344,6 +344,18 @@ first interactive launch, once
 
 Reuse the existing settings and platform adapters. Add explicit inspect/request separation where an existing startup function can prompt. Do not build a second privacy subsystem or duplicate per-game policy.
 
+### Refactoring scope
+
+Keep the current OS-specific architecture. Limit cleanup to concrete duplication and the changes onboarding requires; a broad rewrite or a large line-count reduction is not a goal. Do not introduce a generic permission manager or shared integration lifecycle. File access, login approval, and shortcut sessions keep their own behavior and lifetimes.
+
+- **First-launch state:** remove `Privacy::first_run`, `first_run_asks`, and `end_first_run` when the coordinator replaces them. The settings-backed lifecycle is the sole source of onboarding completion; the privacy cache records access only.
+- **File access:** extend the existing `Privacy::ask` and platform probe with verified, scoped results and correct grant lifetime. Preserve the separate scan, configuration, and per-game workflows: scans skip previously denied categories, per-game requests prioritize store/recovery access, and configuration asks before committing a proposed path. Keep refresh/publication at the appropriate caller boundary rather than introducing a general request framework.
+- **Autostart:** share intent persistence and application of startup choices across flags, Settings, and onboarding, with the precedence and serialization defined in section 4. Keep OS registration in the existing adapters. The shared operation must also work without constructing a normal `Host` for flag-only invocations. Update Settings' rollback behavior deliberately to preserve recorded intent on OS failure.
+- **Linux portal:** adapt the existing binding worker to separate inspection from potentially prompting calls and publish verified live results. Preserve X11/XWayland fallback, delayed replies, and Settings' wait-for-result behavior. A failed replacement must retain the previous portal session. Do not replace the worker or make every caller asynchronous merely to share onboarding code.
+- **Shortcut duplication:** extract only the duplicated macOS/Linux conversion, event-to-action mapping, and registration/rollback algorithms into small internal helpers. Pass existing managers and bindings into those helpers. Keep manager ownership, event listeners, thread dispatch, and fallback handling in the platform modules; leave Windows' native integration separate.
+
+Leave unrelated desktop-entry module reorganization outside this task. The onboarding coordinator consumes existing capabilities and operations; it does not take ownership of their resources or permission caches.
+
 ### UI/IPC contract
 
 Expose one optional onboarding snapshot in the normal host state. Proposed shape, with final Rust/TypeScript naming left to implementation:
@@ -378,6 +390,7 @@ actions:
 - `crates/platform/src/autostart/*`: inspect registration/ownership/disabled status and reuse setters.
 - `apps/host/src/privacy.rs`, `crates/platform/src/privacy/*`: remove automatic first-run prompting; scoped request/results and correct grant lifetime.
 - `crates/platform/src/integration/linux.rs` and `linux/portal.rs`: separate capability inspection and binding; report asynchronous outcomes.
+- `crates/platform/src/integration/macos.rs` and `linux.rs`: extract duplicated shortcut algorithms within the limits above, preserving platform resource ownership and threading.
 - `crates/ipc/src/types.rs`, `apps/ui/src/types.ts`, bridge/mock code, and `App.tsx`: optional onboarding snapshot, actions, and one conditional screen.
 - `packaging/windows/savescummer.iss`: keep the existing `--autostart on|off` contract; both outcomes must become durable choices.
 
