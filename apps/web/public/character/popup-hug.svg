@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1010" height="590" viewBox="120 230 1010 590" version="1.1" style="fill-rule:nonzero;clip-rule:nonzero;stroke-linecap:round;stroke-linejoin:round;">
+    <title>Skeleton hugging a panel — articulated artwork</title>
+    <desc>Transparent, hand-drawn vector artwork. Left and right refer to the viewer. Nested shoulder, elbow, wrist and finger groups carry their own zero-opacity pivot guides. The detached right hand can attach to the opposite edge of any panel. Eye layers follow the shared skeletonEyes contract.</desc>
+    <g id="torso">
+        <g id="rib-cage">
+            <path id="rib-cage-silhouette" d="M240,555C264,522 309,479 379,480L379,691C360,704 334,703 313,690C297,666 287,621 274,586Z" style="fill:rgb(10,5,5);"/>
+            <g id="rib-upper">
+                <path id="rib-upper-bone" d="M288,581C306,597 337,603 361,592C371,588 366,579 362,572C353,557 364,546 379,550L379,605C367,599 366,611 353,615C327,624 293,617 290,596Z" style="fill:white;"/>
+            </g>
+            <g id="rib-middle">
+                <path id="rib-middle-bone" d="M300,627C326,644 356,638 379,620L379,639C363,659 336,662 311,653Z" style="fill:white;"/>
+            </g>
+            <g id="rib-lower">
+                <path id="rib-lower-bone" d="M327,670C345,677 365,670 379,658L379,680C366,691 348,694 332,687Z" style="fill:white;"/>
+            </g>
+        </g>
+        <g id="collarbone">
+            <path id="clavicle-left" d="M264,544C285,542 312,546 337,542C349,540 356,549 355,559C355,569 348,574 337,574L281,574C265,575 255,562 264,544Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+        </g>
+        <g id="neck">
+            <path id="neck-bone" d="M336,503C342,491 359,490 366,503L378,524C386,544 363,555 348,542Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+        </g>
+        <g id="rig-torso" opacity="0">
+            <circle id="pivot-torso" cx="353" cy="598" r="5" style="fill:rgb(0,160,255);"/>
+            <circle id="anchor-panel-left" cx="379" cy="550" r="5" style="fill:rgb(255,140,0);"/>
+            <path id="guide-panel-edge" d="M379,450L379,800" style="fill:none;stroke:rgb(255,140,0);stroke-width:2px;"/>
+        </g>
+    </g>
+    <g id="left-arm">
+        <g id="left-upper-arm">
+            <path id="humerus-left" d="M245,557C252,545 272,549 279,561C287,571 282,581 279,587L309,662C322,663 330,674 328,685C327,694 320,698 313,700C308,715 292,718 280,710C267,702 267,689 274,678L245,603C232,602 224,592 226,579C226,568 235,560 245,557Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+        </g>
+        <g id="left-forearm">
+            <path id="forearm-bone-left" d="M321,691C328,689 336,696 344,700L367,712C376,717 374,729 366,737C358,745 349,742 341,738L308,720C300,715 307,697 315,693Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+            <g id="left-hand">
+                <g id="left-finger-inner">
+                    <path id="left-finger-inner-bone" d="M377,696C388,694 396,703 393,714C389,725 384,735 382,746C380,758 370,763 359,758C348,754 347,745 351,735C357,722 357,705 369,699C372,697 374,696 377,696Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+                    <g id="rig-left-finger-inner" opacity="0">
+                        <circle id="pivot-left-finger-inner" cx="378" cy="710" r="4" style="fill:rgb(0,160,255);"/>
+                        <circle id="tip-left-finger-inner" cx="365" cy="746" r="3" style="fill:rgb(255,140,0);"/>
+                    </g>
+                </g>
+                <g id="left-finger-middle">
+                    <path id="left-finger-middle-bone" d="M409,711C421,709 430,719 427,730C425,741 417,749 415,759C412,771 402,777 391,772C380,768 376,760 382,750C392,737 391,720 402,714C404,712 407,711 409,711Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+                    <g id="rig-left-finger-middle" opacity="0">
+                        <circle id="pivot-left-finger-middle" cx="410" cy="725" r="4" style="fill:rgb(0,160,255);"/>
+                        <circle id="tip-left-finger-middle" cx="398" cy="760" r="3" style="fill:rgb(255,140,0);"/>
+                    </g>
+                </g>
+                <g id="left-finger-outer">
+                    <path id="left-finger-outer-bone" d="M442,725C453,722 461,730 459,742C457,754 450,764 442,774C435,783 426,785 417,779C408,773 410,764 416,756C427,749 426,731 437,727Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+                    <g id="rig-left-finger-outer" opacity="0">
+                        <circle id="pivot-left-finger-outer" cx="442" cy="739" r="4" style="fill:rgb(0,160,255);"/>
+                        <circle id="tip-left-finger-outer" cx="428" cy="768" r="3" style="fill:rgb(255,140,0);"/>
+                    </g>
+                </g>
+                <g id="rig-left-hand" opacity="0">
+                    <circle id="pivot-left-wrist" cx="359" cy="725" r="5" style="fill:rgb(0,160,255);"/>
+                    <circle id="anchor-grip-left" cx="379" cy="734" r="5" style="fill:rgb(255,140,0);"/>
+                </g>
+            </g>
+            <g id="rig-left-forearm" opacity="0">
+                <circle id="pivot-left-elbow" cx="313" cy="702" r="5" style="fill:rgb(0,160,255);"/>
+            </g>
+        </g>
+        <g id="rig-left-arm" opacity="0">
+            <circle id="pivot-left-shoulder" cx="258" cy="574" r="5" style="fill:rgb(0,160,255);"/>
+        </g>
+    </g>
+    <g id="head">
+        <g id="head-pose">
+            <g id="skull-shell">
+                <path id="skull" d="M209,506C178,511 155,488 151,459C140,410 177,357 209,325C250,284 296,257 342,258C385,255 421,275 436,308C442,321 445,335 439,348C453,354 462,366 457,382C453,400 435,404 421,410C417,412 414,414 412,417C423,423 428,435 420,446C413,459 400,455 391,449C405,466 399,482 385,488C374,493 365,484 360,475C374,493 370,509 354,513C339,519 331,508 327,494C334,515 325,529 310,529C295,529 286,520 288,504C277,508 265,532 249,539C228,548 208,533 210,509C205,505 201,501 200,495" style="fill:white;stroke:rgb(10,5,5);stroke-width:10px;"/>
+            </g>
+            <g id="eye-left">
+                <path id="eye-socket-left" d="M211,466C210,448 228,422 246,417C270,410 294,425 306,443C312,451 311,456 302,458C279,461 260,475 249,494C245,502 239,500 232,492C223,482 220,468 222,455C218,458 214,462 211,466Z" style="fill:rgb(10,5,5);"/>
+                <g id="eye-contents-left">
+                    <clipPath id="clip-static-eye-left" clipPathUnits="userSpaceOnUse">
+                        <path d="M211,466C210,448 228,422 246,417C270,410 294,425 306,443C312,451 311,456 302,458C279,461 260,475 249,494C245,502 239,500 232,492C223,482 220,468 222,455C218,458 214,462 211,466Z"/>
+                    </clipPath>
+                    <g clip-path="url(#clip-static-eye-left)">
+                        <g id="iris-static-left">
+                            <path id="eye-red-left" d="M245,484C235,465 244,443 260,437C275,431 290,440 299,449C276,452 257,466 245,484Z" style="fill:rgb(255,0,40);"/>
+                        </g>
+                        <g id="iris-dynamic-left" opacity="0">
+                            <g id="iris-gaze-left">
+                                <circle id="iris-circle-left" cx="269" cy="463" r="27" style="fill:rgb(255,0,40);"/>
+                            </g>
+                        </g>
+                    </g>
+                </g>
+                <g id="eyebrow-left">
+                    <path id="brow-left" d="M205,433C198,416 211,386 231,380C239,377 245,379 239,385C225,397 216,415 211,432C209,438 206,439 205,433Z" style="fill:rgb(10,5,5);"/>
+                </g>
+            </g>
+            <g id="eye-right">
+                <path id="eye-socket-right" d="M355,414C345,396 341,370 354,353C367,333 390,334 406,345C418,353 426,365 428,376C429,384 424,386 417,386C395,387 376,400 366,417C362,423 358,420 355,414Z" style="fill:rgb(10,5,5);"/>
+                <g id="eye-contents-right">
+                    <clipPath id="clip-static-eye-right" clipPathUnits="userSpaceOnUse">
+                        <path d="M355,414C345,396 341,370 354,353C367,333 390,334 406,345C418,353 426,365 428,376C429,384 424,386 417,386C395,387 376,400 366,417C362,423 358,420 355,414Z"/>
+                    </clipPath>
+                    <g clip-path="url(#clip-static-eye-right)">
+                        <g id="iris-static-right">
+                            <path id="eye-red-right" d="M362,406C353,383 363,362 380,360C395,357 407,366 416,376C393,378 375,389 362,406Z" style="fill:rgb(255,0,40);"/>
+                        </g>
+                        <g id="iris-dynamic-right" opacity="0">
+                            <g id="iris-gaze-right">
+                                <circle id="iris-circle-right" cx="386" cy="385" r="26" style="fill:rgb(255,0,40);"/>
+                            </g>
+                        </g>
+                    </g>
+                </g>
+                <g id="eyebrow-right">
+                    <path id="brow-right" d="M330,322C338,303 369,301 389,317C395,322 395,325 388,324C368,319 351,321 334,326C329,328 327,326 330,322Z" style="fill:rgb(10,5,5);"/>
+                </g>
+            </g>
+            <g id="nose">
+                <path id="nose-opening" d="M329,434C330,428 339,430 348,433C358,436 364,441 359,447C355,453 348,451 344,450C341,459 336,469 330,465C323,462 326,443 329,434Z" style="fill:rgb(10,5,5);"/>
+            </g>
+            <g id="rig-head" opacity="0">
+                <circle id="pivot-head" cx="357" cy="520" r="5" style="fill:rgb(0,160,255);"/>
+                <ellipse id="gaze-bounds-left" cx="269" cy="463" rx="10" ry="12" style="fill:rgb(0,160,255);fill-opacity:0.5;"/>
+                <circle id="gaze-neutral-left" cx="269" cy="463" r="3" style="fill:rgb(0,160,255);"/>
+                <ellipse id="gaze-bounds-right" cx="386" cy="385" rx="9" ry="11" style="fill:rgb(0,160,255);fill-opacity:0.5;"/>
+                <circle id="gaze-neutral-right" cx="386" cy="385" r="3" style="fill:rgb(0,160,255);"/>
+            </g>
+        </g>
+    </g>
+    <g id="right-hand">
+        <g id="right-hand-pose">
+            <g id="right-finger-inner">
+                <path id="right-finger-inner-bone" d="M981,363C990,350 1005,349 1015,358C1024,367 1017,379 1007,386C999,393 1001,410 990,418C980,425 967,420 964,410C959,395 969,377 981,363Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+                <g id="rig-right-finger-inner" opacity="0">
+                    <circle id="pivot-right-finger-inner" cx="1001" cy="366" r="4" style="fill:rgb(0,160,255);"/>
+                    <circle id="tip-right-finger-inner" cx="980" cy="406" r="3" style="fill:rgb(255,140,0);"/>
+                </g>
+            </g>
+            <g id="right-finger-middle">
+                <path id="right-finger-middle-bone" d="M1029,358C1041,355 1054,363 1054,375C1054,382 1049,387 1048,393C1046,410 1041,430 1030,435C1017,442 1004,433 1005,420C1005,406 1014,393 1015,381C1013,370 1017,361 1029,358Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+                <g id="rig-right-finger-middle" opacity="0">
+                    <circle id="pivot-right-finger-middle" cx="1034" cy="374" r="4" style="fill:rgb(0,160,255);"/>
+                    <circle id="tip-right-finger-middle" cx="1024" cy="422" r="3" style="fill:rgb(255,140,0);"/>
+                </g>
+            </g>
+            <g id="right-finger-outer">
+                <path id="right-finger-outer-bone" d="M1066,372C1078,370 1090,377 1091,387C1093,395 1087,401 1087,408C1088,425 1085,440 1074,446C1065,451 1053,445 1050,436C1047,425 1053,413 1054,402C1055,395 1051,389 1054,381C1056,376 1060,373 1066,372Z" style="fill:white;stroke:rgb(10,5,5);stroke-width:9px;"/>
+                <g id="rig-right-finger-outer" opacity="0">
+                    <circle id="pivot-right-finger-outer" cx="1072" cy="386" r="4" style="fill:rgb(0,160,255);"/>
+                    <circle id="tip-right-finger-outer" cx="1067" cy="433" r="3" style="fill:rgb(255,140,0);"/>
+                </g>
+            </g>
+            <g id="rig-right-hand" opacity="0">
+                <circle id="pivot-right-wrist" cx="1033" cy="373" r="5" style="fill:rgb(0,160,255);"/>
+                <circle id="anchor-grip-right" cx="1033" cy="390" r="5" style="fill:rgb(255,140,0);"/>
+            </g>
+        </g>
+    </g>
+</svg>

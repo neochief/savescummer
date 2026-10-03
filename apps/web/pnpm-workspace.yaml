@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@shvetsgroup/ui@0.1.2'

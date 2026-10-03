@@ -1,0 +1,20 @@
+{
+  "name": "savescummer-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 41988 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 41988 --strictPort",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@shvetsgroup/ui": "0.1.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "4.3.3",
+    "tailwindcss": "4.3.3",
+    "vite": "^8.3.2"
+  }
+}

@@ -10,8 +10,8 @@ const outputs = [
     + stripTypeScriptTypes(readFileSync(eyes, 'utf8'))],
 ];
 for (const [name, content] of outputs) {
-  const target = new URL(`dist/character/${name}`, import.meta.url);
+  const target = new URL(`public/character/${name}`, import.meta.url);
   if (process.argv.includes('--check')) {
-    if (readFileSync(target, 'utf8') !== content) throw new Error(`Run node apps/web/sync-character.mjs: ${name} is out of date`);
+    if (readFileSync(target, 'utf8') !== content) throw new Error(`Run node apps/web/sync-character.mjs: public/character/${name} is out of date`);
   } else writeFileSync(target, content);
 }

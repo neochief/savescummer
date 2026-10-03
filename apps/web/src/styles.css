@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+@import '@shvetsgroup/ui/button.css';
+@import '@shvetsgroup/ui/input.css';
+@import './popup.css';
+@import './cards.css';
+
+@custom-variant dark (.dark &);
+
+@theme {
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: Inter, system-ui, sans-serif;
+  --color-page: #1c1918;
+  --color-page-deep: #12100f;
+  --color-cream: #faf8ee;
+  --color-muted: #d7c9ba;
+  --color-brand: #ff1e29;
+  --color-primary-200: #ffb3b7;
+  --color-primary-400: #ff6970;
+  --color-primary-500: #ff1e29;
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: Inter;
+  src: url('/fonts/Inter-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Shantell Sans';
+  src: url('/fonts/ShantellSans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@layer base {
+  :root { color-scheme: dark; --popup-bg: #332822; }
+  [hidden] { display: none !important; }
+}
+
+/* Illustration treatments and gallery clipping; ordinary layout lives in utilities. */
+@layer components {
+  .wordmark { -webkit-text-stroke: .035em #0d0707; paint-order: stroke fill; }
+  .gallery-mask { position: relative; --gallery-visible-part: 85%; }
+  .gallery-mask:not(.expanded) {
+    max-height: 38rem;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, #000 var(--gallery-visible-part), transparent);
+  }
+  /* The fade masks paint, but does not block hit testing on the cards underneath. */
+  .gallery-mask:not(.expanded)::after {
+    content: '';
+    position: absolute;
+    z-index: 5;
+    inset: calc(var(--gallery-visible-part) - 50px) 0 0;
+    cursor: default;
+    backdrop-filter: blur(3px);
+    mask-image: linear-gradient(to bottom, transparent, #000 45%);
+  }
+  .game-card.pinned, .game-tooltip.pinned { --popup-bg: #40322b; }
+  @media (prefers-reduced-motion: no-preference) {
+    .game-card.reveal-pending { opacity: 0; pointer-events: none; }
+  }
+  .game-card:not(.open) .game-link { opacity: 0; pointer-events: none; }
+  .game-link-icon {
+    width: 13px;
+    height: 13px;
+    flex: none;
+    background: currentColor;
+    mask: var(--icon) center / contain no-repeat;
+  }
+  .game-link-icon.steam { --icon: url('/icons/steam.svg'); }
+  .game-link-icon.website { --icon: url('/icons/planet.svg'); }
+}

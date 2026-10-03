@@ -1,6 +1,7 @@
 /target/
 /build/
 /dist/
+/apps/web/dist/
 /.runtime/
 *.db
 *.db-shm

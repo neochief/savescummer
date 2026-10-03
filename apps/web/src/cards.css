@@ -1,0 +1,73 @@
+/* Original illustration effects. Layout and type are Tailwind utilities. */
+.hero {
+  --shade-start: 44rem;
+  background: linear-gradient(to bottom, #1c1918 var(--shade-start), #12100f calc(var(--shade-start) + 16rem));
+}
+.benefit-card {
+  background: linear-gradient(160deg, var(--card-tint), transparent 75%) #201b19;
+  box-shadow: inset 0 1px 0 #ffffff12, 0 5px 0 var(--card-edge);
+}
+.benefit-slot::before {
+  content: '';
+  position: absolute;
+  top: calc(100% - 3rem);
+  left: -20%;
+  z-index: -1;
+  width: 140%;
+  height: 10rem;
+  background: radial-gradient(ellipse at center, var(--card-accent), transparent 70%) center / 71.4286% 60% no-repeat;
+  opacity: .16;
+  filter: blur(.5rem);
+  transition: background-size .2s ease;
+  pointer-events: none;
+}
+.benefit-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  opacity: .2;
+  pointer-events: none;
+  background: linear-gradient(135deg, transparent calc(50% - 50px), var(--card-accent) calc(50% - 50px), var(--card-accent) calc(50% + 50px), transparent calc(50% + 50px)) 100% 100% / 300% 300% no-repeat;
+}
+.benefit-skill { --card-tilt: -2deg; --card-accent: #c7a76b; --card-edge: #73603e; --card-tint: #413626; }
+.benefit-time { --card-tilt: 1deg; --card-accent: #90ad98; --card-edge: #4d6c57; --card-tint: #293d33; }
+.benefit-calm { --card-tilt: 2deg; --card-accent: #c39193; --card-edge: #764e55; --card-tint: #442c34; }
+.benefit-platforms { --card-tilt: -1deg; --card-accent: #92a9c9; --card-edge: #4d607a; --card-tint: #2b3647; }
+.benefit-human { --card-tilt: 2deg; --card-accent: #b5a0c9; --card-edge: #6c567e; --card-tint: #3d3047; }
+.platform-logo { transform: rotate(-9deg); }
+.platform-logo + .platform-logo { margin-left: -.5rem; }
+.platform-logo:nth-child(2) { transform: translateY(-.2rem) rotate(-3deg); }
+.platform-logo:nth-child(3) { transform: translateY(-.15rem) rotate(4deg); }
+.platform-logo:nth-child(4) { transform: rotate(10deg); }
+.platform-logo:nth-child(2) img { width: 3.3rem; }
+@keyframes card-reflection { to { background-position: 0% 0%; } }
+@media (hover: hover) and (pointer: fine) {
+  .benefit-slot:hover::before { background-size: 100% 99%; }
+  .benefit-card:hover { z-index: 2; background-color: #302926; transform: rotate(calc(var(--card-tilt) * 2)) scale(1.035); }
+  .benefit-card:hover::after { animation: card-reflection .6s ease-out both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .benefit-card, .benefit-slot::before { transition: none; }
+  .benefit-card::after { display: none; }
+}
+@media (max-width: 900px) { .hero { --shade-start: 40rem; } }
+@media (max-width: 700px) {
+  .hero { --shade-start: 36rem; }
+  .benefit-slot { --card-tilt: -2deg; }
+  .benefit-time, .benefit-platforms { --card-tilt: 2deg; }
+  .benefit-calm, .benefit-human { --card-tilt: -1deg; }
+}
+@media (max-width: 380px) { .platform-logo:nth-child(2) img { width: 3rem; } }
+
+/* These illustration exceptions override the base artwork utilities. */
+  .game-tooltip-art.link-hover .game-link-preview {
+    background: #fff;
+    color: #f51e2b;
+  }
+
+  [data-art-style='self-contained'] .game-art { object-position: center top; }
+  [data-art-style='self-contained'] .game-shade { display: none; }
+  [data-art-style='nethack'] .game-shade { background: rgba(0, 0, 0, .7); }
+  [data-art-style='nethack'] .game-logo { left: 10%; width: 80%; filter: invert(1); mix-blend-mode: screen; }

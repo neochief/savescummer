@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en-US" class="dark scroll-smooth motion-reduce:scroll-auto">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1c1918" />
+    <meta name="description" content="Save and restore progress in games that don't let you go back. Build gaming skill without wasting time, enjoy challenging games while having a life, and play with less pressure." />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <title>SaveScummer</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body class="bg-page font-body leading-[normal] text-cream">
+    <a class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-cream focus:p-4 focus:text-page" href="#supported-title">Skip to supported games</a>
+    <main>
+      <div class="hero flex w-full flex-col items-center overflow-x-clip px-[max(1.25rem,calc((100%-80rem)/2))] pt-32 pb-40 text-center max-[700px]:pt-20 max-[700px]:pb-32">
+        <img class="app-icon mx-auto mb-4 block h-auto w-[clamp(6rem,24vw,9rem)]" src="./icon.svg" alt="" width="144" height="144" />
+        <h1 id="hero-title" class="wordmark mb-5 font-head text-[clamp(2.5rem,9vw,5rem)] leading-[1.05] font-bold tracking-[-.035em]"><span>Save</span><strong class="text-brand">Scummer</strong></h1>
+        <p class="subtitle mx-auto max-w-[48rem] text-balance text-[clamp(1.25rem,3vw,1.625rem)] leading-[1.6] text-cream">Save and restore progress in games that don’t let you go back.</p>
+        <p class="supporting mx-auto mt-5 max-w-xl text-[clamp(1rem,2.2vw,1.125rem)] leading-[1.6] text-muted">Roguelikes, permadeath, Ironman modes — experience them with less pain and more fun. Checkpoint before risky moments. Try an unfamiliar build, make a bold decision, fail, learn, and keep going.</p>
+        <div id="benefits" class="benefits isolate mt-11 grid w-[calc(100%-2rem)] max-w-5xl grid-cols-6 gap-x-7 max-[900px]:max-w-[46rem] max-[900px]:grid-cols-4 max-[900px]:gap-x-4 max-[900px]:gap-y-12 max-[700px]:w-[calc(100%-1.5rem)] max-[700px]:grid-cols-[minmax(0,22rem)] max-[700px]:justify-center max-[700px]:gap-9">
+          <section class="downloads relative z-2 col-span-full row-start-1 mb-34 flex w-full justify-center max-[900px]:mb-14 max-[700px]:col-start-1 max-[700px]:row-auto max-[700px]:mb-15" aria-label="Download options">
+            <a class="btn btn-white-no-border btn-3xl max-w-full [--btn_foreground-color:#000] [--btn_content-gap:.75rem] max-[450px]:[--btn_text-size:1.5rem] max-[450px]:[--btn_pl:.75rem] max-[450px]:[--btn_pr:.75rem]" href="https://github.com/neochief/savescummer/releases/latest">
+              <span><img class="size-12 shrink-0 max-[450px]:size-9" src="./icons/github.svg" alt="" width="48" height="48" /><span id="download-label">Download on GitHub</span></span>
+            </a>
+          </section>
+          <div class="benefit-slot relative max-[900px]:col-span-2 max-[900px]:row-auto max-[900px]:mt-0 max-[700px]:col-span-1 max-[700px]:col-start-1 benefit-skill col-span-2 col-start-1 row-start-2">
+            <article class="benefit-card relative h-full cursor-default rounded-2xl border border-[var(--card-accent)] px-4 pt-4 pb-11 [transform:rotate(var(--card-tilt))] [transition:transform_.2s_ease,background-color_.2s_ease] max-[900px]:pb-6">
+              <div class="benefit-art grid h-28 place-items-center" aria-hidden="true"><img class="size-20 object-contain [filter:drop-shadow(0_1px_0_#0d070799)]" src="./icons/value/swords.svg" alt="" width="80" height="80" /></div>
+              <h2 class="mx-1 mt-4 mb-3 font-head text-[1.35rem] leading-[1.2] font-bold text-balance text-cream">Build gaming skill without wasting time</h2>
+              <p class="mx-[.4rem] text-[.9375rem] leading-[1.6] text-[#ded2c5]">Spend more time practicing the parts you find difficult and less time replaying what you already know.</p>
+            </article>
+          </div>
+          <div class="benefit-slot relative max-[900px]:col-span-2 max-[900px]:row-auto max-[900px]:mt-0 max-[700px]:col-span-1 max-[700px]:col-start-1 benefit-time col-span-2 col-start-3 row-start-2 max-[900px]:col-start-auto">
+            <article class="benefit-card relative h-full cursor-default rounded-2xl border border-[var(--card-accent)] px-4 pt-4 pb-11 [transform:rotate(var(--card-tilt))] [transition:transform_.2s_ease,background-color_.2s_ease] max-[900px]:pb-6">
+              <div class="benefit-art grid h-28 place-items-center" aria-hidden="true"><img class="size-20 object-contain [filter:drop-shadow(0_1px_0_#0d070799)]" src="./icons/value/watch-smart.svg" alt="" width="80" height="80" /></div>
+              <h2 class="mx-1 mt-4 mb-3 font-head text-[1.35rem] leading-[1.2] font-bold text-balance text-cream">Enjoy challenging games while having a life</h2>
+              <p class="mx-[.4rem] text-[.9375rem] leading-[1.6] text-[#ded2c5]">Reach the stories, builds, and decisions that interest you without losing an evening’s progress while you’re still figuring things out.</p>
+            </article>
+          </div>
+          <div class="benefit-slot relative max-[900px]:col-span-2 max-[900px]:row-auto max-[900px]:mt-0 max-[700px]:col-span-1 max-[700px]:col-start-1 benefit-calm col-span-2 col-start-5 row-start-2 max-[900px]:col-start-auto">
+            <article class="benefit-card relative h-full cursor-default rounded-2xl border border-[var(--card-accent)] px-4 pt-4 pb-11 [transform:rotate(var(--card-tilt))] [transition:transform_.2s_ease,background-color_.2s_ease] max-[900px]:pb-6">
+              <div class="benefit-art grid h-28 place-items-center" aria-hidden="true"><img class="size-20 object-contain [filter:drop-shadow(0_1px_0_#0d070799)]" src="./icons/value/heart-pulse.svg" alt="" width="80" height="80" /></div>
+              <h2 class="mx-1 mt-4 mb-3 font-head text-[1.35rem] leading-[1.2] font-bold text-balance text-cream">Play with less pressure</h2>
+              <p class="mx-[.4rem] text-[.9375rem] leading-[1.6] text-[#ded2c5]">If you or your child finds losing progress stressful, having a way back can make it easier to take chances, experiment, and enjoy the game.</p>
+            </article>
+          </div>
+          <div class="benefit-slot relative max-[900px]:col-span-2 max-[900px]:row-auto max-[900px]:mt-0 max-[700px]:col-span-1 max-[700px]:col-start-1 benefit-platforms z-1 col-span-2 col-start-2 row-start-3 -mt-5 max-[900px]:col-start-auto [&_.benefit-card]:pb-6">
+            <article class="benefit-card relative h-full cursor-default rounded-2xl border border-[var(--card-accent)] px-4 pt-4 pb-11 [transform:rotate(var(--card-tilt))] [transition:transform_.2s_ease,background-color_.2s_ease] max-[900px]:pb-6">
+              <div class="benefit-art platform-art flex h-28 place-items-center justify-center" aria-hidden="true">
+                <span class="platform-logo grid h-[3.75rem] flex-[0_0_3.5rem] place-items-center max-[380px]:h-14 max-[380px]:basis-12"><img class="h-[3.3rem] w-11 object-contain [filter:drop-shadow(0_1px_0_#0d070799)] max-[380px]:h-12 max-[380px]:w-10" src="./icons/platforms/windows.svg" alt="" width="32" height="38" /></span>
+                <span class="platform-logo grid h-[3.75rem] flex-[0_0_3.5rem] place-items-center max-[380px]:h-14 max-[380px]:basis-12"><img class="h-[3.3rem] w-11 object-contain [filter:drop-shadow(0_1px_0_#0d070799)] max-[380px]:h-12 max-[380px]:w-10" src="./icons/platforms/linux.svg" alt="" width="32" height="38" /></span>
+                <span class="platform-logo grid h-[3.75rem] flex-[0_0_3.5rem] place-items-center max-[380px]:h-14 max-[380px]:basis-12"><img class="h-[3.3rem] w-11 object-contain [filter:drop-shadow(0_1px_0_#0d070799)] max-[380px]:h-12 max-[380px]:w-10" src="./icons/platforms/apple.svg" alt="" width="32" height="38" /></span>
+                <span class="platform-logo grid h-[3.75rem] flex-[0_0_3.5rem] place-items-center max-[380px]:h-14 max-[380px]:basis-12"><img class="h-[3.3rem] w-11 object-contain [filter:drop-shadow(0_1px_0_#0d070799)] max-[380px]:h-12 max-[380px]:w-10" src="./icons/platforms/steam-deck.svg" alt="" width="32" height="38" /></span>
+              </div>
+              <h2 class="mx-1 mt-4 mb-3 font-head text-[1.35rem] leading-[1.2] font-bold text-balance text-cream">Works on PC, Mac, Linux, and Steam Deck</h2>
+              <p class="mx-[.4rem] text-[.9375rem] leading-[1.6] text-[#ded2c5]">Any <s>real</s> computer setup is covered. No consoles!</p>
+            </article>
+          </div>
+          <div class="benefit-slot relative max-[900px]:col-span-2 max-[900px]:row-auto max-[900px]:mt-0 max-[700px]:col-span-1 max-[700px]:col-start-1 benefit-human z-1 col-span-2 col-start-4 row-start-3 -mt-5 max-[900px]:col-start-2 [&_.benefit-card]:pb-6">
+            <article class="benefit-card relative h-full cursor-default rounded-2xl border border-[var(--card-accent)] px-4 pt-4 pb-11 [transform:rotate(var(--card-tilt))] [transition:transform_.2s_ease,background-color_.2s_ease] max-[900px]:pb-6">
+              <div class="benefit-art grid h-28 place-items-center"><img class="author-photo size-24 rounded-full border-2 border-[var(--card-accent)] object-cover [filter:drop-shadow(0_1px_0_#0d070799)]" src="./images/alex2.webp" alt="Alexander Shvets" width="96" height="96" /></div>
+              <h2 class="mx-1 mt-4 mb-3 font-head text-[1.35rem] leading-[1.2] font-bold text-balance text-cream">Produced by a human</h2>
+              <p class="mx-[.4rem] text-[.9375rem] leading-[1.6] text-[#ded2c5]">With love to gaming, quality software and you!</p>
+              <p class="author-signature mt-3 flex items-center justify-center gap-[.35rem] opacity-75 mx-[.4rem] text-[.9375rem] leading-[1.6] text-[#ded2c5]"><img class="size-4 shrink-0" src="./icons/value/heart.svg" alt="" aria-hidden="true" width="16" height="16" />Alexander Shvets</p>
+            </article>
+          </div>
+        </div>
+      </div>
+      <section class="supported bg-page-deep px-5 pt-20 pb-24 max-[700px]:pt-16" aria-labelledby="supported-title">
+        <div class="supported-inner mx-auto w-full max-w-[68rem]">
+          <h2 id="supported-title" class="text-center font-head text-[clamp(2.5rem,5vw,3.5rem)] leading-[1.1] font-bold">Supported games</h2>
+          <div class="supported-copy mx-auto mt-5 mb-11 text-center">
+            <p class="subtitle mx-auto max-w-[39rem] text-[clamp(1.25rem,3vw,1.625rem)] leading-[1.6] text-cream">I chose games where progress is costly to lose.</p>
+            <p class="supporting mx-auto mt-5 max-w-xl text-[clamp(1rem,2.2vw,1.125rem)] leading-[1.6] text-muted">Permadeath ends fun builds, Ironman overwrites exciting campaigns, and autosaves lock in boring story choices.<br />There are too many games to suffer through the slog!</p>
+          </div>
+          <div class="game-groups gallery-mask -mx-1.5 w-[calc(100%+12px)] px-1.5" id="game-groups"></div>
+          <div class="relative z-10 -mt-12 text-center"><button class="btn btn-stone btn-xl btn-border" id="show-more" type="button" aria-controls="game-groups" aria-expanded="false"><span>Show all games</span></button></div>
+        </div>
+      </section>
+    </main>
+    <footer class="bg-page-deep px-5 pb-8 text-muted">
+      <div class="mx-auto flex max-w-[68rem] items-center justify-between gap-6 pt-6">
+        <p class="text-xs leading-relaxed">© <span id="copyright-years">2026</span> Alexander Shvets. All rights reserved.</p>
+        <a class="inline-flex shrink-0 items-center gap-1.5 text-sm no-underline hover:text-cream focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cream" href="mailto:alex@savescummer.app">
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" /></svg>
+          Contact
+        </a>
+      </div>
+    </footer>
+    <div class="game-tooltip pointer-events-none fixed z-10 isolate w-[min(29rem,calc(100vw-1.5rem))] text-cream" id="game-tooltip" hidden>
+      <div class="game-tooltip-art" id="game-tooltip-art" aria-hidden="true"></div>
+      <div class="game-tooltip-copy">
+        <div class="game-tooltip-details">
+          <h3 class="game-tooltip-title mb-3 text-center font-head text-[1.4rem] leading-[1.15] font-bold max-[450px]:text-[1.2rem]" id="game-tooltip-title"></h3>
+          <p class="game-tooltip-context text-[.925rem] leading-normal max-[450px]:text-[.8125rem]" id="game-tooltip-context"></p>
+          <div class="game-tooltip-value">
+            <span class="game-tooltip-icon mt-[.05rem] block size-10 shrink-0 translate-y-0.5 bg-contain bg-center bg-no-repeat" id="game-tooltip-icon" aria-hidden="true"></span>
+            <p class="text-sm leading-normal max-[450px]:text-[.8125rem]" id="game-tooltip-value"></p>
+          </div>
+        </div>
+        <p class="game-tooltip-callout">
+          <svg class="game-tooltip-callout-tail" aria-hidden="true"><path /></svg>
+          <span id="game-tooltip-callout-text"></span>
+        </p>
+      </div>
+    </div>
+    <script src="./games-data.js" vite-ignore></script>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
