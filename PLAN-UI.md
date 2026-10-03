@@ -298,7 +298,7 @@ Cards trade some density for recognition: about eight fit in a default-height wi
   Background scans are **silent**: the button keeps its idle state, and newly found games simply appear in their group. Only a scan the user started drives the `Scanning…` and result states. Why: focus scans happen on nearly every alt-tab, and a button that flickers `Scanning… → No new games` each time is noise. If the user presses the button while a background scan is running, the button shows `Scanning…` until the scan they asked for finishes, and counts games found since they pressed.
 
 
-- **`⚙ Settings`** is a cog-and-text button directly below Scan for games. It opens the Settings dialog for shortcuts, sound effects and launch on startup. It stays available with no selected game and while a game is busy.
+- **`⚙ Settings`** is a cog-and-text button directly below Scan for games. It opens the Settings dialog for shortcuts, sound effects and start at login. It stays available with no selected game and while a game is busy.
 
 ## MAIN ACTIONS
 
@@ -535,7 +535,7 @@ Opened by the cog-and-text `⚙ Settings` button directly below Scan for games, 
 │ Load shortcut       [ Ctrl+F9                              ]  │
 │                                                              │
 │ ☑ Play sounds                                                │
-│ ☑ Launch on startup                                          │
+│ ☑ Start at login                                             │
 │                                                              │
 │                                        [ Save ]  [ Cancel ]  │
 └──────────────────────────────────────────────────────────────┘
@@ -543,7 +543,7 @@ Opened by the cog-and-text `⚙ Settings` button directly below Scan for games, 
 
 - Focus a shortcut field and press the desired combination to replace it. Show the platform's key names and the currently saved bindings when opening the dialog.
 - Show an inline error for a non-function shortcut without a modifier, a duplicate of the other shortcut, or a system-reserved combination. The host remains the final authority on whether registration succeeds.
-- `Play sounds` enables or disables sound effects; `Launch on startup` enables or disables starting the host at sign-in. These preferences appear only here, not in the main window.
+- `Play sounds` enables or disables sound effects; `Start at login` enables or disables starting the host at sign-in. These preferences appear only here, not in the main window.
 - Apply changes on **Save**, the default button, after the host validates and accepts them. Cancel or closing the dialog discards unapplied edits. Accepted settings persist across restarts; shortcut hints update immediately.
 - A duplicate, unsupported or unavailable shortcut shows an inline error beside its field. Keep the dialog and entered values open for correction; rejected changes leave the saved configuration and previous bindings intact.
 - The host owns shortcut registration, persistence, sound playback and startup integration. The UI saves shortcut changes through the host's settings contract; it does not register a second independent set of global hotkeys.
@@ -803,7 +803,7 @@ For the Tauri UI, test React views against a fake typed bridge that can simulate
     - Settings opens below Scan for games in all layouts; there is no status bar;
     - reassign both shortcuts, save and verify the hints and actual bindings, reopen and verify persistence; Cancel leaves settings unchanged;
     - duplicate, unsupported and unavailable shortcuts show inline errors without losing the old bindings; capturing a shortcut never runs an operation;
-    - toggle sounds and launch on startup, save, reopen and verify the accepted values;
+    - toggle sounds and start at login, save, reopen and verify the accepted values;
     - standard keyboard, focus, default-button and cancel behavior;
     - the custom-game dialog's validation and name autofill;
     - the save location hint always visible in both dialogs, with errors below it and the hint kept;

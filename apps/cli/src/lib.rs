@@ -184,8 +184,9 @@ enum Cmd {
     Settings {
         #[arg(long)]
         sounds: Option<OnOff>,
-        #[arg(long)]
-        launch_on_startup: Option<OnOff>,
+        /// Start SaveScummer at login.
+        #[arg(long, alias = "launch-on-startup")]
+        start_at_login: Option<OnOff>,
         #[arg(long)]
         save_shortcut: Option<String>,
         #[arg(long)]
@@ -656,10 +657,10 @@ fn run(s: &mut Session, command: Cmd) -> std::io::Result<Exit> {
                 format!("scan finished; {} new game(s)", v.get("new_games").and_then(|n| n.as_u64()).unwrap_or(0))
             }))
         }
-        Cmd::Settings { sounds, launch_on_startup, save_shortcut, load_shortcut, flush_old_checkpoints } => {
+        Cmd::Settings { sounds, start_at_login, save_shortcut, load_shortcut, flush_old_checkpoints } => {
             let response = s.send(Command::Settings {
                 play_sounds: sounds.map(OnOff::value),
-                launch_on_startup: launch_on_startup.map(OnOff::value),
+                launch_on_startup: start_at_login.map(OnOff::value),
                 save_shortcut,
                 load_shortcut,
                 flush_old_checkpoints: flush_old_checkpoints.map(OnOff::value),

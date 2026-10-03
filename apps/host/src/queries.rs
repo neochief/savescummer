@@ -16,9 +16,7 @@ use savescummer_storage::{self as db, CheckpointRow};
 
 use crate::checkpoints::unavailable_reason;
 use crate::host::Host;
-use crate::model::{
-    SETTING_FLUSH_OLD, SETTING_LAUNCH, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT,
-};
+use crate::model::{SETTING_FLUSH_OLD, SETTING_LOAD_SHORTCUT, SETTING_PLAY_SOUNDS, SETTING_SAVE_SHORTCUT};
 
 const DEFAULT_PAGE: usize = 50;
 const MAX_PAGE: usize = 500;
@@ -247,7 +245,6 @@ pub fn settings(
         return Err(Failure::new(ErrorKind::InvalidRequest, "sign-in changes are off (--no-integrations)"));
     }
     let exe = launch.map(|_| std::env::current_exe().map_err(io)).transpose()?;
-    let old_launch = exe.as_ref().map(|exe| savescummer_platform::autostart::is_enabled(exe));
     let integration = host.integration.lock().unwrap_or_else(|e| e.into_inner());
     if changed && let Some(integration) = integration.as_ref() {
         integration.rebind(shortcuts).map_err(|error| {
@@ -263,21 +260,24 @@ pub fn settings(
             Failure::new(ErrorKind::InvalidRequest, format!("{field}: {error}"))
         })?;
     }
-    if let (Some(on), Some(exe)) = (launch, exe.as_ref())
-        && let Err(error) = savescummer_platform::autostart::set(on, exe, host.opts.data_dir.as_deref())
-    {
-        if changed && let Some(integration) = integration.as_ref() {
-            let _ = integration.rebind(old);
+    // The choice is recorded first and kept when the OS refuses it, so
+    // first-launch setup can never turn startup on over an explicit off.
+    if let (Some(on), Some(exe)) = (launch, exe.as_ref()) {
+        let _choice = host.launch_lock.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(error) = crate::autostart::choose(&mut host.db(), on, exe, host.opts.data_dir.as_deref()) {
+            if changed && let Some(integration) = integration.as_ref() {
+                let _ = integration.rebind(old);
+            }
+            drop(integration);
+            refresh_launch(host);
+            host.publish(&mut host.lock());
+            return Err(Failure::new(ErrorKind::InvalidRequest, error));
         }
-        return Err(Failure::new(ErrorKind::InvalidRequest, error));
     }
     let write_result = host.db().write(|conn| {
         if changed {
             db::set_setting(conn, SETTING_SAVE_SHORTCUT, &shortcut_text(shortcuts[0]))?;
             db::set_setting(conn, SETTING_LOAD_SHORTCUT, &shortcut_text(shortcuts[1]))?;
-        }
-        if let Some(on) = launch {
-            db::set_setting(conn, SETTING_LAUNCH, if on { "1" } else { "0" })?;
         }
         if let Some(on) = play_sounds {
             db::set_setting(conn, SETTING_PLAY_SOUNDS, if on { "1" } else { "0" })?;
@@ -288,9 +288,7 @@ pub fn settings(
         Ok(())
     });
     if let Err(error) = write_result {
-        if let (Some(was_on), Some(exe)) = (old_launch, exe.as_ref()) {
-            let _ = savescummer_platform::autostart::set(was_on, exe, host.opts.data_dir.as_deref());
-        }
+        // The startup choice is already recorded and applied: it stays.
         if changed && let Some(integration) = integration.as_ref() {
             let _ = integration.rebind(old);
         }
@@ -318,7 +316,7 @@ pub fn settings(
         "save_shortcut": shortcut_text(inner.shortcuts[0]), "load_shortcut": shortcut_text(inner.shortcuts[1]) }))
 }
 
-/// Reads launch at login back from the OS: the user may change it in
+/// Reads start at login back from the OS: the user may change it in
 /// System Settings (macOS) while the host runs.
 pub fn refresh_launch(host: &Host) {
     let Ok(exe) = std::env::current_exe() else { return };

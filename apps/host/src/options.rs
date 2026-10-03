@@ -60,6 +60,10 @@ pub struct Options {
     /// failed (a read stuck on a permission prompt).
     #[arg(long, hide = true, default_value_t = 30)]
     pub stall_secs: u64,
+    /// How long first-launch setup waits for a window that went away (or
+    /// never came) before it counts as closed.
+    #[arg(long, hide = true, default_value_t = 30)]
+    pub onboarding_grace_secs: u64,
     /// Watch store locations even with integrations off (tests).
     #[arg(long, hide = true)]
     pub watch: bool,

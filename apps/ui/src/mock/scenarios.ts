@@ -1,6 +1,6 @@
 // Named UI states for the dev mock bridge: open `pnpm dev` with `?scenario=<name>`, or browse them at /scenarios.html.
 // Scenarios describe host *facts*; policy.ts turns them into the availability and guidance the real host would publish.
-import type { Failure, Game, HostState, UiRequest } from '../types';
+import type { Failure, Game, HostState, OnboardingAction, OnboardingKind, OnboardingStatus, UiRequest } from '../types';
 import type { Facts } from './policy';
 
 export interface Preview {
@@ -20,7 +20,13 @@ export interface Scenario {
   fail?: Partial<Record<'save' | 'load' | 'revert' | 'retry' | 'delete' | 'flush', Failure>>;
   /** The host never answers. */
   offline?: boolean;
+  /** First-launch setup: the rows shown, and what each successive request on a row ends in (the last one repeats). */
+  onboarding?: { rows: OnboardingKind[]; inspecting?: boolean; answers?: Partial<Record<OnboardingKind, OnboardingAnswer[]>> };
 }
+
+export interface OnboardingAnswer { status: OnboardingStatus; message?: string; action?: OnboardingAction }
+
+const allowed: OnboardingAnswer = { status: 'granted' };
 
 const FTL = 'steam-212680';
 const RISK_OF_RAIN = 'steam-1337520';
@@ -105,6 +111,29 @@ export const scenarios: Record<string, Scenario> = {
   'delete-fails': { title: 'Delete fails (delete a row)', focus: FTL,
     fail: { delete: { kind: 'delete_mismatch', detail: 'Checkpoint files changed on disk; nothing was deleted.' } } },
   'scan-fails': { title: 'Scan fails (click Scan for games)', refuse: { scan: { kind: 'io', detail: 'The Steam library folder is unreadable.' } } },
+
+  'onboarding-mac': { title: 'First launch: two macOS permissions (saves granted; login approved on the second try)',
+    onboarding: { rows: ['game_access', 'login_approval'], answers: {
+      game_access: [allowed],
+      login_approval: [{ status: 'needs_action', message: 'Turn on SaveScummer in Login Items.', action: 'open_settings' }, allowed],
+    } } },
+  'onboarding-partial': { title: 'First launch: game saves partly granted, then denied',
+    onboarding: { rows: ['game_access'], answers: {
+      game_access: [{ status: 'partial', message: 'Some locations still need access.', action: 'allow_access' },
+        { status: 'partial', message: 'Some locations still need access.', action: 'open_settings' }],
+    } } },
+  'onboarding-denied': { title: 'First launch: game saves denied',
+    onboarding: { rows: ['game_access'], answers: {
+      game_access: [{ status: 'denied', message: 'macOS didn’t allow access.', action: 'open_settings' },
+        { status: 'denied', message: 'Turn on access in System Settings, then check again.', action: 'check_again' }],
+    } } },
+  'onboarding-linux': { title: 'First launch: Linux shortcuts (cancelled, then allowed)',
+    onboarding: { rows: ['shortcuts'], answers: {
+      shortcuts: [{ status: 'denied', message: 'The desktop’s dialog was cancelled.', action: 'set_up' }, allowed],
+    } } },
+  'onboarding-empty': { title: 'First launch with no games found (Skip shows the empty library)',
+    setup: ({ state }) => { state.games = []; }, onboarding: { rows: ['login_approval'] } },
+  'onboarding-inspecting': { title: 'First launch: still finding out what to ask', onboarding: { rows: [], inspecting: true } },
 
   trouble: { title: 'Every problem at once, one per game', setup: (preview) => {
     run(GUNGEON)(preview);

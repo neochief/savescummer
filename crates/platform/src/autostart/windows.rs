@@ -5,7 +5,8 @@ use std::path::Path;
 
 use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 use windows_sys::Win32::System::Registry::{
-    HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW,
+    HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_BINARY, RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW,
+    RegGetValueW, RegSetKeyValueW,
 };
 
 use crate::win::wide;
@@ -19,6 +20,11 @@ pub(super) struct Entry {
 
 pub(super) const RUN: Entry = Entry { key: r"Software\Microsoft\Windows\CurrentVersion\Run", name: "SaveScummer" };
 
+/// Where Task Manager and Settings > Apps > Startup record that the user
+/// turned a `Run` entry off, by the same value name.
+pub(super) const APPROVED: Entry =
+    Entry { key: r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run", name: "SaveScummer" };
+
 pub(super) fn set_at(entry: &Entry, on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), String> {
     if on {
         write(entry, &command_line(host_exe, data_dir))
@@ -28,6 +34,22 @@ pub(super) fn set_at(entry: &Entry, on: bool, host_exe: &Path, data_dir: Option<
         // No entry, or another install's entry: nothing of ours to remove.
         Ok(())
     }
+}
+
+pub(super) fn inspect_at(entry: &Entry, approved: &Entry, host_exe: &Path) -> super::Status {
+    use super::Status;
+    match read(entry) {
+        None => Status::Absent,
+        Some(cmd) if !points_at(&cmd, host_exe) => Status::Foreign,
+        Some(_) if turned_off(approved) => Status::Disabled,
+        Some(_) => Status::Enabled,
+    }
+}
+
+/// The `StartupApproved` value: 12 bytes, the first even (`02`) when on and
+/// odd (`03`) when the user turned the entry off.
+fn turned_off(approved: &Entry) -> bool {
+    read_binary(approved).and_then(|bytes| bytes.first().copied()).is_some_and(|flag| flag & 1 == 1)
 }
 
 pub(super) fn is_enabled_at(entry: &Entry, host_exe: &Path) -> bool {
@@ -73,6 +95,43 @@ pub(super) fn read(entry: &Entry) -> Option<String> {
     }
 }
 
+/// A binary value's bytes, or `None` when it (or its key) doesn't exist.
+fn read_binary(entry: &Entry) -> Option<Vec<u8>> {
+    let key = wide(entry.key);
+    let name = wide(entry.name);
+    let mut bytes = 0u32;
+    // SAFETY: as in `read`: a size query, then a buffer of that size.
+    unsafe {
+        let status = RegGetValueW(
+            HKEY_CURRENT_USER,
+            key.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_BINARY,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut bytes,
+        );
+        if status != ERROR_SUCCESS {
+            return None;
+        }
+        let mut buf = vec![0u8; bytes as usize];
+        let status = RegGetValueW(
+            HKEY_CURRENT_USER,
+            key.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_BINARY,
+            std::ptr::null_mut(),
+            buf.as_mut_ptr().cast(),
+            &mut bytes,
+        );
+        if status != ERROR_SUCCESS {
+            return None;
+        }
+        buf.truncate(bytes as usize);
+        Some(buf)
+    }
+}
+
 fn write(entry: &Entry, command: &str) -> Result<(), String> {
     let key = wide(entry.key);
     let name = wide(entry.name);
@@ -110,8 +169,16 @@ pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), Str
     set_at(&RUN, on, host_exe, data_dir)
 }
 
+/// Whether our `Run` value exists. Turned off in Task Manager still counts
+/// as on here, as before: only Task Manager turns it back on, and the
+/// checkbox must not get stuck off. First-launch setup reads that through
+/// [`inspect`].
 pub fn is_enabled(host_exe: &Path) -> bool {
     is_enabled_at(&RUN, host_exe)
+}
+
+pub fn inspect(host_exe: &Path) -> super::Status {
+    inspect_at(&RUN, &APPROVED, host_exe)
 }
 
 /// The command line the entry runs.
@@ -186,6 +253,24 @@ mod tests {
         assert!(!points_at("", exe));
     }
 
+    fn write_binary(entry: &Entry, bytes: &[u8]) {
+        use windows_sys::Win32::System::Registry::REG_BINARY;
+        let key = wide(entry.key);
+        let name = wide(entry.name);
+        // SAFETY: NUL-terminated names; `bytes` outlives the call.
+        let status = unsafe {
+            RegSetKeyValueW(
+                HKEY_CURRENT_USER,
+                key.as_ptr(),
+                name.as_ptr(),
+                REG_BINARY,
+                bytes.as_ptr().cast(),
+                bytes.len() as u32,
+            )
+        };
+        assert_eq!(status, ERROR_SUCCESS);
+    }
+
     /// Exercises the real write path against a throwaway key, never `Run`.
     #[test]
     fn write_and_remove_against_a_throwaway_key() {
@@ -217,8 +302,15 @@ mod tests {
         set_at(&entry, false, other, None).unwrap();
         assert!(is_enabled_at(&entry, exe));
 
+        let approved = Entry { key, name: "Approved" };
+        assert_eq!(inspect_at(&entry, &approved, exe), super::super::Status::Enabled);
+        assert_eq!(inspect_at(&entry, &approved, other), super::super::Status::Foreign);
+        write_binary(&approved, &[3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(inspect_at(&entry, &approved, exe), super::super::Status::Disabled);
+
         set_at(&entry, false, exe, None).unwrap();
         assert_eq!(read(&entry), None);
+        assert_eq!(inspect_at(&entry, &approved, exe), super::super::Status::Absent);
         // Removing again is still fine.
         set_at(&entry, false, exe, None).unwrap();
     }

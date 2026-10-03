@@ -82,8 +82,7 @@ export function AboutDialog({ bridge, close, opener }: { bridge: Bridge; close: 
       {error && <p className="dialog-error" role="alert">{error}</p>}
     </div>
     <footer>
-      <button type="button" className="dialog-primary" onClick={() => bridge.openWebsite().catch((failure) => setError(message(failure)))}>Website</button>
-      <button type="button" onClick={close}>Close</button>
+      <button type="button" className="dialog-primary" onClick={() => bridge.openWebsite().catch((failure) => setError(message(failure)))}>Open website</button>
     </footer>
   </DialogFrame>;
 }
@@ -278,8 +277,8 @@ export function AppDialog({ kind, game, state, bridge, close, opener, onAdded, o
           <div className="dialog-group">
           <label className="dialog-check"><input type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} />Play sounds</label>
           <label className="dialog-check"><input type="checkbox" checked={startup} disabled={!state?.settings?.launch_on_startup_available}
-            onChange={(event) => setStartup(event.target.checked)} />Launch on startup</label>
-          {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Enable SaveScummer in Login Items to allow startup.</p>}
+            onChange={(event) => setStartup(event.target.checked)} />Start at login</label>
+          {state?.settings?.launch_on_startup_needs_approval && <p className="dialog-hint">Turn on SaveScummer in Login Items so it can start at login.</p>}
           <label className="dialog-check"><input type="checkbox" checked={flushOld} onChange={(event) => setFlushOld(event.target.checked)} />Flush checkpoints older than 30 days</label>
           </div>
         </>}

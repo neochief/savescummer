@@ -296,7 +296,7 @@ fn a_stalled_save_is_reported_while_other_file_work_goes_on() {
 }
 
 #[test]
-fn a_damaged_privacy_record_asks_again_only_once() {
+fn a_damaged_privacy_record_never_asks_by_itself() {
     let world = World::new();
     documents_game(&world, 9001, "Docs One");
     guard(&world, &world.documents, "denied");
@@ -310,9 +310,9 @@ fn a_damaged_privacy_record_asks_again_only_once() {
         std::thread::sleep(Duration::from_secs(1));
         host.kill();
     }
-    // Read as a first run once; answering rewrote the record.
+    // Asking follows a user action only (first-launch setup's included).
     let log = world.host_log();
-    assert_eq!(log.matches("asking for access").count(), 1, "{log}");
+    assert_eq!(log.matches("asking for access").count(), 0, "{log}");
 }
 
 #[test]

@@ -15,10 +15,12 @@ button:focus-visible { outline: 2px solid #faf8ee; outline-offset: 2px; }
 .app.is-busy { cursor: wait; }
 .sidebar { position: relative; width: 248px; flex: none; display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; overflow: hidden; }
 .app.no-games .sidebar { width: 100%; align-items: center; justify-content: center; gap: 16px; }
-.app.no-games .sidebar-surface { flex: none; width: 260px; background: none; overflow: visible; }
+.app.no-games .sidebar-surface { flex: none; width: 220px; margin-top: 16px; padding: 8px; overflow: visible; }  /* the sidebar's surface, as a menu */
 .app.no-games .sidebar-content, .app.no-games .sidebar-scrollbar { display: none; }
 .app.no-games .library-controls { position: static; display: flex; flex-direction: column; padding: 0; background: none; }
 .app.no-games .library-controls button { justify-content: center; }
+.no-games-text { margin-top: -4px; text-align: center; }  /* like the first-launch heading under its skeleton */
+.no-games-text h1 { margin: 0; font: 700 24px/1.12 Chakra Petch, sans-serif; }
 .app.no-games .main { flex: 0 0 0; width: 0; padding: 0; overflow: hidden; visibility: hidden; }
 /* One bar for both platforms: macOS keeps its traffic lights on the left; Windows draws its own caption buttons. */
 .window-bar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; height: 32px; display: flex; align-items: center; }
@@ -152,7 +154,6 @@ button.running-badge:not(:disabled):is(:hover, :focus-visible) .running-badge-fa
    spacing, like the Info drawer's, is built from the 12px stack gap. --handle-height is the Info handle's, which hangs
    below the line. */
 .main { --stack-gap: 12px; --section-gap: calc(var(--stack-gap) * 2); --handle-height: 28px; --drawer-pad: calc(var(--stack-gap) * 5); flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 16px; }
-.connection { position: absolute; top: 8px; right: 20px; margin: 0; color: #f3eee7; background: #3a322e; border-radius: 8px; padding: 9px 12px; font-size: 13px; z-index: 5; }
 .action-band { --control-height: 96px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: var(--control-height); height: calc(32px + var(--control-height)); flex: none; gap: 8px; margin-bottom: var(--section-gap); padding-top: 32px; position: relative; z-index: 3; }  /* the Load card overhangs what follows */
 /* The Info line is the top edge of the history's scroll area and the drawer's front: the drawer slides out from under
    its stroke (animated in App.tsx). The handle hangs from it, 12px from the history below, and over the open drawer. */
@@ -367,7 +368,7 @@ dialog.dialog-about { width: min(360px, calc(100vw - 48px)); }
 .about .about-version { color: #d7c9ba; }
 .about .about-copyright { color: #afa095; font-size: 12px; }
 .about .dialog-error { margin: 12px 0 0; }
-.dialog-about footer { justify-content: center; }
+dialog.dialog-about footer { justify-content: center; }  /* over the generic .dialog footer below */
 dialog.dialog-flush { width: min(560px, calc(100vw - 48px)); }
 dialog.dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
 dialog.dialog:focus { outline: none; }
@@ -496,3 +497,57 @@ input[type="checkbox"]:checked:disabled { background-color: #3d342d; }
   white-space: nowrap;
   border: 0;
 }
+/* First-launch permissions: one small panel in the middle of the window, rows of a name, a line of text and an action. */
+.onboarding { flex: 1; display: grid; place-items: center; padding: 16px 24px 32px; }
+.onboarding-panel { width: min(480px, 100%); }
+.onboarding-header { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 32px; }  /* the no-games screen's spacing */
+.onboarding-header .empty-character { margin-bottom: 12px; }
+.onboarding h1 { margin: 0; font: 700 24px/1.12 Chakra Petch, sans-serif; outline: none; }  /* like the guidance titles */
+.onboarding-rows { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.onboarding-row { display: flex; align-items: stretch; gap: 16px; padding: 12px; border-radius: 12px; background: #2c2623; }  /* the sidebar's surface; the gap between rows is the divider */
+.onboarding-row-text { flex: 1; min-width: 0; }
+.onboarding-row-text strong { font: 600 18px/1.2 Chakra Petch, sans-serif; }  /* like the dialog titles */
+.onboarding-optional { color: #a99b90; font-weight: 400; }
+.onboarding-row-text p { margin: 4px 0 0; color: #a99b90; font-size: 13px; line-height: 1.45; }  /* like the guidance text */
+.onboarding-row-text .onboarding-message { color: #e4d7c9; }
+.onboarding-row-text .onboarding-message:empty { display: none; }
+.onboarding-row:is(.denied, .failed) .onboarding-message { color: #ff9a8f; }
+.onboarding-row button { flex: none; min-width: 140px; padding: 0 16px; border: 0; border-radius: 6px; background: #463830; color: #faf8ee; font: 600 15px Chakra Petch, sans-serif; }  /* as tall as the row's text */
+.onboarding footer button { border: 0; }
+.onboarding-row button:not(:disabled):hover { background: #5b4c42; }
+.onboarding-row button:disabled { opacity: .6; }
+.onboarding-allowed { flex: none; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 6px; color: #9fd49a; font: 600 15px Chakra Petch, sans-serif; }
+.onboarding-check { width: 14px; height: 14px; background: currentColor; mask: url('/icons/check.svg') center / contain no-repeat; }  /* the app's check, in the text's green */
+.onboarding-error { margin: 12px 0 0; color: #ff9a8f; }
+.onboarding footer { display: flex; justify-content: center; margin-top: 32px; }
+.onboarding footer button.onboarding-exit { min-width: 160px; height: 40px; padding: 0 28px; border-radius: 6px; background: #f3eee7; color: #2a2420; font: 600 15px Chakra Petch, sans-serif; }
+.onboarding footer button.onboarding-exit:not(:disabled):hover { background: #fff; }
+.onboarding-loading { margin: 0; color: #afa095; opacity: 0; animation: onboarding-loading .3s ease 1s forwards; }
+@keyframes onboarding-loading { to { opacity: 1; } }
+/* Screen hand-overs (App's showState). The title bar stays put through all of them. */
+html:is(.arriving-library, .leaving-onboarding-empty) .window-bar { view-transition-name: window-bar; }
+/* The skeleton in the window's middle morphs into the next screen's: it moves, and one drawing fades into the other. */
+html:is(.arriving-library, .leaving-onboarding-empty) .empty-character { view-transition-name: screen-character; }
+html:is(.arriving-library, .leaving-onboarding-empty)::view-transition-group(screen-character) { animation-duration: .5s; animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+/* Into a library with games: the old screen fades; the sidebar slides in from the left, the main area from the right. */
+html.library-arrived .sidebar { view-transition-name: library-sidebar; }
+html.library-arrived .main { view-transition-name: library-main; }
+html.arriving-library::view-transition-old(root) { animation: screen-fade-out .2s ease-in both; }
+html.arriving-library::view-transition-new(root) { animation: none; }
+html.arriving-library::view-transition-new(library-sidebar) { animation: arrive-from-left .45s cubic-bezier(.2, .8, .2, 1) .08s both; }
+html.arriving-library::view-transition-new(library-main) { animation: arrive-from-right .45s cubic-bezier(.2, .8, .2, 1) .14s both; }
+@keyframes screen-fade-out { to { opacity: 0; } }
+@keyframes arrive-from-left { from { opacity: 0; transform: translateX(-48px); } }
+@keyframes arrive-from-right { from { opacity: 0; transform: translateX(48px); } }
+/* Into an empty library: the skeleton moves into place; below it, the setup fades down as the library's buttons rise. */
+html.leaving-onboarding-empty::view-transition-old(screen-character) { animation: none; opacity: 0; }  /* same drawing: show only the live one */
+html.leaving-onboarding-empty::view-transition-new(screen-character) { animation: none; }
+html.leaving-onboarding-empty::view-transition-old(root) { animation: onboarding-sink .22s cubic-bezier(.4, 0, 1, 1) both; }
+html.leaving-onboarding-empty::view-transition-new(root) { animation: onboarding-rise .35s cubic-bezier(0, 0, .2, 1) .2s both; }
+@keyframes onboarding-sink { to { opacity: 0; transform: translateY(24px); } }
+@keyframes onboarding-rise { from { opacity: 0; transform: translateY(24px); } }
+/* Before the host's first state: a centered note that fades in only if the wait is noticeable. */
+.waiting { flex: 1; display: grid; place-items: center; }
+.waiting p { margin: 0 0 32px; color: #a99b90; font: 600 15px Chakra Petch, sans-serif; opacity: 0; animation: onboarding-loading .3s ease .6s forwards; }
+.app.entering { animation: app-enter .3s ease both; }
+@keyframes app-enter { from { opacity: 0; } }

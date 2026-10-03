@@ -111,6 +111,8 @@ pub struct Inner {
     /// it on again.
     pub launch_needs_approval: bool,
     pub revision: u64,
+    /// First-launch setup's stage in this run.
+    pub onboarding: crate::onboarding::Stage,
     /// Cached art by Steam app id.
     pub artwork: HashMap<u64, savescummer_ipc::Artwork>,
 }
@@ -135,6 +137,11 @@ pub struct Host {
     pub monitor_dirty: std::sync::atomic::AtomicBool,
     pub watcher: Mutex<Option<savescummer_platform::watch::Watcher>>,
     pub privacy: Arc<crate::privacy::Privacy>,
+    /// Startup choices (the flag, Settings, first-launch setup) apply one
+    /// at a time. Taken before `db`, never while holding `inner`.
+    pub launch_lock: Mutex<()>,
+    /// The first scan is done and the integrations started.
+    pub started: std::sync::atomic::AtomicBool,
     crash_at: Option<(String, usize)>,
 }
 
@@ -176,6 +183,8 @@ impl Host {
             monitor_dirty: std::sync::atomic::AtomicBool::new(true),
             watcher: Mutex::new(None),
             privacy,
+            launch_lock: Mutex::new(()),
+            started: std::sync::atomic::AtomicBool::new(false),
             crash_at,
         })
     }
@@ -251,6 +260,7 @@ impl Host {
             catalog_revision: catalog.bundle.source.revision.clone(),
             games,
             deletes: inner.deletes.values().map(|delete| delete.op.clone()).collect(),
+            onboarding: crate::onboarding::snapshot(inner),
         }
     }
 
@@ -535,6 +545,7 @@ fn placeholder_state(instance: &str) -> State {
         catalog_revision: String::new(),
         games: Vec::new(),
         deletes: Vec::new(),
+        onboarding: None,
     }
 }
 
@@ -572,6 +583,7 @@ impl Inner {
             shortcuts: Shortcut::defaults(),
             launch_on_startup: false,
             launch_needs_approval: false,
+            onboarding: crate::onboarding::Stage::Done,
             revision: 0,
             artwork: HashMap::new(),
         }

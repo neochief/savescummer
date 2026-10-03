@@ -117,6 +117,17 @@ pub fn start(
 }
 
 impl Integration {
+    /// Native hotkeys need no permission: nothing to allow.
+    pub fn shortcut_setup(&self, _wait: std::time::Duration) -> super::ShortcutSetup {
+        super::ShortcutSetup::Ready
+    }
+
+    pub fn set_up_shortcuts(&self) -> std::sync::mpsc::Receiver<Result<(), String>> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = tx.send(Err("the shortcuts need no setup on Windows".into()));
+        rx
+    }
+
     pub fn hotkey_errors(&self) -> Vec<String> {
         self.hotkey_errors.clone()
     }

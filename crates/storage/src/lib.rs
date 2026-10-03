@@ -9,13 +9,13 @@
 
 use std::path::Path;
 
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{OptionalExtension, Row, params};
 use serde_json::Value;
 
 use savescummer_core::common::RecordedTarget;
 use savescummer_core::history::RowKind;
 
-pub use rusqlite::Error;
+pub use rusqlite::{Connection, Error};
 pub type Result<T> = rusqlite::Result<T>;
 
 const SCHEMA_VERSION: i64 = 4;
@@ -186,6 +186,17 @@ pub fn set_setting(c: &Connection, key: &str, value: &str) -> Result<()> {
         params![key, value],
     )?;
     Ok(())
+}
+
+/// Whether this profile was used before: any host run, game record,
+/// checkpoint or history. Settings alone (an installer's) don't count.
+pub fn has_been_used(c: &Connection) -> Result<bool> {
+    c.query_row(
+        "SELECT EXISTS (SELECT 1 FROM host_runs) OR EXISTS (SELECT 1 FROM games)
+            OR EXISTS (SELECT 1 FROM checkpoints) OR EXISTS (SELECT 1 FROM history)",
+        [],
+        |r| r.get(0),
+    )
 }
 
 // ---- games --------------------------------------------------------------------
@@ -684,6 +695,20 @@ mod tests {
             cloud_replaced: false,
             visible: true,
         }
+    }
+
+    #[test]
+    fn settings_alone_are_not_use_but_a_run_or_a_game_is() {
+        let (_dir, storage) = open();
+        let c = storage.conn();
+        assert!(!has_been_used(c).unwrap());
+        set_setting(c, "launch_on_startup", "0").unwrap();
+        assert!(!has_been_used(c).unwrap(), "an installer's choice is no use");
+        start_run(c, "host-1", "2026-09-24T19:25:03Z").unwrap();
+        assert!(has_been_used(c).unwrap());
+        let (_dir, storage) = open();
+        put_game(storage.conn(), "g", "{}").unwrap();
+        assert!(has_been_used(storage.conn()).unwrap());
     }
 
     #[test]

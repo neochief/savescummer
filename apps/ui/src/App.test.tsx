@@ -4,7 +4,7 @@ import { App, relativeAge } from './App';
 import { copyrightYears } from './Dialogs';
 import { displayShortcut } from './shortcuts/shortcuts';
 import { HostError, type Bridge } from './bridge';
-import type { Failure, Game, HistoryEntry, HistoryPage, HostState, Operation, SaveSet, SaveTarget, UiRequest } from './types';
+import type { Failure, Game, HistoryEntry, HistoryPage, HostState, OnboardingRow, Operation, SaveSet, SaveTarget, UiRequest } from './types';
 
 const dialogOpen = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: dialogOpen }));
@@ -794,9 +794,9 @@ test('the sidebar logo opens About, whose Website button opens the site', async 
   const about = screen.getByRole('dialog', { name: 'About' });
   expect(about.textContent).toMatch(/Version \d+\.\d+\.\d+/);
   expect(about.textContent).toContain('Alexander Shvets. All rights reserved.');
-  fireEvent.click(within(about).getByRole('button', { name: 'Website' }));
+  fireEvent.click(within(about).getByRole('button', { name: 'Open website' }));
   expect(bridge.openWebsite).toHaveBeenCalledOnce();
-  fireEvent.click(within(about).getByRole('button', { name: 'Close' }));
+  fireEvent.click(within(about).getByRole('button', { name: 'Close dialog' }));
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
@@ -806,7 +806,7 @@ test('a tray dialog request opens About when the UI connects and only once per r
   render(<App bridge={bridge} />);
   const about = await screen.findByRole('dialog', { name: 'About' });
   expect(bridge.requests).toContainEqual({ type: 'ack_tray_dialog', id: 'tray-1' });
-  fireEvent.click(within(about).getByRole('button', { name: 'Close' }));
+  fireEvent.click(within(about).getByRole('button', { name: 'Close dialog' }));
   expect(screen.queryByRole('dialog')).toBeNull();
   act(() => bridge.stateListener?.({ ...bridge.state, revision: 2 }));
   expect(screen.queryByRole('dialog')).toBeNull();
@@ -970,6 +970,7 @@ test('no-games layout keeps Scan, Add, Settings in keyboard order', async () => 
   bridge.state.active_stack = [];
   const { container } = render(<App bridge={bridge} />);
   await waitFor(() => expect(container.querySelector('.no-games')).toBeTruthy());
+  expect(screen.getByRole('heading', { name: 'No supported games detected' })).toBeTruthy();
   expect([...container.querySelectorAll('.library-controls button')].map((button) => button.textContent)).toEqual([
     'Scan for games', 'Add custom game', 'Settings',
   ]);
@@ -1127,7 +1128,7 @@ test('Scan icon spins while scanning and becomes a checkmark while results are s
 
   finish({ new_games: 0 });
   await waitFor(() => expect(button.classList.contains('scanning')).toBe(false));
-  expect(button.textContent).toBe('No new games');
+  expect(button.textContent).toBe('No new games found');
   expect(button.classList.contains('scan-success')).toBe(true);
   expect(button.querySelector('img')?.getAttribute('src')).toBe('/icons/check.svg');
 
@@ -1135,4 +1136,72 @@ test('Scan icon spins while scanning and becomes a checkmark while results are s
   fireEvent.click(button);
   await waitFor(() => expect(button.textContent).toBe('2 games found'));
   expect(button.querySelector('img')?.getAttribute('src')).toBe('/icons/check.svg');
+});
+
+const onboarding = (rows: Array<[OnboardingRow['kind'], Partial<OnboardingRow>?]>, confirmed = false): HostState['onboarding'] => ({
+  session: 'onboarding-1', inspecting: false, any_permission_confirmed: confirmed,
+  rows: rows.map(([kind, row]) => ({ id: kind, kind, status: 'needs_action', action: 'allow_access', ...row })),
+});
+
+test('first-launch setup waits for its rows instead of flashing an empty screen or the library', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.onboarding = { session: 'onboarding-1', inspecting: true, rows: [], any_permission_confirmed: false };
+  render(<App bridge={bridge} />);
+  await waitFor(() => expect(document.querySelector('.onboarding[aria-busy="true"]')).not.toBeNull());
+  expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  expect(screen.queryByText('Game A')).toBeNull();
+});
+
+test('one permission: a singular heading, its action, and Skip until the host confirms it', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.onboarding = onboarding([['shortcuts', { action: 'set_up' }]]);
+  render(<App bridge={bridge} />);
+  expect(await screen.findByRole('heading', { name: 'Before you play' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Set up' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'request_onboarding_permission', session: 'onboarding-1', row: 'shortcuts' }));
+  // Clicking (and waiting) never counts as allowed.
+  expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy();
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
+    onboarding: onboarding([['shortcuts', { status: 'denied', action: 'set_up', message: 'The desktop’s dialog was cancelled.' }]]) }));
+  expect(screen.getByText('The desktop’s dialog was cancelled.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy();
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3,
+    onboarding: onboarding([['shortcuts', { status: 'granted', action: undefined }]], true) }));
+  expect(screen.getByText('Allowed')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'finish_onboarding', session: 'onboarding-1' }));
+});
+
+test('two macOS permissions: one confirmed turns Skip into Continue while the other stays available', async () => {
+  const bridge = new FakeBridge();
+  bridge.state.onboarding = onboarding([['game_access'], ['login_approval', { action: 'open_settings' }]]);
+  render(<App bridge={bridge} />);
+  expect(await screen.findByRole('heading', { name: 'Before you play' })).toBeTruthy();
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
+    onboarding: onboarding([['game_access', { status: 'requesting' }], ['login_approval', { action: 'open_settings' }]]) }));
+  // One OS request at a time; leaving stays possible.
+  expect((screen.getByRole('button', { name: 'Waiting' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Open settings' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Skip' }) as HTMLButtonElement).disabled).toBe(false);
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3, onboarding: onboarding([
+    ['game_access', { status: 'partial', message: 'Some locations still need access.' }],
+    ['login_approval', { action: 'open_settings' }]], true) }));
+  expect(screen.getByText('Some locations still need access.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Allow access' })).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Open settings' }) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(bridge.requests).toContainEqual({ type: 'finish_onboarding', session: 'onboarding-1' }));
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 4, onboarding: undefined }));
+  expect(await screen.findByText('Game A')).toBeTruthy();
+});
+
+test('before the host answers, the window shows only a quiet note, never an empty library', async () => {
+  const bridge = new FakeBridge();
+  bridge.request = (async () => new Promise(() => undefined)) as FakeBridge['request'];
+  const { container } = render(<App bridge={bridge} />);
+  expect(await screen.findByText('Locating my eyes…')).toBeTruthy();
+  expect(container.querySelector('.sidebar')).toBeNull();
+  await act(async () => bridge.stateListener?.(bridge.state));
+  expect(screen.queryByText('Locating my eyes…')).toBeNull();
+  expect(container.querySelector('.sidebar')).not.toBeNull();
 });

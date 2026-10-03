@@ -359,6 +359,10 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
                 crate::queries::refresh_launch(host);
                 host.publish(&mut host.lock());
             }
+            if focused {
+                // Back from System Settings, maybe with Login Items approved.
+                crate::onboarding::recheck(host);
+            }
             json(serde_json::json!({ "scan": scan }))
         }
         Command::AckTrayDialog { id } => {
@@ -381,6 +385,8 @@ fn answer(host: &Arc<Host>, request_id: &str, command: Command) -> Result<serde_
             json(op)
         }
         Command::RequestAccess { game } => crate::privacy::request_access(host, &game),
+        Command::RequestOnboardingPermission { session, row } => crate::onboarding::request(host, &session, &row),
+        Command::FinishOnboarding { session } => crate::onboarding::finish(host, &session),
         Command::Shutdown => {
             host.request_shutdown();
             json(serde_json::json!({ "shutting_down": true }))

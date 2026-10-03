@@ -3,8 +3,8 @@
 //!
 //! It connects to the host of `--data-dir` the way the UI does (a focus
 //! report, then a watch) and appends one line per event to the file named
-//! by `FAKE_UI_LOG`: `started`, `connected`, `show`. It exits when the host
-//! shuts down or goes away.
+//! by `FAKE_UI_LOG`: `started`, `pid <n>`, `connected`, `show`. It exits
+//! when the host shuts down or goes away, or is killed (the window closed).
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -16,6 +16,7 @@ fn main() {
     let data_dir = args.windows(2).find(|w| w[0] == "--data-dir").map(|w| PathBuf::from(&w[1])).expect("--data-dir");
     let log = PathBuf::from(std::env::var_os("FAKE_UI_LOG").expect("FAKE_UI_LOG"));
     append(&log, "started");
+    append(&log, &format!("pid {}", std::process::id()));
     let mut client = Client::connect(&savescummer_ipc::endpoint(&data_dir)).expect("connect to the host");
     client
         .request(

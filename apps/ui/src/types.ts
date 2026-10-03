@@ -68,6 +68,27 @@ export interface Game {
   labels_version: number;
 }
 
+export type OnboardingKind = 'game_access' | 'login_approval' | 'shortcuts';
+export type OnboardingStatus = 'needs_action' | 'requesting' | 'granted' | 'partial' | 'denied' | 'failed';
+export type OnboardingAction = 'allow_access' | 'open_settings' | 'check_again' | 'set_up';
+
+export interface OnboardingRow {
+  id: string;
+  kind: OnboardingKind;
+  status: OnboardingStatus;
+  message?: string;
+  action?: OnboardingAction;
+}
+
+/** The first-launch permission screen, present only while its host session lasts. */
+export interface Onboarding {
+  session: string;
+  /** The rows aren't known yet: show the loading state, never an empty screen. */
+  inspecting: boolean;
+  rows: OnboardingRow[];
+  any_permission_confirmed: boolean;
+}
+
 export interface HostState {
   instance: string;
   revision: number;
@@ -77,6 +98,7 @@ export interface HostState {
   tray_dialog?: { id: string; kind: 'add' | 'settings' | 'about' };
   store?: { path: string; available: boolean };
   deletes: Operation[];
+  onboarding?: Onboarding;
   settings?: { play_sounds: boolean; launch_on_startup: boolean; launch_on_startup_available: boolean; launch_on_startup_needs_approval?: boolean;
     flush_old_checkpoints?: boolean; checkpoint_store: string; save_shortcut?: string; load_shortcut?: string };
 }
@@ -147,7 +169,9 @@ export type UiRequest =
   | { type: 'open_checkpoints'; game: string; resolve_only?: boolean }
   | { type: 'open_executable'; game: string }
   | { type: 'open_saves'; game: string; target: number }
-  | { type: 'picker_start'; path: string };
+  | { type: 'picker_start'; path: string }
+  | { type: 'request_onboarding_permission'; session: string; row: string }
+  | { type: 'finish_onboarding'; session: string };
 
 export interface HostResponse<T> {
   v: number;

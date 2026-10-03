@@ -54,7 +54,7 @@ UsePreviousTasks=yes
 ; Checked on first install. On upgrade UsePreviousTasks restores the previous
 ; choice, checked or not, so a user who turned it off is never opted back in.
 ; (Not `checkedonce`: on upgrade it unchecks the task, overriding that choice.)
-Name: "autostart"; Description: "Launch at sign-in"
+Name: "autostart"; Description: "Start at login"
 
 [InstallDelete]
 ; Upgrades replace the program files wholesale, so nothing stale is left.
@@ -69,7 +69,7 @@ Name: "{userprograms}\SaveScummer"; Filename: "{app}\bin\SaveScummer.exe"
 
 [Run]
 ; The host is the only writer of the sign-in entry.
-Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: autostart; StatusMsg: "Setting up launch at sign-in..."
+Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: autostart; StatusMsg: "Setting SaveScummer to start at login..."
 Filename: "{app}\bin\SaveScummer.exe"; Parameters: "--autostart off"; Flags: runhidden waituntilterminated; Tasks: not autostart
 ; The same as a user launch: the host starts and shows the UI.
 Filename: "{app}\bin\SaveScummer.exe"; Description: "Launch SaveScummer"; Flags: nowait postinstall skipifsilent

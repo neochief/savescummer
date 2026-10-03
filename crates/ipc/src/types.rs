@@ -192,6 +192,16 @@ pub enum Command {
     RequestAccess {
         game: String,
     },
+    /// First-launch setup: runs a row's OS request (may prompt) and answers
+    /// once its result is known. Only for the host's live session.
+    RequestOnboardingPermission {
+        session: String,
+        row: String,
+    },
+    /// First-launch setup is over (Skip, Continue, or the window closed).
+    FinishOnboarding {
+        session: String,
+    },
     Shutdown,
 }
 
@@ -230,6 +240,8 @@ impl Command {
             Command::ShowUi => "show_ui",
             Command::Hotkey { .. } => "hotkey",
             Command::RequestAccess { .. } => "request_access",
+            Command::RequestOnboardingPermission { .. } => "request_onboarding_permission",
+            Command::FinishOnboarding { .. } => "finish_onboarding",
             Command::Shutdown => "shutdown",
         }
     }
@@ -548,7 +560,7 @@ pub struct SettingsInfo {
     pub load_shortcut: String,
     pub launch_on_startup: bool,
     pub launch_on_startup_available: bool,
-    /// macOS: the user turned launch at login off in System Settings; only
+    /// macOS: the user turned start at login off in System Settings; only
     /// they can turn it on again there (Login Items).
     #[serde(default)]
     pub launch_on_startup_needs_approval: bool,
@@ -611,6 +623,67 @@ pub struct State {
     pub games: Vec<GameSummary>,
     /// Deletes waiting or running.
     pub deletes: Vec<Operation>,
+    /// The first-launch permission screen, while its session lasts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onboarding: Option<Onboarding>,
+}
+
+/// The first-launch permission screen (PLAN-onboarding). It exists only
+/// for the one session of the app's first deliberate opening.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Onboarding {
+    pub session: String,
+    /// Still finding out which permissions apply: the UI shows its ordinary
+    /// loading state, never an empty screen.
+    pub inspecting: bool,
+    pub rows: Vec<OnboardingRow>,
+    /// At least one requested permission was confirmed: Skip becomes
+    /// Continue.
+    pub any_permission_confirmed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OnboardingRow {
+    pub id: String,
+    pub kind: OnboardingKind,
+    pub status: OnboardingStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// What the row's button does; none once it's granted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<OnboardingAction>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnboardingKind {
+    /// macOS: the protected locations detected games keep their saves in.
+    GameAccess,
+    /// macOS: approving the login item in Login Items.
+    LoginApproval,
+    /// Linux: allowing the global shortcuts in the desktop's dialog.
+    Shortcuts,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnboardingStatus {
+    NeedsAction,
+    Requesting,
+    Granted,
+    /// Some of what the row covers was granted, not all.
+    Partial,
+    Denied,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnboardingAction {
+    AllowAccess,
+    OpenSettings,
+    CheckAgain,
+    SetUp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

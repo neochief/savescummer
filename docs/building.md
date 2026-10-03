@@ -120,7 +120,7 @@ build/<mode>/package/SaveScummer.app/
   Contents/MacOS/SaveScummer      host: the bundle's executable, what opening the app runs
   Contents/MacOS/SaveScummer.UI   embedded Tauri/WebKit UI
   Contents/MacOS/SaveScummer.CLI  CLI
-  Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist   launch at login
+  Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist   start at login
   Contents/Resources/SaveScummer.icns, Rust and web licenses, manifest, SHA256SUMS.txt
 ```
 
@@ -190,7 +190,7 @@ Every build (so also `run`, `host start` and `dist`), `test` and `clean` first s
 `cargo xtask dist` compiles [`packaging/windows/savescummer.iss`](../packaging/windows/savescummer.iss) with Inno Setup into `dist/SaveScummer-windows-x64-<version>-setup.exe`. The payload is exactly the release package.
 
 - Per-user install into `%LOCALAPPDATA%\Programs\SaveScummer`, no admin prompt; upgrades replace in place (stable `AppId`).
-- "Launch at sign-in" task: checked on first install, the user's choice kept on upgrade. It runs `SaveScummer.exe --autostart on|off`, so the host stays the only writer of the sign-in entry. Uninstalling runs `--autostart off`.
+- "Start at login" task: checked on first install, the user's choice kept on upgrade. It runs `SaveScummer.exe --autostart on|off`, so the host stays the only writer of the sign-in entry. Uninstalling runs `--autostart off`.
 - Before replacing or removing files, it runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes.
 - If WebView2 is absent, the installer downloads and installs Microsoft's Evergreen Runtime before installing the app. This requires an internet connection on those machines.
 - The Start menu entry and the last page's "Launch SaveScummer" run `SaveScummer.exe`: the host starts, or the running one is reached, and shows the UI.
@@ -203,7 +203,7 @@ Version resources: `apps/host/build.rs` and `apps/cli/build.rs` embed the Cargo 
 
 `cargo xtask dist` puts the release bundle and an `Applications` link into `dist/SaveScummer-macos-arm64-<version>.dmg` (`hdiutil`, UDZO). The user drags the app over; there's no installer.
 
-- Launch at login is an `SMAppService` agent whose plist is inside the bundle; macOS lists it as SaveScummer in *System Settings → General → Login Items*, under *Allow in the Background* (not *Open at Login*).
+- Start at login is an `SMAppService` agent whose plist is inside the bundle; macOS lists it as SaveScummer in *System Settings → General → Login Items*, under *Allow in the Background* (not *Open at Login*).
 - The version is in `Info.plist`; the `winresource` build scripts do nothing on macOS.
 
 

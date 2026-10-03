@@ -25,7 +25,7 @@ pub(crate) const TARGET_KEY: &str = "X-SaveScummer-Target";
 
 pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), String> {
     if on && data_dir.is_some_and(|d| d != crate::data_dir()) {
-        return Err("launch at sign-in always uses the default data folder on Linux; drop --data-dir".into());
+        return Err("start at login always uses the default data folder on Linux; drop --data-dir".into());
     }
     let path = entry_path().ok_or("no home folder for the autostart entry")?;
     set_at(&path, on, &target(host_exe))
@@ -33,6 +33,31 @@ pub fn set(on: bool, host_exe: &Path, data_dir: Option<&Path>) -> Result<(), Str
 
 pub fn is_enabled(host_exe: &Path) -> bool {
     entry_path().is_some_and(|path| read(&path).is_some_and(|entry| entry.enabled && entry.target == target(host_exe)))
+}
+
+pub fn inspect(host_exe: &Path) -> super::Status {
+    // A host inside an AppImage's mount that isn't the AppImage's own: its
+    // path is gone once it exits.
+    if std::env::var_os("APPDIR").is_some() && appimage(host_exe).is_none() {
+        return super::Status::Unavailable;
+    }
+    match entry_path() {
+        Some(path) => inspect_at(&path, &target(host_exe)),
+        None => super::Status::Unavailable,
+    }
+}
+
+fn inspect_at(path: &Path, target: &Path) -> super::Status {
+    use super::Status;
+    if !path.exists() {
+        return Status::Absent;
+    }
+    match read(path) {
+        None => Status::Foreign,
+        Some(entry) if !entry.enabled => Status::Disabled,
+        Some(entry) if entry.target == target => Status::Enabled,
+        Some(_) => Status::Foreign,
+    }
 }
 
 /// Re-points an enabled entry of ours at this AppImage, when a different
@@ -215,6 +240,23 @@ mod tests {
         let text = std::fs::read_to_string(&path).unwrap().replace("Autostart-enabled=true", "Autostart-enabled=false");
         std::fs::write(&path, text).unwrap();
         assert!(!read(&path).unwrap().enabled);
+    }
+
+    #[test]
+    fn inspecting_tells_absent_ours_disabled_and_foreign_apart() {
+        use super::super::Status;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE);
+        let exe = Path::new("/opt/SaveScummer");
+        assert_eq!(inspect_at(&path, exe), Status::Absent);
+        set_at(&path, true, exe).unwrap();
+        assert_eq!(inspect_at(&path, exe), Status::Enabled);
+        assert_eq!(inspect_at(&path, Path::new("/elsewhere/SaveScummer")), Status::Foreign);
+        let text = std::fs::read_to_string(&path).unwrap().replace("X-GNOME-Autostart-enabled=true", "Hidden=true");
+        std::fs::write(&path, text).unwrap();
+        assert_eq!(inspect_at(&path, exe), Status::Disabled);
+        std::fs::write(&path, "[Desktop Entry]\nType=Application\nExec=/usr/bin/savescummer\n").unwrap();
+        assert_eq!(inspect_at(&path, exe), Status::Foreign);
     }
 
     #[test]

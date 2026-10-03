@@ -14,8 +14,8 @@ The Linux AppImage includes the host, UI and CLI; it needs no installation or ro
 ## Upgrade or remove
 
 - **Windows:** run the new installer to upgrade, or uninstall SaveScummer in Settings → Apps.
-- **macOS:** quit from the menu bar, then drag the new app over the old one to upgrade. To remove it, turn off launch at login, quit, then move the app to Trash.
-- **Linux:** quit from the tray and run the new AppImage. To remove it, turn off launch at login, quit, then delete the AppImage.
+- **macOS:** quit from the menu bar, then drag the new app over the old one to upgrade. To remove it, turn off start at login, quit, then move the app to Trash.
+- **Linux:** quit from the tray and run the new AppImage. To remove it, turn off start at login, quit, then delete the AppImage.
 
 ## Checkpoint storage
 

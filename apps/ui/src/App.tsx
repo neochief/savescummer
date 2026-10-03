@@ -8,6 +8,7 @@ import { AboutDialog, AppDialog, formatBytes, type DialogKind } from './Dialogs'
 import { displayShortcut } from './shortcuts/shortcuts';
 import { failureMessage } from './messages';
 import { GuidancePanel } from './GuidancePanel';
+import { OnboardingScreen } from './Onboarding';
 import { SleepySkeleton } from './SleepySkeleton';
 import { PointingSkeleton } from './PointingSkeleton';
 import { CrouchingSkeleton } from './CrouchingSkeleton';
@@ -416,24 +417,52 @@ export function App({ bridge }: { bridge: Bridge }) {
     return () => clearInterval(timer);
   }, []);
 
+  // Screens that hand over with a view transition. Leaving first-launch setup into an empty library, the sleepy
+  // skeleton both screens show stays and moves into place, and only what's below it changes. Arriving at a library with
+  // games, from setup or from the empty library once games are found, the old screen fades as the sidebar slides in
+  // from the left and the main area from the right.
+  const hadState = useRef(false);
+  const entering = useRef(false);
+  const onboardingShown = useRef(false);
+  onboardingShown.current = Boolean(state?.onboarding && !state.onboarding.inspecting);
+  const emptyShown = useRef(false);
+  emptyShown.current = Boolean(state && !state.onboarding && !state.games.some((game) => game.installed));
+  const showState = useCallback((value: HostState) => {
+    const games = value.games.some((game) => game.installed);
+    const leavingSetup = onboardingShown.current && !value.onboarding;
+    const motion = leavingSetup ? (games ? 'arriving-library' : 'leaving-onboarding-empty')
+      : emptyShown.current && games && !value.onboarding ? 'arriving-library' : undefined;
+    if (!motion || !document.startViewTransition || scrollMotion() !== 'smooth') {
+      setState(value);
+      return;
+    }
+    const root = document.documentElement;
+    root.classList.add(motion);
+    document.startViewTransition(() => {
+      // Named only in the new screen, so the library's parts arrive rather than morph from the old screen's.
+      if (motion === 'arriving-library') root.classList.add('library-arrived');
+      flushSync(() => setState(value));
+    }).finished.finally(() => root.classList.remove(motion, 'library-arrived'));
+  }, []);
+
   useEffect(() => {
     let live = true;
     const unlisteners: Array<() => void> = [];
     Promise.all([
-      bridge.onState((value) => { if (live) { setState(value); setStatus('connected'); } }),
+      bridge.onState((value) => { if (live) { showState(value); setStatus('connected'); } }),
       bridge.onStatus((value) => { if (live) { setStatus(value); if (value !== 'connected') setState(undefined); } }),
       bridge.onLabels(() => { if (live) setLabelsRevision((n) => n + 1); }),
     ]).then((items) => {
       if (live) unlisteners.push(...items);
       else items.forEach((unlisten) => unlisten());
       return bridge.request<HostState>({ type: 'state' });
-    }).then((value) => { if (live) { setState(value); setStatus('connected'); } }).catch(() => undefined);
+    }).then((value) => { if (live) { showState(value); setStatus('connected'); } }).catch(() => undefined);
     return () => {
       live = false;
       unlisteners.forEach((unlisten) => unlisten());
       for (const timer of [feedbackTimer, arrivalTimer, flashTimer, cardTimer, scanTimer, revealTimer]) clearTimeout(timer.current);
     };
-  }, [bridge]);
+  }, [bridge, showState]);
 
   const visibleGames = useMemo(() => state?.games.filter((game) => game.installed) || [], [state]);
   const selectedGame = visibleGames.find((game) => game.id === selected);
@@ -628,7 +657,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     try {
       const result = await bridge.request<{ new_games: number }>({ type: 'scan' });
       const count = result.new_games;
-      setScanFeedback({ label: count ? `${count} game${count === 1 ? '' : 's'} found` : 'No new games', phase: 'success' });
+      setScanFeedback({ label: count ? `${count} game${count === 1 ? '' : 's'} found` : 'No new games found', phase: 'success' });
     } catch (error) {
       setScanFeedback({ label: String(error instanceof Error ? error.message : error), phase: 'error' });
     }
@@ -865,13 +894,47 @@ export function App({ bridge }: { bridge: Bridge }) {
 
   const noGames = !!state && visibleGames.length === 0;
 
+  // Closing the window during first-launch setup finishes it, as Skip does (the host also notices the window gone).
+  const onboardingSession = state?.onboarding?.session;
+  useEffect(() => {
+    if (!onboardingSession || !('__TAURI_INTERNALS__' in window)) return;
+    const listening = getCurrentWindow().onCloseRequested(async () => {
+      const finish = bridge.request({ type: 'finish_onboarding', session: onboardingSession }).catch(() => undefined);
+      await Promise.race([finish, new Promise((resolve) => setTimeout(resolve, 1000))]);
+    });
+    return () => { listening.then((unlisten) => unlisten()).catch(() => undefined); };
+  }, [bridge, onboardingSession]);
+
+  // The first screen after the wait fades in, whichever it is; later changes have their own transitions.
+  if (!state) { hadState.current = false; } else if (!hadState.current) { hadState.current = true; entering.current = true; }
+  const enter = entering.current ? ' entering' : '';
+  const entered = (event: React.AnimationEvent) => { if (event.target === event.currentTarget) entering.current = false; };
+
+  // No host state yet (starting, or reconnecting): nothing but the title bar and a quiet note, never an empty library.
+  if (!state) return <div className="app waiting-app">
+    <header className="window-bar" data-tauri-drag-region>
+      {!mac && <WindowControls />}
+    </header>
+    <main className="waiting"><p role="status">Locating my eyes…</p></main>
+  </div>;
+
+  if (state?.onboarding) return <div className={`app onboarding-app${enter}`} onAnimationEnd={entered}>
+    <header className="window-bar" data-tauri-drag-region>
+      {!mac && <WindowControls />}
+    </header>
+    <OnboardingScreen onboarding={state.onboarding} bridge={bridge} sound={state.settings?.play_sounds ?? true} />
+  </div>;
+
   return (
-    <div className={`app ${working ? 'is-busy' : ''} ${noGames ? 'no-games' : ''}`}>
+    <div className={`app ${working ? 'is-busy' : ''} ${noGames ? 'no-games' : ''}${enter}`} onAnimationEnd={entered}>
       <header className="window-bar" data-tauri-drag-region>
         {!mac && <WindowControls />}
       </header>
       <aside className="sidebar">
         {noGames && <Character name="no-games-found" sound={state?.settings?.play_sounds ?? true} />}
+        {noGames && <div className="no-games-text">
+          <h1>No supported games detected</h1>
+        </div>}
         <div className="sidebar-surface">
           {installed.length > 0 && <h2 className="library-heading">
             {filterOpen ? <span className="library-filter" onBlur={(event) => {
@@ -922,7 +985,6 @@ export function App({ bridge }: { bridge: Bridge }) {
       <main className="main">
         <p className="sr-only" role="status">{feedback?.phase === 'busy' ? `${feedback.action} in progress`
           : feedback?.phase === 'success' ? `${feedback.action} complete` : ''}</p>
-        {status !== 'connected' && <p className="connection" role="status">{status.startsWith('reconnecting') ? 'Reconnecting to host…' : 'Connecting to host…'}</p>}
         {state?.store?.available === false && <p className="store-notice" role="alert">The checkpoint store is unavailable. Reconnect its drive to continue.</p>}
         {selectedGame ? <>
           <div className={`action-band ${selectedGame.guidance?.save ? 'covers-save' : ''} ${selectedGame.guidance?.load ? 'covers-load' : ''}`} aria-label="Checkpoint actions">

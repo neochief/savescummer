@@ -5,15 +5,17 @@
 //! - The guarded locations come from the environment (the OS's table, or a
 //!   test's). A path is judged by its location alone, before any read.
 //! - Granted categories are remembered in the data folder for this build's
-//!   code identity: a new build starts with none, as macOS does.
+//!   code identity: a new build starts with none, as macOS does. Other
+//!   apps' data is granted for the process's lifetime only (Apple's
+//!   rule): it's never remembered across runs.
 //! - A game whose save location (or install folder) is in a category not
 //!   granted is inactive: listed, but not scanned, watched or targeted.
-//! - Asking reads the location, which prompts; only first run, Scan games,
-//!   adding or configuring a game and `RequestAccess` ask.
+//! - Asking reads the location, which prompts; only first-launch setup's
+//!   Allow access, Scan games, adding or configuring a game and
+//!   `RequestAccess` ask.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -46,9 +48,17 @@ pub struct Privacy {
     answers: BTreeMap<Category, PrivacyAnswer>,
     file: PathBuf,
     identity: String,
-    /// No record at all: the app's first run may ask, once.
-    first_run: AtomicBool,
     grants: Mutex<Grants>,
+}
+
+/// What asking found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Answer {
+    Granted,
+    Denied,
+    /// Nothing inside the location exists to read yet: neither proven nor
+    /// refused.
+    Unverified,
 }
 
 impl Privacy {
@@ -56,8 +66,7 @@ impl Privacy {
         let file = data_dir.join(FILE);
         let identity = privacy::code_identity().unwrap_or_default();
         let saved: Option<Saved> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok());
-        let first_run = saved.is_none();
-        let granted = match saved {
+        let mut granted = match saved {
             Some(saved) if saved.identity == identity => saved.granted,
             Some(saved) if !saved.granted.is_empty() => {
                 crate::trace(&format!(
@@ -68,29 +77,19 @@ impl Privacy {
             }
             _ => BTreeSet::new(),
         };
+        // Recorded by an earlier build, which remembered everything.
+        granted.retain(|c| remembered(*c));
         Privacy {
             table: env.privacy.clone(),
             answers: env.privacy_answers.clone(),
             file,
             identity,
-            first_run: AtomicBool::new(first_run),
             grants: Mutex::new(Grants { granted, ..Default::default() }),
         }
     }
 
     fn grants(&self) -> std::sync::MutexGuard<'_, Grants> {
         self.grants.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    pub fn first_run(&self) -> bool {
-        self.first_run.load(Ordering::SeqCst)
-    }
-
-    /// The first run's question was asked (or there was nothing to ask):
-    /// from now on this is like any other run, this launch included.
-    pub fn end_first_run(&self) {
-        self.first_run.store(false, Ordering::SeqCst);
-        self.save();
     }
 
     /// The guarded category `path` needs and doesn't have yet.
@@ -104,8 +103,9 @@ impl Privacy {
     }
 
     /// Reads `path` to ask macOS for its category, and waits for the answer.
-    /// Returns whether access is granted now.
-    pub fn ask(&self, path: &Path, category: Category) -> bool {
+    /// Only a read inside the location counts: when nothing there exists
+    /// yet, the answer is [`Answer::Unverified`] and nothing is recorded.
+    pub fn ask(&self, path: &Path, category: Category) -> Answer {
         crate::trace(&format!("asking for access to {} ({})", category.display_name(), path.display()));
         let access = match self.answers.get(&category) {
             Some(PrivacyAnswer::Granted) => Access::Granted,
@@ -113,6 +113,10 @@ impl Privacy {
             Some(PrivacyAnswer::Hangs) => loop {
                 std::thread::sleep(Duration::from_secs(3600));
             },
+            None if !self.inside(path, category) => {
+                crate::trace(&format!("access to {}: nothing there to read yet", category.display_name()));
+                return Answer::Unverified;
+            }
             None => privacy::probe(path, category),
         };
         let granted = access == Access::Granted;
@@ -127,7 +131,19 @@ impl Privacy {
         }
         crate::trace(&format!("access to {}: {}", category.display_name(), if granted { "granted" } else { "denied" }));
         self.save();
-        granted
+        if granted { Answer::Granted } else { Answer::Denied }
+    }
+
+    /// Whether the folder a probe of `path` reads (its nearest existing
+    /// one) is inside the guarded location: reading an ancestor outside it
+    /// proves nothing. Other apps' data is guarded per container, so its
+    /// parent folders don't count either.
+    fn inside(&self, path: &Path, category: Category) -> bool {
+        let Some(folder) = path.ancestors().find(|p| std::fs::metadata(p).is_ok_and(|m| m.is_dir())) else {
+            return false;
+        };
+        let root = self.table.folders.iter().any(|(root, c)| *c == Category::AppData && root == folder);
+        self.table.category_of(folder) == Some(category) && !(category == Category::AppData && root)
     }
 
     fn revoke(&self, category: Category) -> bool {
@@ -158,12 +174,19 @@ impl Privacy {
     }
 
     fn save(&self) {
-        let saved = Saved { identity: self.identity.clone(), granted: self.grants().granted.clone() };
+        let granted = self.grants().granted.iter().copied().filter(|c| remembered(*c)).collect();
+        let saved = Saved { identity: self.identity.clone(), granted };
         let text = serde_json::to_string_pretty(&saved).expect("grants serialize");
         if let Err(e) = std::fs::write(&self.file, text) {
             crate::trace(&format!("can't record granted access in {}: {e}", self.file.display()));
         }
     }
+}
+
+/// Whether a grant outlives the process. macOS grants other apps' data for
+/// the process's lifetime.
+fn remembered(category: Category) -> bool {
+    category != Category::AppData
 }
 
 /// Installs the privacy guard: file helpers leave locations not granted yet
@@ -191,7 +214,7 @@ pub fn game_needs(host: &Host, targets: &[PathBuf], install_dirs: &[PathBuf]) ->
 }
 
 /// Installed games waiting for each category, with a path that needs it.
-fn waiting(inner: &Inner) -> BTreeMap<Category, PathBuf> {
+pub fn waiting(inner: &Inner) -> BTreeMap<Category, PathBuf> {
     let mut out: BTreeMap<Category, PathBuf> = BTreeMap::new();
     for (id, derived) in &inner.derived {
         if let Some((path, category)) = &derived.access
@@ -203,8 +226,7 @@ fn waiting(inner: &Inner) -> BTreeMap<Category, PathBuf> {
     out
 }
 
-/// After a user's scan (or the first run), ask for every category installed
-/// games wait for. Background scans leave access guidance in the app's UI.
+/// After a user's scan, ask for every category installed games wait for. Background scans leave access guidance in the app's UI.
 pub fn after_scan(host: &Arc<Host>, user: bool) {
     if !user {
         return;
@@ -216,7 +238,7 @@ pub fn after_scan(host: &Arc<Host>, user: bool) {
     let mut any = false;
     for (category, path) in &waiting {
         if !host.privacy.is_denied(*category) {
-            any |= host.privacy.ask(path, *category);
+            any |= host.privacy.ask(path, *category) == Answer::Granted;
         }
     }
     if any {
@@ -225,12 +247,6 @@ pub fn after_scan(host: &Arc<Host>, user: bool) {
         // A denial shows as such.
         host.publish(&mut host.lock());
     }
-}
-
-/// The app's first run, opened by the user: it may ask for what the games
-/// it found wait for.
-pub fn first_run_asks(host: &Host) -> bool {
-    host.privacy.first_run() && !host.opts.minimized
 }
 
 /// Asks for the category `game` waits for (the UI's Allow access). Blocks
@@ -257,12 +273,16 @@ pub fn request_access(host: &Arc<Host>, game: &str) -> Result<serde_json::Value,
     let Some((path, category)) = needed else {
         return Ok(serde_json::json!({ "game": game_id, "access": "granted" }));
     };
-    if host.privacy.ask(&path, category) {
+    let answer = host.privacy.ask(&path, category);
+    if answer == Answer::Granted {
         granted(host);
         return Ok(serde_json::json!({ "game": game_id, "access": "granted", "category": category }));
     }
     let mut inner = host.lock();
     host.publish(&mut inner);
+    if answer == Answer::Unverified {
+        return Ok(serde_json::json!({ "game": game_id, "access": "unverified", "category": category }));
+    }
     Ok(serde_json::json!({
         "game": game_id,
         "access": "denied",
@@ -286,10 +306,11 @@ pub fn after_failure(host: &Arc<Host>, failure: &Failure) {
 }
 
 /// Asks before a user-typed location is used (adding or configuring a
-/// game), so the prompt shows while the form is open.
+/// game), so the prompt shows while the form is open. A location with
+/// nothing to read yet is accepted: the game waits for access until there is.
 pub fn ask_for(host: &Host, path: &Path) -> Result<(), Failure> {
     let Some(category) = host.privacy.needed(path) else { return Ok(()) };
-    if host.privacy.ask(path, category) {
+    if host.privacy.ask(path, category) != Answer::Denied {
         return Ok(());
     }
     Err(Failure::new(ErrorKind::AccessNeeded, category.as_str()).path(path))
@@ -299,7 +320,7 @@ pub fn ask_for(host: &Host, path: &Path) -> Result<(), Failure> {
 /// and a scan resolves them again with their locations readable. A scan
 /// running now (the one that asked) read without access, so it's a new one,
 /// queued after it.
-fn granted(host: &Arc<Host>) {
+pub fn granted(host: &Arc<Host>) {
     {
         let mut inner = host.lock();
         crate::library::derive_all(host, &mut inner);

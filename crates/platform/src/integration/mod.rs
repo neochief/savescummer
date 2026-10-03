@@ -15,11 +15,18 @@ pub enum HotkeyAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Signal {
     Hotkey(HotkeyAction),
-    TrayGame { game: String, action: TrayGameAction },
+    TrayGame {
+        game: String,
+        action: TrayGameAction,
+    },
     OpenDialog(TrayDialog),
     Scan,
     OpenMainWindow,
     Exit,
+    /// Linux: the desktop's shortcuts portal bound these ids. The host
+    /// records them and hands them back at the next start
+    /// ([`remember_allowed_shortcuts`]), so that start binds them silently.
+    ShortcutsAllowed(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +86,23 @@ pub fn icon_png(icon: TrayIcon) -> &'static [u8] {
     }
 }
 
+/// Whether the global shortcuts wait for the user to allow them in the
+/// desktop's own dialog (Linux, the Wayland shortcuts portal). First-launch
+/// setup offers that dialog behind an explicit action; nothing else on
+/// startup opens it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutSetup {
+    /// Nothing to allow: the shortcuts work (or fail) without a dialog.
+    Ready,
+    /// The portal is there and the shortcuts aren't bound through it yet;
+    /// binding them may show the dialog.
+    Needed,
+    /// Still finding out.
+    Unknown,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod hotkeys;
 #[cfg_attr(windows, path = "windows.rs")]
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
 #[cfg_attr(target_os = "linux", path = "linux.rs")]
@@ -88,6 +112,26 @@ mod shortcut;
 
 pub use imp::{Integration, start};
 pub use shortcut::{Key, Shortcut, Shortcuts, shortcut_text, validate_shortcuts};
+
+/// Shortcut ids recorded from an earlier [`Signal::ShortcutsAllowed`]; call
+/// before [`start`]. Only the Linux portal needs them.
+pub fn remember_allowed_shortcuts(ids: Vec<String>) {
+    #[cfg(target_os = "linux")]
+    imp::remember_allowed_shortcuts(ids);
+    #[cfg(not(target_os = "linux"))]
+    let _ = ids;
+}
+
+/// The ids the Linux portal knows `shortcuts` by; none elsewhere.
+pub fn portal_ids(shortcuts: Shortcuts) -> Vec<String> {
+    #[cfg(target_os = "linux")]
+    return imp::portal_ids(shortcuts);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = shortcuts;
+        Vec::new()
+    }
+}
 
 /// Runs the OS's event loop on the calling thread, which must be the main
 /// thread, until `wait` returns (the host waits for shutdown and shuts down

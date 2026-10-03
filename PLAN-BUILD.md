@@ -282,8 +282,8 @@ The host and CLI get version resources (see VERSION) and `assets/icon.ico`; the 
 `packaging/windows/savescummer.iss`, a per-user Inno Setup installer to `%LOCALAPPDATA%\Programs\SaveScummer`. Per-user means no admin prompt. Its payload is exactly the release APP PACKAGE. Only `cargo xtask dist` compiles it, passing the version, payload and output as `/D` defines.
 
 - **Stable `AppId`** and `PrivilegesRequired=lowest`, so upgrades replace in place without admin.
-- **One task, "Launch at sign-in",** with `UsePreviousTasks=yes`: checked on first install; on upgrade the user's previous choice is kept, checked or not, so a user who turned it off is never opted back in. Not `checkedonce`: on an upgrade it unchecks the task, overriding the remembered choice, so an upgrade would silently turn sign-in off.
-- **Launch at sign-in** is set by running the installed `SaveScummer.exe --autostart on`, so the host stays the only writer of that entry. The uninstaller runs `--autostart off`, which removes the entry only if it points at this install.
+- **One task, "Start at login",** with `UsePreviousTasks=yes`: checked on first install; on upgrade the user's previous choice is kept, checked or not, so a user who turned it off is never opted back in. Not `checkedonce`: on an upgrade it unchecks the task, overriding the remembered choice, so an upgrade would silently turn sign-in off.
+- **Start at login** is set by running the installed `SaveScummer.exe --autostart on`, so the host stays the only writer of that entry. The uninstaller runs `--autostart off`, which removes the entry only if it points at this install.
 - **Before replacing files,** `PrepareToInstall` runs the installed `SaveScummer.CLI.exe --no-start shutdown`, so an in-flight save finishes. Inno's Restart Manager (`CloseApplications=yes`) closes the UI.
 - **User data is never touched:** `%LOCALAPPDATA%\SaveScummer`, and the checkpoint store if the user moved it elsewhere.
 - **Upgrades replace `bin\` wholesale,** so no file from an older version lingers. Only the app's own folder is cleared.
@@ -338,14 +338,14 @@ The host, CLI, UI and bundle must agree on the minimum macOS.
 
 ### Integration
 
-**Launch at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*, under *Allow in the Background*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS.
+**Start at login:** a login agent registered with `SMAppService.agent`, through the shared `--autostart on|off` code. Its plist ships in the bundle (`Contents/Library/LaunchAgents/com.savescummer.SaveScummer.host.plist`) and runs `Contents/MacOS/SaveScummer --minimized`. macOS lists it as SaveScummer in *Login Items*, under *Allow in the Background*. A custom `--data-dir` can't be carried, so `--autostart on` refuses with one on macOS.
 
 ### Upgrade and removal
 
 The [installation guide](docs/install.md) gives the user steps; packaging preserves these behaviors:
 
 - **Upgrade:** quit (menu-bar icon → Quit), drag the new app over the old one. Replacing a running app is safe on macOS, since running processes keep the old files, and the next launch runs the new version.
-- **Remove:** turn off launch at login, quit, drag to Trash. `~/Library/Application Support/SaveScummer` is never touched.
+- **Remove:** turn off start at login, quit, drag to Trash. `~/Library/Application Support/SaveScummer` is never touched.
 
 ### Done when
 
@@ -353,7 +353,7 @@ The [installation guide](docs/install.md) gives the user steps; packaging preser
 2. Every binary in the bundle is arm64 (`lipo -archs`), and `codesign --verify --deep --strict` passes.
 3. The DMG shows the app and an Applications link; dragging installs it; after *Open Anyway* it runs on a clean machine with the minimum macOS.
 4. `Info.plist` has the Cargo version and the minimum macOS.
-5. Enabling launch at login registers the agent, it shows as SaveScummer in *Login Items* (*Allow in the Background*), and the host starts at login; disabling unregisters it.
+5. Enabling start at login registers the agent, it shows as SaveScummer in *Login Items* (*Allow in the Background*), and the host starts at login; disabling unregisters it.
 6. Replacing the app while it runs doesn't corrupt data, and the next launch runs the new version.
 7. Nothing ever touches `~/Library/Application Support/SaveScummer`.
 
@@ -391,7 +391,7 @@ The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`: Tauri's AppDir wit
 
 ### Integration
 
-- **Launch at login:** the host writes and removes `~/.config/autostart/com.savescummer.SaveScummer.desktop` with `Exec="<AppImage path>" --minimized`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE). Like macOS, the entry always starts the default data folder: `--autostart on` with another `--data-dir` is refused.
+- **Start at login:** the host writes and removes `~/.config/autostart/com.savescummer.SaveScummer.desktop` with `Exec="<AppImage path>" --minimized`, through the shared `--autostart on|off` code. The path comes from `$APPIMAGE`, which the AppImage runtime sets, and the host keeps it current (see WHAT THE APP MUST PROVIDE). Like macOS, the entry always starts the default data folder: `--autostart on` with another `--data-dir` is refused.
 - **App menu entry:** an AppImage installs nothing itself, so a release host started from one writes `~/.local/share/applications/com.savescummer.SaveScummer.desktop` (`Exec="<AppImage path>"`) and the icon (`~/.local/share/icons/hicolor/scalable/apps/savescummer.svg`) at every start, rewriting them only when they differ (a new version is a new file). It marks the entry `X-SaveScummer-Target` like the autostart entry and leaves an entry of the same name that isn't its own alone. Why the host and not only AppImage tools: besides the menu, the desktop names the app by this entry: the dock groups the window under it, and the shortcuts portal registers the host under its id (PLAN-HOST, Linux under Wayland). Without the entry the portal files the shortcuts under whatever app started the host. Development builds never write it.
 
 ### Upgrade and removal
@@ -399,14 +399,14 @@ The APP PACKAGE is `build/<mode>/package/SaveScummer.AppDir`: Tauri's AppDir wit
 The README gives both:
 
 - **Upgrade:** download the new AppImage, quit the old one, start the new one, delete the old file.
-- **Remove:** turn off launch at login, quit, delete the file, and delete `~/.local/share/applications/com.savescummer.SaveScummer.desktop` and `~/.local/share/icons/hicolor/scalable/apps/savescummer.svg` to drop it from the app menu. `~/.local/share/SaveScummer` is never touched.
+- **Remove:** turn off start at login, quit, delete the file, and delete `~/.local/share/applications/com.savescummer.SaveScummer.desktop` and `~/.local/share/icons/hicolor/scalable/apps/savescummer.svg` to drop it from the app menu. `~/.local/share/SaveScummer` is never touched.
 
 ### Done when
 
 1. `dist` on the oldest supported Ubuntu leaves exactly `SaveScummer-linux-<arch>-<ver>.AppImage` in `dist/`, for x86_64 and aarch64.
 2. After `chmod +x`, it runs on the oldest supported Ubuntu and current Fedora, both stock, without `libfuse2`, under both X11 and Wayland.
 3. `….AppImage --version` and `….AppImage cli --version` print the Cargo version.
-4. Enabling launch at login writes the XDG entry pointing at the AppImage and the host starts at login. Running a newer AppImage re-points the entry, and disabling removes it.
+4. Enabling start at login writes the XDG entry pointing at the AppImage and the host starts at login. Running a newer AppImage re-points the entry, and disabling removes it.
 5. Nothing ever touches `~/.local/share/SaveScummer`.
 
 
