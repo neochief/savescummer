@@ -49,6 +49,9 @@ pub struct LinuxSource {
     /// namespace, which is never in the list: asking once per such window
     /// keeps it from forcing a full look on every poll.
     unknown_front: Option<u32>,
+    /// Reuse the foreground read from `may_have_changed` for this poll's
+    /// focus check.
+    front_for_poll: Option<Option<u32>>,
 }
 
 impl ProcessSource for LinuxSource {
@@ -77,7 +80,8 @@ impl ProcessSource for LinuxSource {
     }
 
     fn may_have_changed(&mut self, watched: &[u32]) -> bool {
-        let front = self.foreground().filter(|pid| !self.pids.contains(pid));
+        self.front_for_poll = Some(self.display.active_pid());
+        let front = self.front_for_poll.flatten().filter(|pid| !self.pids.contains(pid));
         if front.is_some() && front != self.unknown_front {
             self.unknown_front = front;
             return true;
@@ -87,7 +91,7 @@ impl ProcessSource for LinuxSource {
         // game): look now, while its parent is still known.
         for &pid in watched {
             let Some(children) = children(pid) else { return true };
-            if children.iter().any(|child| !self.pids.contains(child)) {
+            if has_unseen_live_child(&children, &self.pids, stat) {
                 return true;
             }
         }
@@ -95,8 +99,14 @@ impl ProcessSource for LinuxSource {
     }
 
     fn foreground(&mut self) -> Option<u32> {
-        self.display.active_pid()
+        self.front_for_poll.take().unwrap_or_else(|| self.display.active_pid())
     }
+}
+
+/// An unreadable child's state still asks for a full look; only a confirmed
+/// zombie can be ignored.
+fn has_unseen_live_child(children: &[u32], known: &HashSet<u32>, read_stat: impl Fn(u32) -> Option<Stat>) -> bool {
+    children.iter().any(|&child| !known.contains(&child) && !read_stat(child).is_some_and(|stat| stat.zombie))
 }
 
 /// The X display, connected on first use. A lost or missing one is asked
@@ -336,6 +346,19 @@ pub fn system_source() -> Box<dyn ProcessSource> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zombie_child_stays_quiet_but_live_or_unreadable_child_asks_for_a_full_look() {
+        let known = HashSet::from([10]);
+        let children = [10, 20];
+        for _ in 0..crate::FULL_EVERY {
+            assert!(!has_unseen_live_child(&children, &known, |_| {
+                Some(Stat { parent: 10, zombie: true, start: 1 })
+            }));
+        }
+        assert!(has_unseen_live_child(&children, &known, |_| { Some(Stat { parent: 10, zombie: false, start: 1 }) }));
+        assert!(has_unseen_live_child(&children, &known, |_| None));
+    }
 
     #[test]
     fn stat_fields_count_from_the_end_of_the_name() {
