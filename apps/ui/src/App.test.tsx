@@ -1150,6 +1150,31 @@ test('first-launch setup waits for its rows instead of flashing an empty screen 
   await waitFor(() => expect(document.querySelector('.onboarding[aria-busy="true"]')).not.toBeNull());
   expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
   expect(screen.queryByText('Game A')).toBeNull();
+  expect(document.querySelector('.app.entering')).toBeNull();
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2,
+    onboarding: onboarding([['game_access']]) }));
+  expect(await screen.findByRole('heading', { name: 'Before you play' })).toBeTruthy();
+  expect(document.querySelector('.app.entering')).not.toBeNull();
+});
+
+test('a library found at startup enters once and keeps its entrance through state updates', async () => {
+  const bridge = new FakeBridge();
+  const { container } = render(<App bridge={bridge} />);
+  await screen.findByText('Game A');
+  const app = container.querySelector('.app')!;
+  // React uses the prefixed event in jsdom, which lacks AnimationEvent.
+  const finishAnimation = (element: Element) => fireEvent(element,
+    new Event('AnimationEvent' in window ? 'animationend' : 'webkitAnimationEnd', { bubbles: true }));
+  expect(app.classList.contains('entering')).toBe(true);
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 2 }));
+  expect(app.classList.contains('entering')).toBe(true);
+  // A panel finishing must not end the enclosing entrance early.
+  finishAnimation(container.querySelector('.sidebar')!);
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 3 }));
+  expect(app.classList.contains('entering')).toBe(true);
+  finishAnimation(app);
+  await act(async () => bridge.stateListener?.({ ...bridge.state, revision: 4 }));
+  expect(app.classList.contains('entering')).toBe(false);
 });
 
 test('one permission: a singular heading, its action, and Skip until the host confirms it', async () => {

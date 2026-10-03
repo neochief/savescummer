@@ -551,3 +551,10 @@ html.leaving-onboarding-empty::view-transition-new(root) { animation: onboarding
 .waiting p { margin: 0 0 32px; color: #a99b90; font: 600 15px Chakra Petch, sans-serif; opacity: 0; animation: onboarding-loading .3s ease .6s forwards; }
 .app.entering { animation: app-enter .3s ease both; }
 @keyframes app-enter { from { opacity: 0; } }
+/* A library already found at startup arrives like one revealed by discovery.
+   Keep the parent entrance active until both panels finish, so a host update cannot cut them short. */
+@media (prefers-reduced-motion: no-preference) {
+  .app.entering:not(.onboarding-app):not(.no-games) { animation-duration: .6s; }
+  .app.entering:not(.onboarding-app):not(.no-games) .sidebar { animation: arrive-from-left .45s cubic-bezier(.2, .8, .2, 1) .08s both; }
+  .app.entering:not(.onboarding-app):not(.no-games) .main { animation: arrive-from-right .45s cubic-bezier(.2, .8, .2, 1) .14s both; }
+}

@@ -905,8 +905,11 @@ export function App({ bridge }: { bridge: Bridge }) {
     return () => { listening.then((unlisten) => unlisten()).catch(() => undefined); };
   }, [bridge, onboardingSession]);
 
-  // The first screen after the wait fades in, whichever it is; later changes have their own transitions.
-  if (!state) { hadState.current = false; } else if (!hadState.current) { hadState.current = true; entering.current = true; }
+  // Wait for actual content: fading an inspecting screen would finish before its rows appear.
+  if (!state) { hadState.current = false; } else if (!state.onboarding?.inspecting && !hadState.current) {
+    hadState.current = true;
+    entering.current = true;
+  }
   const enter = entering.current ? ' entering' : '';
   const entered = (event: React.AnimationEvent) => { if (event.target === event.currentTarget) entering.current = false; };
 
