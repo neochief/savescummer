@@ -5,8 +5,7 @@ delivered and consumed at runtime. This document is the complete behavior spec;
 implementation is intentionally split from the rest of the host so nearly all of
 it can be built and tested in isolation.
 
-Status: design agreed for implementation. Supersedes `catalog/games/*.yaml` and
-`crates/scanner`'s current `Definition` shape.
+Catalog inputs live in `catalog/games.csv` and `catalog/addendum.yaml`; the scanner consumes the generated bundle.
 
 ---
 

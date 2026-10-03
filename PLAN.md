@@ -4,7 +4,7 @@ I want an app that saves and loads backups of game save data, mainly for rogueli
 
 The app finds supported games on the computer by itself and lets the user add others. For each game it backs up exactly its saves: one or more folders, files or file patterns, never its settings or other programs' data. Save and Load always cover all of them together, and a Load makes them exactly as they were at the checkpoint, removing saves made since.
 
-It should work on Windows, macOS and Linux. Windows came first; macOS and Linux use platform adapters around the same host and UI design.
+It works on Windows, macOS and Linux through platform adapters around the same host and UI design.
 
 The app icon is [assets/icon.svg](assets/icon.svg).
 
@@ -98,20 +98,19 @@ These hold across every part:
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Status | Full Tauri UI and installer built locally; tag-triggered release workflow configured | Host, CLI and Tauri UI packaged in an app bundle and DMG; tag-triggered release workflow configured | Host, CLI and Tauri UI AppImage packaging implemented for x86_64 and aarch64; no Linux CI or release job; runner and desktop validation pending |
-| Game monitoring | Implemented | Implemented | Implemented; real-game validation pending |
-| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 | Ctrl+F5 / Ctrl+F9 through the desktop portal where available, with X11 fallback; desktop validation pending |
+| Status | Host, CLI and Tauri UI in an installer | Host, CLI and Tauri UI in a DMG | Host, CLI and Tauri UI in x86_64 and aarch64 AppImages; exercised with real games |
+| Game monitoring | Implemented | Implemented | Implemented |
+| Global hotkeys | Ctrl+F5 / Ctrl+F9 | ⌥F5 / ⌥F9 | Ctrl+F5 / Ctrl+F9 through the desktop portal where available, with X11 fallback |
 | Proton games | — | — | Resolved inside the game's prefix (catalog) |
 
 
 ## TECHNOLOGY
 
 - **Rust** for the host, CLI and every backend module. Why: one safe, fast, portable language for the part that touches the user's files.
-- **Tauri 2, React and TypeScript** for the UI on all three platforms, in its own process with bundled web assets. The host can keep running after the window closes. Linux's packaged UI still needs runtime validation before release.
+- **Tauri 2, React and TypeScript** for the UI on all three platforms, in its own process with bundled web assets. The host can keep running after the window closes.
 - **SQLite**, owned only by the host, for configuration, checkpoint records, history and the operation journal.
 - **A versioned local JSON protocol** over named pipes (Windows) and Unix sockets (macOS, Linux) between the host and its clients. The Tauri bridge uses this protocol to reach the host.
 
-An earlier Qt proof of concept showed host/UI communication, busy rejection, progress, UI reconnection and an operation surviving the UI being killed. It used about 51 MiB of combined working set and reopened the UI in about 150 ms. Those historical demo numbers did not include real copying, SQLite or scanning and are not budgets for the Tauri UI.
 
 
 ## REPOSITORY

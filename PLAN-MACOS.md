@@ -10,7 +10,7 @@ Status (2026-10-03): the macOS host, CLI, Tauri UI bundle and DMG are implemente
 ## PRINCIPLES
 
 - **Adapters, not forks.** Each item is a macOS module behind the interface Windows already uses (`ProcessSource`, `integration::start`, `autostart::set`, `sounds::play_now`, `scanner::os`, `xtask::macos`). Shared code changes only where it wrongly assumes Windows. Why: PLAN-HOST's "portable core, thin platform adapters".
-- **Public APIs, no private frameworks, no elevated rights.** Nothing asks for admin or for Accessibility unless there is no other way. Why: the app is unsigned and not notarized; every extra permission prompt is a reason to give up on it.
+- **Public APIs, no private frameworks, no elevated rights.** Nothing asks for admin or for Accessibility unless there is no other way. Extra permission prompts interrupt play and should be avoided.
 - **Proven on a real Mac.** Each adapter is checked by hand with FTL and Into the Breach, not only with fixtures (PLAN-HOST, "passing on fixtures alone doesn't count").
 
 
@@ -28,11 +28,6 @@ There's one bundle, with the host as its main executable. `SaveScummer.app/Conte
 - **Starting the UI.** The host runs `SaveScummer.UI` directly. Asking macOS to open the bundle would reach the host again.
 - **Starting the host from the CLI or development task.** Privacy permissions go to the process macOS holds responsible, and a child inherits it. Every packaged host launch uses Launch Services (`open -n -a … --args`, hidden when minimized), including launches with `--data-dir` and an explicit bundled host path. This keeps RustRover and Terminal out of the permission decision. The development task reads the ready line and pid from the host's data-folder log; bare test executables still start directly so tests can control their processes.
 - **To verify early:** two processes using AppKit under one bundle ID behave as described, in particular who receives "reopen" while the UI is also open. Either answer is fine as long as both show the window.
-
-
-## SIGNING
-
-Ad-hoc signed, no Developer ID, for now. An ad-hoc signature gives the app a new identity on every build, so macOS forgets every privacy grant on each upgrade and the user allows access again (PRIVACY PERMISSIONS); the README says so. Why: a Developer ID keeps the identity across upgrades and removes *Open Anyway*, but costs a yearly fee that isn't worth it yet. Revisit if re-allowing access after updates becomes a common complaint.
 
 
 ## PRIVACY PERMISSIONS
@@ -61,7 +56,7 @@ macOS asks the user before an app reads some locations (TCC). A prompt nobody as
 - **Steam libraries on external disks** are in the removable volumes category. Until it's granted, the scanner skips them and their games are inactive; the mount trigger in FILE WATCHING only scans a volume once the category is granted.
 - **Tests.** The table is part of the environment, so e2e tests mark a fixture folder as protected and use a fake probe that answers granted, denied or hangs.
 - **To verify on a Mac:** whether an FSEvents stream on a protected folder prompts, or silently gets no events; whether `stat` of a path inside a protected folder prompts; whether picking a folder in the UI's open panel grants the host anything (not relied on); what denial returns for each category. Add **Six Ages** (group container) and **Slay the Spire** (inside its `.app`) to TEST-REAL-GAMES.md.
-- **Confirmed (macOS 15.7, 2026-09-25):** Six Ages' container is protected even though the Steam build is unsigned and the folder has no container-manager metadata: listing, reading and writing it each raise a `kTCCServiceSystemPolicyAppData` request. The unified log (`/usr/bin/log stream --predicate 'subsystem == "com.apple.TCC"'`; in zsh `log` is a builtin) shows each request's service, the responsible app (`AUTHREQ_ATTRIBUTION … responsible_path=`) and the answer (`AUTHREQ_RESULT … authValue=2` allowed, `0` denied), which is what the macOS permission tests build on.
+- **Confirmed (macOS 15.7, 2026-09-25):** Six Ages' container is protected even though the folder has no container-manager metadata: listing, reading and writing it each raise a `kTCCServiceSystemPolicyAppData` request. The unified log (`/usr/bin/log stream --predicate 'subsystem == "com.apple.TCC"'`; in zsh `log` is a builtin) shows each request's service, the responsible app (`AUTHREQ_ATTRIBUTION … responsible_path=`) and the answer (`AUTHREQ_RESULT … authValue=2` allowed, `0` denied), which is what the macOS permission tests build on.
 
 Done when:
 
@@ -144,7 +139,7 @@ Done when the six cues play for their hotkey outcomes on a Mac, with the "Play s
 - **`on`** calls `register()`, **`off`** calls `unregister()`; `is_enabled` reads `status`. The registration belongs to this bundle, so `off` can't remove another copy's entry.
 - **Turned off in System Settings:** `status` becomes *requires approval*. The host reports launch at login as off, and the UI's checkbox offers to open the pane (`SMAppService.openSystemSettingsLoginItems()`), since the app can't turn it back on by itself.
 - **No custom data folder.** The plist is fixed at build time, so it can't carry `--data-dir`: `--autostart on` with a `--data-dir` other than the default refuses on macOS with a clear message. Dev hosts keep refusing, as everywhere.
-- **To verify first:** that `register()` works from the ad-hoc signed bundle (SIGNING), and that the registration survives dragging a new build over the old app. If either fails, fall back to writing the plist into `~/Library/LaunchAgents` and loading it with `launchctl bootstrap gui/<uid>`.
+- **Registration check:** verify that `register()` works from the packaged bundle and survives replacing the app. If either fails, fall back to writing the plist into `~/Library/LaunchAgents` and loading it with `launchctl bootstrap gui/<uid>`.
 
 Done when PLAN-BUILD.md macOS "Done when" items 5 and 7 pass: turning it on makes the host start at login in the menu bar without a window, and it shows as SaveScummer in *Login Items → Allow in the Background* (confirmed 2026-09-26 on macOS 15); turning it off, from the app or from System Settings, stops it.
 
@@ -230,7 +225,7 @@ Done when `cargo xtask test` passes on an Apple Silicon Mac.
 
 - **Build flags:** set `MACOSX_DEPLOYMENT_TARGET` from `pins::MIN_MACOS` for every Rust build.
 - **The bundle:** `SaveScummer.app` with the layout from THE APP BUNDLE, `packaging/macos/Info.plist.in` (`CFBundleExecutable` `SaveScummer`, `LSUIElement`), the login agent's plist (LAUNCH AT LOGIN), the app icon as `.icns` generated from `assets/icon.svg` (the full-color Dock and Finder icon; the menu-bar template in `assets/macos/` is a separate asset), licenses, manifest and checksums in `Contents/Resources/`.
-- **Signing:** ad-hoc `codesign --force --deep --sign -` as the last step, then `codesign --verify --deep --strict`.
+- **Bundle verification:** `codesign --verify --deep --strict` after packaging.
 - **The DMG:** `hdiutil create -format UDZO` with the app and an `Applications` link.
 - **Dev session:** `run` and `host start` start the host from the dev bundle; `procs` stopping must recognize the host inside a bundle.
 - **Version resources:** `apps/host/build.rs` and `apps/cli/build.rs` use `winresource`; they must stay no-ops on macOS (they are today) while `Info.plist` carries the version.

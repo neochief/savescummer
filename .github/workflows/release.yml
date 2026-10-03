@@ -1,5 +1,5 @@
 # Release (PLAN-BUILD.md CI, RELEASING): a `v*` tag checks all four
-# platforms, then drafts a GitHub release with Windows and macOS files.
+# platforms, then drafts a GitHub release with all four platform files.
 # A human publishes it.
 #
 # Build commands are `cargo xtask` commands.
@@ -148,6 +148,11 @@ jobs:
         run: cargo xtask test
       - name: Package the AppImage
         run: cargo xtask dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*.AppImage
+          if-no-files-found: error
 
   publish:
     name: Draft release

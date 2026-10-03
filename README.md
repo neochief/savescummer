@@ -22,18 +22,20 @@ Saving and loading while a game is running is disabled by default. Many games ke
 
 ## Install
 
-Download the latest supported build from [Releases](https://github.com/neochief/savescummer/releases):
+SaveScummer supports Windows, macOS and Linux. Download the package for your platform from [Releases](https://github.com/neochief/savescummer/releases):
 
 | Platform | File |
 | --- | --- |
 | Windows 10/11 x64 | `SaveScummer-windows-x64-<version>-setup.exe` |
 | macOS 13+, Apple Silicon | `SaveScummer-macos-arm64-<version>.dmg` |
+| Linux x86_64, glibc 2.35+ | `SaveScummer-linux-x86_64-<version>.AppImage` |
+| Linux ARM64, glibc 2.35+ | `SaveScummer-linux-aarch64-<version>.AppImage` |
 
-On Windows, run the installer. It installs for your user without admin access. The unsigned installer may trigger SmartScreen; choose **More info → Run anyway** if you trust the download.
+On Windows, run the installer. It installs for your user without admin access.
 
-On macOS, drag SaveScummer from the disk image to Applications. If macOS blocks the first launch, use **System Settings → Privacy & Security → Open Anyway**. SaveScummer lives in the menu bar and may ask for access to a game's save folder. Because the app is not signed with a Developer ID, an upgrade may require you to allow access again.
+On macOS, drag SaveScummer from the disk image to Applications. SaveScummer lives in the menu bar and may ask for access to a game's save folder.
 
-Linux AppImages for x86_64 and ARM64 are configured but are not release assets yet. See [building from source](docs/building.md) to try a development build.
+On Linux, make the AppImage executable (`chmod +x SaveScummer-linux-*.AppImage`) and run it. The AppImage includes the host, UI and CLI; no installation or root access is needed.
 
 ## Your checkpoints
 

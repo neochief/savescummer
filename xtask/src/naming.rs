@@ -10,18 +10,15 @@ pub struct Platform {
     /// Appended after the version, e.g. `setup`.
     pub suffix: Option<&'static str>,
     pub ext: &'static str,
-    /// Whether releases include it yet. `publish` requires exactly one file
-    /// per shipping platform.
+    /// Whether `publish` requires this platform's release file.
     pub ships: bool,
 }
 
 pub const WINDOWS: Platform = Platform { os: "windows", arch: "x64", suffix: Some("setup"), ext: "exe", ships: true };
 pub const MACOS: Platform = Platform { os: "macos", arch: "arm64", suffix: None, ext: "dmg", ships: true };
-// Linux ships once its CI jobs have built both in release.yml.
-pub const LINUX_X86_64: Platform =
-    Platform { os: "linux", arch: "x86_64", suffix: None, ext: "AppImage", ships: false };
+pub const LINUX_X86_64: Platform = Platform { os: "linux", arch: "x86_64", suffix: None, ext: "AppImage", ships: true };
 pub const LINUX_AARCH64: Platform =
-    Platform { os: "linux", arch: "aarch64", suffix: None, ext: "AppImage", ships: false };
+    Platform { os: "linux", arch: "aarch64", suffix: None, ext: "AppImage", ships: true };
 
 pub const ALL: [Platform; 4] = [WINDOWS, MACOS, LINUX_X86_64, LINUX_AARCH64];
 
@@ -84,5 +81,10 @@ mod tests {
         assert_eq!(MACOS.release_file("1.2.3"), "SaveScummer-macos-arm64-1.2.3.dmg");
         assert_eq!(LINUX_X86_64.release_file("1.2.3"), "SaveScummer-linux-x86_64-1.2.3.AppImage");
         assert_eq!(LINUX_AARCH64.release_file("1.2.3"), "SaveScummer-linux-aarch64-1.2.3.AppImage");
+    }
+
+    #[test]
+    fn every_supported_platform_ships() {
+        assert!(ALL.iter().all(|platform| platform.ships));
     }
 }

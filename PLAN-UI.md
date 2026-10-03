@@ -1,13 +1,13 @@
 # Save Scummer UI
 
-This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Windows packages the Tauri/WebView2 UI from `apps/ui` in the installer, macOS packages the Tauri/WebKit UI in the DMG, and Linux packages the Tauri/WebKitGTK UI in an AppImage that is not yet published. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
+This is the main window, `SaveScummer.UI`. The host starts it when the user launches the app and it ends when closed; the tray, hotkeys and everything else that runs without a window belong to the host. Windows packages the Tauri/WebView2 UI from `apps/ui` in the installer, macOS packages the Tauri/WebKit UI in the DMG, and Linux packages the Tauri/WebKitGTK UI in x86_64 and aarch64 AppImages. Core behavior (SAVE, LOAD, REVERT, snapshots, operation safety) and the protocol the UI talks to live in [`PLAN-HOST.md`](PLAN-HOST.md); the error block's contents live in [`PLAN-ERRORS.md`](PLAN-ERRORS.md).
 
 The app should feel like a game-oriented utility: not a generic settings app, and not an in-game fantasy interface. It is **history-first**. There is no fixed number of save slots, so the main view is an activity log listing every event, newest first.
 
 
-## WINDOWS FRONTEND: TAURI AND WEB UI
+## TAURI AND WEB UI
 
-The Windows UI is a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The prototype in [`ui-prototype/`](ui-prototype/) is the visual and interaction reference, not the application source. A packaged UI loads local bundled assets without a development server.
+The UI is a separate `SaveScummer.UI` process using **Tauri 2, Vite, React, TypeScript and CSS** in `apps/ui`. Tauri hosts the desktop window and bundled web assets; React renders the stateful view and dialogs. The interactive design in [`ui-prototype/`](ui-prototype/) is the visual and interaction reference. A packaged UI loads local bundled assets without a development server.
 
 Keep the existing process boundary:
 
@@ -19,7 +19,7 @@ Keep the existing process boundary:
 
 **Windows implementation:** the host launches the Tauri window, the UI connects to the real host, and Save and Load have been exercised through an installed package against simulated game data. Closing and reopening the UI and restarting the host were also exercised. The remaining controls, dialogs, deletion flow, virtualization and accessibility rules in this plan are product work beyond the Windows packaging gate.
 
-**Remaining cross-platform validation:** The macOS Tauri UI is packaged; validate its WKWebView behavior in the installed app before publishing the draft release. The Linux WebKitGTK UI is packaged in the AppImage build path; validate the built AppImage on supported desktops before shipping it. Neither platform packages a Qt UI. Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed against the earlier proof-of-concept numbers. macOS activation and bundle identity need validation against [`PLAN-MACOS.md`](PLAN-MACOS.md).
+**Cross-platform checks:** Verify the one-window lifecycle, tray and Dock behavior, local protocol reconnection, keyboard and screen-reader access, packaged artwork/fonts, and the minimum window layout on each platform. Check CSS view transitions and scroll-driven fades on each engine; provide an equivalent static/fade-free state when an engine lacks a feature. Measure cold open time and memory with the UI open and closed. macOS activation and bundle identity are covered by [`PLAN-MACOS.md`](PLAN-MACOS.md).
 
 
 ## PROTOTYPE DECISIONS
@@ -108,14 +108,14 @@ To make it feel like a game, use presentation: dark layered surfaces, strong typ
 ### Typography, icons and surfaces
 
 - Use **Chakra Petch** for the main Save and Load controls, their shortcut hints, and the small Load and Revert buttons in history. Use **Inter** for the main content body, descriptions, editable labels, dates, notes, library controls and dialog content. Game logos keep their own lettering.
-- Use **Font Awesome Pro 7.3.1, Whiteboard Semibold** single-tone icons for app-owned UI controls. The jump-to-checkpoint hover uses Duotone `crosshairs`, the one exception. The icons used by the self-contained prototype are embedded in [`ui-prototype/index.html`](ui-prototype/index.html); the existing Duotone Regular assets in `assets/ui/icons/fontawesome-duotone-regular` are superseded for the main UI. The symbols in the text mockups are placeholders. The app's identity icon and game artwork remain separate assets.
+- Use **Font Awesome Pro 7.3.1, Whiteboard Semibold** single-tone icons for app-owned UI controls. The jump-to-checkpoint hover uses Duotone `crosshairs`, the one exception. The icons used by the interactive design are embedded in [`ui-prototype/index.html`](ui-prototype/index.html). The symbols in the text mockups are placeholders. The app's identity icon and game artwork remain separate assets.
 - Main Save is red and Load is ivory, with rounded corners and a shallow raised bottom edge. History action buttons use a compact version of this button family, subordinate to the main controls.
 - Render the title bar seamlessly with the window: continue the underlying dark surfaces into it, without a separate colored strip, divider or shadow. Keep the app title quiet and the platform's window controls usable. The title bar must retain normal dragging and window behavior (see WINDOW).
 - Checkpoint labels use a leading Font Awesome tag icon inside an inline chip. Saved chips are editable; Loaded and Reverted chips are read-only. Other text editable in place uses an always-visible trailing pencil within the same edit target. Ordinary form fields need neither affordance.
 
 ### Main-window visual mockup
 
-The interactive prototype in [`ui-prototype/index.html`](ui-prototype/index.html) supersedes the static mockup `assets/ui/main-window.png`.
+The interactive design in [`ui-prototype/index.html`](ui-prototype/index.html) is the visual reference for the main window.
 
 This is the visual reference for the main window and its button family. It uses the app's actual identity icon and locally cached Steam artwork for Void War, XCOM 2 and Noita. The text mockups below describe the other window states and control placement. The behavior sections remain authoritative for interaction details.
 

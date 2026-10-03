@@ -1,8 +1,6 @@
 # Host-owned action policy
 
 Status: implemented. This is the canonical scope for action availability and guidance.
-It supersedes the earlier proposal that combined this work with game launching,
-automatic exit checkpoints, and content-based Save/Load suppression.
 
 The host remains the authority. Keep the existing operation executor, per-game
 reservation, checkpoint format and recovery journal. Consolidate the decisions
